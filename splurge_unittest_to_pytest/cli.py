@@ -14,7 +14,7 @@ from .main import convert_file, find_unittest_files
 @click.version_option(version=__version__)
 @click.argument("paths", nargs=-1, type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "--output-dir",
+    "--output",
     "-o",
     type=click.Path(path_type=Path),
     help="Output directory for converted files (default: overwrite in place)",
@@ -42,23 +42,33 @@ from .main import convert_file, find_unittest_files
     is_flag=True,
     help="Show detailed output",
 )
+@click.option(
+    "--backup",
+    "-b",
+    type=click.Path(path_type=Path),
+    help="Create backup files in specified directory with .bak extension",
+)
 def main(
     paths: tuple[Path, ...],
-    output_dir: Optional[Path],
+    output: Optional[Path],
     dry_run: bool,
     recursive: bool,
     encoding: str,
     verbose: bool,
+    backup: Optional[Path],
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
     
-    PATHS can be individual Python files or directories. If directories are
-    provided, use --recursive to search for unittest files within them.
+    PATHS can be individual files or directories. Files can have any extension.
+    If directories are provided, use --recursive to search for unittest files within them.
     
     Examples:
     
         # Convert a single file
         splurge-convert test_example.py
+        
+        # Convert files with any extension
+        splurge-convert test_example.txt test_example.md
         
         # Convert multiple files  
         splurge-convert test_*.py
@@ -70,7 +80,10 @@ def main(
         splurge-convert --dry-run --recursive tests/
         
         # Convert to a different directory
-        splurge-convert --output-dir converted_tests/ test_*.py
+        splurge-convert --output converted_tests/ test_*.py
+        
+        # Create backups before conversion
+        splurge-convert --backup backups/ test_*.py
     """
     if not paths:
         click.echo("Error: No paths provided", err=True)
@@ -81,10 +94,7 @@ def main(
     
     for path in paths:
         if path.is_file():
-            if path.suffix == ".py":
-                files_to_convert.append(path)
-            else:
-                click.echo(f"Warning: Skipping non-Python file: {path}", err=True)
+            files_to_convert.append(path)
         elif path.is_dir():
             if recursive:
                 unittest_files = find_unittest_files(path)
@@ -110,9 +120,22 @@ def main(
             click.echo(f"Processing: {file_path}")
         
         try:
+            # Create backup if requested
+            if backup and not dry_run:
+                backup_dir = backup
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                backup_path = backup_dir / f"{file_path.name}.bak"
+                try:
+                    import shutil
+                    shutil.copy2(file_path, backup_path)
+                    if verbose:
+                        click.echo(f"Backup created: {backup_path}")
+                except Exception as e:
+                    click.echo(f"Warning: Failed to create backup for {file_path}: {e}", err=True)
+            
             # Determine output path
-            if output_dir:
-                output_path = output_dir / file_path.name
+            if output:
+                output_path = output / file_path.name
             else:
                 output_path = None  # Will overwrite in place
             

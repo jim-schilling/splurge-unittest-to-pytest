@@ -146,7 +146,7 @@ class TestExample(unittest.TestCase):
             
             try:
                 runner = CliRunner()
-                result = runner.invoke(main, ["--output-dir", str(output_dir), str(input_path)])
+                result = runner.invoke(main, ["--output", str(output_dir), str(input_path)])
                 
                 assert result.exit_code == 0
                 assert f"Converted: {input_path}" in result.output
@@ -252,9 +252,9 @@ class TestCLIErrorHandling:
             runner = CliRunner()
             result = runner.invoke(main, [str(temp_path)])
             
-            assert result.exit_code == 0
-            assert f"Warning: Skipping non-Python file: {temp_path}" in result.output
-            assert "No unittest files found to convert" in result.output
+            assert result.exit_code == 1
+            assert "Failed to parse source code" in result.output
+            assert "1 files had errors" in result.output
             
         finally:
             temp_path.unlink()

@@ -119,7 +119,7 @@ def is_unittest_file(file_path: Union[str, Path]) -> bool:
     """
     file_path = Path(file_path)
     
-    if not file_path.exists() or file_path.suffix != ".py":
+    if not file_path.exists():
         return False
     
     try:
@@ -163,8 +163,8 @@ def find_unittest_files(directory: Union[str, Path]) -> list[Path]:
     
     unittest_files = []
     
-    for file_path in directory.rglob("*.py"):
-        if is_unittest_file(file_path):
+    for file_path in directory.rglob("*"):
+        if file_path.is_file() and is_unittest_file(file_path):
             unittest_files.append(file_path)
     
     return unittest_files
