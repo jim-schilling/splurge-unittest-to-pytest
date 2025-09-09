@@ -131,7 +131,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     updated_node = updated_node.with_changes(bases=new_bases)
         except Exception:
             # If conversion fails, return original node unchanged
-            return updated_node
+            return original_node
 
         return updated_node
 
@@ -213,7 +213,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 )
         except Exception:
             # If conversion fails, return original node unchanged
-            return updated_node
+            return original_node
         
         return updated_node
 
@@ -234,7 +234,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     return conversion_result
         except Exception:
             # If conversion fails, return original node unchanged
-            return updated_node
+            return original_node
         
         return updated_node
 
@@ -256,7 +256,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 return updated_node.with_changes(items=[new_item])
         except Exception:
             # If conversion fails, return original node unchanged
-            return updated_node
+            return original_node
         
         return updated_node
 
@@ -269,7 +269,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 return self._add_pytest_import(updated_node)
         except Exception:
             # If import addition fails, return original node unchanged
-            return updated_node
+            return original_node
         
         return updated_node
 

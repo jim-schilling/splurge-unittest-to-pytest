@@ -207,7 +207,95 @@ splurge-convert --encoding utf-8 test_file.py
 
 # Verbose output
 splurge-convert --verbose --recursive tests/
+
+# Create backups before conversion
+splurge-convert --backup backups/ test_*.py
 ```
+
+### Custom Method Patterns
+
+Splurge supports configurable method name patterns to accommodate different testing frameworks and custom conventions. This feature allows you to specify custom patterns for setup, teardown, and test methods.
+
+#### Default Patterns
+
+The converter includes these default patterns:
+
+**Setup Methods:**
+- `setUp`, `set_up`, `setup`, `setup_method`, `setUp_method`
+- `before_each`, `beforeEach`, `before_test`, `beforeTest`
+
+**Teardown Methods:**
+- `tearDown`, `tear_down`, `teardown`, `teardown_method`, `tearDown_method`
+- `after_each`, `afterEach`, `after_test`, `afterTest`
+
+**Test Methods:**
+- `test_`, `test`, `should_`, `when_`, `given_`, `it_`, `spec_`
+
+#### Custom Pattern Configuration
+
+Use the following CLI options to specify custom method patterns:
+
+```bash
+# Comma-separated patterns
+splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+
+# Multiple flag usage
+splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+
+# Configure all method types
+splurge-convert --setup-methods "setUp,beforeAll" \
+                --teardown-methods "tearDown,afterAll" \
+                --test-methods "test_,it_,spec_" test.py
+```
+
+#### Pattern Matching Features
+
+- **Case-insensitive matching**: `setUp` matches `setup`, `SETUP`, etc.
+- **CamelCase/Snake_case support**: `beforeAll` matches `before_all` and vice versa
+- **Flexible syntax**: Supports both prefix patterns (`test_`) and exact patterns (`setUp`)
+- **Whitespace handling**: Automatically trims whitespace from pattern arguments
+- **Duplicate removal**: Eliminates duplicate patterns while preserving order
+
+#### Pattern Examples
+
+```bash
+# JavaScript testing frameworks
+splurge-convert --setup-methods "beforeEach,beforeAll" \
+                --teardown-methods "afterEach,afterAll" \
+                --test-methods "describe_,it_,context_" test.js
+
+# Ruby RSpec style
+splurge-convert --setup-methods "before,before_each" \
+                --teardown-methods "after,after_each" \
+                --test-methods "describe_,it_,context_" test.rb
+
+# Custom framework patterns
+splurge-convert --setup-methods "my_setup,custom_setup" \
+                --teardown-methods "my_teardown,custom_teardown" \
+                --test-methods "spec_,feature_,scenario_" test.py
+```
+
+#### Pattern Parsing Details
+
+The CLI argument parser handles various edge cases:
+
+- **Leading/trailing spaces**: `"  setUp  "` → `["setUp"]`
+- **Empty values**: `"setUp,,beforeAll"` → `["setUp", "beforeAll"]`
+- **Only whitespace**: `"  "` → `[]` (ignored)
+- **Trailing commas**: `"setUp,beforeAll,"` → `["setUp", "beforeAll"]`
+- **Leading commas**: `",setUp,beforeAll"` → `["setUp", "beforeAll"]`
+- **Duplicate patterns**: `("setUp", "setUp")` → `["setUp"]` (deduplicated)
+
+#### Integration with Conversion Process
+
+Custom patterns are applied during the AST transformation phase:
+
+1. **Method Detection**: Uses configured patterns to identify setup/teardown/test methods
+2. **Parameter Removal**: Removes `self`/`cls` parameters based on method type detection
+3. **Fixture Conversion**: Converts setup/teardown methods to pytest fixtures
+4. **Reference Removal**: Removes `self.`/`cls.` references from converted methods
+
+This ensures that custom method patterns work seamlessly with all existing conversion features.
 
 ## Library API Usage
 

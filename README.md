@@ -8,6 +8,8 @@ A Python library and CLI tool for converting unittest-style tests to modern pyte
 - **Smart import handling**: Removes unittest imports and adds pytest imports when needed
 - **setUp/tearDown conversion**: Converts to pytest fixtures with proper decorators
 - **Class inheritance cleanup**: Removes unittest.TestCase inheritance
+- **Custom method patterns**: Configurable patterns for setup, teardown, and test methods
+- **CamelCase/Snake_case support**: Intelligent pattern matching across naming conventions
 - **Preserves formatting**: Uses libcst to maintain code style, comments, and whitespace
 - **CLI and library API**: Use as a command-line tool or import as a library
 - **Dry-run support**: Preview changes before applying them
@@ -69,6 +71,17 @@ splurge-convert --dry-run --recursive tests/
 
 # Convert to a different directory
 splurge-convert --output-dir converted_tests/ test_*.py
+
+# Use custom method patterns (comma-separated)
+splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+
+# Use custom method patterns (multiple flags)
+splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+
+# Configure all method types
+splurge-convert --setup-methods "setUp,beforeAll" \
+                --teardown-methods "tearDown,afterAll" \
+                --test-methods "test_,it_,spec_" test.py
 ```
 
 ### Python API
@@ -76,7 +89,7 @@ splurge-convert --output-dir converted_tests/ test_*.py
 ```python
 from splurge_unittest_to_pytest import convert_string, convert_file
 
-# Convert code string
+# Convert code string with default patterns
 unittest_code = """
 import unittest
 
@@ -89,11 +102,64 @@ class TestExample(unittest.TestCase):
 result = convert_string(unittest_code)
 print(result.converted_code)
 
+# Convert with custom method patterns
+result = convert_string(
+    unittest_code,
+    setup_patterns=["setUp", "beforeAll"],
+    teardown_patterns=["tearDown", "afterAll"],
+    test_patterns=["test_", "it_"]
+)
+
 # Convert file
 result = convert_file("test_example.py", "test_example_pytest.py")
 if result.has_changes:
     print("File converted successfully!")
+
+# Convert file with custom patterns
+result = convert_file(
+    "test_example.py", 
+    "test_example_pytest.py",
+    setup_patterns=["setUp", "beforeAll"],
+    teardown_patterns=["tearDown", "afterAll"],
+    test_patterns=["test_", "it_"]
+)
 ```
+
+## Custom Method Patterns
+
+Splurge supports configurable method name patterns for different testing frameworks and custom conventions. You can specify custom patterns for setup, teardown, and test methods.
+
+### Default Patterns
+
+By default, the converter recognizes these patterns:
+
+- **Setup methods**: `setUp`, `set_up`, `setup`, `setup_method`, `setUp_method`, `before_each`, `beforeEach`, `before_test`, `beforeTest`
+- **Teardown methods**: `tearDown`, `tear_down`, `teardown`, `teardown_method`, `tearDown_method`, `after_each`, `afterEach`, `after_test`, `afterTest`
+- **Test methods**: `test_`, `test`, `should_`, `when_`, `given_`, `it_`, `spec_`
+
+### Custom Patterns
+
+Use the CLI options to specify custom method patterns:
+
+```bash
+# Custom setup patterns for different frameworks
+splurge-convert --setup-methods "beforeEach,beforeAll,setup_class" test.js
+
+# Custom test patterns for BDD-style tests
+splurge-convert --test-methods "describe_,it_,context_" test.js
+
+# Mix and match patterns
+splurge-convert --setup-methods "setUp,beforeAll" \
+                --teardown-methods "tearDown,afterAll" \
+                --test-methods "test_,should_,it_" test.py
+```
+
+### Pattern Matching Features
+
+- **Case-insensitive**: `setUp` matches `setup`, `SETUP`, etc.
+- **CamelCase/Snake_case**: `beforeAll` matches `before_all` and vice versa
+- **Multiple patterns**: Separate with commas or use multiple flags
+- **Flexible syntax**: Supports both `pattern_` (prefix) and `pattern` (exact) matching
 
 ## Conversion Examples
 
