@@ -290,8 +290,10 @@ class TestExample(unittest.TestCase):
         
         assert result.has_changes
         assert "@pytest.fixture" in result.converted_code
-        assert "def setUp_fixture():" in result.converted_code
-        assert "def setUp(self):" not in result.converted_code
+        assert "def value():" in result.converted_code  # Should create fixture named after attribute
+        assert "def setUp_fixture():" not in result.converted_code  # Should not create old-style fixture
+        assert "autouse=True" not in result.converted_code  # Should not be autouse
+        assert "def test_something(value):" in result.converted_code  # Test should receive fixture as parameter
 
     def test_teardown_method_conversion(self) -> None:
         """Test tearDown method conversion to pytest fixture with yield."""
@@ -299,6 +301,9 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
+    def setUp(self):
+        self.value = 42
+        
     def tearDown(self):
         pass
     
@@ -308,9 +313,89 @@ class TestExample(unittest.TestCase):
         result = convert_string(unittest_code)
         
         assert result.has_changes
-        assert "@pytest.fixture(autouse=True)" in result.converted_code
-        assert "def tearDown_fixture():" in result.converted_code
-        assert "def tearDown(self):" not in result.converted_code
+        assert "@pytest.fixture" in result.converted_code
+        assert "def value():" in result.converted_code  # Should create fixture for setUp attribute
+        assert "def tearDown_fixture():" not in result.converted_code  # Should not create old-style fixture
+        assert "autouse=True" not in result.converted_code  # Should not be autouse
+        assert "def test_something(value):" in result.converted_code  # Test should receive fixture as parameter
+
+    def test_setup_teardown_fixture_integration(self) -> None:
+        """Test setUp/tearDown conversion to proper pytest fixtures with parameters."""
+        unittest_code = """
+import os
+import shutil
+import tempfile
+import unittest
+
+from splurge_sql_generator.schema_parser import SchemaParser
+
+
+class TestSchemaParser(unittest.TestCase):
+    def setUp(self):
+        self.parser = SchemaParser()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        
+    def test_load_sql_type_mapping_default(self):
+        yaml_content = "..."
+        yaml_file = os.path.join(self.temp_dir, "sql_type.yaml")
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+
+        parser_instance = SchemaParser(sql_type_mapping_file=yaml_file)
+        mapping = parser_instance._sql_type_mapping
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        
+        # Should create individual fixtures, not autouse fixtures
+        assert "@pytest.fixture" in result.converted_code
+        assert "autouse=True" not in result.converted_code  # Should not be autouse
+        
+        # Should create fixtures named after the attributes
+        assert "def parser():" in result.converted_code
+        assert "def temp_dir():" in result.converted_code
+        
+        # Should not create the old-style fixture names
+        assert "def setUp_fixture():" not in result.converted_code
+        assert "def tearDown_fixture():" not in result.converted_code
+        
+        # Test method should receive fixtures as parameters
+        assert "def test_load_sql_type_mapping_default(parser, temp_dir):" in result.converted_code
+        
+        # tearDown logic should be combined with temp_dir fixture using yield
+        assert "yield temp_dir" in result.converted_code or "yield" in result.converted_code
+
+    def test_teardown_triggers_yield_fixture_for_temp_dir(self) -> None:
+        """Ensure tearDown calling shutil.rmtree(self.temp_dir) produces a yield fixture."""
+        unittest_code = """
+import os
+import shutil
+import tempfile
+import unittest
+
+
+class TestExample(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_something(self):
+        assert True
+"""
+
+        result = convert_string(unittest_code)
+
+        assert result.has_changes
+        # Should create a fixture named temp_dir
+        assert "def temp_dir():" in result.converted_code
+        # Because tearDown removes the temp dir, fixture should use yield
+        assert "yield temp_dir" in result.converted_code or "yield" in result.converted_code
 
 
 class TestImportHandling:
@@ -374,7 +459,11 @@ class TestExample(unittest.TestCase):
         assert "import pytest" in result.converted_code
         assert "class TestExample():" in result.converted_code
         assert "@pytest.fixture" in result.converted_code
-        assert "def setUp_fixture():" in result.converted_code
+        assert "def value():" in result.converted_code
+        assert "yield 42" in result.converted_code
+        assert "value = None" in result.converted_code
+        assert "def test_addition(value):" in result.converted_code
+        assert "def test_boolean(value):" in result.converted_code
         assert "assert value + 1 == 43" in result.converted_code
         assert "assert value > 0" in result.converted_code
 
