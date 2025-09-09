@@ -460,9 +460,16 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def _assert_is_none(self, args: Sequence[cst.Arg]) -> cst.Assert:
         """Convert assertIsNone to assert ... is None."""
         if len(args) >= 1:
+            left_expr = args[0].value
+            # If the original argument is a literal, skip conversion to let linters
+            # handle the questionable usage (e.g., assertIsNone(1)).
+            # Skip conversion only for numeric or string literals; convert None name to 'is None'
+            if isinstance(left_expr, (cst.Integer, cst.Float, cst.SimpleString)):
+                return None
+
             return cst.Assert(
                 test=cst.Comparison(
-                    left=args[0].value,
+                    left=left_expr,
                     comparisons=[
                         cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))
                     ],
@@ -473,9 +480,11 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def _assert_is_not_none(self, args: Sequence[cst.Arg]) -> cst.Assert:
         """Convert assertIsNotNone to assert ... is not None."""
         if len(args) >= 1:
+            left_expr = args[0].value
+            # Convert to 'is not None' for all arguments
             return cst.Assert(
                 test=cst.Comparison(
-                    left=args[0].value,
+                    left=left_expr,
                     comparisons=[
                         cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))
                     ],
@@ -732,16 +741,21 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     ) -> cst.BaseSmallStatement | None:
         """Convert self.assertion() calls to pytest assertions."""
         try:
+            # First try to detect self.method(...) calls
             call_info = self._is_self_call(call_node)
-            if not call_info:
-                return None
-                
-            method_name, args = call_info
-            
-            if self._should_skip_assertion_conversion(method_name):
-                return None
-                
-            return self._convert_assertion(method_name, args)
+            if call_info:
+                method_name, args = call_info
+                if self._should_skip_assertion_conversion(method_name):
+                    return None
+                return self._convert_assertion(method_name, args)
+
+            # If SelfReferenceRemover ran earlier, the call may now be assertX(...)
+            # where func is a Name. Handle that as a fallback.
+            if isinstance(call_node.func, cst.Name):
+                method_name = call_node.func.value
+                if self._should_skip_assertion_conversion(method_name):
+                    return None
+                return self._convert_assertion(method_name, call_node.args)
         except Exception:
             return None
 
