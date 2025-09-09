@@ -1,6 +1,5 @@
 """Tests for the unittest to pytest converter."""
 
-import os
 import pytest
 from pathlib import Path
 

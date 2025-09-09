@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from splurge_unittest_to_pytest.cli import main

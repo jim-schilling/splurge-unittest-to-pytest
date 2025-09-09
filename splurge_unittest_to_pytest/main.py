@@ -7,7 +7,7 @@ from typing import Optional, Union
 import libcst as cst
 
 from .converter import UnittestToPytestTransformer
-from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, ParseError, PermissionDeniedError
+from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 
 
 @dataclass
