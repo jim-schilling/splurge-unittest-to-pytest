@@ -237,6 +237,18 @@ def test_negative_numbers(calc):
 - Adds `from pytest import *` when pytest features are used
 - Preserves other imports
 
+## Note on assertIsNone / assertIsNotNone with literals
+
+The converter transforms `self.assertIsNone(x)` into `assert x is None` and
+`self.assertIsNotNone(x)` into `assert x is not None`. If `x` is a literal
+value (for example an integer or string literal), Python may emit a
+SyntaxWarning like "is not with a literal" when running the converted code.
+This is a known limitation of performing the idiomatic `is`/`is not` conversion
+for literal operands; the conversion intentionally uses `is`/`is not` to match
+the semantic intent for `None` checks. If you prefer to avoid these warnings
+you can edit the converted assertions to use `== None` / `!= None` instead.
+
+
 ## CLI Options
 
 ```
