@@ -32,6 +32,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def __init__(self) -> None:
         """Initialize the transformer."""
         self.needs_pytest_import = False
+        self.has_unittest_content = False
         self.imports_to_remove: list[str] = []
         self.imports_to_add: list[str] = []
         
@@ -100,6 +101,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         try:
             if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
                 # Remove unittest imports
+                self.has_unittest_content = True
                 return cst.RemovalSentinel.REMOVE
             return updated_node
         except Exception:
@@ -114,6 +116,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             for alias in updated_node.names:
                 if m.matches(alias, m.ImportAlias(name=m.Name("unittest"))):
                     # Remove unittest imports
+                    self.has_unittest_content = True
                     return cst.RemovalSentinel.REMOVE
             return updated_node
         except Exception:
@@ -126,6 +129,11 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Remove unittest.TestCase inheritance and convert class structure."""
         try:
             if updated_node.bases:
+                # Check if any bases are unittest TestCase
+                has_unittest_base = any(self._is_unittest_testcase(base) for base in updated_node.bases)
+                if has_unittest_base:
+                    self.has_unittest_content = True
+                
                 # Filter out unittest.TestCase inheritance
                 new_bases = []
                 for base in updated_node.bases:
@@ -211,8 +219,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             elif self._is_teardown_method(method_name):
                 # Convert teardown method to pytest fixture with yield
                 return self._convert_teardown_to_fixture(updated_node)
-            elif self._is_test_method(method_name):
-                # Remove self/cls parameter from test methods and self references from body
+            elif self._is_test_method(method_name) and self.has_unittest_content:
+                # Only remove self/cls parameter from test methods if converting unittest content
                 new_params, new_body = self._remove_method_self_references(updated_node)
                 
                 return updated_node.with_changes(

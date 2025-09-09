@@ -1,6 +1,5 @@
 """Test the new configurable method pattern API."""
 
-import pytest
 from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
 
 

@@ -1,6 +1,5 @@
 """Test the flexible parameter handling for different method types."""
 
-import pytest
 from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
 
 
