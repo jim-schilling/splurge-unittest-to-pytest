@@ -290,8 +290,8 @@ class TestExample(unittest.TestCase):
         
         assert result.has_changes
         assert "@pytest.fixture" in result.converted_code
-        assert "def setup_fixture():" in result.converted_code
-        assert "setUp" not in result.converted_code
+        assert "def setUp_fixture():" in result.converted_code
+        assert "def setUp(self):" not in result.converted_code
 
     def test_teardown_method_conversion(self) -> None:
         """Test tearDown method conversion to pytest fixture with yield."""
@@ -309,8 +309,8 @@ class TestExample(unittest.TestCase):
         
         assert result.has_changes
         assert "@pytest.fixture(autouse=True)" in result.converted_code
-        assert "def teardown_fixture():" in result.converted_code
-        assert "tearDown" not in result.converted_code
+        assert "def tearDown_fixture():" in result.converted_code
+        assert "def tearDown(self):" not in result.converted_code
 
 
 class TestImportHandling:
@@ -374,7 +374,7 @@ class TestExample(unittest.TestCase):
         assert "import pytest" in result.converted_code
         assert "class TestExample():" in result.converted_code
         assert "@pytest.fixture" in result.converted_code
-        assert "def setup_fixture():" in result.converted_code
+        assert "def setUp_fixture():" in result.converted_code
         assert "assert value + 1 == 43" in result.converted_code
         assert "assert value > 0" in result.converted_code
 
