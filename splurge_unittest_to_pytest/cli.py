@@ -7,6 +7,13 @@ from typing import Optional
 import click
 
 from . import __version__
+from .exceptions import (
+    EncodingError,
+    FileNotFoundError as SplurgeFileNotFoundError,
+    ParseError,
+    PermissionDeniedError,
+    SplurgeError,
+)
 from .main import convert_file, find_unittest_files
 
 
@@ -141,41 +148,61 @@ def main(
             
             # Convert the file
             if dry_run:
-                from .main import convert_string
-                source_code = file_path.read_text(encoding=encoding)
-                result = convert_string(source_code)
-                
-                if result.has_changes:
-                    click.echo(f"Would convert: {file_path}")
-                    if verbose:
-                        click.echo("Changes would be made:")
-                        _show_diff_summary(result.original_code, result.converted_code)
-                else:
-                    if verbose:
-                        click.echo(f"No changes needed: {file_path}")
-                        
-                if result.errors:
-                    for error in result.errors:
-                        click.echo(f"Error in {file_path}: {error}", err=True)
+                try:
+                    from .main import convert_string
+                    source_code = file_path.read_text(encoding=encoding)
+                    result = convert_string(source_code)
+                    
+                    if result.has_changes:
+                        click.echo(f"Would convert: {file_path}")
+                        if verbose:
+                            click.echo("Changes would be made:")
+                            _show_diff_summary(result.original_code, result.converted_code)
+                    else:
+                        if verbose:
+                            click.echo(f"No changes needed: {file_path}")
+                            
+                    if result.errors:
+                        for error in result.errors:
+                            click.echo(f"Error in {file_path}: {error}", err=True)
+                        error_count += 1
+                    else:
+                        converted_count += 1
+                except (ParseError, EncodingError) as e:
+                    click.echo(f"Error processing {file_path}: {e}", err=True)
                     error_count += 1
-                else:
-                    converted_count += 1
+                except (SplurgeFileNotFoundError, PermissionDeniedError) as e:
+                    click.echo(f"File access error for {file_path}: {e}", err=True)
+                    error_count += 1
             else:
-                result = convert_file(file_path, output_path, encoding=encoding)
-                
-                if result.has_changes:
-                    click.echo(f"Converted: {file_path}")
-                    if verbose and output_path:
-                        click.echo(f"  -> {output_path}")
-                    converted_count += 1
-                elif verbose:
-                    click.echo(f"No changes needed: {file_path}")
-                
-                if result.errors:
-                    for error in result.errors:
-                        click.echo(f"Error in {file_path}: {error}", err=True)
+                try:
+                    result = convert_file(file_path, output_path, encoding=encoding)
+                    
+                    if result.has_changes:
+                        click.echo(f"Converted: {file_path}")
+                        if verbose and output_path:
+                            click.echo(f"  -> {output_path}")
+                        converted_count += 1
+                    elif verbose:
+                        click.echo(f"No changes needed: {file_path}")
+                    
+                    if result.errors:
+                        for error in result.errors:
+                            click.echo(f"Error in {file_path}: {error}", err=True)
+                        error_count += 1
+                except ParseError as e:
+                    click.echo(f"Parse error in {file_path}: {e}", err=True)
+                    error_count += 1
+                except (SplurgeFileNotFoundError, PermissionDeniedError) as e:
+                    click.echo(f"File access error for {file_path}: {e}", err=True)
+                    error_count += 1
+                except EncodingError as e:
+                    click.echo(f"Encoding error for {file_path}: {e}", err=True)
                     error_count += 1
                     
+        except SplurgeError as e:
+            click.echo(f"Error processing {file_path}: {e}", err=True)
+            error_count += 1
         except Exception as e:
             click.echo(f"Unexpected error processing {file_path}: {e}", err=True)
             error_count += 1

@@ -82,6 +82,7 @@ class TestExample(unittest.TestCase):
 
     def test_convert_nonexistent_file(self) -> None:
         """Test handling of nonexistent input file."""
+        from splurge_unittest_to_pytest.exceptions import FileNotFoundError
         with pytest.raises(FileNotFoundError):
             convert_file("nonexistent_file.py")
 
@@ -175,8 +176,10 @@ def test_something():
             temp_path.unlink()
 
     def test_is_unittest_file_nonexistent(self) -> None:
-        """Test that nonexistent files are not detected as unittest files."""
-        assert not is_unittest_file("nonexistent_file.py")
+        """Test that nonexistent files raise FileNotFoundError."""
+        from splurge_unittest_to_pytest.exceptions import FileNotFoundError
+        with pytest.raises(FileNotFoundError):
+            is_unittest_file("nonexistent_file.py")
 
 
 class TestDirectoryScanning:

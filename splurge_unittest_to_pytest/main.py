@@ -7,6 +7,7 @@ from typing import Optional, Union
 import libcst as cst
 
 from .converter import UnittestToPytestTransformer
+from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, ParseError, PermissionDeniedError
 
 
 @dataclass
@@ -21,15 +22,12 @@ class ConversionResult:
 
 def convert_string(source_code: str) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
-    
+
     Args:
         source_code: The original unittest test code as a string.
-        
+
     Returns:
         ConversionResult containing the converted code and metadata.
-        
-    Raises:
-        cst.ParserError: If the source code cannot be parsed.
     """
     errors = []
     
@@ -58,12 +56,10 @@ def convert_string(source_code: str) -> ConversionResult:
         errors.append(f"Failed to parse source code: {e}")
         return ConversionResult(
             original_code=source_code,
-            converted_code=source_code,
+            converted_code=source_code,  # Return original code unchanged
             has_changes=False,
             errors=errors,
         )
-
-
 def convert_file(
     input_path: Union[str, Path], 
     output_path: Optional[Union[str, Path]] = None,
@@ -81,7 +77,8 @@ def convert_file(
         
     Raises:
         FileNotFoundError: If the input file doesn't exist.
-        PermissionError: If there are file permission issues.
+        PermissionDeniedError: If there are file permission issues.
+        EncodingError: If there are file encoding issues.
     """
     input_path = Path(input_path)
     output_path = Path(output_path) if output_path else input_path
@@ -89,10 +86,12 @@ def convert_file(
     # Read the source file
     try:
         source_code = input_path.read_text(encoding=encoding)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Input file not found: {input_path}")
-    except PermissionError:
-        raise PermissionError(f"Permission denied reading file: {input_path}")
+    except FileNotFoundError as e:
+        raise SplurgeFileNotFoundError(f"Input file not found: {input_path}") from e
+    except PermissionError as e:
+        raise PermissionDeniedError(f"Permission denied reading file: {input_path}") from e
+    except UnicodeDecodeError as e:
+        raise EncodingError(f"Failed to decode file with encoding '{encoding}': {input_path}") from e
     
     # Convert the code
     result = convert_string(source_code)
@@ -103,7 +102,9 @@ def convert_file(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(result.converted_code, encoding=encoding)
         except PermissionError:
-            result.errors.append(f"Permission denied writing to: {output_path}")
+            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionError
+        except UnicodeEncodeError as e:
+            raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
     
     return result
 
@@ -116,11 +117,16 @@ def is_unittest_file(file_path: Union[str, Path]) -> bool:
         
     Returns:
         True if the file appears to contain unittest tests, False otherwise.
+        
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        PermissionDeniedError: If file permissions prevent reading.
+        EncodingError: If file encoding issues occur.
     """
     file_path = Path(file_path)
     
     if not file_path.exists():
-        return False
+        raise SplurgeFileNotFoundError(f"File not found: {file_path}")
     
     try:
         content = file_path.read_text(encoding="utf-8")
@@ -143,8 +149,10 @@ def is_unittest_file(file_path: Union[str, Path]) -> bool:
         
         return any(indicator in content for indicator in unittest_indicators)
         
-    except (UnicodeDecodeError, PermissionError):
-        return False
+    except PermissionError:
+        raise PermissionDeniedError(f"Permission denied reading file: {file_path}") from PermissionError
+    except UnicodeDecodeError as e:
+        raise EncodingError(f"Failed to decode file with UTF-8 encoding: {file_path}") from e
 
 
 def find_unittest_files(directory: Union[str, Path]) -> list[Path]:
