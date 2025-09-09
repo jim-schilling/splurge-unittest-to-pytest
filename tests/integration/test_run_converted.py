@@ -1,11 +1,8 @@
-import importlib.util
-import os
 import sys
-import tempfile
 from pathlib import Path
 import subprocess
 
-from splurge_unittest_to_pytest.main import convert_file, find_unittest_files
+from splurge_unittest_to_pytest.main import convert_file
 
 
 def _write_converted(src_path: Path, out_dir: Path) -> Path:
