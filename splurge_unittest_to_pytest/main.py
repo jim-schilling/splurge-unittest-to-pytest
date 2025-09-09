@@ -23,7 +23,8 @@ def convert_string(
     source_code: str,
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
-    test_patterns: list[str] | None = None
+    test_patterns: list[str] | None = None,
+    compat: bool = True,
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
@@ -41,10 +42,10 @@ def convert_string(
     try:
         # Parse the source code into a CST
         tree = cst.parse_module(source_code)
-        
+
         # Apply the transformation
-        transformer = UnittestToPytestTransformer()
-        
+        transformer = UnittestToPytestTransformer(compat=compat)
+
         # Apply custom patterns if provided
         if setup_patterns:
             for pattern in setup_patterns:
@@ -55,22 +56,22 @@ def convert_string(
         if test_patterns:
             for pattern in test_patterns:
                 transformer.add_test_pattern(pattern)
-        
+
         converted_tree = tree.visit(transformer)
-        
+
         # Generate the converted code
         converted_code = converted_tree.code
-        
+
         # Check if any changes were made
         has_changes = converted_code != source_code
-        
+
         return ConversionResult(
             original_code=source_code,
             converted_code=converted_code,
             has_changes=has_changes,
             errors=errors,
         )
-        
+
     except cst.ParserSyntaxError as e:
         errors.append(f"Failed to parse source code: {e}")
         return ConversionResult(
@@ -85,7 +86,8 @@ def convert_file(
     encoding: str = "utf-8",
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
-    test_patterns: list[str] | None = None
+    test_patterns: list[str] | None = None,
+    compat: bool = True,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
     
@@ -120,7 +122,8 @@ def convert_file(
         source_code,
         setup_patterns=setup_patterns,
         teardown_patterns=teardown_patterns,
-        test_patterns=test_patterns
+    test_patterns=test_patterns,
+    compat=compat,
     )
     
     # Write the converted code if there were changes and no errors
@@ -204,7 +207,40 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
     unittest_files = []
     
     for file_path in directory.rglob("*"):
-        if file_path.is_file() and is_unittest_file(file_path):
-            unittest_files.append(file_path)
+        # Skip __pycache__ directories early
+        try:
+            if "__pycache__" in file_path.parts:
+                continue
+        except Exception:
+            # Defensive: if Path.parts access fails for some reason, skip this path
+            continue
+
+        if not file_path.is_file():
+            continue
+
+        # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
+        try:
+            with file_path.open("r", encoding="utf-8") as fh:
+                _ = fh.read(1024)
+        except UnicodeDecodeError:
+            # Binary or non-UTF8 file; skip it
+            continue
+        except PermissionError:
+            # Can't read this file; skip it
+            continue
+        except FileNotFoundError:
+            # Race: file removed between rglob and read; skip
+            continue
+
+        # Now safely check for unittest content; is_unittest_file may still raise specific errors
+        try:
+            if is_unittest_file(file_path):
+                unittest_files.append(file_path)
+        except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
+            # Skip files that cannot be read or decoded
+            continue
+        except OSError:
+            # Any OS-level error (e.g., path issues) should not break discovery; skip and continue
+            continue
     
     return unittest_files

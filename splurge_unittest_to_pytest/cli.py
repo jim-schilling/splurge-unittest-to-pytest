@@ -100,6 +100,11 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
     multiple=True,
     help="Test method patterns (comma-separated or multiple flags)",
 )
+@click.option(
+    "--compat/--no-compat",
+    default=True,
+    help="Emit compatibility autouse fixture to attach fixtures to unittest-style test instances (default: --compat)",
+)
 def main(
     paths: tuple[Path, ...],
     output: Path | None,
@@ -111,6 +116,7 @@ def main(
     setup_methods: tuple[str, ...],
     teardown_methods: tuple[str, ...],
     test_methods: tuple[str, ...],
+    compat: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
     
@@ -226,7 +232,8 @@ def main(
                         source_code,
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
-                        test_patterns=test_patterns
+                        test_patterns=test_patterns,
+                        compat=compat,
                     )
                     
                     if result.has_changes:
@@ -258,7 +265,8 @@ def main(
                         encoding=encoding,
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
-                        test_patterns=test_patterns
+                        test_patterns=test_patterns,
+                        compat=compat,
                     )
                     
                     if result.has_changes:

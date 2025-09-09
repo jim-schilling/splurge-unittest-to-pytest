@@ -212,6 +212,43 @@ splurge-unittest-to-pytest --verbose --recursive tests/
 splurge-unittest-to-pytest --backup backups/ test_*.py
 ```
 
+### Compatibility and Discovery Notes
+
+- --compat / --no-compat
+   - The CLI exposes a `--compat` flag (default) which emits a small autouse fixture that
+      attaches generated fixtures to the original unittest-style `self` test instance where
+      applicable. This preserves code that referenced `self.<name>` inside tests after
+      conversion. Use `--no-compat` to disable this behavior if you prefer pure pytest idioms
+      and to avoid emitting the compatibility glue.
+
+- Backups
+   - Use `--backup <dir>` to create a copy of each file before it is modified. Backups are
+      saved as `<filename>.bak` in the provided directory. Backups are not created during
+      `--dry-run`.
+
+- Discovery robustness
+   - The converter will skip `__pycache__` directories during recursive discovery and will
+      treat unreadable files (encoding/permission errors) as non-unittest files so that
+      discovery continues. Any files skipped for access reasons will be reported when `--verbose`
+      is used or in the CLI summary.
+
+### Troubleshooting
+
+- No changes detected
+   - If the tool reports "No changes needed" the source file either contains no unittest
+      constructs the converter recognizes, or conversion was intentionally disabled via
+      `--no-compat` or custom method patterns. Try a dry-run with `--verbose` to see more
+      diagnostic information.
+
+- Files skipped during discovery
+   - If a directory appears to be skipped, ensure you are using `--recursive` and that
+      file permissions allow reading. `__pycache__` directories are ignored by design.
+
+- Unexpected errors during conversion
+   - Run the converter with `--dry-run --verbose` to see parse and transformation errors.
+   - If you discover a transformation bug, please open an issue and include the minimal
+      test file that reproduces the problem; see `docs/issue-u2p.md` for existing reports.
+
 ### Custom Method Patterns
 
 Splurge supports configurable method name patterns to accommodate different testing frameworks and custom conventions. This feature allows you to specify custom patterns for setup, teardown, and test methods.

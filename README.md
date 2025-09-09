@@ -71,6 +71,14 @@ splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" \
                 --test-methods "test_,it_,spec_" test.py
 ```
 
+#### Compatibility and discovery options
+
+- `--compat/--no-compat` (default: `--compat`) — When enabled, the converter emits a small autouse fixture (`_attach_to_instance`) that attaches generated fixtures to `request.instance`, preserving `self.<attr>` access in converted class-based tests. Disable with `--no-compat` if you prefer explicit fixture-only conversions.
+- Discovery robustness — the converter will skip `__pycache__` directories and gracefully ignore unreadable or binary files during recursive discovery to avoid UnicodeDecodeError or permission errors when scanning large projects.
+
+- Backups — Use `--backup <dir>` to create a copy of each file before it is modified. Backups are saved as `<filename>.bak` in the provided directory. Backups are not created during `--dry-run`.
+
+
 ### Python API
 
 ```python
