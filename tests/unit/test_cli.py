@@ -166,7 +166,192 @@ class TestExample(unittest.TestCase):
                 input_path.unlink()
 
 
-class TestCLIDirectoryHandling:
+    def test_cli_backup_basic(self) -> None:
+        """Test CLI backup functionality with long option."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertTrue(True)
+"""
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(unittest_code)
+            input_path = Path(f.name)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = Path(temp_dir) / "backups"
+
+            try:
+                runner = CliRunner()
+                result = runner.invoke(main, ["--backup", str(backup_dir), str(input_path)])
+
+                assert result.exit_code == 0
+                assert f"Converted: {input_path}" in result.output
+
+                # Check that backup file was created
+                backup_path = backup_dir / f"{input_path.name}.bak"
+                assert backup_path.exists()
+
+                # Check backup content matches original
+                backup_content = backup_path.read_text()
+                assert backup_content == unittest_code
+
+                # Check that input file was converted
+                converted_content = input_path.read_text()
+                assert "assert True" in converted_content
+                assert "assertEqual" not in converted_content
+
+            finally:
+                input_path.unlink()
+
+    def test_cli_backup_short_option(self) -> None:
+        """Test CLI backup functionality with short option."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertEqual(1, 1)
+"""
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(unittest_code)
+            input_path = Path(f.name)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = Path(temp_dir) / "backups"
+
+            try:
+                runner = CliRunner()
+                result = runner.invoke(main, ["-b", str(backup_dir), str(input_path)])
+
+                assert result.exit_code == 0
+                assert f"Converted: {input_path}" in result.output
+
+                # Check that backup file was created
+                backup_path = backup_dir / f"{input_path.name}.bak"
+                assert backup_path.exists()
+
+                # Check backup content matches original
+                backup_content = backup_path.read_text()
+                assert backup_content == unittest_code
+
+            finally:
+                input_path.unlink()
+
+    def test_cli_backup_with_verbose(self) -> None:
+        """Test CLI backup functionality with verbose output."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertTrue(True)
+"""
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(unittest_code)
+            input_path = Path(f.name)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = Path(temp_dir) / "backups"
+
+            try:
+                runner = CliRunner()
+                result = runner.invoke(main, ["--backup", str(backup_dir), "--verbose", str(input_path)])
+
+                assert result.exit_code == 0
+                assert f"Processing: {input_path}" in result.output
+                assert f"Backup created: {backup_dir / input_path.name}.bak" in result.output
+                assert f"Converted: {input_path}" in result.output
+
+            finally:
+                input_path.unlink()
+
+    def test_cli_backup_with_output_directory(self) -> None:
+        """Test CLI backup functionality combined with output directory."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertEqual(1, 1)
+"""
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(unittest_code)
+            input_path = Path(f.name)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            backup_dir = temp_path / "backups"
+            output_dir = temp_path / "output"
+
+            try:
+                runner = CliRunner()
+                result = runner.invoke(main, [
+                    "--backup", str(backup_dir),
+                    "--output", str(output_dir),
+                    str(input_path)
+                ])
+
+                assert result.exit_code == 0
+                assert f"Converted: {input_path}" in result.output
+
+                # Check that backup file was created
+                backup_path = backup_dir / f"{input_path.name}.bak"
+                assert backup_path.exists()
+
+                # Check that output file was created
+                output_path = output_dir / input_path.name
+                assert output_path.exists()
+
+                # Check that input file is unchanged
+                original_content = input_path.read_text()
+                assert original_content == unittest_code
+
+                # Check that output file is converted
+                converted_content = output_path.read_text()
+                assert "assert 1 == 1" in converted_content
+
+            finally:
+                input_path.unlink()
+
+    def test_cli_backup_dry_run_no_backup_created(self) -> None:
+        """Test that backup is not created during dry run."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertTrue(True)
+"""
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(unittest_code)
+            input_path = Path(f.name)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = Path(temp_dir) / "backups"
+
+            try:
+                runner = CliRunner()
+                result = runner.invoke(main, ["--backup", str(backup_dir), "--dry-run", str(input_path)])
+
+                assert result.exit_code == 0
+                assert f"Would convert: {input_path}" in result.output
+
+                # Check that backup directory is not created during dry run
+                assert not backup_dir.exists()
+
+                # Check that input file is unchanged
+                original_content = input_path.read_text()
+                assert original_content == unittest_code
+
+            finally:
+                input_path.unlink()
     """Test CLI directory handling functionality."""
 
     def test_cli_recursive_directory(self) -> None:

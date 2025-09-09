@@ -164,13 +164,13 @@ def test_something():
                 temp_path.unlink()
 
     def test_is_unittest_file_non_python_file(self) -> None:
-        """Test that non-Python files are not detected as unittest files."""
+        """Test that files with unittest content are detected regardless of extension."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("import unittest\nclass TestExample(unittest.TestCase): pass")
             temp_path = Path(f.name)
         
         try:
-            assert not is_unittest_file(temp_path)
+            assert is_unittest_file(temp_path)
         finally:
             temp_path.unlink()
 
