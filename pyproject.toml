@@ -44,7 +44,7 @@ Repository = "https://github.com/jim-schilling/splurge-unittest-to-pytest"
 Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 
 [project.scripts]
-splurge-convert = "splurge_unittest_to_pytest.cli:main"
+splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,5 +1,13 @@
 # Splurge unittest-to-pytest
 
+[![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-139%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Coverage](https://img.shields.io/badge/coverage-82%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
+
 A Python library and CLI tool for converting unittest-style tests to modern pytest-style tests using libcst.
 
 ## ✨ Features
@@ -37,49 +45,28 @@ pip install -e ".[dev]"
 
 ```bash
 # Convert a single file
-splurge-convert test_example.py
+splurge-unittest-to-pytest test_example.py
 
 # Convert multiple files
-splurge-convert test_*.py
+splurge-unittest-to-pytest test_*.py
 
 # Convert all unittest files in a directory recursively
-splurge-convert --recursive tests/
+splurge-unittest-to-pytest --recursive tests/
 
 # Dry run to preview changes
-splurge-convert --dry-run --recursive tests/
+splurge-unittest-to-pytest --dry-run --recursive tests/
 
 # Convert to a different directory
-splurge-convert --output-dir converted_tests/ test_*.py
-```
-
-## Quick Start
-
-### Command Line
-
-```bash
-# Convert a single file
-splurge-convert test_example.py
-
-# Convert multiple files
-splurge-convert test_*.py
-
-# Convert all unittest files in a directory recursively
-splurge-convert --recursive tests/
-
-# Dry run to preview changes
-splurge-convert --dry-run --recursive tests/
-
-# Convert to a different directory
-splurge-convert --output-dir converted_tests/ test_*.py
+splurge-unittest-to-pytest --output-dir converted_tests/ test_*.py
 
 # Use custom method patterns (comma-separated)
-splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+splurge-unittest-to-pytest --setup-methods "setUp,beforeAll,setup_class" test.py
 
 # Use custom method patterns (multiple flags)
-splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+splurge-unittest-to-pytest --setup-methods setUp --setup-methods beforeAll test.py
 
 # Configure all method types
-splurge-convert --setup-methods "setUp,beforeAll" \
+splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" \
                 --teardown-methods "tearDown,afterAll" \
                 --test-methods "test_,it_,spec_" test.py
 ```
@@ -143,13 +130,13 @@ Use the CLI options to specify custom method patterns:
 
 ```bash
 # Custom setup patterns for different frameworks
-splurge-convert --setup-methods "beforeEach,beforeAll,setup_class" test.js
+splurge-unittest-to-pytest --setup-methods "beforeEach,beforeAll,setup_class" test.js
 
 # Custom test patterns for BDD-style tests
-splurge-convert --test-methods "describe_,it_,context_" test.js
+splurge-unittest-to-pytest --test-methods "describe_,it_,context_" test.js
 
 # Mix and match patterns
-splurge-convert --setup-methods "setUp,beforeAll" \
+splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" \
                 --teardown-methods "tearDown,afterAll" \
                 --test-methods "test_,should_,it_" test.py
 ```
@@ -253,7 +240,7 @@ def test_negative_numbers(calc):
 ## CLI Options
 
 ```
-Usage: splurge-convert [OPTIONS] [PATHS]...
+Usage: splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 
   Convert unittest-style tests to pytest-style tests.
 

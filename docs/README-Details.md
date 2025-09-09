@@ -185,31 +185,31 @@ pytest -k "test_convert"
 ### Basic Usage
 ```bash
 # Convert single file
-splurge-convert test_example.py
+splurge-unittest-to-pytest test_example.py
 
 # Convert multiple files
-splurge-convert test_*.py
+splurge-unittest-to-pytest test_*.py
 
 # Recursive directory conversion
-splurge-convert --recursive tests/
+splurge-unittest-to-pytest --recursive tests/
 ```
 
 ### Advanced Options
 ```bash
 # Dry run to preview changes
-splurge-convert --dry-run --recursive tests/
+splurge-unittest-to-pytest --dry-run --recursive tests/
 
 # Convert to different directory
-splurge-convert --output-dir converted/ test_*.py
+splurge-unittest-to-pytest --output-dir converted/ test_*.py
 
 # Specify encoding
-splurge-convert --encoding utf-8 test_file.py
+splurge-unittest-to-pytest --encoding utf-8 test_file.py
 
 # Verbose output
-splurge-convert --verbose --recursive tests/
+splurge-unittest-to-pytest --verbose --recursive tests/
 
 # Create backups before conversion
-splurge-convert --backup backups/ test_*.py
+splurge-unittest-to-pytest --backup backups/ test_*.py
 ```
 
 ### Custom Method Patterns
@@ -237,13 +237,13 @@ Use the following CLI options to specify custom method patterns:
 
 ```bash
 # Comma-separated patterns
-splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+splurge-unittest-to-pytest --setup-methods "setUp,beforeAll,setup_class" test.py
 
 # Multiple flag usage
-splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+splurge-unittest-to-pytest --setup-methods setUp --setup-methods beforeAll test.py
 
 # Configure all method types
-splurge-convert --setup-methods "setUp,beforeAll" \
+splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" \
                 --teardown-methods "tearDown,afterAll" \
                 --test-methods "test_,it_,spec_" test.py
 ```
@@ -260,17 +260,17 @@ splurge-convert --setup-methods "setUp,beforeAll" \
 
 ```bash
 # JavaScript testing frameworks
-splurge-convert --setup-methods "beforeEach,beforeAll" \
+splurge-unittest-to-pytest --setup-methods "beforeEach,beforeAll" \
                 --teardown-methods "afterEach,afterAll" \
                 --test-methods "describe_,it_,context_" test.js
 
 # Ruby RSpec style
-splurge-convert --setup-methods "before,before_each" \
+splurge-unittest-to-pytest --setup-methods "before,before_each" \
                 --teardown-methods "after,after_each" \
                 --test-methods "describe_,it_,context_" test.rb
 
 # Custom framework patterns
-splurge-convert --setup-methods "my_setup,custom_setup" \
+splurge-unittest-to-pytest --setup-methods "my_setup,custom_setup" \
                 --teardown-methods "my_teardown,custom_teardown" \
                 --test-methods "spec_,feature_,scenario_" test.py
 ```

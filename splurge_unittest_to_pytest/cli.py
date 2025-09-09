@@ -120,34 +120,34 @@ def main(
     Examples:
     
         # Convert a single file
-        splurge-convert test_example.py
+        splurge-unittest-to-pytest test_example.py
         
         # Convert files with any extension
-        splurge-convert test_example.txt test_example.md
+        splurge-unittest-to-pytest test_example.txt test_example.md
         
         # Convert multiple files  
-        splurge-convert test_*.py
+        splurge-unittest-to-pytest test_*.py
         
         # Convert all unittest files in a directory
-        splurge-convert --recursive tests/
+        splurge-unittest-to-pytest --recursive tests/
         
         # Dry run to see what would be changed
-        splurge-convert --dry-run --recursive tests/
+        splurge-unittest-to-pytest --dry-run --recursive tests/
         
         # Convert to a different directory
-        splurge-convert --output converted_tests/ test_*.py
+        splurge-unittest-to-pytest --output converted_tests/ test_*.py
         
         # Create backups before conversion
-        splurge-convert --backup backups/ test_*.py
+        splurge-unittest-to-pytest --backup backups/ test_*.py
         
         # Use custom method patterns (comma-separated)
-        splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+        splurge-unittest-to-pytest --setup-methods "setUp,beforeAll,setup_class" test.py
         
         # Use custom method patterns (multiple flags)
-        splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+        splurge-unittest-to-pytest --setup-methods setUp --setup-methods beforeAll test.py
         
         # Configure all method types
-        splurge-convert --setup-methods "setUp,beforeAll" --teardown-methods "tearDown,afterAll" --test-methods "test_,it_,spec_" test.py
+        splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" --teardown-methods "tearDown,afterAll" --test-methods "test_,it_,spec_" test.py
     """
     if not paths:
         click.echo("Error: No paths provided", err=True)
