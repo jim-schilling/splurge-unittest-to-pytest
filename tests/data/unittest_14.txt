@@ -1,0 +1,13 @@
+import unittest
+
+class TestComplexSetup(unittest.TestCase):
+    def setUp(self):
+        self.data = {"key": "value"}
+        self.numbers = [1, 2, 3]
+    
+    def tearDown(self):
+        self.data = None
+    
+    def test_complex(self):
+        self.assertIn("key", self.data)
+        self.assertEqual(len(self.numbers), 3)

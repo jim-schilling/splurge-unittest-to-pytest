@@ -1,0 +1,10 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.class_var = "test"
+
+def test_pytest_class_var():
+    assert True

@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_in(self):
+        self.assertIn(1, [1, 2, 3])
+
+def test_pytest_in():
+    assert 1 in [1, 2, 3]

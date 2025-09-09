@@ -1,0 +1,19 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def setUp(self):
+        self.data = [1, 2, 3]
+    
+    def tearDown(self):
+        self.data = None
+    
+    def test_unittest_with_setup(self):
+        self.assertIn(1, self.data)
+
+@pytest.fixture
+def data_fixture():
+    return [1, 2, 3]
+
+def test_pytest_with_fixture(data_fixture):
+    assert 1 in data_fixture

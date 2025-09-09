@@ -1,0 +1,6 @@
+import unittest
+
+class TestAssertRaisesRegex(unittest.TestCase):
+    def test_raises_regex(self):
+        with self.assertRaisesRegex(ValueError, "test"):
+            raise ValueError("test message")

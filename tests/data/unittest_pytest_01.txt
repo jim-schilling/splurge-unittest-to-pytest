@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_unittest_method(self):
+        self.assertEqual(1 + 1, 2)
+
+def test_pytest_function():
+    assert 2 + 2 == 4

@@ -1,0 +1,11 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_raises_regex(self):
+        with self.assertRaisesRegex(ValueError, "test"):
+            raise ValueError("test message")
+
+def test_pytest_raises_regex():
+    with pytest.raises(ValueError, match="test"):
+        raise ValueError("test message")

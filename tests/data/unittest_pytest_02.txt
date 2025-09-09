@@ -1,0 +1,16 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def setUp(self):
+        self.value = 42
+    
+    def test_unittest_method(self):
+        self.assertEqual(self.value, 42)
+
+@pytest.fixture
+def sample_fixture():
+    return {"key": "value"}
+
+def test_pytest_with_fixture(sample_fixture):
+    assert sample_fixture["key"] == "value"

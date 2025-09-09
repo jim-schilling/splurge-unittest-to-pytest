@@ -1,0 +1,17 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def tearDown(self):
+        pass
+    
+    def test_with_teardown(self):
+        self.assertTrue(True)
+
+@pytest.fixture
+def teardown_fixture():
+    yield
+    # teardown code
+
+def test_with_teardown_fixture(teardown_fixture):
+    assert True

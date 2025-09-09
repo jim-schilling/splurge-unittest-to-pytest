@@ -1,0 +1,12 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_subtest(self):
+        for i in range(2):
+            with self.subTest(i=i):
+                self.assertEqual(i, i)
+
+@pytest.mark.parametrize("i", [0, 1])
+def test_pytest_parametrize(i):
+    assert i == i

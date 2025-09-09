@@ -1,0 +1,8 @@
+import unittest
+
+class TestWithTeardown(unittest.TestCase):
+    def tearDown(self):
+        pass
+    
+    def test_something(self):
+        self.assertTrue(True)

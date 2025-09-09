@@ -1,0 +1,13 @@
+import unittest
+
+class TestClassMethods(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.class_value = 100
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.class_value = None
+    
+    def test_class_value(self):
+        self.assertEqual(self.class_value, 100)

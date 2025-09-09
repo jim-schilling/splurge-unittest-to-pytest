@@ -1,0 +1,6 @@
+import unittest
+
+class TestWithImports(unittest.TestCase):
+    def test_with_math(self):
+        import math
+        self.assertEqual(math.sqrt(4), 2)

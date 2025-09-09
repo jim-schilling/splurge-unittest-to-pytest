@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_is_instance(self):
+        self.assertIsInstance(1, int)
+
+def test_pytest_isinstance():
+    assert isinstance(1, int)

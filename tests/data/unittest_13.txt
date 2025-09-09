@@ -1,0 +1,9 @@
+import unittest
+
+class TestMultipleClasses(unittest.TestCase):
+    def test_first_class(self):
+        self.assertTrue(True)
+
+class TestSecondClass(unittest.TestCase):
+    def test_second_class(self):
+        self.assertFalse(False)

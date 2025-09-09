@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_is_not_none(self):
+        self.assertIsNotNone(1)
+
+def test_pytest_is_not_none():
+    assert 1 is not None

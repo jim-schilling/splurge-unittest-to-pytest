@@ -1,0 +1,14 @@
+import unittest
+import pytest
+
+class BaseUnittest(unittest.TestCase):
+    def setUp(self):
+        self.base = True
+
+class TestDerived(BaseUnittest):
+    def test_derived(self):
+        self.assertTrue(self.base)
+
+class TestPytest:
+    def test_pytest_class_method(self):
+        assert True

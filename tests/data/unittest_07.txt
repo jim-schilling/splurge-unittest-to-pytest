@@ -1,0 +1,14 @@
+import unittest
+
+class TestComparisonAssertions(unittest.TestCase):
+    def test_greater(self):
+        self.assertGreater(2, 1)
+    
+    def test_greater_equal(self):
+        self.assertGreaterEqual(2, 2)
+    
+    def test_less(self):
+        self.assertLess(1, 2)
+    
+    def test_less_equal(self):
+        self.assertLessEqual(2, 2)

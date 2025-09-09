@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_false(self):
+        self.assertFalse(False)
+
+def test_pytest_assert_false():
+    assert not False
