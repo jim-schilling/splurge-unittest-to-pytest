@@ -150,19 +150,17 @@ def test_something():
         with pytest.raises(FileNotFoundError):
             is_unittest_file("nonexistent_file.py")
 
-    def test_convert_file_permission_error_reading(self, tmp_path: Path) -> None:
+    def test_convert_file_permission_error_reading(self, tmp_path: Path, mocker) -> None:
         """Test handling of permission errors when reading files."""
-        import unittest.mock
-
         # Create a temporary file and mock the read_text method to raise PermissionError
         temp_file = tmp_path / "test_permission.py"
         temp_file.write_text("import unittest\nclass Test(unittest.TestCase): pass")
 
         # Mock Path.read_text to raise PermissionError
-        with unittest.mock.patch.object(Path, 'read_text', side_effect=PermissionError("Permission denied")):
-            from splurge_unittest_to_pytest.exceptions import PermissionDeniedError
-            with pytest.raises(PermissionDeniedError):
-                convert_file(temp_file)
+        mocker.patch.object(Path, 'read_text', side_effect=PermissionError("Permission denied"))
+        from splurge_unittest_to_pytest.exceptions import PermissionDeniedError
+        with pytest.raises(PermissionDeniedError):
+            convert_file(temp_file)
 
     def test_convert_file_encoding_error(self, tmp_path: Path) -> None:
         """Test handling of encoding errors when reading files."""
@@ -175,19 +173,17 @@ def test_something():
         with pytest.raises(EncodingError):
             convert_file(temp_file)
 
-    def test_is_unittest_file_permission_error(self, tmp_path: Path) -> None:
+    def test_is_unittest_file_permission_error(self, tmp_path: Path, mocker) -> None:
         """Test handling of permission errors in is_unittest_file."""
-        import unittest.mock
-
         # Create a temporary file and mock the read_text method to raise PermissionError
         temp_file = tmp_path / "test_permission.py"
         temp_file.write_text("import unittest\nclass Test(unittest.TestCase): pass")
 
         # Mock Path.read_text to raise PermissionError
-        with unittest.mock.patch.object(Path, 'read_text', side_effect=PermissionError("Permission denied")):
-            from splurge_unittest_to_pytest.exceptions import PermissionDeniedError
-            with pytest.raises(PermissionDeniedError):
-                is_unittest_file(temp_file)
+        mocker.patch.object(Path, 'read_text', side_effect=PermissionError("Permission denied"))
+        from splurge_unittest_to_pytest.exceptions import PermissionDeniedError
+        with pytest.raises(PermissionDeniedError):
+            is_unittest_file(temp_file)
 
     def test_is_unittest_file_encoding_error(self, tmp_path: Path) -> None:
         """Test handling of encoding errors in is_unittest_file."""

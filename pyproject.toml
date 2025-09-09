@@ -33,16 +33,15 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
+    "pytest-mock>=3.10.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/splurge-unittest-to-pytest"
-Repository = "https://github.com/yourusername/splurge-unittest-to-pytest"
-Issues = "https://github.com/yourusername/splurge-unittest-to-pytest/issues"
+Homepage = "https://github.com/jim-schilling/splurge-unittest-to-pytest"
+Repository = "https://github.com/jim-schilling/splurge-unittest-to-pytest"
+Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 
 [project.scripts]
 splurge-convert = "splurge_unittest_to_pytest.cli:main"
@@ -52,14 +51,6 @@ where = ["splurge_unittest_to_pytest"]
 
 [tool.setuptools.package-dir]
 "" = "splurge_unittest_to_pytest"
-
-[tool.black]
-line-length = 120
-target-version = ['py310', 'py311', 'py312']
-
-[tool.isort]
-profile = "black"
-line_length = 120
 
 [tool.mypy]
 python_version = "3.10"
@@ -77,3 +68,4 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=splurge_unittest_to_pytest --cov-report=term-missing"
+pythonpath = ["."]

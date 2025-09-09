@@ -557,10 +557,8 @@ class TestExample(unittest.TestCase
         assert f"Error in {temp_file}:" in result.output
         assert "1 files had errors" in result.output
 
-    def test_cli_backup_creation_failure(self, tmp_path: Path) -> None:
+    def test_cli_backup_creation_failure(self, tmp_path: Path, mocker) -> None:
         """Test CLI behavior when backup creation fails."""
-        import unittest.mock
-        
         unittest_code = """
 import unittest
 
@@ -575,9 +573,9 @@ class TestExample(unittest.TestCase):
         backup_dir = tmp_path / "backups"
         
         # Mock shutil.copy2 to raise an exception
-        with unittest.mock.patch('shutil.copy2', side_effect=Exception("Mock backup failure")):
-            runner = CliRunner()
-            result = runner.invoke(main, ["--backup", str(backup_dir), str(input_file)])
+        mocker.patch('shutil.copy2', side_effect=Exception("Mock backup failure"))
+        runner = CliRunner()
+        result = runner.invoke(main, ["--backup", str(backup_dir), str(input_file)])
         
         # Should still succeed but with warning
         assert result.exit_code == 0
