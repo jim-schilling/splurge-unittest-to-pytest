@@ -1,0 +1,105 @@
+import unittest
+import sqlite3
+import os
+from contextlib import contextmanager
+
+class DatabaseTestCase(unittest.TestCase):
+    """Test case with database setup and teardown."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Class-level setup for database initialization."""
+        cls.db_path = ':memory:'  # Use in-memory database for tests
+        cls.connection = sqlite3.connect(cls.db_path)
+        cls.cursor = cls.connection.cursor()
+
+        # Create test tables
+        cls.cursor.execute('''
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                email TEXT UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cls.cursor.execute('''
+            CREATE TABLE orders (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                amount REAL,
+                status TEXT DEFAULT 'pending',
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
+        # Insert test data
+        cls.cursor.executemany('''
+            INSERT INTO users (username, email) VALUES (?, ?)
+        ''', [
+            ('alice', 'alice@example.com'),
+            ('bob', 'bob@example.com'),
+            ('charlie', 'charlie@example.com')
+        ])
+
+        cls.connection.commit()
+        cls.class_setup_complete = True
+
+    @classmethod
+    def tearDownClass(cls):
+        """Class-level teardown for database cleanup."""
+        if hasattr(cls, 'cursor'):
+            cls.cursor.close()
+        if hasattr(cls, 'connection'):
+            cls.connection.close()
+        cls.class_teardown_complete = True
+
+    def setUp(self):
+        """Instance setup for each test."""
+        # Start transaction for each test
+        self.connection.execute('BEGIN TRANSACTION')
+        self.test_data = {
+            'user_count': self.cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0],
+            'initial_orders': 0
+        }
+
+    def tearDown(self):
+        """Instance teardown to rollback changes."""
+        # Rollback any changes made during the test
+        self.connection.rollback()
+
+    def test_user_creation(self):
+        """Test creating a new user."""
+        self.cursor.execute('''
+            INSERT INTO users (username, email) VALUES (?, ?)
+        ''', ('diana', 'diana@example.com'))
+
+        count = self.cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        self.assertEqual(count, self.test_data['user_count'] + 1)
+
+    def test_order_creation(self):
+        """Test creating an order."""
+        # Get a user ID
+        user_id = self.cursor.execute('SELECT id FROM users LIMIT 1').fetchone()[0]
+
+        self.cursor.execute('''
+            INSERT INTO orders (user_id, amount, status) VALUES (?, ?, ?)
+        ''', (user_id, 99.99, 'completed'))
+
+        order_count = self.cursor.execute('SELECT COUNT(*) FROM orders').fetchone()[0]
+        self.assertEqual(order_count, 1)
+
+    def test_database_constraints(self):
+        """Test database constraints and relationships."""
+        # Try to create user with duplicate email
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.cursor.execute('''
+                INSERT INTO users (username, email) VALUES (?, ?)
+            ''', ('duplicate', 'alice@example.com'))
+
+        # Test foreign key constraint
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.cursor.execute('''
+                INSERT INTO orders (user_id, amount) VALUES (?, ?)
+            ''', (999, 50.00))  # Non-existent user_id
+

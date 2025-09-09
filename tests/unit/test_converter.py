@@ -290,7 +290,7 @@ class TestExample(unittest.TestCase):
         
         assert result.has_changes
         assert "@pytest.fixture" in result.converted_code
-        assert "def setup_method(self):" in result.converted_code
+        assert "def setup_fixture():" in result.converted_code
         assert "setUp" not in result.converted_code
 
     def test_teardown_method_conversion(self) -> None:
@@ -308,8 +308,8 @@ class TestExample(unittest.TestCase):
         result = convert_string(unittest_code)
         
         assert result.has_changes
-        assert "@pytest.fixture(autouse = True)" in result.converted_code
-        assert "def teardown_method(self):" in result.converted_code
+        assert "@pytest.fixture(autouse=True)" in result.converted_code
+        assert "def teardown_fixture():" in result.converted_code
         assert "tearDown" not in result.converted_code
 
 
@@ -374,9 +374,9 @@ class TestExample(unittest.TestCase):
         assert "import pytest" in result.converted_code
         assert "class TestExample():" in result.converted_code
         assert "@pytest.fixture" in result.converted_code
-        assert "def setup_method(self):" in result.converted_code
-        assert "assert self.value + 1 == 43" in result.converted_code
-        assert "assert self.value > 0" in result.converted_code
+        assert "def setup_fixture():" in result.converted_code
+        assert "assert value + 1 == 43" in result.converted_code
+        assert "assert value > 0" in result.converted_code
 
     def test_no_changes_needed(self) -> None:
         """Test that pure pytest code is left unchanged."""
@@ -441,7 +441,7 @@ class TestExample(unittest.TestCase
 class TestExampleFiles:
     """Test conversion of example unittest files to ensure they compile after conversion."""
 
-    @pytest.mark.parametrize("filename", [f"unittest_{i:02d}.txt" for i in range(1, 26)])
+    @pytest.mark.parametrize("filename", [f"unittest_{i:02d}.txt" for i in range(1, 31)])
     def test_conversion_compiles(self, filename: str, tmp_path: Path) -> None:
         """Test that converted code from example files compiles without syntax errors."""
         # Read the example file

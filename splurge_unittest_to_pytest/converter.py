@@ -8,6 +8,17 @@ from libcst._flatten_sentinel import FlattenSentinel
 from libcst._removal_sentinel import RemovalSentinel
 
 
+class SelfReferenceRemover(cst.CSTTransformer):
+    """Remove self references from attribute accesses."""
+
+    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.Attribute | cst.Name:
+        """Convert self.attribute to just attribute."""
+        if m.matches(updated_node.value, m.Name("self")):
+            # Replace self.attribute with just attribute
+            return updated_node.attr
+        return updated_node
+
+
 class UnittestToPytestTransformer(cst.CSTTransformer):
     """Transform unittest-style tests to pytest-style tests."""
 
@@ -58,13 +69,27 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef | cst.RemovalSentinel:
-        """Convert setUp/tearDown methods to pytest fixtures."""
+        """Convert setUp/tearDown methods to pytest fixtures and remove self from test methods."""
         if updated_node.name.value == "setUp":
             # Convert setUp to pytest fixture
             return self._convert_setup_to_fixture(updated_node)
         elif updated_node.name.value == "tearDown":
             # Convert tearDown to pytest fixture with yield
             return self._convert_teardown_to_fixture(updated_node)
+        elif updated_node.name.value.startswith("test_"):
+            # Remove self parameter from test methods and self references from body
+            new_params = []
+            if updated_node.params.params:
+                # Skip the first parameter (self)
+                new_params = list(updated_node.params.params[1:])
+            
+            # Remove self references from the function body
+            new_body = self._remove_self_references(updated_node.body)
+            
+            return updated_node.with_changes(
+                params=updated_node.params.with_changes(params=new_params),
+                body=new_body
+            )
         return updated_node
 
     def leave_Call(
@@ -387,45 +412,87 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             )
         return self._assert_raises(args[:1] if args else [])
 
+    def _remove_self_references(self, node: cst.CSTNode) -> cst.CSTNode:
+        """Remove self references from attribute accesses in fixture bodies."""
+        return node.visit(SelfReferenceRemover())
+
     def _convert_setup_to_fixture(self, node: cst.FunctionDef) -> cst.FunctionDef:
         """Convert setUp method to pytest fixture."""
-        # Add pytest.fixture decorator
-        fixture_decorator = cst.Decorator(
-            decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture"))
+        # Create the decorator manually
+        autouse_arg = cst.Arg(
+            keyword=cst.Name("autouse"), 
+            value=cst.Name("True"),
+            equal=cst.AssignEqual(
+                whitespace_before=cst.SimpleWhitespace(''),
+                whitespace_after=cst.SimpleWhitespace('')
+            )
         )
-        
+        fixture_call = cst.Call(
+            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")),
+            args=[autouse_arg]
+        )
+        fixture_decorator = cst.Decorator(decorator=fixture_call)
+
         decorators = list(node.decorators) if node.decorators else []
         decorators.append(fixture_decorator)
-        
+
         self.needs_pytest_import = True
-        
+
+        # Remove self parameter from fixture function
+        new_params = []
+        if node.params.params:
+            # Skip the first parameter (self)
+            new_params = list(node.params.params[1:])
+
+        # Remove self references from the function body
+        new_body = self._remove_self_references(node.body)
+
         return node.with_changes(
-            name=cst.Name("setup_method"),
-            decorators=decorators
+            name=cst.Name("setup_fixture"),
+            decorators=decorators,
+            params=node.params.with_changes(params=new_params),
+            body=new_body
         )
 
     def _convert_teardown_to_fixture(self, node: cst.FunctionDef) -> cst.FunctionDef:
         """Convert tearDown method to pytest fixture with yield."""
-        # Add pytest.fixture decorator with autouse=True
-        fixture_decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")),
-                args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))],
+        # Create the decorator manually
+        autouse_arg = cst.Arg(
+            keyword=cst.Name("autouse"), 
+            value=cst.Name("True"),
+            equal=cst.AssignEqual(
+                whitespace_before=cst.SimpleWhitespace(''),
+                whitespace_after=cst.SimpleWhitespace('')
             )
         )
-        
+        fixture_call = cst.Call(
+            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")),
+            args=[autouse_arg]
+        )
+        fixture_decorator = cst.Decorator(decorator=fixture_call)
+
         decorators = list(node.decorators) if node.decorators else []
         decorators.append(fixture_decorator)
-        
+
         self.needs_pytest_import = True
-        
+
+        # Remove self parameter from fixture function
+        new_params = []
+        if node.params.params:
+            # Skip the first parameter (self)
+            new_params = list(node.params.params[1:])
+
         # Convert tearDown body to use yield pattern
         yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield())])
         body_statements = node.body.body
         new_body = cst.IndentedBlock(body=[yield_stmt] + list(body_statements))  # type: ignore
-        
+
+        # Remove self references from the function body
+        new_body = self._remove_self_references(new_body)
+
         return node.with_changes(
-            name=cst.Name("teardown_method"),
+            name=cst.Name("teardown_fixture"),
             decorators=decorators,
+            params=node.params.with_changes(params=new_params),
             body=new_body
         )

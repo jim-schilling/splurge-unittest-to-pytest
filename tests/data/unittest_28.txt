@@ -1,0 +1,180 @@
+import unittest
+from unittest.mock import patch, MagicMock
+import logging
+
+class BaseTestSetup(unittest.TestCase):
+    """Base test case with common setup/teardown logic."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Base class setup."""
+        cls.base_class_resource = "base_resource"
+        cls.base_logger = logging.getLogger('base_test')
+        cls.base_logger.setLevel(logging.DEBUG)
+
+    @classmethod
+    def tearDownClass(cls):
+        """Base class teardown."""
+        cls.base_class_resource = None
+
+    def setUp(self):
+        """Base instance setup."""
+        self.base_setup_called = True
+        self.base_counter = 0
+        self.base_resources = []
+
+        # Setup logging
+        self.logger = logging.getLogger(f'{self.__class__.__name__}.{self._testMethodName}')
+
+    def tearDown(self):
+        """Base instance teardown."""
+        # Clean up resources
+        for resource in self.base_resources:
+            if hasattr(resource, 'close'):
+                resource.close()
+        self.base_resources.clear()
+        self.base_teardown_called = True
+
+class APITestSetup(BaseTestSetup):
+    """API-specific test setup extending base setup."""
+
+    @classmethod
+    def setUpClass(cls):
+        """API class setup."""
+        super().setUpClass()
+        cls.api_base_url = "https://api.example.com"
+        cls.api_client = MagicMock()
+        cls.api_client.base_url = cls.api_base_url
+
+    @classmethod
+    def tearDownClass(cls):
+        """API class teardown."""
+        cls.api_client = None
+        super().tearDownClass()
+
+    def setUp(self):
+        """API instance setup."""
+        super().setUp()
+        self.api_setup_called = True
+
+        # Mock API responses
+        self.api_client.get.return_value = {"status": "success", "data": []}
+        self.api_client.post.return_value = {"id": 123, "created": True}
+
+        # Add to base resources for cleanup
+        self.base_resources.append(self.api_client)
+
+    def tearDown(self):
+        """API instance teardown."""
+        # Reset API client
+        if hasattr(self, 'api_client'):
+            self.api_client.reset_mock()
+        super().tearDown()
+
+class DatabaseTestSetup(BaseTestSetup):
+    """Database-specific test setup extending base setup."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Database class setup."""
+        super().setUpClass()
+        cls.db_connection = MagicMock()
+        cls.db_cursor = MagicMock()
+        cls.db_connection.cursor.return_value = cls.db_cursor
+
+    @classmethod
+    def tearDownClass(cls):
+        """Database class teardown."""
+        cls.db_cursor = None
+        cls.db_connection = None
+        super().tearDownClass()
+
+    def setUp(self):
+        """Database instance setup."""
+        super().setUp()
+        self.db_setup_called = True
+
+        # Setup database mocks
+        self.db_cursor.execute.return_value = None
+        self.db_cursor.fetchall.return_value = []
+        self.db_connection.commit.return_value = None
+
+        self.base_resources.append(self.db_cursor)
+
+    def tearDown(self):
+        """Database instance teardown."""
+        # Reset database mocks
+        if hasattr(self, 'db_cursor'):
+            self.db_cursor.reset_mock()
+        if hasattr(self, 'db_connection'):
+            self.db_connection.reset_mock()
+        super().tearDown()
+
+class FullStackTest(APITestSetup, DatabaseTestSetup):
+    """Test case combining API and database setup."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Full stack class setup."""
+        super().setUpClass()
+        cls.full_stack_resource = "combined_resource"
+
+    @classmethod
+    def tearDownClass(cls):
+        """Full stack class teardown."""
+        cls.full_stack_resource = None
+        super().tearDownClass()
+
+    def setUp(self):
+        """Full stack instance setup."""
+        super().setUp()
+        self.full_stack_setup_called = True
+
+        # Verify all parent setups were called
+        self.assertTrue(self.base_setup_called)
+        self.assertTrue(self.api_setup_called)
+        self.assertTrue(self.db_setup_called)
+
+    def tearDown(self):
+        """Full stack instance teardown."""
+        self.full_stack_teardown_called = True
+        super().tearDown()
+
+    def test_inheritance_chain(self):
+        """Test that all setup methods in inheritance chain work."""
+        # Verify class-level resources
+        self.assertEqual(self.base_class_resource, "base_resource")
+        self.assertEqual(self.api_base_url, "https://api.example.com")
+        self.assertIsNotNone(self.db_connection)
+
+        # Verify instance-level setups
+        self.assertTrue(self.base_setup_called)
+        self.assertTrue(self.api_setup_called)
+        self.assertTrue(self.db_setup_called)
+        self.assertTrue(self.full_stack_setup_called)
+
+    def test_api_database_integration(self):
+        """Test API and database working together."""
+        # Simulate API call that triggers database operation
+        self.api_client.get.return_value = {"user_id": 1, "data": "test"}
+
+        # Simulate database query
+        self.db_cursor.fetchall.return_value = [{"id": 1, "name": "Test User"}]
+
+        # Verify both systems work
+        api_result = self.api_client.get("/users/1")
+        db_result = self.db_cursor.fetchall()
+
+        self.assertEqual(api_result["user_id"], 1)
+        self.assertEqual(len(db_result), 1)
+        self.assertEqual(db_result[0]["name"], "Test User")
+
+    def test_resource_cleanup(self):
+        """Test that resources are properly cleaned up."""
+        # Add a resource that needs cleanup
+        mock_resource = MagicMock()
+        self.base_resources.append(mock_resource)
+
+        # Resource should be closed during teardown
+        # (This will be verified when tearDown runs)
+
