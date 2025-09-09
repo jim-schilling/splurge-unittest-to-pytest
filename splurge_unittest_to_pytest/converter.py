@@ -1,6 +1,6 @@
 """Core conversion logic for unittest to pytest transformation."""
 
-from typing import List, Optional, Sequence, Union
+from typing import Sequence
 
 import libcst as cst
 from libcst import matchers as m
@@ -14,12 +14,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def __init__(self) -> None:
         """Initialize the transformer."""
         self.needs_pytest_import = False
-        self.imports_to_remove: List[str] = []
-        self.imports_to_add: List[str] = []
+        self.imports_to_remove: list[str] = []
+        self.imports_to_add: list[str] = []
 
     def leave_ImportFrom(
         self, original_node: cst.ImportFrom, updated_node: cst.ImportFrom
-    ) -> Union[cst.ImportFrom, cst.RemovalSentinel]:
+    ) -> cst.ImportFrom | cst.RemovalSentinel:
         """Handle import statements."""
         if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
             # Remove unittest imports
@@ -28,7 +28,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def leave_Import(
         self, original_node: cst.Import, updated_node: cst.Import
-    ) -> Union[cst.Import, cst.RemovalSentinel]:
+    ) -> cst.Import | cst.RemovalSentinel:
         """Handle import statements."""
         for alias in updated_node.names:
             if m.matches(alias, m.ImportAlias(name=m.Name("unittest"))):
@@ -57,7 +57,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
-    ) -> Union[cst.FunctionDef, cst.RemovalSentinel]:
+    ) -> cst.FunctionDef | cst.RemovalSentinel:
         """Convert setUp/tearDown methods to pytest fixtures."""
         if updated_node.name.value == "setUp":
             # Convert setUp to pytest fixture
@@ -75,7 +75,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def leave_Expr(
         self, original_node: cst.Expr, updated_node: cst.Expr
-    ) -> Union[cst.BaseSmallStatement, FlattenSentinel[cst.BaseSmallStatement], RemovalSentinel]:
+    ) -> cst.BaseSmallStatement | FlattenSentinel[cst.BaseSmallStatement] | RemovalSentinel:
         """Convert unittest assertion expressions to pytest assert statements."""
         if isinstance(updated_node.value, cst.Call):
             call_node = updated_node.value
@@ -173,7 +173,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _convert_assertion(
         self, method_name: str, args: Sequence[cst.Arg]
-    ) -> Optional[cst.BaseSmallStatement]:
+    ) -> cst.BaseSmallStatement | None:
         """Convert unittest assertion methods to pytest assertions."""
         # Skip assertRaises methods - handled in leave_With
         if method_name in ("assertRaises", "assertRaisesRegex"):

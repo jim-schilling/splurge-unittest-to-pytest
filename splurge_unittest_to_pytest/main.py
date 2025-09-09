@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union
 
 import libcst as cst
 
@@ -61,8 +60,8 @@ def convert_string(source_code: str) -> ConversionResult:
             errors=errors,
         )
 def convert_file(
-    input_path: Union[str, Path], 
-    output_path: Optional[Union[str, Path]] = None,
+    input_path: str | Path, 
+    output_path: str | Path | None = None,
     encoding: str = "utf-8"
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
@@ -109,7 +108,7 @@ def convert_file(
     return result
 
 
-def is_unittest_file(file_path: Union[str, Path]) -> bool:
+def is_unittest_file(file_path: str | Path) -> bool:
     """Check if a Python file appears to contain unittest-style tests.
     
     Args:
@@ -160,7 +159,7 @@ def is_unittest_file(file_path: Union[str, Path]) -> bool:
         raise EncodingError(f"Failed to decode file with UTF-8 encoding: {file_path}") from e
 
 
-def find_unittest_files(directory: Union[str, Path]) -> list[Path]:
+def find_unittest_files(directory: str | Path) -> list[Path]:
     """Find all Python files that appear to contain unittest tests.
     
     Args:

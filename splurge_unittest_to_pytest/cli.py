@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -57,12 +56,12 @@ from .main import convert_file, find_unittest_files
 )
 def main(
     paths: tuple[Path, ...],
-    output: Optional[Path],
+    output: Path | None,
     dry_run: bool,
     recursive: bool,
     encoding: str,
     verbose: bool,
-    backup: Optional[Path],
+    backup: Path | None,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
     
