@@ -21,7 +21,15 @@ from splurge_unittest_to_pytest.main import convert_file, convert_string, Conver
 
 __all__ = [
     "UnittestToPytestTransformer",
-    "convert_file", 
+    "convert_file",
     "convert_string",
     "ConversionResult",
+    "BackupError",
+    "ConversionError",
+    "EncodingError",
+    "FileNotFoundError",
+    "FileOperationError",
+    "ParseError",
+    "PermissionDeniedError",
+    "SplurgeError",
 ]

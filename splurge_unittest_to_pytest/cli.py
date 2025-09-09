@@ -242,6 +242,8 @@ def _show_diff_summary(original: str, converted: str) -> None:
     
     if original_asserts > 0:
         click.echo(f"    Unittest assertions converted: {original_asserts}")
+        if converted_asserts > 0:
+            click.echo(f"    Pytest assertions created: {converted_asserts}")
     
     # Check for unittest.TestCase removal
     if any("unittest.TestCase" in line for line in original_lines):

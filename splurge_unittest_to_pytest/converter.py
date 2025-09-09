@@ -4,6 +4,8 @@ from typing import List, Optional, Sequence, Union
 
 import libcst as cst
 from libcst import matchers as m
+from libcst._flatten_sentinel import FlattenSentinel
+from libcst._removal_sentinel import RemovalSentinel
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -67,25 +69,67 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def leave_Call(
         self, original_node: cst.Call, updated_node: cst.Call
-    ) -> Union[cst.Call, cst.Assert, cst.With]:
-        """Convert unittest assertion methods to pytest assertions."""
-        if not isinstance(updated_node.func, cst.Attribute):
-            return updated_node
+    ) -> cst.BaseExpression:
+        """Handle call expressions."""
+        return updated_node
 
-        if not isinstance(updated_node.func.value, cst.Name):
-            return updated_node
+    def leave_Expr(
+        self, original_node: cst.Expr, updated_node: cst.Expr
+    ) -> Union[cst.BaseSmallStatement, FlattenSentinel[cst.BaseSmallStatement], RemovalSentinel]:
+        """Convert unittest assertion expressions to pytest assert statements."""
+        if isinstance(updated_node.value, cst.Call):
+            call_node = updated_node.value
+            if isinstance(call_node.func, cst.Attribute):
+                if isinstance(call_node.func.value, cst.Name):
+                    if call_node.func.value.value == "self":
+                        method_name = call_node.func.attr.value
+                        args = call_node.args
+                        
+                        # Skip assertRaises methods - handle them in leave_With
+                        if method_name in ("assertRaises", "assertRaisesRegex"):
+                            return updated_node
+                            
+                        # Handle other assertion methods
+                        conversion_result = self._convert_assertion(method_name, args)
+                        if conversion_result is not None and isinstance(conversion_result, cst.BaseSmallStatement):
+                            return conversion_result
+        
+        return updated_node
 
-        if updated_node.func.value.value != "self":
-            return updated_node
-
-        method_name = updated_node.func.attr.value
-        args = updated_node.args
-
-        # Handle different assertion methods
-        conversion_result = self._convert_assertion(method_name, args)
-        if conversion_result is not None:
-            return conversion_result
-
+    def leave_With(
+        self, original_node: cst.With, updated_node: cst.With
+    ) -> cst.With:
+        """Convert unittest assertRaises context managers to pytest.raises."""
+        if updated_node.items:
+            item = updated_node.items[0]
+            if isinstance(item.item, cst.Call):
+                call_node = item.item
+                if isinstance(call_node.func, cst.Attribute):
+                    if isinstance(call_node.func.value, cst.Name):
+                        if call_node.func.value.value == "self":
+                            method_name = call_node.func.attr.value
+                            if method_name in ("assertRaises", "assertRaisesRegex"):
+                                # Convert to pytest.raises
+                                self.needs_pytest_import = True
+                                if method_name == "assertRaises":
+                                    new_item = cst.WithItem(
+                                        item=cst.Call(
+                                            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
+                                            args=call_node.args,
+                                        )
+                                    )
+                                else:  # assertRaisesRegex
+                                    new_item = cst.WithItem(
+                                        item=cst.Call(
+                                            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
+                                            args=[
+                                                call_node.args[0],
+                                                cst.Arg(keyword=cst.Name("match"), value=call_node.args[1].value),
+                                            ] if len(call_node.args) >= 2 else call_node.args,
+                                        )
+                                    )
+                                return updated_node.with_changes(items=[new_item])
+        
         return updated_node
 
     def leave_Module(
@@ -103,10 +147,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             insert_pos = 0
             
             for i, stmt in enumerate(new_body):
-                if isinstance(stmt, (cst.SimpleStatementLine, cst.ImportFrom)):
-                    if any(isinstance(s, (cst.Import, cst.ImportFrom)) for s in 
-                          (stmt.body if hasattr(stmt, 'body') else [stmt])):
+                if isinstance(stmt, cst.SimpleStatementLine):
+                    # Check if this is an import statement
+                    if stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
                         insert_pos = i + 1
+                elif isinstance(stmt, cst.ImportFrom):
+                    insert_pos = i + 1
                         
             new_body.insert(insert_pos, pytest_import)
             updated_node = updated_node.with_changes(body=new_body)
@@ -127,8 +173,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _convert_assertion(
         self, method_name: str, args: Sequence[cst.Arg]
-    ) -> Optional[Union[cst.Assert, cst.With, cst.Call]]:
+    ) -> Optional[cst.BaseSmallStatement]:
         """Convert unittest assertion methods to pytest assertions."""
+        # Skip assertRaises methods - handled in leave_With
+        if method_name in ("assertRaises", "assertRaisesRegex"):
+            return None
+            
         assertions_map = {
             "assertEqual": self._assert_equal,
             "assertNotEqual": self._assert_not_equal,
@@ -144,8 +194,6 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             "assertGreaterEqual": self._assert_greater_equal,
             "assertLess": self._assert_less,
             "assertLessEqual": self._assert_less_equal,
-            "assertRaises": self._assert_raises,
-            "assertRaisesRegex": self._assert_raises_regex,
         }
 
         converter = assertions_map.get(method_name)
@@ -373,7 +421,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         
         # Convert tearDown body to use yield pattern
         yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield())])
-        new_body = cst.IndentedBlock(body=[yield_stmt] + list(node.body.body))
+        body_statements = node.body.body
+        new_body = cst.IndentedBlock(body=[yield_stmt] + list(body_statements))  # type: ignore
         
         return node.with_changes(
             name=cst.Name("teardown_method"),

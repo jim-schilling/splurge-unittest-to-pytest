@@ -29,7 +29,7 @@ def convert_string(source_code: str) -> ConversionResult:
     Returns:
         ConversionResult containing the converted code and metadata.
     """
-    errors = []
+    errors: list[str] = []
     
     try:
         # Parse the source code into a CST
