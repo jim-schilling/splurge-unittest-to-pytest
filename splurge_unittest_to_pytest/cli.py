@@ -166,7 +166,7 @@ def main(
                         for error in result.errors:
                             click.echo(f"Error in {file_path}: {error}", err=True)
                         error_count += 1
-                    else:
+                    elif result.has_changes:
                         converted_count += 1
                 except (ParseError, EncodingError) as e:
                     click.echo(f"Error processing {file_path}: {e}", err=True)

@@ -130,6 +130,96 @@ class TestExample(unittest.TestCase):
         assert "assert 2 <= 2" in result.converted_code
         assert "assertLessEqual" not in result.converted_code
 
+    def test_assert_not_equal_conversion(self) -> None:
+        """Test assertNotEqual conversion to assert !=."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertNotEqual(1, 2)
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert 1 != 2" in result.converted_code
+        assert "assertNotEqual" not in result.converted_code
+
+    def test_assert_is_not_none_conversion(self) -> None:
+        """Test assertIsNotNone conversion to assert ... is not None."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertIsNotNone(42)
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert 42 is not None" in result.converted_code
+        assert "assertIsNotNone" not in result.converted_code
+
+    def test_assert_not_in_conversion(self) -> None:
+        """Test assertNotIn conversion to assert ... not in ..."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertNotIn(4, [1, 2, 3])
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert 4 not in [1, 2, 3]" in result.converted_code
+        assert "assertNotIn" not in result.converted_code
+
+    def test_assert_not_is_instance_conversion(self) -> None:
+        """Test assertNotIsInstance conversion to assert not isinstance(...)."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertNotIsInstance("hello", int)
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert not isinstance(\"hello\", int)" in result.converted_code
+        assert "assertNotIsInstance" not in result.converted_code
+
+    def test_assert_greater_equal_conversion(self) -> None:
+        """Test assertGreaterEqual conversion to assert ... >= ..."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertGreaterEqual(2, 2)
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert 2 >= 2" in result.converted_code
+        assert "assertGreaterEqual" not in result.converted_code
+
+    def test_assert_less_conversion(self) -> None:
+        """Test assertLess conversion to assert ... < ..."""
+        unittest_code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertLess(1, 2)
+"""
+        result = convert_string(unittest_code)
+        
+        assert result.has_changes
+        assert "assert 1 < 2" in result.converted_code
+        assert "assertLess" not in result.converted_code
+
 
 class TestExceptionHandling:
     """Test conversion of exception handling assertions."""

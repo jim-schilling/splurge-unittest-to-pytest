@@ -125,7 +125,12 @@ def is_unittest_file(file_path: Union[str, Path]) -> bool:
     """
     file_path = Path(file_path)
     
-    if not file_path.exists():
+    try:
+        exists = file_path.exists()
+    except PermissionError as e:
+        raise PermissionDeniedError(f"Permission denied checking file: {file_path}") from e
+    
+    if not exists:
         raise SplurgeFileNotFoundError(f"File not found: {file_path}")
     
     try:
