@@ -19,11 +19,19 @@ class ConversionResult:
     errors: list[str]
 
 
-def convert_string(source_code: str) -> ConversionResult:
+def convert_string(
+    source_code: str,
+    setup_patterns: list[str] | None = None,
+    teardown_patterns: list[str] | None = None,
+    test_patterns: list[str] | None = None
+) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
     Args:
         source_code: The original unittest test code as a string.
+        setup_patterns: Optional list of setup method patterns to use.
+        teardown_patterns: Optional list of teardown method patterns to use.
+        test_patterns: Optional list of test method patterns to use.
 
     Returns:
         ConversionResult containing the converted code and metadata.
@@ -36,6 +44,18 @@ def convert_string(source_code: str) -> ConversionResult:
         
         # Apply the transformation
         transformer = UnittestToPytestTransformer()
+        
+        # Apply custom patterns if provided
+        if setup_patterns:
+            for pattern in setup_patterns:
+                transformer.add_setup_pattern(pattern)
+        if teardown_patterns:
+            for pattern in teardown_patterns:
+                transformer.add_teardown_pattern(pattern)
+        if test_patterns:
+            for pattern in test_patterns:
+                transformer.add_test_pattern(pattern)
+        
         converted_tree = tree.visit(transformer)
         
         # Generate the converted code
@@ -62,7 +82,10 @@ def convert_string(source_code: str) -> ConversionResult:
 def convert_file(
     input_path: str | Path, 
     output_path: str | Path | None = None,
-    encoding: str = "utf-8"
+    encoding: str = "utf-8",
+    setup_patterns: list[str] | None = None,
+    teardown_patterns: list[str] | None = None,
+    test_patterns: list[str] | None = None
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
     
@@ -93,7 +116,12 @@ def convert_file(
         raise EncodingError(f"Failed to decode file with encoding '{encoding}': {input_path}") from e
     
     # Convert the code
-    result = convert_string(source_code)
+    result = convert_string(
+        source_code,
+        setup_patterns=setup_patterns,
+        teardown_patterns=teardown_patterns,
+        test_patterns=test_patterns
+    )
     
     # Write the converted code if there were changes and no errors
     if result.has_changes and not result.errors:

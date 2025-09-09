@@ -7,12 +7,21 @@ from libcst import matchers as m
 
 
 class SelfReferenceRemover(cst.CSTTransformer):
-    """Remove self references from attribute accesses."""
+    """Remove self/cls references from attribute accesses."""
+    
+    def __init__(self, param_names: set[str] | None = None):
+        """Initialize with parameter names to remove.
+        
+        Args:
+            param_names: Set of parameter names to remove (defaults to {'self', 'cls'})
+        """
+        self.param_names = param_names or {"self", "cls"}
 
     def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.Attribute | cst.Name:
-        """Convert self.attribute to just attribute."""
-        if m.matches(updated_node.value, m.Name("self")):
-            # Replace self.attribute with just attribute
+        """Convert self.attribute or cls.attribute to just attribute."""
+        if (isinstance(updated_node.value, cst.Name) and 
+            updated_node.value.value in self.param_names):
+            # Replace self.attribute or cls.attribute with just attribute
             return updated_node.attr
         return updated_node
 
@@ -126,6 +135,61 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         return updated_node
 
+        return updated_node
+
+    def _should_remove_first_param(self, node: cst.FunctionDef) -> bool:
+        """Determine if the first parameter should be removed based on method type."""
+        if not node.params.params:
+            return False
+            
+        first_param = node.params.params[0]
+        first_param_name = first_param.name.value if hasattr(first_param, 'name') else ""
+        
+        # Check for decorators that indicate method type
+        has_classmethod = any(
+            (isinstance(decorator, cst.Decorator) and 
+             isinstance(decorator.decorator, cst.Name) and 
+             decorator.decorator.value == "classmethod")
+            for decorator in (node.decorators or [])
+        )
+        
+        has_staticmethod = any(
+            (isinstance(decorator, cst.Decorator) and 
+             isinstance(decorator.decorator, cst.Name) and 
+             decorator.decorator.value == "staticmethod")
+            for decorator in (node.decorators or [])
+        )
+        
+        # For staticmethods, remove no parameters (they don't have self/cls)
+        if has_staticmethod:
+            return False
+            
+        # For classmethods, only remove if first param is 'cls'
+        if has_classmethod:
+            return first_param_name == "cls"
+            
+        # For regular instance methods, remove if first param is 'self'
+        return first_param_name == "self"
+
+    def _remove_method_self_references(self, node: cst.FunctionDef) -> tuple[list[cst.Param], cst.BaseSuite]:
+        """Remove self/cls parameters and references based on method type."""
+        new_params = list(node.params.params)
+        new_body = node.body
+        
+        if self._should_remove_first_param(node):
+            # Get the parameter name being removed
+            first_param = node.params.params[0]
+            param_name = first_param.name.value if hasattr(first_param, 'name') else ""
+            
+            # Remove the first parameter (self/cls)
+            new_params = new_params[1:]
+            
+            # Remove self/cls references from the function body
+            remover = SelfReferenceRemover({param_name})
+            new_body = node.body.visit(remover)
+        
+        return new_params, new_body
+
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef | cst.RemovalSentinel:
@@ -140,14 +204,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 # Convert teardown method to pytest fixture with yield
                 return self._convert_teardown_to_fixture(updated_node)
             elif self._is_test_method(method_name):
-                # Remove self parameter from test methods and self references from body
-                new_params = []
-                if updated_node.params.params:
-                    # Skip the first parameter (self)
-                    new_params = list(updated_node.params.params[1:])
-                
-                # Remove self references from the function body
-                new_body = self._remove_self_references(updated_node.body)
+                # Remove self/cls parameter from test methods and self references from body
+                new_params, new_body = self._remove_method_self_references(updated_node)
                 
                 return updated_node.with_changes(
                     params=updated_node.params.with_changes(params=new_params),
@@ -226,6 +284,49 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             if base.value.value == "TestCase":
                 return True
         return False
+
+    def _normalize_method_name(self, name: str) -> str:
+        """Normalize method name for pattern matching (convert camelCase to snake_case)."""
+        import re
+        # Convert camelCase to snake_case
+        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+    def _is_setup_method(self, method_name: str) -> bool:
+        """Check if method name matches setup patterns (case insensitive)."""
+        method_lower = method_name.lower()
+        method_normalized = self._normalize_method_name(method_name)
+        
+        return any(
+            pattern.lower() in method_lower or 
+            pattern.lower() in method_normalized or
+            self._normalize_method_name(pattern) in method_normalized
+            for pattern in self._setup_patterns
+        )
+
+    def _is_teardown_method(self, method_name: str) -> bool:
+        """Check if method name matches teardown patterns (case insensitive)."""
+        method_lower = method_name.lower()
+        method_normalized = self._normalize_method_name(method_name)
+        
+        return any(
+            pattern.lower() in method_lower or 
+            pattern.lower() in method_normalized or
+            self._normalize_method_name(pattern) in method_normalized
+            for pattern in self._teardown_patterns
+        )
+
+    def _is_test_method(self, method_name: str) -> bool:
+        """Check if method name matches test patterns (case insensitive)."""
+        method_lower = method_name.lower()
+        method_normalized = self._normalize_method_name(method_name)
+        
+        return any(
+            pattern.lower() in method_lower or 
+            pattern.lower() in method_normalized or
+            self._normalize_method_name(pattern) in method_normalized
+            for pattern in self._test_patterns
+        )
 
     def _convert_assertion(
         self, method_name: str, args: Sequence[cst.Arg]
@@ -490,66 +591,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     ] if len(args) >= 2 else args,
                 )
             )
-        """Check if method name indicates a setup method."""
-        setup_variants = {
-            "setup", "setUp", "set_up", "setup_method", "setUp_method",
-            "before_each", "beforeEach", "before_test", "beforeTest"
-        }
-        return method_name.lower() in setup_variants
-
-    def _is_teardown_method(self, method_name: str) -> bool:
-        """Check if method name indicates a teardown method."""
-        try:
-            if not isinstance(method_name, str) or not method_name:
-                return False
-            
-            method_lower = method_name.lower()
-            # Check for exact matches and common variations
-            for pattern in self._teardown_patterns:
-                if pattern in method_lower:
-                    return True
-                # Also check for camelCase variations
-                if pattern.replace('_', '') == method_lower.replace('_', ''):
-                    return True
-            return False
-        except Exception:
-            return False
-
-    def _is_test_method(self, method_name: str) -> bool:
-        """Check if method name indicates a test method."""
-        try:
-            if not isinstance(method_name, str) or not method_name:
-                return False
-            
-            # Check for exact prefix matches
-            for pattern in self._test_patterns:
-                if method_name.startswith(pattern):
-                    return True
-            
-            return False
-        except Exception:
-            return False
-
-    def _is_setup_method(self, method_name: str) -> bool:
-        """Check if method name indicates a setup method."""
-        try:
-            if not isinstance(method_name, str) or not method_name:
-                return False
-            
-            method_lower = method_name.lower()
-            # Check for exact matches and common variations
-            for pattern in self._setup_patterns:
-                if pattern in method_lower:
-                    return True
-                # Also check for camelCase variations
-                if pattern.replace('_', '') == method_lower.replace('_', ''):
-                    return True
-            return False
-        except Exception:
-            return False
-
     def _remove_self_references(self, node: cst.CSTNode) -> cst.CSTNode:
-        """Remove self references from attribute accesses in fixture bodies."""
+        """Remove self/cls references from attribute accesses in fixture bodies."""
         return node.visit(SelfReferenceRemover())
 
     def _add_pytest_import(self, module_node: cst.Module) -> cst.Module:
@@ -630,14 +673,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         self.needs_pytest_import = True
 
-        # Remove self parameter from fixture function
-        new_params = []
-        if node.params.params:
-            # Skip the first parameter (self)
-            new_params = list(node.params.params[1:])
-
-        # Remove self references from the function body
-        new_body = self._remove_self_references(node.body)
+        # Remove self/cls parameter from fixture function based on method type
+        new_params, new_body = self._remove_method_self_references(node)
 
         return node.with_changes(
             name=cst.Name(f"{node.name.value}_fixture"),
@@ -668,19 +705,13 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         self.needs_pytest_import = True
 
-        # Remove self parameter from fixture function
-        new_params = []
-        if node.params.params:
-            # Skip the first parameter (self)
-            new_params = list(node.params.params[1:])
+        # Remove self/cls parameter from fixture function based on method type
+        new_params, new_body = self._remove_method_self_references(node)
 
         # Convert tearDown body to use yield pattern
         yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield())])
-        body_statements = node.body.body
+        body_statements = new_body.body
         new_body = cst.IndentedBlock(body=[yield_stmt] + list(body_statements))  # type: ignore
-
-        # Remove self references from the function body
-        new_body = self._remove_self_references(new_body)
 
         return node.with_changes(
             name=cst.Name(f"{node.name.value}_fixture"),

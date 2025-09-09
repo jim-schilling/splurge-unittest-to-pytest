@@ -16,6 +16,37 @@ from .exceptions import (
 from .main import convert_file, find_unittest_files
 
 
+def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
+    """Parse method patterns from CLI arguments.
+    
+    Supports both comma-separated values and multiple flags.
+    Properly trims whitespace from all values.
+    Examples: 
+        ('setUp,beforeAll', 'teardown') -> ['setUp', 'beforeAll', 'teardown']
+        ('  setUp  ,  beforeAll  ',) -> ['setUp', 'beforeAll']
+    """
+    patterns = []
+    for arg in pattern_args:
+        # Trim the entire argument first, then split on commas
+        trimmed_arg = arg.strip()
+        if trimmed_arg:  # Skip empty arguments
+            # Split on commas and strip each pattern
+            for pattern in trimmed_arg.split(','):
+                trimmed_pattern = pattern.strip()
+                if trimmed_pattern:  # Skip empty patterns
+                    patterns.append(trimmed_pattern)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_patterns = []
+    for pattern in patterns:
+        if pattern not in seen:
+            seen.add(pattern)
+            unique_patterns.append(pattern)
+    
+    return unique_patterns
+
+
 @click.command()
 @click.version_option(version=__version__)
 @click.argument("paths", nargs=-1, type=click.Path(exists=True, path_type=Path))
@@ -54,6 +85,21 @@ from .main import convert_file, find_unittest_files
     type=click.Path(path_type=Path),
     help="Create backup files in specified directory with .bak extension",
 )
+@click.option(
+    "--setup-methods",
+    multiple=True,
+    help="Setup method patterns (comma-separated or multiple flags). Examples: --setup-methods 'setUp,beforeAll' --setup-methods teardown",
+)
+@click.option(
+    "--teardown-methods", 
+    multiple=True,
+    help="Teardown method patterns (comma-separated or multiple flags)",
+)
+@click.option(
+    "--test-methods",
+    multiple=True,
+    help="Test method patterns (comma-separated or multiple flags)",
+)
 def main(
     paths: tuple[Path, ...],
     output: Path | None,
@@ -62,6 +108,9 @@ def main(
     encoding: str,
     verbose: bool,
     backup: Path | None,
+    setup_methods: tuple[str, ...],
+    teardown_methods: tuple[str, ...],
+    test_methods: tuple[str, ...],
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
     
@@ -90,6 +139,15 @@ def main(
         
         # Create backups before conversion
         splurge-convert --backup backups/ test_*.py
+        
+        # Use custom method patterns (comma-separated)
+        splurge-convert --setup-methods "setUp,beforeAll,setup_class" test.py
+        
+        # Use custom method patterns (multiple flags)
+        splurge-convert --setup-methods setUp --setup-methods beforeAll test.py
+        
+        # Configure all method types
+        splurge-convert --setup-methods "setUp,beforeAll" --teardown-methods "tearDown,afterAll" --test-methods "test_,it_,spec_" test.py
     """
     if not paths:
         click.echo("Error: No paths provided", err=True)
@@ -116,6 +174,20 @@ def main(
     if not files_to_convert:
         click.echo("No unittest files found to convert")
         sys.exit(0)
+    
+    # Parse method patterns from CLI arguments
+    setup_patterns = _parse_method_patterns(setup_methods)
+    teardown_patterns = _parse_method_patterns(teardown_methods)
+    test_patterns = _parse_method_patterns(test_methods)
+    
+    if verbose and (setup_patterns or teardown_patterns or test_patterns):
+        click.echo("Using custom method patterns:")
+        if setup_patterns:
+            click.echo(f"  Setup: {', '.join(setup_patterns)}")
+        if teardown_patterns:
+            click.echo(f"  Teardown: {', '.join(teardown_patterns)}")
+        if test_patterns:
+            click.echo(f"  Test: {', '.join(test_patterns)}")
     
     # Process each file
     converted_count = 0
@@ -150,7 +222,12 @@ def main(
                 try:
                     from .main import convert_string
                     source_code = file_path.read_text(encoding=encoding)
-                    result = convert_string(source_code)
+                    result = convert_string(
+                        source_code,
+                        setup_patterns=setup_patterns,
+                        teardown_patterns=teardown_patterns,
+                        test_patterns=test_patterns
+                    )
                     
                     if result.has_changes:
                         click.echo(f"Would convert: {file_path}")
@@ -175,7 +252,14 @@ def main(
                     error_count += 1
             else:
                 try:
-                    result = convert_file(file_path, output_path, encoding=encoding)
+                    result = convert_file(
+                        file_path, 
+                        output_path, 
+                        encoding=encoding,
+                        setup_patterns=setup_patterns,
+                        teardown_patterns=teardown_patterns,
+                        test_patterns=test_patterns
+                    )
                     
                     if result.has_changes:
                         click.echo(f"Converted: {file_path}")
