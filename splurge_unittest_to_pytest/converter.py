@@ -97,20 +97,28 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self, original_node: cst.ImportFrom, updated_node: cst.ImportFrom
     ) -> cst.ImportFrom | cst.RemovalSentinel:
         """Handle import statements."""
-        if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
-            # Remove unittest imports
-            return cst.RemovalSentinel.REMOVE
-        return updated_node
+        try:
+            if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
+                # Remove unittest imports
+                return cst.RemovalSentinel.REMOVE
+            return updated_node
+        except Exception:
+            # If conversion fails, return original node unchanged
+            return original_node
 
     def leave_Import(
         self, original_node: cst.Import, updated_node: cst.Import
     ) -> cst.Import | cst.RemovalSentinel:
         """Handle import statements."""
-        for alias in updated_node.names:
-            if m.matches(alias, m.ImportAlias(name=m.Name("unittest"))):
-                # Remove unittest imports
-                return cst.RemovalSentinel.REMOVE
-        return updated_node
+        try:
+            for alias in updated_node.names:
+                if m.matches(alias, m.ImportAlias(name=m.Name("unittest"))):
+                    # Remove unittest imports
+                    return cst.RemovalSentinel.REMOVE
+            return updated_node
+        except Exception:
+            # If conversion fails, return original node unchanged
+            return original_node
 
     def leave_ClassDef(
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef
