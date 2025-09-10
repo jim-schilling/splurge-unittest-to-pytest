@@ -8,7 +8,7 @@ def make_fixture(name: str) -> cst.FunctionDef:
     return cst.FunctionDef(name=cst.Name(name), params=cst.Parameters(), body=body, decorators=[decorator])
 
 
-def test_tidy_inserts_emptyline_after_fixtures():
+def test_tidy_inserts_emptyline_after_fixtures() -> None:
     src = 'import pytest\n\n'
     module = cst.parse_module(src)
     fixtures = [make_fixture("a"), make_fixture("b")]

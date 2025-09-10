@@ -13,7 +13,7 @@ class MyTests(unittest.TestCase):
 '''
 
 
-def test_rewriter_adds_fixture_params_and_removes_self():
+def test_rewriter_adds_fixture_params_and_removes_self() -> None:
     module = cst.parse_module(SAMPLE)
     # collect
     visitor = Collector()

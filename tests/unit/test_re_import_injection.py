@@ -3,7 +3,7 @@ import textwrap
 from splurge_unittest_to_pytest.main import convert_string
 
 
-def test_import_re_added_for_assert_regex():
+def test_import_re_added_for_assert_regex() -> None:
     src = textwrap.dedent('''
         import unittest
 
@@ -15,7 +15,7 @@ def test_import_re_added_for_assert_regex():
     assert 'import re' in out
 
 
-def test_import_re_not_added_when_unused():
+def test_import_re_not_added_when_unused() -> None:
     src = textwrap.dedent('''
         import unittest
 

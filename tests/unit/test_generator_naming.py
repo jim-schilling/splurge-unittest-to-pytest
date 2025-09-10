@@ -13,7 +13,7 @@ def _run(src: str):
     return generator_stage({"module": module, "collector_output": out})
 
 
-def test_local_name_determinism():
+def test_local_name_determinism() -> None:
     src = """
 class T(unittest.TestCase):
     def setUp(self):

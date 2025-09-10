@@ -1,7 +1,7 @@
 from splurge_unittest_to_pytest import main
 
 
-def test_rewriter_ensures_self_with_fixture():
+def test_rewriter_ensures_self_with_fixture() -> None:
     src = """
 import unittest
 
