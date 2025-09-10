@@ -10,8 +10,12 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     module: cst.Module = context.get("module")
     collector: CollectorOutput | None = context.get("collector_output")
+    needs_pytest: bool = bool(context.get("needs_pytest_import", False))
     if module is None:
         return {}
+    # If no stage signaled that pytest is required, skip insertion (keeps imports minimal)
+    if not needs_pytest:
+        return {"module": module}
     # quick check: if module already contains pytest import, do nothing
     for stmt in module.body:
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:

@@ -14,6 +14,10 @@ import libcst as cst
 class AssertionRewriter(cst.CSTTransformer):
     """Transformer that rewrites unittest-style assertions to pytest asserts."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.needs_pytest_import = False
+
     def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr):
         # Only handle call expressions like self.assertX(...)
         if isinstance(updated_node.value, cst.Call):
@@ -82,6 +86,13 @@ class AssertionRewriter(cst.CSTTransformer):
                 "assertNotIn": self._assert_not_in,
                 "assertIsInstance": self._assert_is_instance,
                 "assertNotIsInstance": self._assert_not_is_instance,
+                "assertAlmostEqual": self._assert_almost_equal,
+                "assertNotAlmostEqual": self._assert_not_almost_equal,
+                "assertListEqual": self._assert_collection_equal,
+                "assertDictEqual": self._assert_collection_equal,
+                "assertSequenceEqual": self._assert_collection_equal,
+                "assertSetEqual": self._assert_collection_equal,
+                "assertCountEqual": self._assert_collection_equal,
                 "assertGreater": self._assert_greater,
                 "assertGreaterEqual": self._assert_greater_equal,
                 "assertLess": self._assert_less,
@@ -155,6 +166,33 @@ class AssertionRewriter(cst.CSTTransformer):
             pass
         return None
 
+    def _assert_almost_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            # map to assert a == pytest.approx(b)
+            if len(args) >= 2:
+                left = args[0].value
+                right = args[1].value
+                # mark that pytest.approx is required
+                self.needs_pytest_import = True
+                approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
+                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]))
+        except Exception:
+            pass
+        return None
+
+    def _assert_not_almost_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            if len(args) >= 2:
+                left = args[0].value
+                right = args[1].value
+                # mark that pytest.approx is required
+                self.needs_pytest_import = True
+                approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
+                return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)])))
+        except Exception:
+            pass
+        return None
+
     def _assert_not_in(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
@@ -213,6 +251,15 @@ class AssertionRewriter(cst.CSTTransformer):
             pass
         return None
 
+    def _assert_collection_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            # Map collection equality-like asserts to simple equality comparison
+            if len(args) >= 2:
+                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
+        except Exception:
+            pass
+        return None
+
     # assertRaises helpers
     def _is_assert_raises_context_manager(self, call_node: cst.Call) -> str | None:
         call_info = self._is_self_call(call_node)
@@ -236,5 +283,6 @@ def assertion_rewriter_stage(context: dict) -> dict:
     module: cst.Module = context.get("module")
     if module is None:
         return {}
-    new_mod = module.visit(AssertionRewriter())
-    return {"module": new_mod}
+    transformer = AssertionRewriter()
+    new_mod = module.visit(transformer)
+    return {"module": new_mod, "needs_pytest_import": getattr(transformer, "needs_pytest_import", False)}
