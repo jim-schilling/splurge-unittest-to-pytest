@@ -1,6 +1,7 @@
 """Core conversion logic for unittest to pytest transformation."""
 
 from typing import Sequence, Any, cast
+import warnings
 
 import libcst as cst
 from libcst import matchers as m
@@ -36,6 +37,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             compat: If True, emit autouse compatibility fixture to attach fixtures
                 to unittest-style test instances (default: True).
         """
+        # Deprecation: prefer staged pipeline
+        warnings.warn(
+            "UnittestToPytestTransformer is deprecated; prefer the staged pipeline (engine='pipeline').",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.compat = bool(compat)
         self.needs_pytest_import = False
         self.has_unittest_content = False

@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+from libcst import matchers as m
 
 
 @dataclass
@@ -50,10 +51,29 @@ def generator_stage(context: dict) -> dict:
                     spec.local_value_name = local_name
                     assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(local_name))], value=value)])
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                    body = cst.IndentedBlock(body=[assign, yield_stmt])
+                    # transform cleanup statements to reference the local name instead of self.attr
+                    class _AttrRewriter(cst.CSTTransformer):
+                        def __init__(self, target_attr: str, local: str) -> None:
+                            self.target_attr = target_attr
+                            self.local = local
+
+                        def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+                            if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
+                                if isinstance(original.attr, cst.Name) and original.attr.value == self.target_attr:
+                                    return cst.Name(self.local)
+                            return updated
+
+                    body_stmts = [assign, yield_stmt]
+                    for stmt in spec.cleanup_statements:
+                        new_stmt = stmt.visit(_AttrRewriter(attr, local_name))
+                        body_stmts.append(new_stmt)
+
+                    body = cst.IndentedBlock(body=body_stmts)
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
                     continue
+                # append cleanup statements after yield for yield-style fixtures
+                # (we'll add them later when constructing the fixture body for literal yields)
             else:
                 if _is_literal(value):
                     return_stmt = cst.SimpleStatementLine(body=[cst.Return(value)])
@@ -68,7 +88,13 @@ def generator_stage(context: dict) -> dict:
                     continue
             # yield direct literal case
             if yield_style and _is_literal(value):
-                body = cst.IndentedBlock(body=[body_stmt])
+                # include cleanup statements after the yield
+                body_stmts = [body_stmt]
+                # append teardown statements converted to simple statements
+                for stmt in spec.cleanup_statements:
+                    # naive: append the original teardown statement (could be If)
+                    body_stmts.append(stmt)
+                body = cst.IndentedBlock(body=body_stmts)
                 func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                 fixture_nodes.append(func)
             elif not yield_style and _is_literal(value):

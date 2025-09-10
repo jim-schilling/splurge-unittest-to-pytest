@@ -36,3 +36,9 @@ def test_generator_creates_fixture_nodes():
     node_names = {n.name.value for n in nodes}
     assert "count" in node_names
     assert "name" in node_names
+    # find the count fixture node and verify it yields and contains cleanup
+    count_node = next(n for n in nodes if n.name.value == "count")
+    src = cst.Module(body=[count_node]).code
+    assert "yield" in src
+    # teardown should have been preserved (assignment to None)
+    assert "= None" in src

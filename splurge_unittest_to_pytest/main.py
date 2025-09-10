@@ -51,7 +51,13 @@ def convert_string(
             converted_module = run_pipeline(tree, compat=compat)
             converted_code = converted_module.code
         else:
-            # legacy transformer
+            # legacy transformer (deprecated)
+            import warnings
+            warnings.warn(
+                "convert_string engine='transformer' is deprecated; use engine='pipeline'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             transformer = UnittestToPytestTransformer(compat=compat)
 
             # Apply custom patterns if provided
