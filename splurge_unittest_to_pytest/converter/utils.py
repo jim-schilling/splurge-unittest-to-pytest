@@ -4,7 +4,6 @@ Start with small, well-tested helpers and move more pieces here iteratively.
 """
 from __future__ import annotations
 
-from typing import Optional
 
 import libcst as cst
 

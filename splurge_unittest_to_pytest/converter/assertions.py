@@ -4,6 +4,8 @@ This file is intentionally minimal for the initial decomposition step.
 """
 from __future__ import annotations
 
+from typing import List
+
 # placeholder for future assertion conversion helpers
 
-__all__ = []
+__all__: List[str] = []

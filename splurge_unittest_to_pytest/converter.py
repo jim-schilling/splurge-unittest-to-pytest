@@ -7,27 +7,7 @@ import libcst as cst
 from libcst import matchers as m
 
 # Reuse the moved helpers from converter.utils during decomposition
-from .converter.utils import SelfReferenceRemover, normalize_method_name
-
-
-class SelfReferenceRemover(cst.CSTTransformer):
-    """Remove self/cls references from attribute accesses."""
-    
-    def __init__(self, param_names: set[str] | None = None):
-        """Initialize with parameter names to remove.
-        
-        Args:
-            param_names: Set of parameter names to remove (defaults to {'self', 'cls'})
-        """
-        self.param_names = param_names or {"self", "cls"}
-
-    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.Attribute | cst.Name:
-        """Convert self.attribute or cls.attribute to just attribute."""
-        if (isinstance(updated_node.value, cst.Name) and 
-            updated_node.value.value in self.param_names):
-            # Replace self.attribute or cls.attribute with just attribute
-            return updated_node.attr
-        return updated_node
+from .converter.utils import SelfReferenceRemover
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
