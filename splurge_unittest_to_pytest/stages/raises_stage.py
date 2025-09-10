@@ -19,6 +19,12 @@ class RaisesRewriter(cst.CSTTransformer):
     - self.assertRaisesRegex(E, 'pat', func, *args) -> with pytest.raises(E, match='pat'): func(*args)
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        # set when we create/replace nodes that introduce pytest usage
+        self.made_changes: bool = False
+
+
     def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
         # handle with self.assertRaises(...) as cm: or without 'as'
         if not updated_node.items:
@@ -33,6 +39,7 @@ class RaisesRewriter(cst.CSTTransformer):
         new_item = self._create_pytest_raises_item(method, first.item.args)
         new_first = first.with_changes(item=new_item)
         new_items = [new_first] + list(updated_node.items[1:])
+        self.made_changes = True
         return updated_node.with_changes(items=new_items)
 
     def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr):
@@ -49,9 +56,15 @@ class RaisesRewriter(cst.CSTTransformer):
                 exc_arg = args[0]
                 func_call = cst.Call(func=args[1].value, args=list(args[2:]))
                 # wrap the function call in a with pytest.raises(...): block
-                with_item = self._create_pytest_raises_item(method_name, [exc_arg] + ([] if method_name == 'assertRaises' else [args[1]]))
+                # For assertRaisesRegex the pattern is the second arg, so pass exc_arg and pattern as needed
+                if method_name == 'assertRaises':
+                    with_item = self._create_pytest_raises_item(method_name, [exc_arg])
+                else:
+                    # assume args like (Exc, pattern, func, ...)
+                    with_item = self._create_pytest_raises_item(method_name, [exc_arg, args[1]])
                 # craft a With node
                 new_with = cst.With(items=[with_item], body=cst.IndentedBlock(body=[cst.SimpleStatementLine([cst.Expr(func_call)])]))
+                self.made_changes = True
                 return new_with
         return updated_node
 
@@ -72,10 +85,10 @@ class RaisesRewriter(cst.CSTTransformer):
         # Build pytest.raises(...) call; for Regex variant, bind second arg as match=
         # mark that pytest import will be needed by the pipeline
         try:
-            # store a flag on the transformation via a sentinel in the tree context (we'll set it later)
-            # but for now, construction proceeds
-            pass
+            # creation of a pytest.raises call implies we'll need pytest imported
+            self.made_changes = True
         except Exception:
+            # defensive: if something goes wrong, don't raise from transformer
             pass
         if method_name == 'assertRaises':
             return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name('pytest'), attr=cst.Name('raises')), args=list(args)))
@@ -94,7 +107,5 @@ def raises_stage(context: dict) -> dict:
         return {}
     transformer = RaisesRewriter()
     new_mod = module.visit(transformer)
-    # if the transformer produced pytest usage, signal the import injector
-    # Currently RaisesRewriter does not track a flag; detect presence by simple heuristic: search for 'pytest' attribute usage
-    # But to keep things simple, always request pytest import when raises-stage ran and found With nodes modified.
-    return {'module': new_mod, 'needs_pytest_import': True}
+    # signal the import injector only if we actually created pytest.raises usage
+    return {'module': new_mod, 'needs_pytest_import': bool(getattr(transformer, 'made_changes', False))}
