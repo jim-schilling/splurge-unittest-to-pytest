@@ -97,6 +97,12 @@ class AssertionRewriter(cst.CSTTransformer):
                 "assertGreaterEqual": self._assert_greater_equal,
                 "assertLess": self._assert_less,
                 "assertLessEqual": self._assert_less_equal,
+                # regex and multi-line comparisons
+                "assertRegex": self._assert_regex,
+                "assertNotRegex": self._assert_not_regex,
+                "assertRegexpMatches": self._assert_regex,
+                "assertNotRegexpMatches": self._assert_not_regex,
+                "assertMultiLineEqual": self._assert_multi_line_equal,
             }
             converter = assertions_map.get(method_name)
             if converter:
@@ -260,6 +266,41 @@ class AssertionRewriter(cst.CSTTransformer):
             pass
         return None
 
+    def _assert_regex(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            # map assertRegex(text, pattern) -> assert re.search(pattern, text)
+            if len(args) >= 2:
+                text = args[0].value
+                pattern = args[1].value
+                # ensure we will import re at module level
+                setattr(self, "needs_re_import", True)
+                search_call = cst.Call(func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")), args=[cst.Arg(value=pattern), cst.Arg(value=text)])
+                return cst.Assert(test=search_call)
+        except Exception:
+            pass
+        return None
+
+    def _assert_not_regex(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            if len(args) >= 2:
+                text = args[0].value
+                pattern = args[1].value
+                setattr(self, "needs_re_import", True)
+                search_call = cst.Call(func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")), args=[cst.Arg(value=pattern), cst.Arg(value=text)])
+                return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=search_call))
+        except Exception:
+            pass
+        return None
+
+    def _assert_multi_line_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            # map to normal equality; multi-line diffs are handled by pytest's assert rewriter
+            if len(args) >= 2:
+                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
+        except Exception:
+            pass
+        return None
+
     # assertRaises helpers
     def _is_assert_raises_context_manager(self, call_node: cst.Call) -> str | None:
         call_info = self._is_self_call(call_node)
@@ -285,4 +326,8 @@ def assertion_rewriter_stage(context: dict) -> dict:
         return {}
     transformer = AssertionRewriter()
     new_mod = module.visit(transformer)
-    return {"module": new_mod, "needs_pytest_import": getattr(transformer, "needs_pytest_import", False)}
+    return {
+        "module": new_mod,
+        "needs_pytest_import": getattr(transformer, "needs_pytest_import", False),
+        "needs_re_import": getattr(transformer, "needs_re_import", False),
+    }
