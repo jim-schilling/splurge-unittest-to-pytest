@@ -13,25 +13,12 @@ import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 
 
-def _should_remove_first_param(node: cst.FunctionDef) -> bool:
-    # Determine if the first parameter should be removed (self/cls).
-    if not node.params.params:
-        return False
-    first = node.params.params[0]
-    first_name = getattr(first.name, "value", "")
-    # If decorated as staticmethod, don't remove
-    for dec in node.decorators or []:
-        if isinstance(dec.decorator, cst.Name) and dec.decorator.value == "staticmethod":
-            return False
-    # If decorated as classmethod, only remove if first param is 'cls'
-    for dec in node.decorators or []:
-        if isinstance(dec.decorator, cst.Name) and dec.decorator.value == "classmethod":
-            return first_name == "cls"
-    # Default: remove if first param is 'self'
-    return first_name == "self"
+# NOTE: helper to decide removal of first param was removed; the current
+# staged pipeline keeps instance/class first params to make converted modules
+# runnable by default and uses an autouse attach fixture for pytest runs.
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.FunctionDef:
+def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str], remove_first: bool) -> cst.FunctionDef:
     """Ensure instance methods keep `self`/`cls` (unless staticmethod) and append fixtures.
 
     We intentionally do not remove the first parameter; instead we make sure runnable
@@ -51,17 +38,32 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.
                 is_classmethod = True
 
     if not is_static:
-        desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
-        first_name = getattr(params[0].name, 'value', None) if params else None
-        if first_name not in ("self", "cls"):
-            # insert desired first param
-            params.insert(0, cst.Param(name=desired_first))
+        # If the class originally inherited from unittest.TestCase we remove
+        # the instance/class first parameter and rely on fixtures being
+        # provided as function parameters. Otherwise ensure `self`/`cls` is
+        # present to keep the function runnable.
+        if remove_first:
+            # drop first param if it's self/cls
+            if params:
+                first_name = getattr(params[0].name, 'value', None)
+                if first_name in ("self", "cls"):
+                    params = params[1:]
+        else:
+            desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
+            first_name = getattr(params[0].name, 'value', None) if params else None
+            if first_name not in ("self", "cls"):
+                # insert desired first param
+                params.insert(0, cst.Param(name=desired_first))
 
-    # Do NOT append fixture parameters here. The pipeline inserts an autouse
-    # fixture that will deterministically retrieve fixture values via
-    # request.getfixturevalue(...) and attach them to the instance. Keeping
-    # test signatures runnable (preserving `self`/`cls`) allows executing the
-    # converted module outside of pytest.
+    # Append fixture parameters only when we've removed the first param
+    # (i.e., converting TestCase methods into plain pytest functions). If
+    # we keep the method runnable (retain self/cls), do not append fixture
+    # params and rely on the autouse attach fixture to set instance attrs.
+    if remove_first:
+        for fname in fixture_names:
+            if not any(getattr(p.name, 'value', None) == fname for p in params):
+                params.append(cst.Param(name=cst.Name(fname)))
+
     new_params = fn.params.with_changes(params=params)
     return fn.with_changes(params=new_params)
 
@@ -69,8 +71,10 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.
 def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     module: cst.Module | None = context.get("module")
     collector: CollectorOutput | None = context.get("collector_output")
-    fixture_specs: Dict[str, Any] = context.get("fixture_specs") or {}
-    compat: bool = context.get("compat", False)
+    # fixture_specs and compat may be provided by earlier stages; they are
+    # not needed in this stage's current implementation but may be present
+    # in the context. We intentionally do not use them here to keep this
+    # stage focused on producing runnable classes and top-level wrappers.
 
     if module is None or collector is None:
         return {"module": module}
@@ -113,11 +117,18 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                 if mname.startswith("test") or member in cls_info.test_methods:
                     # Decide per-class whether to remove the first param by checking
                     # if the class originally inherited from unittest.TestCase.
-                    def _class_inherits_unittest_testcase(class_node: cst.ClassDef) -> bool:
-                        for base in getattr(class_node, 'bases', []) or []:
-                            # base is an Arg or similar in some parsers; guard accordingly
+                    # Decide per-class whether to remove the first param by checking
+                    # the collector's recorded original ClassDef (preserves original
+                    # bases even if a prior stage removed unittest imports/bases).
+                    cls_info = classes.get(stmt.name.value)
+                    def _class_inherits_unittest_testcase_from_original(class_info) -> bool:
+                        # Use the original node saved in the collector to detect
+                        # unittest.TestCase inheritance.
+                        node = getattr(class_info, 'node', None)
+                        if node is None:
+                            return False
+                        for base in getattr(node, 'bases', []) or []:
                             bval = getattr(base, 'value', base)
-                            # unittest.TestCase or TestCase
                             if isinstance(bval, cst.Attribute):
                                 if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
                                     return True
@@ -125,9 +136,11 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                                 return True
                         return False
 
-                    # legacy "remove_self" decision removed; keep methods runnable
-                    # by ensuring `self`/`cls` are present in _update_test_function
-                    updated_fn = _update_test_function(member, fixture_names)
+                    # Keep the original first parameter (self/cls) so the
+                    # converted module remains runnable by default. The
+                    # autouse attach fixture will ensure pytest runs still
+                    # receive fixture values via request.getfixturevalue.
+                    updated_fn = _update_test_function(member, fixture_names, remove_first=False)
                     new_class_body.append(updated_fn)
                     continue
 
@@ -136,6 +149,51 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
 
             new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
             new_body.append(new_class)
+            # Create top-level pytest functions for each test method when the
+            # class originally inherited from unittest.TestCase. These functions
+            # accept fixture parameters and contain a rewritten body where
+            # `self.<attr>` is replaced by the fixture name so pytest can inject
+            # fixtures directly. The original class and methods are retained so
+            # the module remains runnable by calling instance methods.
+            cls_original = cls_info
+            def _class_inherits_unittest_testcase_from_original(class_info) -> bool:
+                node = getattr(class_info, 'node', None)
+                if node is None:
+                    return False
+                for base in getattr(node, 'bases', []) or []:
+                    bval = getattr(base, 'value', base)
+                    if isinstance(bval, cst.Attribute):
+                        if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                            return True
+                    if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                        return True
+                return False
+
+            if _class_inherits_unittest_testcase_from_original(cls_original):
+                for member in stmt.body.body:
+                    if not isinstance(member, cst.FunctionDef):
+                        continue
+                    mname = member.name.value
+                    if not (mname.startswith('test') or member in cls_info.test_methods):
+                        continue
+
+                    # rewrite `self.attr` -> `attr` in the member body for the
+                    # top-level function variant
+                    class _SelfAttrRewriter(cst.CSTTransformer):
+                        def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+                            if isinstance(original.value, cst.Name) and original.value.value == 'self' and isinstance(original.attr, cst.Name):
+                                return cst.Name(original.attr.value)
+                            return updated
+
+                    new_body_block = member.body.visit(_SelfAttrRewriter())
+
+                    # build function params from fixture_names
+                    params_list = [cst.Param(name=cst.Name(fname)) for fname in fixture_names]
+                    params = cst.Parameters(params=params_list)
+
+                    # create top-level test function using the rewritten body
+                    top_fn = cst.FunctionDef(name=cst.Name(mname), params=params, body=new_body_block, decorators=[])
+                    new_body.append(top_fn)
         else:
             new_body.append(stmt)
 

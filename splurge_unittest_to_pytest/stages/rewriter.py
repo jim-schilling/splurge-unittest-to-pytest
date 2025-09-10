@@ -62,13 +62,33 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                     if first_name not in ("self", "cls"):
                         # insert desired first param before existing params
                         params.insert(0, cst.Param(name=desired_first))
-            # Do NOT append fixture parameters to test methods here.
-            # The pipeline now inserts an autouse fixture that deterministically
-            # retrieves fixture values and attaches them to the instance via
-            # request.getfixturevalue(...). Keeping test signatures runnable by
-            # default (preserving `self`/`cls`) ensures converted code can be
-            # executed as plain Python without requiring pytest to call methods.
+            # Under Option A we've removed self/cls from test method signatures
+            # earlier in the pipeline; here we also rewrite references inside
+            # the test body like `self.attr` -> `attr` so test code uses the
+            # fixture names directly.
             new_params = updated_node.params.with_changes(params=params)
+
+                # Replace self.attr occurrences with bare fixture names when the
+                # original class inherited from unittest.TestCase. The check for
+                # unittest.TestCase inheritance uses the class node stored in the
+                # collector; no local assignment is required here.
+            def _class_inherits_unittest_testcase(class_info) -> bool:
+                node = getattr(class_info, 'node', None)
+                if node is None:
+                    return False
+                for base in getattr(node, 'bases', []) or []:
+                    bval = getattr(base, 'value', base)
+                    if isinstance(bval, cst.Attribute):
+                        if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                            return True
+                    if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                        return True
+                return False
+
+            # Do not rewrite `self.attr` -> `attr`. Keep methods runnable
+            # by retaining instance attribute access; fixtures are appended
+            # as parameters but autouse attach will also set instance attrs
+            # when running under pytest.
             return updated_node.with_changes(params=new_params)
 
     transformer = Rewriter(collector.classes)

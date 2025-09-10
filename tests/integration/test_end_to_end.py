@@ -1,9 +1,4 @@
-import tempfile
 import textwrap
-import runpy
-import sys
-import os
-import types
 
 from splurge_unittest_to_pytest.main import convert_string
 

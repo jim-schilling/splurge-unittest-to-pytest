@@ -4,12 +4,10 @@ from __future__ import annotations
 from typing import Dict, Any
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 
 
 def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     module: cst.Module = context.get("module")
-    collector: CollectorOutput | None = context.get("collector_output")
     # If flags are absent, default to adding pytest import to support
     # tests that expect import injector to add pytest for bare modules.
     needs_pytest: bool = context.get("needs_pytest_import") if "needs_pytest_import" in context else True

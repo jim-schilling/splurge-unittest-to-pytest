@@ -113,15 +113,25 @@ def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     # insert an empty line then fixtures
     for i, fn in enumerate(nodes):
         new_body.insert(insert_idx + i, fn)
-    # Always add an autouse attach fixture when we generated fixture nodes.
-    # This intentionally drops the legacy/compat gating so staged output is
-    # runnable and deterministic (we attach generated fixture values to the
-    # test instance on conversion).
-    fixture_names = [n.name.value for n in nodes]
-    attach_fn = _make_autouse_attach(fixture_names)
-    # insert a blank line before the autouse fixture
-    new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
-    new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
+    # Insert fixtures into module body. We do not add an autouse attach
+    # fixture here; instead the fixtures are intended to be used as normal
+    # pytest fixtures by generated top-level test wrappers (created in the
+    # fixtures stage). Signal that pytest import is needed so ImportInjector
+    # will insert it.
+    # If the original module used unittest TestCase classes (or compat mode
+    # is requested), add an autouse attach fixture that will attach fixture
+    # values onto test instances during pytest runs. This keeps converted
+    # modules runnable while allowing pytest to inject fixtures.
+    collector: CollectorOutput | None = context.get("collector_output")
+    has_unittest_usage = False
+    if collector is not None:
+        has_unittest_usage = getattr(collector, 'has_unittest_usage', False)
+
+    if has_unittest_usage or compat:
+        fixture_names = [n.name.value for n in nodes]
+        attach_fn = _make_autouse_attach(fixture_names)
+        new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
+        new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
+
     new_module = module.with_changes(body=new_body)
-    # Signal that pytest import is needed so ImportInjector will insert it
     return {"module": new_module, "needs_pytest_import": True}

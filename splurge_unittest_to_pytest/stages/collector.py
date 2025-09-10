@@ -19,7 +19,8 @@ class ClassInfo:
     setup_methods: List[cst.FunctionDef] = field(default_factory=list)
     teardown_methods: List[cst.FunctionDef] = field(default_factory=list)
     test_methods: List[cst.FunctionDef] = field(default_factory=list)
-    setup_assignments: Dict[str, cst.BaseExpression] = field(default_factory=dict)
+    # store list of assigned expressions per attribute to detect multiple assignments
+    setup_assignments: Dict[str, List[cst.BaseExpression]] = field(default_factory=dict)
     teardown_statements: List[cst.BaseStatement] = field(default_factory=list)
 
 
@@ -90,7 +91,8 @@ class Collector(cst.CSTVisitor):
                     if m.matches(target, m.Attribute(value=m.Name("self"), attr=m.Name())):
                         attr_name = target.attr.value
                         value = assign.value
-                        self._current_class.setup_assignments[attr_name] = value
+                        # append assignment to list (support multiple assignments)
+                        self._current_class.setup_assignments.setdefault(attr_name, []).append(value)
                         self.output.has_unittest_usage = True
         elif name in ("tearDown", "tearDownClass"):
             self._current_class.teardown_methods.append(node)

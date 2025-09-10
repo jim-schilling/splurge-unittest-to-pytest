@@ -20,7 +20,6 @@ class T(unittest.TestCase):
         ctx = {'module': mod, 'collector_output': None}
         # For rewriter_stage we need a collector_output that provides classes map
         # Simulate collector output with empty setup_assignments for simplicity
-        from splurge_unittest_to_pytest.stages.collector import CollectorOutput
         # Build a fake collector output with classes mapping
         fake = type('F', (), {})()
         fake.classes = {'T': type('CI', (), {'setup_assignments': {}})()}

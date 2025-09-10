@@ -25,6 +25,10 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
 
     mgr.register(collect_stage)
 
+    # remove leftover unittest imports and TestCase inheritance early in the pipeline
+    from .remove_unittest_artifacts import remove_unittest_artifacts_stage
+    mgr.register(remove_unittest_artifacts_stage)
+
     # Note: legacy transformer previously ran early here.
     # Per project decision to ignore legacy behavior and make the staged
     # pipeline authoritative, we no longer run the legacy transformer here.

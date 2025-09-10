@@ -123,8 +123,20 @@ def generator_stage(context: dict) -> dict:
                     return True
             return False
 
+    # snapshot module-level names to detect collisions that should force
+    # binding to a local name even when the value is a literal.
+    module_level_names = set(used_local_names)
+
     for cls_name, cls in out.classes.items():
         for attr, value in cls.setup_assignments.items():
+            # collector may record multiple assignments per attribute as a list
+            multi_assigned = False
+            if isinstance(value, list):
+                multi_assigned = len(value) > 1
+                # use the last assigned value as the effective value
+                value_expr = value[-1] if value else None
+            else:
+                value_expr = value
             fname = f"{attr}"
             # find teardown statements that reference this attr
             relevant_cleanup: list[cst.BaseStatement] = []
@@ -199,22 +211,33 @@ def generator_stage(context: dict) -> dict:
 
             has_cleanup = bool(relevant_cleanup)
             yield_style = has_cleanup
-            spec = FixtureSpec(name=fname, value_expr=value, cleanup_statements=relevant_cleanup.copy(), yield_style=yield_style)
+            spec = FixtureSpec(name=fname, value_expr=value_expr, cleanup_statements=relevant_cleanup.copy(), yield_style=yield_style)
             specs[fname] = spec
             # create a minimal fixture node: @pytest.fixture
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
             # determine local name and ensure uniqueness
+            def _choose_local_name(base: str, taken: set[str]) -> str:
+                """Deterministically pick a unique local name by appending
+                a numeric suffix when needed. Returns the chosen name and
+                reserves it in `taken`.
+                """
+                if base not in taken:
+                    taken.add(base)
+                    return base
+                suffix = 1
+                while True:
+                    candidate = f"{base}_{suffix}"
+                    if candidate not in taken:
+                        taken.add(candidate)
+                        return candidate
+                    suffix += 1
+
             base_local = f"_{attr}_value"
-            local_name = base_local
-            suffix = 1
-            while local_name in used_local_names:
-                suffix += 1
-                local_name = f"{base_local}_{suffix}"
-            used_local_names.add(local_name)
+            local_name = _choose_local_name(base_local, used_local_names)
             spec.local_value_name = local_name
 
             # bind value to local variable in all cases to make cleanup rewriting consistent
-            assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(local_name))], value=value)])
+            assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(local_name))], value=value_expr)])
 
             # helper rewriter to replace self.attr or cls.attr with local_name
             class _AttrRewriter(cst.CSTTransformer):
@@ -236,20 +259,74 @@ def generator_stage(context: dict) -> dict:
                 continue
 
             if yield_style:
-                # yield the local name
-                yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                # transform cleanup statements to reference the local name instead of self.attr
-                body_stmts = [assign, yield_stmt]
-                for stmt in spec.cleanup_statements:
-                    new_stmt = stmt.visit(_AttrRewriter(attr, local_name))
-                    body_stmts.append(new_stmt)
-                body = cst.IndentedBlock(body=body_stmts)
-                func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
-                fixture_nodes.append(func)
+                # If the value is a simple literal and all cleanup statements are
+                # simple assignments or deletions targeting the attribute, we
+                # can yield the literal directly and rewrite cleanup to use the
+                # fixture name (e.g., value = None). Otherwise, bind to a
+                # unique local name and rewrite cleanup to reference that
+                # local name so complex control flow works safely.
+                def _is_simple_cleanup_statement(s: cst.BaseStatement) -> bool:
+                    # Simple assignment like `self.attr = X` or `del self.attr`
+                    if isinstance(s, cst.SimpleStatementLine) and s.body:
+                        expr = s.body[0]
+                        if isinstance(expr, cst.Assign):
+                            target = expr.targets[0].target
+                            if isinstance(target, cst.Attribute) and isinstance(target.value, cst.Name) and target.value.value in ("self", "cls"):
+                                return True
+                        if isinstance(expr, cst.Delete):
+                            for t in expr.targets:
+                                targ = getattr(t, 'target', t)
+                                if isinstance(targ, cst.Attribute) and isinstance(targ.value, cst.Name) and targ.value.value in ("self", "cls"):
+                                    return True
+                    return False
+
+                # If multiple assignments occurred in setUp, prefer binding to a
+                # local name so cleanup rewrites are consistent and literal-only
+                # yields are avoided. Also, if the module already defines the
+                # conventional local base name (e.g., `_x_value`), force binding
+                # to avoid colliding with module-level identifiers.
+                # Force binding if module defines the conventional local name
+                # or if the module contains private/underscore-prefixed names
+                # (common pattern) which increases risk of collision with
+                # the conventional fixture-local names like `_x_value`.
+                force_bind_due_to_module_collision = (
+                    base_local in module_level_names
+                    or any(name and name.startswith("_") for name in module_level_names)
+                )
+                if (not multi_assigned and _is_literal(value_expr) and all(_is_simple_cleanup_statement(s) for s in spec.cleanup_statements)
+                        and not force_bind_due_to_module_collision):
+                    # yield the literal value and rewrite cleanup to use fixture name
+                    yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(value_expr))])
+                    body_stmts = [yield_stmt]
+                    for stmt in spec.cleanup_statements:
+                        new_stmt = stmt.visit(_AttrRewriter(attr, fname))
+                        body_stmts.append(new_stmt)
+                    body = cst.IndentedBlock(body=body_stmts)
+                    func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
+                    fixture_nodes.append(func)
+                else:
+                    # bind to local_name and yield it; rewrite cleanup to local_name
+                    yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
+                    body_stmts = [assign, yield_stmt]
+                    for stmt in spec.cleanup_statements:
+                        new_stmt = stmt.visit(_AttrRewriter(attr, local_name))
+                        body_stmts.append(new_stmt)
+                    body = cst.IndentedBlock(body=body_stmts)
+                    func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
+                    fixture_nodes.append(func)
             else:
-                # non-yield: return the local name
-                return_stmt = cst.SimpleStatementLine(body=[cst.Return(cst.Name(local_name))])
-                body = cst.IndentedBlock(body=[assign, return_stmt])
-                func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
-                fixture_nodes.append(func)
+                # For simple literal values, return the literal directly instead
+                # of binding to a local name, preserving the original intent
+                # (e.g., return 42). For non-literals we still bind to a local
+                # name and return it to keep cleanup rewriting consistent.
+                if _is_literal(value_expr):
+                    return_stmt = cst.SimpleStatementLine(body=[cst.Return(value_expr)])
+                    body = cst.IndentedBlock(body=[return_stmt])
+                    func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
+                    fixture_nodes.append(func)
+                else:
+                    return_stmt = cst.SimpleStatementLine(body=[cst.Return(cst.Name(local_name))])
+                    body = cst.IndentedBlock(body=[assign, return_stmt])
+                    func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
+                    fixture_nodes.append(func)
     return {"fixture_specs": specs, "fixture_nodes": fixture_nodes}

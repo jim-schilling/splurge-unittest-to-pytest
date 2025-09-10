@@ -11,9 +11,8 @@ def test_postvalidator_accepts_valid_module():
 
 def test_postvalidator_detects_syntax_error():
     # craft a module that becomes invalid when string is replaced (simulate bad transform)
-    src = 'def f():\n    return 1\n'
-    module = cst.parse_module(src)
-    # monkey-patch module.code to return invalid code
+    # Monkey-patch a module-like object whose .code property reports
+    # invalid source to simulate a post-validation failure.
     class M:
         code = "def f(:\n"
     res = postvalidator_stage({"module": M()})

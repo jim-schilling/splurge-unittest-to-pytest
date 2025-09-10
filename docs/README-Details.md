@@ -17,10 +17,12 @@ Splurge unittest-to-pytest is a comprehensive Python library and CLI tool for co
    - File discovery and processing logic
    - Integration with converter module
 
-3. **Code Transformation** (`splurge_unittest_to_pytest/converter.py`)
-   - AST-based code transformation using libcst
-   - Assertion conversion, import management, class structure changes
-   - Preserves code formatting, comments, and whitespace
+3. **Code Transformation** (staged pipeline under `splurge_unittest_to_pytest/stages/`)
+    - AST-based code transformation using libcst
+    - Assertion conversion, import management, class structure changes
+    - Preserves code formatting, comments, and whitespace
+    - Legacy transformer implementation has been archived to `contrib/legacy_converter.py` for
+       reference; prefer the staged pipeline for conversions.
 
 4. **Exception Handling** (`splurge_unittest_to_pytest/exceptions.py`)
    - Custom exception classes for different error scenarios

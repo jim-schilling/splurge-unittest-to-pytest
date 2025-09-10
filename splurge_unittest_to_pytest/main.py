@@ -5,7 +5,6 @@ from pathlib import Path
 
 import libcst as cst
 
-from .converter import UnittestToPytestTransformer
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 
@@ -26,7 +25,7 @@ def convert_string(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
-    engine: str = "transformer",
+    engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
@@ -51,28 +50,15 @@ def convert_string(
             converted_module = run_pipeline(tree, compat=compat)
             converted_code = converted_module.code
         else:
-            # legacy transformer (deprecated)
-            import warnings
-            warnings.warn(
-                "convert_string engine='transformer' is deprecated; use engine='pipeline'",
-                DeprecationWarning,
-                stacklevel=2,
+            # The legacy transformer implementation was removed from the
+            # package proper and archived under contrib/legacy_converter.py.
+            # The staged pipeline is the supported conversion engine.
+            raise NotImplementedError(
+                "engine='transformer' is no longer supported by default."
+                " If you need the legacy transformer, import it from"
+                " 'contrib.legacy_converter' or pass engine='pipeline' to use"
+                " the staged pipeline."
             )
-            transformer = UnittestToPytestTransformer(compat=compat)
-
-            # Apply custom patterns if provided
-            if setup_patterns:
-                for pattern in setup_patterns:
-                    transformer.add_setup_pattern(pattern)
-            if teardown_patterns:
-                for pattern in teardown_patterns:
-                    transformer.add_teardown_pattern(pattern)
-            if test_patterns:
-                for pattern in test_patterns:
-                    transformer.add_test_pattern(pattern)
-
-            converted_tree = tree.visit(transformer)
-            converted_code = converted_tree.code
 
         # Check if any changes were made
         has_changes = converted_code != source_code
@@ -179,7 +165,7 @@ def convert_file(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
-    engine: str = "transformer",
+    engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
     
