@@ -71,3 +71,6 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=splurge_unittest_to_pytest --cov-report=term-missing"
 pythonpath = ["."]
+    # Do not recurse into temporary output directories used by the conversion
+    # pipeline. Some CI runners may pick these up if not explicitly ignored.
+    norecursedirs = ["tmp"]
