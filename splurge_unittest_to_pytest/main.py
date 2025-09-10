@@ -6,6 +6,7 @@ from pathlib import Path
 import libcst as cst
 
 from .converter import UnittestToPytestTransformer
+from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 
 
@@ -25,6 +26,7 @@ def convert_string(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
+    engine: str = "transformer",
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
@@ -43,24 +45,28 @@ def convert_string(
         # Parse the source code into a CST
         tree = cst.parse_module(source_code)
 
-        # Apply the transformation
-        transformer = UnittestToPytestTransformer(compat=compat)
+        # Apply the chosen conversion engine
+        if engine == "pipeline":
+            # run staged pipeline (returns a Module)
+            converted_module = run_pipeline(tree, compat=compat)
+            converted_code = converted_module.code
+        else:
+            # legacy transformer
+            transformer = UnittestToPytestTransformer(compat=compat)
 
-        # Apply custom patterns if provided
-        if setup_patterns:
-            for pattern in setup_patterns:
-                transformer.add_setup_pattern(pattern)
-        if teardown_patterns:
-            for pattern in teardown_patterns:
-                transformer.add_teardown_pattern(pattern)
-        if test_patterns:
-            for pattern in test_patterns:
-                transformer.add_test_pattern(pattern)
+            # Apply custom patterns if provided
+            if setup_patterns:
+                for pattern in setup_patterns:
+                    transformer.add_setup_pattern(pattern)
+            if teardown_patterns:
+                for pattern in teardown_patterns:
+                    transformer.add_teardown_pattern(pattern)
+            if test_patterns:
+                for pattern in test_patterns:
+                    transformer.add_test_pattern(pattern)
 
-        converted_tree = tree.visit(transformer)
-
-        # Generate the converted code
-        converted_code = converted_tree.code
+            converted_tree = tree.visit(transformer)
+            converted_code = converted_tree.code
 
         # Check if any changes were made
         has_changes = converted_code != source_code
@@ -88,6 +94,7 @@ def convert_file(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
+    engine: str = "transformer",
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
     
@@ -124,6 +131,7 @@ def convert_file(
         teardown_patterns=teardown_patterns,
     test_patterns=test_patterns,
     compat=compat,
+    engine=engine,
     )
     
     # Write the converted code if there were changes and no errors
