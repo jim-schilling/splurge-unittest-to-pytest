@@ -40,6 +40,10 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     mgr.register(legacy_transform_wrapper)
 
     # core pipeline stages
+    # assertion rewriter: convert self.assert* -> pytest assert and assertRaises contexts
+    from .assertion_rewriter import assertion_rewriter_stage
+    mgr.register(assertion_rewriter_stage)
+
     mgr.register(generator_stage)
     mgr.register(import_injector_stage)
     mgr.register(rewriter_stage)

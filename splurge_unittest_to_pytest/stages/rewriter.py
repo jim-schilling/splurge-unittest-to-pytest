@@ -37,8 +37,10 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
             name = original_node.name.value
             if not name.startswith("test"):
                 return updated_node
-            # preserve existing params (keep self/cls when present)
+            # build new params: drop first if it's self/cls
             params = list(updated_node.params.params)
+            if params and params[0].name.value in ("self", "cls"):
+                params = params[1:]
             # append fixture params from collector
             class_info = self._classes_map.get(self._current_class)
             if class_info:
