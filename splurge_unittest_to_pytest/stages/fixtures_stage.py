@@ -57,31 +57,48 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     if module is None or collector is None:
         return {"module": module}
 
+    # Allow configurable setup/teardown name lists via collector output when available
+    def _is_setup_name(name: str) -> bool:
+        # Collector records canonical setUp names; fall back to common defaults
+        return name in ("setUp", "setUpClass")
+
+    def _is_teardown_name(name: str) -> bool:
+        return name in ("tearDown", "tearDownClass")
+
     new_body: List[cst.BaseStatement] = []
-    # For quick lookup of classes to update
     classes = collector.classes
 
     for stmt in module.body:
-        # only transform ClassDef nodes that were collected
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
             cls_info = classes[stmt.name.value]
             new_class_body: List[cst.BaseStatement] = []
-            # per-class fixture names come from setup_assignments keys
+            # per-class fixture names come from setup_assignments keys (stable order)
             fixture_names = list(cls_info.setup_assignments.keys())
 
             for member in stmt.body.body:
-                # remove setUp / setUpClass / tearDown / tearDownClass
-                if isinstance(member, cst.FunctionDef) and member.name.value in ("setUp", "setUpClass", "tearDown", "tearDownClass"):
-                    # drop these methods; their assignments are used to create fixtures
+                # preserve non-function members (assign, pass, etc.)
+                if not isinstance(member, cst.FunctionDef):
+                    new_class_body.append(member)
                     continue
 
-                # update test functions (use collector test_methods to be conservative)
-                if isinstance(member, cst.FunctionDef) and (member in cls_info.test_methods or member.name.value.startswith("test")):
+                mname = member.name.value
+                # drop only exact setup/teardown functions (avoid accidental removal)
+                if _is_setup_name(mname) or _is_teardown_name(mname):
+                    # However, if the method has unexpected decorators or a non-empty signature
+                    # we conservatively keep it to avoid changing behavior.
+                    if member.decorators:
+                        new_class_body.append(member)
+                        continue
+                    # otherwise drop it (assignments are already captured by collector)
+                    continue
+
+                # update test functions discovered by collector or named with test* prefix
+                if mname.startswith("test") or member in cls_info.test_methods:
                     updated_fn = _update_test_function(member, fixture_names)
                     new_class_body.append(updated_fn)
                     continue
 
-                # otherwise keep as-is
+                # otherwise retain the member unchanged
                 new_class_body.append(member)
 
             new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))

@@ -64,13 +64,142 @@ def generator_stage(context: dict) -> dict:
                                 used_local_names.add(asname.name.value)
                             else:
                                 used_local_names.add(name.name.value if isinstance(name.name, str) else getattr(name.name, 'value', None))
+    def _references_attribute(expr: cst.BaseExpression | None, attr_name: str) -> bool:
+        """Recursively check if expression references self.<attr> or bare <attr>.
+
+        This mirrors the legacy converter's conservative search used to decide
+        whether a teardown statement references a given setup attribute.
+        """
+        if expr is None:
+            return False
+        # Attribute like self.attr or cls.attr
+        if isinstance(expr, cst.Attribute):
+            if isinstance(expr.attr, cst.Name) and expr.attr.value == attr_name:
+                if isinstance(expr.value, cst.Name) and expr.value.value in ("self", "cls"):
+                    return True
+            # recurse into value
+            return _references_attribute(expr.value, attr_name)
+        # Name
+        if isinstance(expr, cst.Name):
+            return expr.value == attr_name
+        # Call: check func and args
+        if isinstance(expr, cst.Call):
+            if _references_attribute(expr.func, attr_name):
+                return True
+            for a in expr.args:
+                if _references_attribute(a.value, attr_name):
+                    return True
+            return False
+        # Subscript (value and slices)
+        if isinstance(expr, cst.Subscript):
+            if _references_attribute(expr.value, attr_name):
+                return True
+            for s in expr.slice:
+                inner = getattr(s, 'slice', None) or getattr(s, 'value', None) or s
+                if isinstance(inner, cst.BaseExpression) and _references_attribute(inner, attr_name):
+                    return True
+            return False
+        # Binary/Comparison/Boolean ops
+        if isinstance(expr, (cst.BinaryOperation, cst.Comparison, cst.BooleanOperation)):
+            parts: list[cst.BaseExpression] = []
+            if hasattr(expr, 'left'):
+                parts.append(expr.left)  # type: ignore[attr-defined]
+            if hasattr(expr, 'right'):
+                parts.append(expr.right)  # type: ignore[attr-defined]
+            if hasattr(expr, 'comparisons'):
+                for comp in expr.comparisons:  # type: ignore[attr-defined]
+                    comp_item = getattr(comp, 'comparison', None) or getattr(comp, 'operator', None)
+                    if comp_item is not None and isinstance(comp_item, cst.BaseExpression):
+                        parts.append(comp_item)
+            for p in parts:
+                if _references_attribute(p, attr_name):
+                    return True
+            return False
+        # Tuples/Lists/Sets
+        if isinstance(expr, (cst.Tuple, cst.List, cst.Set)):
+            for e in expr.elements:
+                val = getattr(e, 'value', e)
+                if isinstance(val, cst.BaseExpression) and _references_attribute(val, attr_name):
+                    return True
+            return False
+
     for cls_name, cls in out.classes.items():
         for attr, value in cls.setup_assignments.items():
-            # simple heuristic: if any teardown statements exist, treat as yield-style
-            has_cleanup = bool(cls.teardown_statements)
-            yield_style = has_cleanup
             fname = f"{attr}"
-            spec = FixtureSpec(name=fname, value_expr=value, cleanup_statements=cls.teardown_statements.copy(), yield_style=yield_style)
+            # find teardown statements that reference this attr
+            relevant_cleanup: list[cst.BaseStatement] = []
+            for stmt in cls.teardown_statements:
+                # inspect common containers similarly to legacy
+                def _stmt_references(s: cst.BaseStatement) -> bool:
+                    # SimpleStatementLine: inspect expr or assign
+                    if isinstance(s, cst.SimpleStatementLine) and s.body:
+                        expr = s.body[0]
+                        # assignment
+                        if isinstance(expr, cst.Assign):
+                            for t in expr.targets:
+                                target = getattr(t, 'target', t)
+                                if _references_attribute(target, attr):
+                                    return True
+                            if _references_attribute(expr.value, attr):
+                                return True
+                        # expression wrapper (e.g., Expr(Call(...)))
+                        if isinstance(expr, cst.Expr):
+                            if _references_attribute(expr.value, attr):
+                                return True
+                        # delete statements: del self.attr
+                        if isinstance(expr, cst.Delete):
+                            # Delete.targets is a list of targets (like Assign.targets)
+                            for t in expr.targets:
+                                target = getattr(t, 'target', t)
+                                if _references_attribute(target, attr):
+                                    return True
+                    # If/IndentedBlock: inspect body and orelse
+                    if isinstance(s, cst.If):
+                        if _references_attribute(s.test, attr):
+                            return True
+                        for inner in getattr(s.body, 'body', []):
+                            if _stmt_references(inner):
+                                return True
+                        orelse = getattr(s, 'orelse', None)
+                        if orelse:
+                            if isinstance(orelse, cst.IndentedBlock):
+                                for inner in getattr(orelse, 'body', []):
+                                    if _stmt_references(inner):
+                                        return True
+                            elif isinstance(orelse, cst.If):
+                                if _stmt_references(orelse):
+                                    return True
+                    # IndentedBlock
+                    if isinstance(s, cst.IndentedBlock):
+                        for inner in getattr(s, 'body', []):
+                            if _stmt_references(inner):
+                                return True
+                    return False
+
+                try:
+                    if _stmt_references(stmt):
+                        relevant_cleanup.append(stmt)
+                except Exception:
+                    # be conservative: ignore unexpected shapes
+                    pass
+
+            # fallback: if our structural checks missed some unusual Delete/cleanup
+            # forms, conservatively include statements whose rendered code contains
+            # both 'del' and the attribute name. This mirrors the legacy transformer's
+            # tolerant behavior and avoids missing cleanup like 'del self.x'.
+            if not relevant_cleanup:
+                for stmt in cls.teardown_statements:
+                    try:
+                        rendered = cst.Module(body=[stmt]).code
+                        if "del" in rendered and (f"self.{attr}" in rendered or f"{attr}" in rendered):
+                            relevant_cleanup.append(stmt)
+                    except Exception:
+                        # ignore rendering issues; keep conservative behavior
+                        pass
+
+            has_cleanup = bool(relevant_cleanup)
+            yield_style = has_cleanup
+            spec = FixtureSpec(name=fname, value_expr=value, cleanup_statements=relevant_cleanup.copy(), yield_style=yield_style)
             specs[fname] = spec
             # create a minimal fixture node: @pytest.fixture
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))

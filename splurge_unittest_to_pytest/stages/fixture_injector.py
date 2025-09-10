@@ -43,30 +43,49 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     #         inst.attr = var
     #     return None
     body: List[cst.BaseStatement] = []
-    # inst = getattr(request, "instance", None)
+    # inst = getattr(request, 'instance', None)
     assign = cst.SimpleStatementLine(body=[
         cst.Assign(
             targets=[cst.AssignTarget(target=cst.Name("inst"))],
-            value=cst.Call(func=cst.Name("getattr"), args=[cst.Arg(value=cst.Name("request")), cst.Arg(value=cst.SimpleString('"instance"')), cst.Arg(value=cst.Name("None"))])
+            value=cst.Call(
+                func=cst.Name("getattr"),
+                args=[
+                    cst.Arg(value=cst.Name("request")),
+                    cst.Arg(value=cst.SimpleString("'instance'")),
+                    cst.Arg(value=cst.Name("None")),
+                ],
+            ),
         )
     ])
     body.append(assign)
     # if inst is not None: attach
     inner: List[cst.BaseStatement] = []
     for name in fixture_names:
-        # inst.name = locals()[name]
-        attr_assign = cst.SimpleStatementLine(body=[
-            cst.Assign(
-                targets=[cst.AssignTarget(target=cst.Attribute(value=cst.Name("inst"), attr=cst.Name(name)))],
-                value=cst.Subscript(value=cst.Name("locals"), slice=[cst.SubscriptElement(slice=cst.Index(value=cst.SimpleString(f'"{name}"')))])
-            )
-        ])
+        # setattr(inst, 'name', name)
+        attr_assign = cst.SimpleStatementLine(
+            body=[
+                cst.Expr(
+                    value=cst.Call(
+                        func=cst.Name("setattr"),
+                        args=[
+                            cst.Arg(value=cst.Name("inst")),
+                            cst.Arg(value=cst.SimpleString(f"'{name}'")),
+                            cst.Arg(value=cst.Name(name)),
+                        ],
+                    )
+                )
+            ]
+        )
         inner.append(attr_assign)
     if_stmt = cst.If(test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]), body=cst.IndentedBlock(body=inner))
     body.append(if_stmt)
     body.append(cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))]))
     params = cst.Parameters(params=[cst.Param(name=cst.Name("request"))])
-    func = cst.FunctionDef(name=cst.Name("_attach_to_instance"), params=params, body=cst.IndentedBlock(body=body), decorators=[cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))])
+    # decorator @pytest.fixture(autouse=True)
+    decorator = cst.Decorator(
+        decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))])
+    )
+    func = cst.FunctionDef(name=cst.Name("_attach_to_instance"), params=params, body=cst.IndentedBlock(body=body), decorators=[decorator])
     return func
 
 
@@ -86,6 +105,8 @@ def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     if compat and collector and collector.has_unittest_usage:
         fixture_names = [n.name.value for n in nodes]
         attach_fn = _make_autouse_attach(fixture_names)
-        new_body.insert(insert_idx + len(nodes), attach_fn)
+        # insert a blank line before the autouse fixture
+        new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
+        new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
     new_module = module.with_changes(body=new_body)
     return {"module": new_module}
