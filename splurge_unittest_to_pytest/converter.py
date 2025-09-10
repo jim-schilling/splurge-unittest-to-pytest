@@ -6,6 +6,9 @@ import warnings
 import libcst as cst
 from libcst import matchers as m
 
+# Reuse the moved helpers from converter.utils during decomposition
+from .converter.utils import SelfReferenceRemover, normalize_method_name
+
 
 class SelfReferenceRemover(cst.CSTTransformer):
     """Remove self/cls references from attribute accesses."""
