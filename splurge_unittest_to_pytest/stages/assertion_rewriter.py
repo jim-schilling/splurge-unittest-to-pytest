@@ -53,7 +53,8 @@ class AssertionRewriter(cst.CSTTransformer):
         return None
 
     def _should_skip_assertion_conversion(self, method_name: str) -> bool:
-        return method_name in ("assertRaises", "assertRaisesRegex")
+        # include older alias assertRaisesRegexp
+        return method_name in ("assertRaises", "assertRaisesRegex", "assertRaisesRegexp")
 
     def _convert_self_assertion_to_pytest(self, call_node: cst.Call) -> cst.BaseSmallStatement | None:
         try:
@@ -77,7 +78,9 @@ class AssertionRewriter(cst.CSTTransformer):
         try:
             assertions_map = {
                 "assertEqual": self._assert_equal,
+                "assertEquals": self._assert_equal,
                 "assertNotEqual": self._assert_not_equal,
+                "assertNotEquals": self._assert_not_equal,
                 "assertTrue": self._assert_true,
                 "assertFalse": self._assert_false,
                 "assertIsNone": self._assert_is_none,
@@ -85,14 +88,18 @@ class AssertionRewriter(cst.CSTTransformer):
                 "assertIn": self._assert_in,
                 "assertNotIn": self._assert_not_in,
                 "assertIsInstance": self._assert_is_instance,
+                "assertIs": self._assert_is,
+                "assertIsNot": self._assert_is_not,
                 "assertNotIsInstance": self._assert_not_is_instance,
                 "assertAlmostEqual": self._assert_almost_equal,
                 "assertNotAlmostEqual": self._assert_not_almost_equal,
+                "assertAlmostEquals": self._assert_almost_equal,
                 "assertListEqual": self._assert_collection_equal,
                 "assertDictEqual": self._assert_collection_equal,
                 "assertSequenceEqual": self._assert_collection_equal,
                 "assertSetEqual": self._assert_collection_equal,
                 "assertCountEqual": self._assert_collection_equal,
+                "assertItemsEqual": self._assert_collection_equal,
                 "assertGreater": self._assert_greater,
                 "assertGreaterEqual": self._assert_greater_equal,
                 "assertLess": self._assert_less,
@@ -149,7 +156,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_not_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -157,7 +164,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_true(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -165,7 +172,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=args[0].value)
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_false(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -173,7 +180,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=args[0].value))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_is_none(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -184,7 +191,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=left_expr, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_is_not_none(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -193,7 +200,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=left_expr, comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_in(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -201,7 +208,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_almost_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -236,7 +243,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_not_almost_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -268,7 +275,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)])))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_not_in(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -276,7 +283,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -285,7 +292,27 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=isinstance_call)
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
+
+    def _assert_is(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            if len(args) >= 2:
+                left = args[0].value
+                right = args[1].value
+                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=right)]))
+        except Exception:
+            pass
+        return cst.Assert(test=cst.Name("False"))
+
+    def _assert_is_not(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
+        try:
+            if len(args) >= 2:
+                left = args[0].value
+                right = args[1].value
+                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=right)]))
+        except Exception:
+            pass
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_not_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -294,7 +321,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=isinstance_call))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_greater(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -302,7 +329,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -310,7 +337,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -318,7 +345,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -326,7 +353,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_collection_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -335,7 +362,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_regex(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -349,7 +376,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=search_call)
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_not_regex(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -361,7 +388,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=search_call))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     def _assert_multi_line_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
@@ -370,7 +397,7 @@ class AssertionRewriter(cst.CSTTransformer):
                 return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
         except Exception:
             pass
-        return None
+        return cst.Assert(test=cst.Name("False"))
 
     # assertRaises helpers
     def _is_assert_raises_context_manager(self, call_node: cst.Call) -> str | None:

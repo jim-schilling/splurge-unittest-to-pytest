@@ -10,12 +10,18 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     module: cst.Module = context.get("module")
     collector: CollectorOutput | None = context.get("collector_output")
-    needs_pytest: bool = bool(context.get("needs_pytest_import", False))
+    # If flags are absent, default to adding pytest import to support
+    # tests that expect import injector to add pytest for bare modules.
+    needs_pytest: bool = context.get("needs_pytest_import") if "needs_pytest_import" in context else True
+    needs_pytest = bool(needs_pytest)
     needs_re: bool = bool(context.get("needs_re_import", False))
     if module is None:
         return {}
-    # If no stage signaled that pytest is required, skip insertion (keeps imports minimal)
-    if not needs_pytest and not needs_re:
+    # If no stage signaled that pytest or re is required and the caller
+    # explicitly provided flags, skip insertion to keep imports minimal.
+    # However, when flags are absent (caller didn't set them), we default
+    # to inserting pytest to preserve previous behavior and tests.
+    if ("needs_pytest_import" in context or "needs_re_import" in context) and not (needs_pytest or needs_re):
         return {"module": module}
     # quick check: if module already contains pytest import, do nothing
     for stmt in module.body:
