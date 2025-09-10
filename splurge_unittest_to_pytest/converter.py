@@ -4,7 +4,7 @@ from typing import Sequence, Any, cast
 import warnings
 
 import libcst as cst
-from libcst import matchers as m
+
 
 # Reuse the moved helpers from converter.utils during decomposition
 from .converter.utils import SelfReferenceRemover
@@ -33,6 +33,7 @@ from .converter.fixtures import (
     create_fixture_with_cleanup,
     create_simple_fixture,
 )
+from .converter.imports import add_pytest_import, remove_unittest_importfrom, remove_unittest_import
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -125,13 +126,11 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     ) -> cst.ImportFrom | cst.RemovalSentinel:
         """Handle import statements."""
         try:
-            if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
-                # Remove unittest imports
+            result = remove_unittest_importfrom(updated_node)
+            if result is cst.RemovalSentinel.REMOVE:
                 self.has_unittest_content = True
-                return cst.RemovalSentinel.REMOVE
-            return updated_node
+            return result
         except (AttributeError, TypeError, ValueError):
-            # If conversion fails due to unexpected node shapes, return original node unchanged
             return original_node
 
     def leave_Import(
@@ -139,12 +138,10 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     ) -> cst.Import | cst.RemovalSentinel:
         """Handle import statements."""
         try:
-            for alias in updated_node.names:
-                if m.matches(alias, m.ImportAlias(name=m.Name("unittest"))):
-                    # Remove unittest imports
-                    self.has_unittest_content = True
-                    return cst.RemovalSentinel.REMOVE
-            return updated_node
+            result = remove_unittest_import(updated_node)
+            if result is cst.RemovalSentinel.REMOVE:
+                self.has_unittest_content = True
+            return result
         except (AttributeError, TypeError, ValueError):
             return original_node
 
@@ -488,47 +485,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         return cast(cst.CSTNode, node.visit(SelfReferenceRemover()))
 
     def _add_pytest_import(self, module_node: cst.Module) -> cst.Module:
-        """Add pytest import to module at appropriate position."""
-        pytest_import = cst.SimpleStatementLine(
-            body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])]
-        )
+        """Delegate to pure helper that adds pytest import to the module.
 
-        # Work on a mutable copy of the body
-        new_body: list[Any] = list(module_node.body)
-
-        # If pytest is already imported (direct import or from import), do nothing
-        for stmt in new_body:
-            if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-                first = stmt.body[0]
-                if isinstance(first, cst.Import):
-                    for alias in first.names:
-                        if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
-                            return module_node
-                if isinstance(first, cst.ImportFrom) and isinstance(first.module, cst.Name):
-                    if first.module.value == "pytest":
-                        return module_node
-
-        # Default insert position is after top-level docstring (if present)
-        insert_pos = 0
-        if new_body:
-            first_stmt = new_body[0]
-            if (
-                isinstance(first_stmt, cst.SimpleStatementLine)
-                and first_stmt.body
-                and isinstance(first_stmt.body[0], cst.Expr)
-                and isinstance(first_stmt.body[0].value, cst.SimpleString)
-            ):
-                insert_pos = 1
-
-        # Otherwise place after existing imports
-        for i, stmt in enumerate(new_body[insert_pos:], start=insert_pos):
-            if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
-                insert_pos = i + 1
-            else:
-                break
-
-        new_body.insert(insert_pos, pytest_import)
-        return module_node.with_changes(body=new_body)
+        Kept as a thin wrapper so transformer instance state can be updated here
+        before delegating to the pure function if necessary.
+        """
+        return add_pytest_import(module_node)
 
     def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
         return _assert_greater_equal(args)
