@@ -1,7 +1,7 @@
 """Pipeline runner wiring the individual stages into a conversion pipeline."""
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Any
 
 import libcst as cst
 from .collector import Collector

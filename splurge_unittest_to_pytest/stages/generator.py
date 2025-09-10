@@ -4,7 +4,7 @@ from CollectorOutput.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, cast, Sequence
+from typing import Any, List, Optional, Set, cast, Sequence
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput

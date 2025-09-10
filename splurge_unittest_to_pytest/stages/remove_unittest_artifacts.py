@@ -5,7 +5,7 @@ or TestCase base classes which were previously removed by the legacy transformer
 """
 from __future__ import annotations
 
-from typing import Dict, Any, List
+from typing import Any
 
 import libcst as cst
 

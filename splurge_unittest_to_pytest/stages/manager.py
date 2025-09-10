@@ -6,7 +6,7 @@ extended with stage outputs (e.g., collector_output).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 import libcst as cst
 

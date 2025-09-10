@@ -1,7 +1,7 @@
 """ImportInjector: ensure `import pytest` exists and insert it after module docstring or imports."""
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Any
 from typing import Optional
 
 import libcst as cst

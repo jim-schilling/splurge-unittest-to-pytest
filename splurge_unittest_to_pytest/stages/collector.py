@@ -7,7 +7,7 @@ provide a stable data shape for the next stages.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, cast, Sequence, Any
+from typing import Optional, cast, Sequence, Any
 
 import libcst as cst
 from libcst import matchers as m

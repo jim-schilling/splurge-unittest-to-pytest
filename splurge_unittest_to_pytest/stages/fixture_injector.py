@@ -6,7 +6,7 @@ imports (similar to ImportInjector logic).
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Optional, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput

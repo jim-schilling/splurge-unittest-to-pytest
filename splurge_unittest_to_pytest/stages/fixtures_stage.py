@@ -7,7 +7,7 @@ fixture parameters (one per setup attribute) so tests receive the generated fixt
 """
 from __future__ import annotations
 
-from typing import Dict, Any, List, Optional, Sequence, cast
+from typing import Any, Optional, Sequence, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput

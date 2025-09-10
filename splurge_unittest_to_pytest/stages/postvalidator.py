@@ -3,7 +3,7 @@ serialize and parse it back, returning errors if any.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import libcst as cst
 
