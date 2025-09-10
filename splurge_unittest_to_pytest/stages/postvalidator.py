@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 import libcst as cst
 
 
-def postvalidator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def postvalidator_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module: Any = context.get("module")
     if maybe_module is None:
         return {}

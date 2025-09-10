@@ -4,7 +4,7 @@ from CollectorOutput.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast, Sequence
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -15,7 +15,7 @@ class FixtureSpec:
     name: str
     # value_expr can legitimately be None when collector recorded no value
     value_expr: Optional[cst.BaseExpression]
-    cleanup_statements: List[cst.BaseStatement]
+    cleanup_statements: list[cst.BaseStatement | cst.BaseSmallStatement]
     yield_style: bool
     local_value_name: Optional[str] = None
 
@@ -26,13 +26,13 @@ def _is_literal(expr: Optional[cst.BaseExpression]) -> bool:
     return isinstance(expr, (cst.Integer, cst.Float, cst.SimpleString, cst.Name))
 
 
-def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_out: Any = context.get("collector_output")
     out: Optional[CollectorOutput] = maybe_out if isinstance(maybe_out, CollectorOutput) else None
     if out is None:
         return {}
-    specs: Dict[str, FixtureSpec] = {}
-    fixture_nodes: List[cst.FunctionDef] = []
+    specs: dict[str, FixtureSpec] = {}
+    fixture_nodes: list[cst.FunctionDef] = []
     used_local_names: Set[str] = set()
     # populate used_local_names from module-level identifiers to avoid collisions
     maybe_module: Any = context.get("module")
@@ -52,30 +52,53 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                 used_local_names.add(node.name.value)
             if isinstance(node, cst.ClassDef):
                 used_local_names.add(node.name.value)
-            # imports
+            # imports - be defensive about ImportStar and name kinds
             if isinstance(node, cst.SimpleStatementLine):
                 for stmt in node.body:
                     if isinstance(stmt, cst.Import):
-                        for name in stmt.names:
-                            asname = name.asname
+                        for alias in getattr(stmt, 'names') or []:
+                            asname = getattr(alias, 'asname', None)
                             if asname and isinstance(asname.name, cst.Name):
                                 used_local_names.add(asname.name.value)
                             else:
-                                used_local_names.add(name.name.value.split(".")[0])
+                                base = None
+                                nname = getattr(alias, 'name', None)
+                                if isinstance(nname, str):
+                                    base = nname.split('.')[0]
+                                else:
+                                    val = getattr(nname, 'value', None)
+                                    if isinstance(val, str):
+                                        base = val.split('.')[0]
+                                if base:
+                                    used_local_names.add(base)
                     if isinstance(stmt, cst.ImportFrom):
-                        for name in stmt.names or []:
-                            asname = name.asname
-                            if asname and isinstance(asname.name, cst.Name):
-                                used_local_names.add(asname.name.value)
-                            else:
-                                used_local_names.add(name.name.value if isinstance(name.name, str) else getattr(name.name, 'value', None))
-    def _references_attribute(expr: cst.BaseExpression | None, attr_name: str) -> bool:
+                        names = getattr(stmt, 'names', None)
+                        # names may be an ImportStar (not iterable) or a sequence
+                        if names and isinstance(names, (list, tuple)):
+                            for alias in names:
+                                asname = getattr(alias, 'asname', None)
+                                if asname and isinstance(asname.name, cst.Name):
+                                    used_local_names.add(asname.name.value)
+                                else:
+                                    nname = getattr(alias, 'name', None)
+                                    base = None
+                                    if isinstance(nname, str):
+                                        base = nname
+                                    else:
+                                        val = getattr(nname, 'value', None)
+                                        if isinstance(val, str):
+                                            base = val
+                                    if base:
+                                        used_local_names.add(base)
+    def _references_attribute(expr: Any, attr_name: str) -> bool:
         """Recursively check if expression references self.<attr> or bare <attr>.
 
         This mirrors the legacy converter's conservative search used to decide
         whether a teardown statement references a given setup attribute.
         """
-        if expr is None:
+        # Accept AssignTarget and similar wrapper objects by unwrapping
+        expr = getattr(expr, 'target', expr)
+        if expr is None or not isinstance(expr, cst.BaseExpression):
             return False
         # Attribute like self.attr or cls.attr
         if isinstance(expr, cst.Attribute):
@@ -108,11 +131,11 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(expr, (cst.BinaryOperation, cst.Comparison, cst.BooleanOperation)):
             parts: list[cst.BaseExpression] = []
             if hasattr(expr, 'left'):
-                parts.append(expr.left)  # type: ignore[attr-defined]
+                parts.append(expr.left)
             if hasattr(expr, 'right'):
-                parts.append(expr.right)  # type: ignore[attr-defined]
+                parts.append(expr.right)
             if hasattr(expr, 'comparisons'):
-                for comp in expr.comparisons:  # type: ignore[attr-defined]
+                for comp in expr.comparisons:
                     comp_item = getattr(comp, 'comparison', None) or getattr(comp, 'operator', None)
                     if comp_item is not None and isinstance(comp_item, cst.BaseExpression):
                         parts.append(comp_item)
@@ -127,6 +150,8 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                 if isinstance(val, cst.BaseExpression) and _references_attribute(val, attr_name):
                     return True
             return False
+        # default: no reference found
+        return False
 
     # snapshot module-level names to detect collisions that should force
     # binding to a local name even when the value is a literal.
@@ -144,10 +169,10 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                 value_expr = value
             fname = f"{attr}"
             # find teardown statements that reference this attr
-            relevant_cleanup: list[cst.BaseStatement] = []
+            relevant_cleanup: list[cst.BaseStatement | cst.BaseSmallStatement] = []
             for stmt in cls.teardown_statements:
                 # inspect common containers similarly to legacy
-                def _stmt_references(s: cst.BaseStatement) -> bool:
+                def _stmt_references(s: Any) -> bool:
                     # SimpleStatementLine: inspect expr or assign
                     if isinstance(s, cst.SimpleStatementLine) and s.body:
                         expr = s.body[0]
@@ -196,7 +221,8 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
 
                 try:
                     if _stmt_references(stmt):
-                        relevant_cleanup.append(cast(cst.BaseStatement, stmt))
+                        # cast to the wider union to satisfy list element typing
+                        relevant_cleanup.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
                 except Exception:
                     # be conservative: ignore unexpected shapes
                     pass
@@ -210,7 +236,7 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                     try:
                         rendered = cst.Module(body=[stmt]).code
                         if "del" in rendered and (f"self.{attr}" in rendered or f"{attr}" in rendered):
-                            relevant_cleanup.append(stmt)
+                            relevant_cleanup.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
                     except Exception:
                         # ignore rendering issues; keep conservative behavior
                         pass
@@ -279,7 +305,7 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                 # fixture name (e.g., value = None). Otherwise, bind to a
                 # unique local name and rewrite cleanup to reference that
                 # local name so complex control flow works safely.
-                def _is_simple_cleanup_statement(s: cst.BaseStatement) -> bool:
+                def _is_simple_cleanup_statement(s: cst.BaseStatement | cst.BaseSmallStatement) -> bool:
                     # Simple assignment like `self.attr = X` or `del self.attr`
                     if isinstance(s, cst.SimpleStatementLine) and s.body:
                         expr = s.body[0]
@@ -287,10 +313,14 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                             target = expr.targets[0].target
                             if isinstance(target, cst.Attribute) and isinstance(target.value, cst.Name) and target.value.value in ("self", "cls"):
                                 return True
-                        if isinstance(expr, cst.Delete):
-                            for t in expr.targets:
+                        # Some libcst versions/typeshed don't expose a Delete symbol
+                        # that mypy recognizes. Detect Delete by class name to avoid
+                        # mypy attr-defined errors.
+                        cls = getattr(expr, "__class__", None)
+                        if cls is not None and getattr(cls, "__name__", None) == "Delete":
+                            for t in getattr(expr, 'targets', []):
                                 targ = getattr(t, 'target', t)
-                                if isinstance(targ, cst.Attribute) and isinstance(targ.value, cst.Name) and targ.value.value in ("self", "cls"):
+                                if isinstance(targ, cst.Attribute) and isinstance(getattr(targ, 'value', None), cst.Name) and getattr(getattr(targ, 'value', None), 'value', None) in ("self", "cls"):
                                     return True
                     return False
 
@@ -311,21 +341,22 @@ def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                         and not force_bind_due_to_module_collision):
                     # yield the literal value and rewrite cleanup to use fixture name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cast(cst.BaseExpression, value_expr)))])
-                    body_stmts = [yield_stmt]
+                    body_stmts_small: List[cst.BaseSmallStatement] = [yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = stmt.visit(_AttrRewriter(attr, fname))
-                        body_stmts.append(new_stmt)
-                    body = cst.IndentedBlock(body=body_stmts)
+                        new_stmt = cast(cst.BaseSmallStatement, stmt).visit(_AttrRewriter(attr, fname))
+                        body_stmts_small.append(new_stmt)
+                    # IndentedBlock expects Sequence[BaseStatement]; widen types here
+                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small)))
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
                 else:
                     # bind to local_name and yield it; rewrite cleanup to local_name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                    body_stmts = [assign, yield_stmt]
+                    body_stmts_small: List[cst.BaseSmallStatement] = [assign, yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = stmt.visit(_AttrRewriter(attr, local_name))
-                        body_stmts.append(new_stmt)
-                    body = cst.IndentedBlock(body=body_stmts)
+                        new_stmt = cast(cst.BaseSmallStatement, stmt).visit(_AttrRewriter(attr, local_name))
+                        body_stmts_small.append(new_stmt)
+                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small)))
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
             else:

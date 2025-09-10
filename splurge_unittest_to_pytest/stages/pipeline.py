@@ -17,7 +17,7 @@ from .tidy import tidy_stage
 def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     mgr = StageManager()
 
-    def collect_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+    def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
         visitor = Collector()
         module = context["module"]
         module.visit(visitor)

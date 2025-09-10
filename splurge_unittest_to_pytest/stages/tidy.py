@@ -6,12 +6,12 @@ from typing import Any, Dict, List, Optional, cast
 import libcst as cst
 
 
-def tidy_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {"module": module}
-    new_body: List[cst.BaseStatement] = []
+    new_body: list[cst.BaseStatement] = []
     prev_was_fixture = False
     for stmt in module.body:
         is_fixture = isinstance(stmt, cst.FunctionDef) and any(

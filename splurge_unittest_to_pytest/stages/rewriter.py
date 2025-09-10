@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 import libcst as cst
 
 
-def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     collector = context.get("collector_output")
@@ -19,7 +19,7 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
         return {"module": module}
 
     class Rewriter(cst.CSTTransformer):
-        def __init__(self, classes_map: Dict[str, Any]) -> None:
+        def __init__(self, classes_map: dict[str, Any]) -> None:
             super().__init__()
             self._current_class: str | None = None
             self._classes_map = classes_map

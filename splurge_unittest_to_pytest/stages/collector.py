@@ -7,7 +7,7 @@ provide a stable data shape for the next stages.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, cast
+from typing import Dict, List, Optional, cast, Sequence
 
 import libcst as cst
 from libcst import matchers as m
@@ -16,20 +16,20 @@ from libcst import matchers as m
 @dataclass
 class ClassInfo:
     node: cst.ClassDef
-    setup_methods: List[cst.FunctionDef] = field(default_factory=list)
-    teardown_methods: List[cst.FunctionDef] = field(default_factory=list)
-    test_methods: List[cst.FunctionDef] = field(default_factory=list)
+    setup_methods: list[cst.FunctionDef] = field(default_factory=list)
+    teardown_methods: list[cst.FunctionDef] = field(default_factory=list)
+    test_methods: list[cst.FunctionDef] = field(default_factory=list)
     # store list of assigned expressions per attribute to detect multiple assignments
-    setup_assignments: Dict[str, List[cst.BaseExpression]] = field(default_factory=dict)
-    teardown_statements: List[cst.BaseStatement] = field(default_factory=list)
+    setup_assignments: dict[str, list[cst.BaseExpression]] = field(default_factory=dict)
+    teardown_statements: list[cst.BaseStatement | cst.BaseSmallStatement] = field(default_factory=list)       
 
 
 @dataclass
 class CollectorOutput:
     module: cst.Module
     module_docstring_index: Optional[int]
-    imports: List[cst.BaseStatement]
-    classes: Dict[str, ClassInfo] = field(default_factory=dict)
+    imports: Sequence[cst.BaseStatement | cst.BaseSmallStatement]
+    classes: dict[str, ClassInfo] = field(default_factory=dict)
     has_unittest_usage: bool = False
 
 
@@ -48,7 +48,7 @@ class Collector(cst.CSTVisitor):
         self._current_class: Optional[ClassInfo] = None
         self._module: Optional[cst.Module] = None
         self._module_docstring_index: Optional[int] = None
-        self._imports: List[cst.BaseStatement] = []
+        self._imports: list[cst.BaseStatement] = []
 
     def visit_Module(self, node: cst.Module) -> None:
         self._module = node
@@ -85,11 +85,13 @@ class Collector(cst.CSTVisitor):
             for stmt in node.body.body:
                 # look for simple self.attr = <expr>
                 if m.matches(stmt, m.SimpleStatementLine(body=[m.Assign()])):
-                    assign = cast(cst.SimpleStatementLine, stmt).body[0]
+                    assign = cast(cst.Assign, cast(cst.SimpleStatementLine, stmt).body[0])
                     # assign.targets may be a list; we check target attr
                     target = assign.targets[0].target
-                    if m.matches(target, m.Attribute(value=m.Name("self"), attr=m.Name())):
-                        attr_name = target.attr.value
+                    # be defensive: target can be many shapes; extract attr if present
+                    attr_node = getattr(target, 'attr', None)
+                    if isinstance(target, cst.Attribute) and isinstance(attr_node, cst.Name) and isinstance(getattr(target, 'value', None), cst.Name) and getattr(getattr(target, 'value', None), 'value', None) == 'self':
+                        attr_name = attr_node.value
                         value = assign.value
                         # append assignment to list (support multiple assignments)
                         self._current_class.setup_assignments.setdefault(attr_name, []).append(value)

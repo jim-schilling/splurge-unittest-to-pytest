@@ -19,7 +19,7 @@ class MyTests(unittest.TestCase):
 """
 
 
-def test_generator_creates_fixture_nodes():
+def test_generator_creates_fixture_nodes() -> None:
     module = cst.parse_module(SAMPLE)
     visitor = Collector()
     module.visit(visitor)

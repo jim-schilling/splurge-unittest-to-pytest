@@ -35,14 +35,14 @@ def _find_insertion_index(module: cst.Module) -> int:
     return 0
 
 
-def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
+def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
     # create a fixture that attaches results onto request.instance
     # def _attach_to_instance(request):
     #     inst = getattr(request, "instance", None)
     #     if inst is not None:
     #         inst.attr = var
     #     return None
-    body: List[cst.BaseStatement] = []
+    body: list[cst.BaseStatement] = []
     # inst = getattr(request, 'instance', None)
     assign = cst.SimpleStatementLine(body=[
         cst.Assign(
@@ -59,7 +59,7 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     ])
     body.append(assign)
     # if inst is not None: attach
-    inner: List[cst.BaseStatement] = []
+    inner: list[cst.BaseStatement] = []
     for name in fixture_names:
         # setattr(inst, 'name', name)
         attr_assign = cst.SimpleStatementLine(
@@ -91,7 +91,7 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     body.append(cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))]))
     # make the autouse fixture accept only `request` and use
     # request.getfixturevalue(...) to retrieve fixture values.
-    params_list: List[cst.Param] = [cst.Param(name=cst.Name("request"))]
+    params_list: list[cst.Param] = [cst.Param(name=cst.Name("request"))]
     params = cst.Parameters(params=params_list)
     # decorator @pytest.fixture(autouse=True)
     decorator = cst.Decorator(
@@ -101,10 +101,10 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     return func
 
 
-def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
-    nodes: List[cst.FunctionDef] = context.get("fixture_nodes") or []
+    nodes: list[cst.FunctionDef] = context.get("fixture_nodes") or []
     collector: CollectorOutput | None = context.get("collector_output")
     compat: bool = context.get("compat", False)
     if module is None or not nodes:

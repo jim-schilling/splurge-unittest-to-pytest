@@ -42,7 +42,7 @@ class RaisesRewriter(cst.CSTTransformer):
         self.made_changes = True
         return updated_node.with_changes(items=new_items)
 
-    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr):
+    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> cst.CSTNode | cst.BaseSmallStatement | cst.Expr:
         # handle functional form: self.assertRaises(E, func, *args)
         if isinstance(updated_node.value, cst.Call):
             call = updated_node.value
@@ -63,7 +63,7 @@ class RaisesRewriter(cst.CSTTransformer):
                     # assume args like (Exc, pattern, func, ...)
                     with_item = self._create_pytest_raises_item(method_name, [exc_arg, args[1]])
                 # craft a With node
-                new_with = cst.With(items=[with_item], body=cst.IndentedBlock(body=[cst.SimpleStatementLine([cst.Expr(func_call)])]))
+                new_with = cst.With(items=[with_item], body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(func_call)])]))
                 self.made_changes = True
                 return new_with
         return updated_node
@@ -101,7 +101,7 @@ class RaisesRewriter(cst.CSTTransformer):
         return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name('pytest'), attr=cst.Name('raises')), args=list(args)))
 
 
-def raises_stage(context: dict) -> dict:
+def raises_stage(context: dict[str, object]) -> dict[str, object]:
     maybe_module = context.get('module')
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:

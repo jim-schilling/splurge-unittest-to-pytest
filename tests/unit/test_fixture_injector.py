@@ -9,7 +9,7 @@ def make_dummy_fixture(name: str) -> cst.FunctionDef:
     return cst.FunctionDef(name=cst.Name(name), params=cst.Parameters(), body=body, decorators=[decorator])
 
 
-def test_fixture_injector_inserts_fixtures_after_import():
+def test_fixture_injector_inserts_fixtures_after_import() -> None:
     src = 'import pytest\n\nclass A:\n    pass\n'
     module = parse_module(src)
     fixtures = [make_dummy_fixture("a"), make_dummy_fixture("b")]
@@ -21,7 +21,7 @@ def test_fixture_injector_inserts_fixtures_after_import():
     assert len(found) == 2
 
 
-def test_fixture_injector_adds_compat_attacher():
+def test_fixture_injector_adds_compat_attacher() -> None:
     src = '"""doc"""\n\nclass A:\n    pass\n'
     module = parse_module(src)
     fixtures = [make_dummy_fixture("res")]

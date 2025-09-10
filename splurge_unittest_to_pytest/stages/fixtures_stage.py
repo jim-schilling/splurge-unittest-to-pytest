@@ -7,7 +7,7 @@ fixture parameters (one per setup attribute) so tests receive the generated fixt
 """
 from __future__ import annotations
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Sequence, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -18,7 +18,7 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 # runnable by default and uses an autouse attach fixture for pytest runs.
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str], remove_first: bool) -> cst.FunctionDef:
+def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], remove_first: bool) -> cst.FunctionDef:
     """Ensure instance methods keep `self`/`cls` (unless staticmethod) and append fixtures.
 
     We intentionally do not remove the first parameter; instead we make sure runnable
@@ -68,9 +68,9 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str], remove_
     return fn.with_changes(params=new_params)
 
 
-def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module | None = context.get("module")
-    collector: CollectorOutput | None = context.get("collector_output")
+def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
+    module: Optional[cst.Module] = context.get("module")
+    collector: Optional[CollectorOutput] = context.get("collector_output")
     # fixture_specs and compat may be provided by earlier stages; they are
     # not needed in this stage's current implementation but may be present
     # in the context. We intentionally do not use them here to keep this
@@ -87,13 +87,13 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     def _is_teardown_name(name: str) -> bool:
         return name in ("tearDown", "tearDownClass")
 
-    new_body: List[cst.BaseStatement] = []
+    new_body: list[cst.BaseStatement] = []
     classes = collector.classes
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
             cls_info = classes[stmt.name.value]
-            new_class_body: List[cst.BaseStatement] = []
+            new_class_body: list[cst.BaseStatement] = []
             # per-class fixture names come from setup_assignments keys (stable order)
             fixture_names = list(cls_info.setup_assignments.keys())
 
@@ -121,6 +121,9 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                     # the collector's recorded original ClassDef (preserves original
                     # bases even if a prior stage removed unittest imports/bases).
                     cls_info = classes.get(stmt.name.value)
+                    if cls_info is None:
+                        # fallback to previously recorded class info if missing
+                        cls_info = cast(CollectorOutput, collector).classes.get(stmt.name.value)
                     def _class_inherits_unittest_testcase_from_original(class_info) -> bool:
                         # Use the original node saved in the collector to detect
                         # unittest.TestCase inheritance.

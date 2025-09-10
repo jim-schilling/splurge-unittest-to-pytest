@@ -6,7 +6,7 @@ to migrate assertion rewriting into the staged pipeline.
 """
 from __future__ import annotations
 
-from typing import Sequence, Tuple, Optional
+from typing import Sequence, Tuple, Optional, Any, cast
 
 import libcst as cst
 
@@ -41,7 +41,7 @@ class AssertionRewriter(cst.CSTTransformer):
         return updated_node
 
     # --- helpers (small subset mirrored from legacy transformer) ---
-    def _is_self_call(self, call_node: cst.Call) -> Optional[Tuple[str, Sequence[cst.Arg]]]:
+    def _is_self_call(self, call_node: cst.Call) -> Optional[tuple[str, Sequence[cst.Arg]]]:
         try:
             if isinstance(call_node.func, cst.Attribute):
                 if isinstance(call_node.func.value, cst.Name):
@@ -217,8 +217,8 @@ class AssertionRewriter(cst.CSTTransformer):
                 left = args[0].value
                 right = args[1].value
                 # examine kwargs in further args for 'delta' or 'places'
-                delta_arg = None
-                places_arg = None
+                delta_arg: Optional[cst.BaseExpression] = None
+                places_arg: Optional[cst.BaseExpression] = None
                 # first check for a numeric third positional (treated as 'places')
                 if len(args) >= 3 and args[2].keyword is None and isinstance(args[2].value, (cst.Integer, cst.Float)):
                     places_arg = args[2].value
@@ -255,8 +255,8 @@ class AssertionRewriter(cst.CSTTransformer):
                 left = args[0].value
                 right = args[1].value
                 # check for delta/places kwargs (and numeric third positional as places)
-                delta_arg = None
-                places_arg = None
+                delta_arg: Optional[cst.BaseExpression] = None
+                places_arg: Optional[cst.BaseExpression] = None
                 if len(args) >= 3 and args[2].keyword is None and isinstance(args[2].value, (cst.Integer, cst.Float)):
                     places_arg = args[2].value
                 for a in args[2:]:
@@ -430,10 +430,11 @@ class AssertionRewriter(cst.CSTTransformer):
         return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args)))
 
 
-def assertion_rewriter_stage(context: dict) -> dict:
-    module: cst.Module = context.get("module")
+def assertion_rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
+    module = context.get("module")
     if module is None:
         return {}
+    module = cast(cst.Module, module)
     transformer = AssertionRewriter()
     new_mod = module.visit(transformer)
     return {

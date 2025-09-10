@@ -7,13 +7,13 @@ from typing import Optional
 import libcst as cst
 
 
-def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     # If flags are absent, default to adding pytest import to support
     # tests that expect import injector to add pytest for bare modules.
-    needs_pytest: bool = context.get("needs_pytest_import") if "needs_pytest_import" in context else True
-    needs_pytest = bool(needs_pytest)
+    needs_pytest_val = context.get("needs_pytest_import") if "needs_pytest_import" in context else True
+    needs_pytest: bool = bool(needs_pytest_val)
     needs_re: bool = bool(context.get("needs_re_import", False))
     if module is None:
         return {}

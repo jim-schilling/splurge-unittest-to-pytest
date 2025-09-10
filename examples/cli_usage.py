@@ -6,7 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-def main():
+def main() -> None:
     """Demonstrate CLI usage of the unittest to pytest converter."""
     print("=== CLI Usage Example ===\n")
 

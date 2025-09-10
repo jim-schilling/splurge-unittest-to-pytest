@@ -10,14 +10,14 @@ from typing import Dict, Any, List
 import libcst as cst
 
 
-def remove_unittest_artifacts_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:
     module: cst.Module | None = context.get("module")
     if module is None:
         return {"module": module}
 
     class Cleaner(cst.CSTTransformer):
         def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
-            new_body: List[cst.BaseStatement] = []
+            new_body: list[cst.BaseStatement] = []
             for stmt in updated_node.body:
                 # remove top-level imports of unittest
                 if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
@@ -43,7 +43,7 @@ def remove_unittest_artifacts_stage(context: Dict[str, Any]) -> Dict[str, Any]:
             # filter out bases that are unittest.TestCase or bare TestCase
             if not updated_node.bases:
                 return updated_node
-            new_bases: List[cst.Arg] = []
+            new_bases: list[cst.Arg] = []
             removed = False
             for base in updated_node.bases:
                 bval = getattr(base, 'value', base)
