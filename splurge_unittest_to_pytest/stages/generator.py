@@ -8,7 +8,6 @@ from typing import Dict, List, Optional
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
-from libcst import matchers as m
 
 
 @dataclass

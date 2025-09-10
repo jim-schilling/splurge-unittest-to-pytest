@@ -6,7 +6,7 @@ parameters inferred from the class's `setup_assignments` keys.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import libcst as cst
 

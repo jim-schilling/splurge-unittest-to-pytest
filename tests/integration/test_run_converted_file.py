@@ -1,8 +1,6 @@
-import tempfile
 import subprocess
 from pathlib import Path
 from splurge_unittest_to_pytest.main import convert_string
-import libcst as cst
 
 
 def test_convert_and_run_single_file(tmp_path: Path):

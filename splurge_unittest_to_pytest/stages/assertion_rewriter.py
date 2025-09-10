@@ -6,7 +6,7 @@ to migrate assertion rewriting into the staged pipeline.
 """
 from __future__ import annotations
 
-from typing import Sequence, Any, Tuple
+from typing import Sequence, Tuple
 
 import libcst as cst
 
