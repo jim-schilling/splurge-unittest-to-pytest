@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# type: ignore
 """Demo script showing flexible parameter handling for different method types."""
 
 import libcst as cst

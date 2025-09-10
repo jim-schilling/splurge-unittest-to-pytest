@@ -1,4 +1,5 @@
 import libcst as cst
+from typing import cast
 from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.rewriter import rewriter_stage
 
@@ -21,7 +22,7 @@ def test_rewriter_adds_fixture_params_and_removes_self() -> None:
     co = visitor.as_output()
     ctx = {"module": module, "collector_output": co}
     res = rewriter_stage(ctx)
-    new_mod = res.get("module")
+    new_mod = cast(cst.Module, res.get("module"))
     # find test function
     cls = [n for n in new_mod.body if isinstance(n, cst.ClassDef) and n.name.value == "MyTests"][0]
     func = [m for m in cls.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_one"][0]

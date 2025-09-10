@@ -1,5 +1,7 @@
 """Test the flexible parameter handling for different method types."""
 
+import libcst as cst
+from typing import cast
 from splurge_unittest_to_pytest.stages.rewriter import rewriter_stage
 
 
@@ -16,17 +18,18 @@ class T(unittest.TestCase):
 
     def _convert_and_get_params(self, src: str) -> list[str]:
         """Convert class source and return parameter name list."""
-        import libcst as cst
         mod = cst.parse_module(src)
         ctx = {'module': mod, 'collector_output': None}
         # For rewriter_stage we need a collector_output that provides classes map
         # Simulate collector output with empty setup_assignments for simplicity
-        # Build a fake collector output with classes mapping
         fake = type('F', (), {})()
         fake.classes = {'T': type('CI', (), {'setup_assignments': {}})()}
         ctx['collector_output'] = fake
+
         res = rewriter_stage(ctx)
-        new_mod = res.get('module')
+        # res.get('module') may be typed as Any | None in test context — cast to Module
+        new_mod = cast(cst.Module, res.get('module'))
+
         # find the FunctionDef and return its parameter names
         for node in new_mod.body:
             if isinstance(node, cst.ClassDef) and node.name.value == 'T':

@@ -1,5 +1,4 @@
-
-
+# type: ignore
 from splurge_unittest_to_pytest import convert_string, convert_file
 from splurge_unittest_to_pytest.main import is_unittest_file, find_unittest_files
 

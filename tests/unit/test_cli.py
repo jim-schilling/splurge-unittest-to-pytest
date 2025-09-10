@@ -1,6 +1,7 @@
 """Tests for the CLI interface."""
 
 from pathlib import Path
+from typing import Any
 
 from click.testing import CliRunner
 
@@ -556,7 +557,7 @@ class TestExample(unittest.TestCase
         assert f"Error in {temp_file}:" in result.output
         assert "1 files had errors" in result.output
 
-    def test_cli_backup_creation_failure(self, tmp_path: Path, mocker) -> None:
+    def test_cli_backup_creation_failure(self, tmp_path: Path, mocker: Any) -> None:
         """Test CLI behavior when backup creation fails."""
         unittest_code = """
 import unittest

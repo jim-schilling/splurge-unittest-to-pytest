@@ -1,4 +1,5 @@
 import libcst as cst
+from typing import cast
 from splurge_unittest_to_pytest.stages.fixture_injector import fixture_injector_stage
 from libcst import parse_module
 
@@ -15,7 +16,7 @@ def test_fixture_injector_inserts_fixtures_after_import() -> None:
     fixtures = [make_dummy_fixture("a"), make_dummy_fixture("b")]
     ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": None, "compat": False}
     res = fixture_injector_stage(ctx)
-    new_module = res.get("module")
+    new_module = cast(cst.Module, res.get("module"))
     # find fixtures present after import
     found = [n for n in new_module.body if isinstance(n, cst.FunctionDef) and n.name.value in ("a","b")]
     assert len(found) == 2
@@ -30,6 +31,6 @@ def test_fixture_injector_adds_compat_attacher() -> None:
         has_unittest_usage = True
     ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": Co(), "compat": True}
     res = fixture_injector_stage(ctx)
-    new_module = res.get("module")
+    new_module = cast(cst.Module, res.get("module"))
     attach = [n for n in new_module.body if isinstance(n, cst.FunctionDef) and n.name.value == "_attach_to_instance"]
     assert len(attach) == 1

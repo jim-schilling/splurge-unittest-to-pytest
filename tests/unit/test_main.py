@@ -1,6 +1,6 @@
 """Tests for main conversion functions."""
-
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -14,7 +14,7 @@ from splurge_unittest_to_pytest.main import (
 class TestFileOperations:
     """Test file-based conversion operations."""
 
-    def test_convert_file_in_place(self, tmp_path) -> None:
+    def test_convert_file_in_place(self, tmp_path: Path) -> None:
         """Test converting a file in place."""
         unittest_code = """
 import unittest
@@ -37,7 +37,7 @@ class TestExample(unittest.TestCase):
         assert "assert 1 == 1" in converted_content
         assert "assertEqual" not in converted_content
 
-    def test_convert_file_to_different_location(self, tmp_path) -> None:
+    def test_convert_file_to_different_location(self, tmp_path: Path) -> None:
         """Test converting a file to a different location."""
         unittest_code = """
 import unittest
@@ -72,7 +72,7 @@ class TestExample(unittest.TestCase):
         with pytest.raises(FileNotFoundError):
             convert_file("nonexistent_file.py")
 
-    def test_convert_file_no_changes(self, tmp_path) -> None:
+    def test_convert_file_no_changes(self, tmp_path: Path) -> None:
         """Test converting a file that doesn't need changes."""
         pytest_code = """
 import pytest
@@ -150,7 +150,7 @@ def test_something():
         with pytest.raises(FileNotFoundError):
             is_unittest_file("nonexistent_file.py")
 
-    def test_convert_file_permission_error_reading(self, tmp_path: Path, mocker) -> None:
+    def test_convert_file_permission_error_reading(self, tmp_path: Path, mocker: Any) -> None:
         """Test handling of permission errors when reading files."""
         # Create a temporary file and mock the read_text method to raise PermissionError
         temp_file = tmp_path / "test_permission.py"
@@ -173,7 +173,7 @@ def test_something():
         with pytest.raises(EncodingError):
             convert_file(temp_file)
 
-    def test_is_unittest_file_permission_error(self, tmp_path: Path, mocker) -> None:
+    def test_is_unittest_file_permission_error(self, tmp_path: Path, mocker: Any) -> None:
         """Test handling of permission errors in is_unittest_file."""
         # Create a temporary file and mock the read_text method to raise PermissionError
         temp_file = tmp_path / "test_permission.py"

@@ -51,12 +51,12 @@ where = ["."]
 
 [tool.mypy]
 python_version = "3.10"
-    # Keep strict checks for package code; only type-check the package to
-    # avoid noisy test/demo warnings while we fix package issues.
+    # Keep strict checks for package code; include tests/examples now that
+    # we've added minimal casts/annotations in tests.
     strict = true
     warn_return_any = true
     warn_unused_configs = true
-    files = ["splurge_unittest_to_pytest"]
+    files = ["splurge_unittest_to_pytest", "tests", "examples"]
     exclude = "(^|/)(tmp|contrib)/"
 
 
