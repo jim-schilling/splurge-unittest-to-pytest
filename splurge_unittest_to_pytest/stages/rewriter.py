@@ -62,15 +62,12 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                     if first_name not in ("self", "cls"):
                         # insert desired first param before existing params
                         params.insert(0, cst.Param(name=desired_first))
-            # append fixture params from collector
-            class_info = self._classes_map.get(self._current_class)
-            if class_info:
-                fixtures = list(class_info.setup_assignments.keys())
-                for f in fixtures:
-                    # avoid duplicates
-                    if any(p.name.value == f for p in params):
-                        continue
-                    params.append(cst.Param(name=cst.Name(f)))
+            # Do NOT append fixture parameters to test methods here.
+            # The pipeline now inserts an autouse fixture that deterministically
+            # retrieves fixture values and attaches them to the instance via
+            # request.getfixturevalue(...). Keeping test signatures runnable by
+            # default (preserving `self`/`cls`) ensures converted code can be
+            # executed as plain Python without requiring pytest to call methods.
             new_params = updated_node.params.with_changes(params=params)
             return updated_node.with_changes(params=new_params)
 

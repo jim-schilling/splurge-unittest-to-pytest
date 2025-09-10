@@ -2,13 +2,13 @@
 """Demo script showing flexible parameter handling for different method types."""
 
 import libcst as cst
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import PatternConfigurator
 
 def main():
     """Demonstrate flexible parameter handling."""
     print("=== Flexible Parameter Handling Demo ===\n")
 
-    transformer = UnittestToPytestTransformer()
+    transformer = PatternConfigurator()
 
     # Test cases for different method types
     test_cases = [

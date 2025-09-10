@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `--compat` flag to control emission of autouse compatibility fixture
 - Skip `__pycache__` and unreadable files during discovery to avoid Unicode/IO errors
 - Ensure `import pytest` inserted before generated fixtures and respect module docstrings
+ - Remove legacy `UnittestToPytestTransformer` from public API; staged pipeline is now
+   the authoritative conversion engine.
+ - Add an end-to-end integration test verifying converted modules are executable and
+   autouse fixtures attach correctly.
 
 ## [2025.0.0] - 2025-09-09
 

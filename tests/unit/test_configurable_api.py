@@ -1,6 +1,6 @@
 """Test the new configurable method pattern API."""
 
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import PatternConfigurator
 
 
 class TestConfigurableAPI:
@@ -8,7 +8,7 @@ class TestConfigurableAPI:
 
     def test_default_patterns(self):
         """Test that default patterns are set correctly."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Check default setup patterns
         expected_setup = {
@@ -32,7 +32,7 @@ class TestConfigurableAPI:
 
     def test_add_setup_pattern(self):
         """Test adding custom setup patterns."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Add custom pattern
         transformer.add_setup_pattern("before_all")
@@ -46,7 +46,7 @@ class TestConfigurableAPI:
 
     def test_add_teardown_pattern(self):
         """Test adding custom teardown patterns."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Add custom pattern
         transformer.add_teardown_pattern("after_all")
@@ -60,7 +60,7 @@ class TestConfigurableAPI:
 
     def test_add_test_pattern(self):
         """Test adding custom test patterns."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Add custom pattern
         transformer.add_test_pattern("describe_")
@@ -73,7 +73,7 @@ class TestConfigurableAPI:
 
     def test_pattern_properties_return_copies(self):
         """Test that properties return copies, not references."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Get patterns
         setup_patterns = transformer.setup_patterns
@@ -86,7 +86,7 @@ class TestConfigurableAPI:
 
     def test_invalid_pattern_inputs(self):
         """Test handling of invalid pattern inputs."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Test empty string
         transformer.add_setup_pattern("")
@@ -111,7 +111,7 @@ class TestConfigurableAPI:
 
     def test_method_detection_with_custom_patterns(self):
         """Test method detection works with custom patterns."""
-        transformer = UnittestToPytestTransformer()
+        transformer = PatternConfigurator()
 
         # Add custom patterns
         transformer.add_setup_pattern("before_all")

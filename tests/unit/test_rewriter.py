@@ -26,7 +26,7 @@ def test_rewriter_adds_fixture_params_and_removes_self():
     cls = [n for n in new_mod.body if isinstance(n, cst.ClassDef) and n.name.value == "MyTests"][0]
     func = [m for m in cls.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_one"][0]
     param_names = [p.name.value for p in func.params.params]
-    # Ensure the instance method still accepts `self` (runnable), and fixtures follow
+    # Ensure the instance method still accepts `self` (runnable); fixture
+    # values should not be added as explicit function parameters because the
+    # pipeline now attaches them via an autouse fixture at module level.
     assert ("self" in param_names) or ("cls" in param_names)
-    # fixtures 'a' and 'b' should be present
-    assert "a" in param_names and "b" in param_names

@@ -92,6 +92,85 @@ def convert_string(
             has_changes=False,
             errors=errors,
         )
+
+
+class PatternConfigurator:
+    """Small helper providing pattern configuration helpers.
+
+    This is a lightweight replacement API for tests/examples that previously
+    inspected or mutated the legacy transformer's pattern sets. It intentionally
+    exposes only the pattern configuration surface used by tests.
+    """
+    def __init__(self) -> None:
+        # Keep internal sets private; expose read-only copies via properties
+        self._setup_patterns = {
+            "setup", "setUp", "set_up", "setup_method", "setUp_method",
+            "before_each", "beforeEach", "before_test", "beforeTest"
+        }
+        self._teardown_patterns = {
+            "teardown", "tearDown", "tear_down", "teardown_method", "tearDown_method",
+            "after_each", "afterEach", "after_test", "afterTest"
+        }
+        self._test_patterns = {"test_", "test", "should_", "when_", "given_", "it_", "spec_"}
+
+    def add_setup_pattern(self, p):
+        try:
+            if isinstance(p, str) and p.strip():
+                self._setup_patterns.add(p)
+        except Exception:
+            pass
+
+    def add_teardown_pattern(self, p):
+        try:
+            if isinstance(p, str) and p.strip():
+                self._teardown_patterns.add(p)
+        except Exception:
+            pass
+
+    def add_test_pattern(self, p):
+        try:
+            if isinstance(p, str) and p.strip():
+                self._test_patterns.add(p)
+        except Exception:
+            pass
+
+    def _is_setup_method(self, name: str) -> bool:
+        try:
+            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
+            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._setup_patterns)
+        except Exception:
+            return False
+
+    def _is_teardown_method(self, name: str) -> bool:
+        try:
+            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
+            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._teardown_patterns)
+        except Exception:
+            return False
+
+    def _is_test_method(self, name: str) -> bool:
+        try:
+            # Test patterns are matched case-sensitively for prefix by default,
+            # but normalize to alphanumeric + lowercase to support camelCase/underscore variants.
+            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
+            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._test_patterns)
+        except Exception:
+            return False
+    
+    @property
+    def setup_patterns(self):
+        """Return a copy of the setup pattern set."""
+        return set(self._setup_patterns)
+
+    @property
+    def teardown_patterns(self):
+        """Return a copy of the teardown pattern set."""
+        return set(self._teardown_patterns)
+
+    @property
+    def test_patterns(self):
+        """Return a copy of the test pattern set."""
+        return set(self._test_patterns)
 def convert_file(
     input_path: str | Path, 
     output_path: str | Path | None = None,

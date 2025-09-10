@@ -57,13 +57,11 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.
             # insert desired first param
             params.insert(0, cst.Param(name=desired_first))
 
-    existing = {getattr(p.name, 'value', '') for p in params}
-    for name in fixture_names:
-        if name in existing:
-            continue
-        params.append(cst.Param(name=cst.Name(name)))
-        existing.add(name)
-
+    # Do NOT append fixture parameters here. The pipeline inserts an autouse
+    # fixture that will deterministically retrieve fixture values via
+    # request.getfixturevalue(...) and attach them to the instance. Keeping
+    # test signatures runnable (preserving `self`/`cls`) allows executing the
+    # converted module outside of pytest.
     new_params = fn.params.with_changes(params=params)
     return fn.with_changes(params=new_params)
 
@@ -102,14 +100,13 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                     continue
 
                 mname = member.name.value
-                # drop only exact setup/teardown functions (avoid accidental removal)
+                # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
-                    # However, if the method has unexpected decorators or a non-empty signature
-                    # we conservatively keep it to avoid changing behavior.
-                    if member.decorators:
-                        new_class_body.append(member)
-                        continue
-                    # otherwise drop it (assignments are already captured by collector)
+                    # Keep setup/teardown methods in the converted class so the
+                    # converted module remains runnable by default (calling
+                    # inst.setUp() will still populate attributes). We still
+                    # generate pytest fixtures separately for pytest runs.
+                    new_class_body.append(member)
                     continue
 
                 # update test functions discovered by collector or named with test* prefix

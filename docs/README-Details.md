@@ -221,6 +221,18 @@ splurge-unittest-to-pytest --backup backups/ test_*.py
       conversion. Use `--no-compat` to disable this behavior if you prefer pure pytest idioms
       and to avoid emitting the compatibility glue.
 
+### Note on legacy transformer
+
+- The legacy `UnittestToPytestTransformer` implementation has been removed from the
+   public API; the staged pipeline is now the authoritative conversion engine. Tests
+   and examples that previously used the legacy transformer should use `convert_string`
+   (engine='pipeline') or the `PatternConfigurator` helper for pattern configuration.
+
+### Integration test
+
+- An end-to-end integration test verifies converted modules are executable and that
+   autouse fixtures attach values to the converted test instance when `--compat` is used.
+
 - Backups
    - Use `--backup <dir>` to create a copy of each file before it is modified. Backups are
       saved as `<filename>.bak` in the provided directory. Backups are not created during
