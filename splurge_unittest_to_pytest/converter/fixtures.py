@@ -182,3 +182,33 @@ def add_autouse_attach_fixture_to_module(module_node: cst.Module, setup_fixtures
     new_body.insert(insert_pos + 1, func)
 
     return module_node.with_changes(body=new_body)
+
+
+def parse_setup_assignments(node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
+    """Parse a setUp function to extract assignments to self.<attr>.
+
+    Returns a dict mapping attribute name -> assigned expression.
+    """
+    assignments: dict[str, cst.BaseExpression] = {}
+    for stmt in node.body.body:
+        if isinstance(stmt, cst.SimpleStatementLine):
+            if len(stmt.body) > 0:
+                expr = stmt.body[0]
+                if isinstance(expr, cst.Assign):
+                    if (
+                        len(expr.targets) == 1
+                        and isinstance(expr.targets[0].target, cst.Attribute)
+                        and isinstance(expr.targets[0].target.value, cst.Name)
+                        and expr.targets[0].target.value.value == "self"
+                    ):
+                        attr_name = expr.targets[0].target.attr.value
+                        assignments[attr_name] = expr.value
+    return assignments
+
+
+def create_fixture_for_attribute(attr_name: str, value_expr: cst.BaseExpression, teardown_cleanup: dict[str, list[cst.BaseStatement]]) -> cst.FunctionDef:
+    """Create fixture for attribute (delegates to cleanup/simple creators)."""
+    cleanup_statements = teardown_cleanup.get(attr_name, [])
+    if cleanup_statements:
+        return create_fixture_with_cleanup(attr_name, value_expr, cleanup_statements)
+    return create_simple_fixture(attr_name, value_expr)

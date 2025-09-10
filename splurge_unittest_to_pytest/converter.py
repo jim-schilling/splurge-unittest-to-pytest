@@ -32,8 +32,12 @@ from .converter.raises import (
 from .converter.fixtures import (
     create_fixture_with_cleanup,
     create_simple_fixture,
+    parse_setup_assignments,
+    create_fixture_for_attribute,
 )
 from .converter.imports import add_pytest_import, remove_unittest_importfrom, remove_unittest_import
+from .converter.cleanup import extract_relevant_cleanup, references_attribute
+from .converter.params import get_fixture_param_names, make_fixture_params
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -675,30 +679,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         return None
 
     def _parse_setup_assignments(self, node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
-        """Parse setUp method to find self.attribute = value assignments.
-        
-        Returns:
-            Dictionary mapping attribute names to their assigned expressions
-        """
-        assignments = {}
-        
-        # Visit all assignment statements in the function body
-        for stmt in node.body.body:
-            if isinstance(stmt, cst.SimpleStatementLine):
-                # The assignment might be in stmt.body[0] or directly in stmt.body
-                if len(stmt.body) > 0:
-                    expr = stmt.body[0]
-                    if isinstance(expr, cst.Assign):
-                        # Check if assigning to self.attribute
-                        if (len(expr.targets) == 1 and 
-                            isinstance(expr.targets[0].target, cst.Attribute) and
-                            isinstance(expr.targets[0].target.value, cst.Name) and
-                            expr.targets[0].target.value.value == "self"):
-                            
-                            attr_name = expr.targets[0].target.attr.value
-                            assignments[attr_name] = expr.value
-        
-        return assignments
+        """Delegate parsing of setUp assignments to a pure helper."""
+        return parse_setup_assignments(node)
 
     def _convert_setup_to_fixture(self, node: cst.FunctionDef) -> cst.RemovalSentinel:
         """Convert setUp method by storing assignments and creating fixtures immediately.
@@ -723,35 +705,19 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _create_fixture_for_attribute(self, attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
         """Create a pytest fixture for a specific attribute."""
-        # Check if there's teardown code for this fixture
-        cleanup_statements = self.teardown_cleanup.get(attr_name, [])
-        
-        if cleanup_statements:
-            # Use yield pattern with cleanup
-            return self._create_fixture_with_cleanup(attr_name, value_expr, cleanup_statements)
-        else:
-            # Simple fixture without cleanup
-            return self._create_simple_fixture(attr_name, value_expr)
+        # Delegate to pure helper which uses teardown_cleanup mapping
+        return create_fixture_for_attribute(attr_name, value_expr, self.teardown_cleanup)
 
     def _get_fixture_params_for_test_method(self) -> list[str]:
         """Get list of fixture names that should be parameters for test methods."""
-        return list(self.setup_fixtures.keys())
+        return get_fixture_param_names(self.setup_fixtures)
 
     def _add_fixture_params_to_test_method(
         self, existing_params: cst.Parameters, fixture_names: list[str]
     ) -> cst.Parameters:
         """Add fixture parameters to test method signature."""
-        # Create parameter objects for fixtures
-        fixture_params = []
-        for fixture_name in fixture_names:
-            fixture_params.append(
-                cst.Param(name=cst.Name(fixture_name))
-            )
-        
-        # Combine existing params (excluding self) with fixture params
-        all_params = fixture_params
-        
-        return cst.Parameters(params=all_params)
+        # Delegate to pure helper that builds a Parameters object for fixtures
+        return make_fixture_params(existing_params, fixture_names)
 
     def _convert_teardown_to_fixture(self, node: cst.FunctionDef) -> cst.RemovalSentinel:
         """Convert tearDown method by integrating cleanup with setup fixtures.
@@ -783,7 +749,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Create fixtures from setup assignments with tearDown cleanup integration."""
         for attr_name, value_expr in self.setup_assignments.items():
             # Check if this attribute appears in cleanup statements
-            relevant_cleanup = self._extract_relevant_cleanup(cleanup_statements, attr_name)
+            relevant_cleanup = extract_relevant_cleanup(cleanup_statements, attr_name)
             
             if relevant_cleanup:
                 # Create fixture with yield and cleanup
@@ -797,130 +763,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.needs_pytest_import = True
     
     def _extract_relevant_cleanup(self, cleanup_statements: list[Any], attr_name: str) -> list[Any]:
-        """Extract cleanup statements that reference the given attribute."""
-        relevant_statements: list[Any] = []
-        def inspect_stmt(s: cst.BaseStatement) -> None:
-            # Recursively inspect statements to find references to attr_name
-            if isinstance(s, cst.SimpleStatementLine) and s.body:
-                expr = s.body[0]
-                if isinstance(expr, cst.Expr) and isinstance(expr.value, cst.Call):
-                    call = expr.value
-                    func = call.func
-                    # Method call on attribute, e.g., self.value.close()
-                    if isinstance(func, cst.Attribute) and self._references_attribute(func.value, attr_name):
-                        relevant_statements.append(s)
-                        return
-                    # Or any argument references the attribute (e.g., shutil.rmtree(self.temp_dir))
-                    for arg in call.args:
-                        if self._references_attribute(arg.value, attr_name):
-                            relevant_statements.append(s)
-                            return
-                elif isinstance(expr, cst.Assign):
-                    for target in expr.targets:
-                        target_expr = getattr(target, "target", target)
-                        if self._references_attribute(target_expr, attr_name):
-                            relevant_statements.append(s)
-                            return
-
-            # If statement: inspect body and orelse blocks
-            if isinstance(s, cst.If):
-                # Inspect test for direct reference
-                if self._references_attribute(s.test, attr_name):
-                    relevant_statements.append(s)
-                    return
-                # Inspect body statements
-                for inner in getattr(s.body, 'body', []):
-                    inspect_stmt(inner)
-                    if relevant_statements and relevant_statements[-1] is inner:
-                        return
-                # Inspect orelse (else/elif) if present
-                orelse = getattr(s, 'orelse', None)
-                if orelse:
-                    # orelse may be an IndentedBlock or another If
-                    if isinstance(orelse, cst.IndentedBlock):
-                        for inner in getattr(orelse, 'body', []):
-                            inspect_stmt(inner)
-                            if relevant_statements and relevant_statements[-1] is inner:
-                                return
-                    elif isinstance(orelse, cst.If):
-                        inspect_stmt(orelse)
-                        if relevant_statements and relevant_statements[-1] is orelse:
-                            return
-
-            # Other compound blocks: try to inspect common containers
-            if isinstance(s, cst.IndentedBlock):
-                for inner in getattr(s, 'body', []):
-                    inspect_stmt(inner)
-                    if relevant_statements and relevant_statements[-1] is inner:
-                        return
-
-        for stmt in cleanup_statements:
-            inspect_stmt(stmt)
-        
-        return relevant_statements
+        """Delegate to pure helper that extracts cleanup statements referencing attr_name."""
+        return extract_relevant_cleanup(cleanup_statements, attr_name)
     
     def _references_attribute(self, expr: Any, attr_name: str) -> bool:
-        """Check if an expression references a specific attribute."""
-        # Direct attribute or name match
-        if isinstance(expr, cst.Attribute):
-            # Direct match: obj.attr
-            if expr.attr.value == attr_name:
-                return True
-            # Nested attribute: e.g., obj.attr.method -> inspect expr.value recursively
-            return self._references_attribute(expr.value, attr_name)
-        if isinstance(expr, cst.Name):
-            return expr.value == attr_name
-
-        # Recursively inspect common expression containers
-        # Calls: inspect func and args
-        if isinstance(expr, cst.Call):
-            if self._references_attribute(expr.func, attr_name):
-                return True
-            for a in expr.args:
-                if self._references_attribute(a.value, attr_name):
-                    return True
-            return False
-
-        # Subscript/indexing
-        if isinstance(expr, cst.Subscript):
-            if self._references_attribute(expr.value, attr_name):
-                return True
-            for s in expr.slice:
-                # slice can be Index or Slice objects
-                inner = getattr(s, 'slice', None) or getattr(s, 'value', None) or s
-                if isinstance(inner, cst.BaseExpression) and self._references_attribute(inner, attr_name):
-                    return True
-            return False
-
-        # Binary operations, comparisons, boolean ops
-        if isinstance(expr, (cst.BinaryOperation, cst.Comparison, cst.BooleanOperation)):
-            # These nodes have left/right or comparisons/values attributes
-            parts: list[Any] = []
-            if hasattr(expr, 'left'):
-                parts.append(expr.left)
-            if hasattr(expr, 'right'):
-                parts.append(expr.right)
-            if hasattr(expr, 'comparisons'):
-                for comp in expr.comparisons:
-                    comp_item = getattr(comp, 'comparison', None) or getattr(comp, 'operator', None)
-                    if comp_item is not None:
-                        parts.append(comp_item)
-            for part in parts:
-                if isinstance(part, cst.BaseExpression) and self._references_attribute(part, attr_name):
-                    return True
-            return False
-
-        # Assignments and targets handled elsewhere; for other nodes, try to walk common containers
-        # Sequence/tuple/list literals
-        if isinstance(expr, (cst.Tuple, cst.List, cst.Set)):
-            for e in expr.elements:
-                val = getattr(e, 'value', e)
-                if isinstance(val, cst.BaseExpression) and self._references_attribute(val, attr_name):
-                    return True
-            return False
-
-        # Fallback: not found
-        return False
+        """Delegate to pure helper that checks for attribute references."""
+        return references_attribute(expr, attr_name)
     
     def _create_fixture_with_cleanup(self, attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]) -> cst.FunctionDef:
         """Create a fixture with yield pattern and cleanup."""
