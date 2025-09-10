@@ -10,121 +10,125 @@ class TestBasicAssertions:
     """Test conversion of basic unittest assertions."""
 
     def test_assert_equal_conversion(self) -> None:
-        """Test assertEqual conversion to assert ==."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertEqual(1 + 1, 2)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert 1 + 1 == 2" in result.converted_code
         assert "assertEqual" not in result.converted_code
 
     def test_assert_true_conversion(self) -> None:
-        """Test assertTrue conversion to assert."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertTrue(True)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert True" in result.converted_code
         assert "assertTrue" not in result.converted_code
 
     def test_assert_false_conversion(self) -> None:
-        """Test assertFalse conversion to assert not."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertFalse(False)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert not False" in result.converted_code
         assert "assertFalse" not in result.converted_code
 
     def test_assert_is_none_conversion(self) -> None:
-        """Test assertIsNone conversion to assert ... is None."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertIsNone(None)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert None is None" in result.converted_code
         assert "assertIsNone" not in result.converted_code
 
     def test_assert_in_conversion(self) -> None:
-        """Test assertIn conversion to assert ... in ..."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertIn(1, [1, 2, 3])
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert 1 in [1, 2, 3]" in result.converted_code
         assert "assertIn" not in result.converted_code
 
     def test_assert_is_instance_conversion(self) -> None:
-        """Test assertIsInstance conversion to assert isinstance(...)."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertIsInstance(1, int)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert isinstance(1, int)" in result.converted_code
         assert "assertIsInstance" not in result.converted_code
 
     def test_assert_greater_conversion(self) -> None:
         """Test assertGreater conversion to assert ... > ..."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertGreater(2, 1)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
+
         assert result.has_changes
         assert "assert 2 > 1" in result.converted_code
         assert "assertGreater" not in result.converted_code
 
     def test_assert_less_equal_conversion(self) -> None:
         """Test assertLessEqual conversion to assert ... <= ..."""
-        unittest_code = """
+        unittest_code = (
+            """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self):
         self.assertLessEqual(2, 2)
 """
-        result = convert_string(unittest_code)
-        
+        )
+        result = convert_string(unittest_code, engine="pipeline")
+
         assert result.has_changes
         assert "assert 2 <= 2" in result.converted_code
         assert "assertLessEqual" not in result.converted_code

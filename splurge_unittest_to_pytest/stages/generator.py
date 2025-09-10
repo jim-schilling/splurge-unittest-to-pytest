@@ -31,6 +31,40 @@ def generator_stage(context: dict) -> dict:
     specs: Dict[str, FixtureSpec] = {}
     fixture_nodes: List[cst.FunctionDef] = []
     used_local_names: set[str] = set()
+    # populate used_local_names from module-level identifiers to avoid collisions
+    module: cst.Module | None = context.get("module")
+    if module is not None:
+        for node in module.body:
+            # assignments
+            if isinstance(node, cst.SimpleStatementLine):
+                for stmt in node.body:
+                    if isinstance(stmt, cst.Assign):
+                        for t in stmt.targets:
+                            target = t.target
+                            if isinstance(target, cst.Name):
+                                used_local_names.add(target.value)
+            # def/class names
+            if isinstance(node, cst.FunctionDef):
+                used_local_names.add(node.name.value)
+            if isinstance(node, cst.ClassDef):
+                used_local_names.add(node.name.value)
+            # imports
+            if isinstance(node, cst.SimpleStatementLine):
+                for stmt in node.body:
+                    if isinstance(stmt, cst.Import):
+                        for name in stmt.names:
+                            asname = name.asname
+                            if asname and isinstance(asname.name, cst.Name):
+                                used_local_names.add(asname.name.value)
+                            else:
+                                used_local_names.add(name.name.value.split(".")[0])
+                    if isinstance(stmt, cst.ImportFrom):
+                        for name in stmt.names or []:
+                            asname = name.asname
+                            if asname and isinstance(asname.name, cst.Name):
+                                used_local_names.add(asname.name.value)
+                            else:
+                                used_local_names.add(name.name.value if isinstance(name.name, str) else getattr(name.name, 'value', None))
     for cls_name, cls in out.classes.items():
         for attr, value in cls.setup_assignments.items():
             # simple heuristic: if any teardown statements exist, treat as yield-style
@@ -67,6 +101,12 @@ def generator_stage(context: dict) -> dict:
                     return updated
 
             # body: return or yield
+            # skip creating fixture if a top-level function with same name already exists
+            if module is not None and any(isinstance(n, cst.FunctionDef) and n.name.value == fname for n in module.body):
+                # still record spec but don't create a duplicate fixture node
+                specs[fname] = spec
+                continue
+
             if yield_style:
                 # yield the local name
                 yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])

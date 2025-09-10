@@ -17,7 +17,7 @@ class TestC(unittest.TestCase):
     def test_use(self):
         self.assertTrue(True)
 '''
-    result = convert_string(src)
+    result = convert_string(src, engine="pipeline")
     assert result.has_changes
     out = result.converted_code
     # Expect fixtures for d and f and cleanup present
@@ -40,7 +40,7 @@ class TestD(unittest.TestCase):
     def test_it(self):
         self.assertIsNotNone(self.tmp)
 '''
-    result = convert_string(src)
+    result = convert_string(src, engine="pipeline")
     assert result.has_changes
     out = result.converted_code
     # Ensure cleanup conditional is present in converted fixture

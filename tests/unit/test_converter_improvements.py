@@ -58,7 +58,7 @@ class TestExample(unittest.TestCase):
         self.assertTrue(True)
 """
 
-    res = convert_string(src)
+    res = convert_string(src, engine="pipeline")
     assert res.has_changes
     out = res.converted_code
     # pytest import should be present

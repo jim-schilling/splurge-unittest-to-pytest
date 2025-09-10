@@ -12,7 +12,7 @@ class TestX(unittest.TestCase):
     def test_one(self):
         self.assertEqual(self.tmp, 1)
 '''
-    result = convert_string(src)
+    result = convert_string(src, engine="pipeline")
     assert result.has_changes
     out = result.converted_code
     # Ensure 'import pytest' appears before any '@pytest.fixture' decorator
