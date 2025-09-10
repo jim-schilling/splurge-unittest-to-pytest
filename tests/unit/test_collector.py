@@ -19,7 +19,7 @@ class MyTests(unittest.TestCase):
 """
 
 
-def test_collector_captures_setup_and_teardown():
+def test_collector_captures_setup_and_teardown() -> None:
     module = cst.parse_module(SAMPLE)
     visitor = Collector()
     module.visit(visitor)

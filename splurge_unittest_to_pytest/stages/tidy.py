@@ -11,7 +11,8 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {"module": module}
-    new_body: list[cst.BaseStatement] = []
+    # allow insertion of EmptyLine (a BaseSmallStatement) into the module body
+    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     prev_was_fixture = False
     for stmt in module.body:
         is_fixture = isinstance(stmt, cst.FunctionDef) and any(
@@ -19,9 +20,9 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
         )
         if prev_was_fixture and not is_fixture:
             # insert an empty line separation, but avoid duplicate EmptyLines
-                if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
-                    new_body.append(cast(cst.BaseStatement, cst.EmptyLine()))
-        new_body.append(cast(cst.BaseStatement, stmt))
+                    if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
+                        new_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+        new_body.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
         prev_was_fixture = is_fixture
     new_module = module.with_changes(body=new_body)
     # Ensure test methods inside classes have a 'self' parameter when missing

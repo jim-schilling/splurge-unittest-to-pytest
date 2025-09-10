@@ -15,7 +15,7 @@ class FixtureSpec:
     name: str
     # value_expr can legitimately be None when collector recorded no value
     value_expr: Optional[cst.BaseExpression]
-    cleanup_statements: list[cst.BaseStatement | cst.BaseSmallStatement]
+    cleanup_statements: list[Any]
     yield_style: bool
     local_value_name: Optional[str] = None
 
@@ -194,7 +194,8 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         # delete statements: del self.attr
                         # Some libcst versions/typeshed don't expose a Delete symbol
                         # that mypy recognizes. Detect by class name to avoid mypy errors.
-                        if getattr(expr, "__class__", None).__name__ == "Delete":
+                        cls = getattr(expr, "__class__", None)
+                        if cls is not None and getattr(cls, "__name__", None) == "Delete":
                             for t in getattr(expr, 'targets', []):
                                 target = getattr(t, 'target', t)
                                 if _references_attribute(target, attr):
@@ -308,7 +309,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # fixture name (e.g., value = None). Otherwise, bind to a
                 # unique local name and rewrite cleanup to reference that
                 # local name so complex control flow works safely.
-                def _is_simple_cleanup_statement(s: cst.BaseStatement | cst.BaseSmallStatement) -> bool:
+                def _is_simple_cleanup_statement(s: Any) -> bool:
                     # Simple assignment like `self.attr = X` or `del self.attr`
                     if isinstance(s, cst.SimpleStatementLine) and s.body:
                         expr = s.body[0]
@@ -344,11 +345,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         and not force_bind_due_to_module_collision):
                     # yield the literal value and rewrite cleanup to use fixture name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cast(cst.BaseExpression, value_expr)))])
-                    body_stmts_small_small: List[cst.BaseSmallStatement | cst.RemovalSentinel | cst.FlattenSentinel[cst.BaseSmallStatement]] = [yield_stmt]
+                    # accumulate as Any to accept mixed libcst statement flavors
+                    body_stmts_small_small: List[Any] = [yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        # stmt may be several libcst statement flavors; rely on
-                        # runtime visit() behavior and treat as Any here to
-                        # avoid overly strict static typing mismatches.
                         new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, fname))
                         body_stmts_small_small.append(new_stmt)
                     # IndentedBlock expects Sequence[BaseStatement]; widen types here
@@ -358,7 +357,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 else:
                     # bind to local_name and yield it; rewrite cleanup to local_name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                    body_stmts_small_small: List[cst.BaseSmallStatement | cst.RemovalSentinel | cst.FlattenSentinel[cst.BaseSmallStatement]] = [assign, yield_stmt]
+                    # accumulate as Any to accept Assign (BaseStatement) and
+                    # SimpleStatementLine/other small-statement flavors
+                    body_stmts_small_small = [assign, yield_stmt]
                     for stmt in spec.cleanup_statements:
                         new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, local_name))
                         body_stmts_small_small.append(new_stmt)

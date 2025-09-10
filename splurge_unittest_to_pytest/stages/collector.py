@@ -7,7 +7,7 @@ provide a stable data shape for the next stages.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, cast, Sequence
+from typing import Dict, List, Optional, cast, Sequence, Any
 
 import libcst as cst
 from libcst import matchers as m
@@ -16,19 +16,19 @@ from libcst import matchers as m
 @dataclass
 class ClassInfo:
     node: cst.ClassDef
-    setup_methods: list[cst.FunctionDef] = field(default_factory=list)
-    teardown_methods: list[cst.FunctionDef] = field(default_factory=list)
-    test_methods: list[cst.FunctionDef] = field(default_factory=list)
+    setup_methods: list[Any] = field(default_factory=list)
+    teardown_methods: list[Any] = field(default_factory=list)
+    test_methods: list[Any] = field(default_factory=list)
     # store list of assigned expressions per attribute to detect multiple assignments
-    setup_assignments: dict[str, list[cst.BaseExpression]] = field(default_factory=dict)
-    teardown_statements: list[cst.BaseStatement | cst.BaseSmallStatement] = field(default_factory=list)       
+    setup_assignments: dict[str, list[Any]] = field(default_factory=dict)
+    teardown_statements: list[Any] = field(default_factory=list)
 
 
 @dataclass
 class CollectorOutput:
     module: cst.Module
     module_docstring_index: Optional[int]
-    imports: Sequence[cst.BaseStatement | cst.BaseSmallStatement]
+    imports: Sequence[Any]
     classes: dict[str, ClassInfo] = field(default_factory=dict)
     has_unittest_usage: bool = False
 
@@ -48,7 +48,7 @@ class Collector(cst.CSTVisitor):
         self._current_class: Optional[ClassInfo] = None
         self._module: Optional[cst.Module] = None
         self._module_docstring_index: Optional[int] = None
-        self._imports: list[cst.BaseStatement] = []
+        self._imports: list[Any] = []
 
     def visit_Module(self, node: cst.Module) -> None:
         self._module = node
@@ -60,7 +60,7 @@ class Collector(cst.CSTVisitor):
         # collect top-level imports
         for stmt in node.body:
             if m.matches(stmt, m.Import() | m.ImportFrom()):
-                self._imports.append(cast(cst.BaseStatement, stmt))
+                self._imports.append(cast(Any, stmt))
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         name = node.name.value

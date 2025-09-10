@@ -125,7 +125,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     cls_info_local = classes.get(stmt.name.value)
                     if cls_info_local is None:
                         # fallback to previously recorded class info if missing
-                        cls_info_local = cast(Any, cast(CollectorOutput, collector).classes.get(stmt.name.value))
+                        cls_info_local = cast(Any, collector.classes.get(stmt.name.value))
 
                     def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
                         # Use the original node saved in the collector to detect
@@ -199,7 +199,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     params = cst.Parameters(params=params_list)
 
                     # create top-level test function using the rewritten body
-                    top_fn = cst.FunctionDef(name=cst.Name(mname), params=params, body=new_body_block, decorators=[])
+                    top_fn = cst.FunctionDef(name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[])
                     new_body.append(top_fn)
         else:
             new_body.append(stmt)
