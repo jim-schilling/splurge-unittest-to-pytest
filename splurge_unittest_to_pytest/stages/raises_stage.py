@@ -42,7 +42,11 @@ class RaisesRewriter(cst.CSTTransformer):
         self.made_changes = True
         return updated_node.with_changes(items=new_items)
 
-    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> cst.CSTNode | cst.BaseSmallStatement | cst.Expr:
+    # The libcst typed-visitor protocol allows returning several small-statement
+    # flavors including FlattenSentinel/RemovalSentinel. Use a compatible union
+    # return annotation so mypy accepts both a transformed With node and the
+    # usual Expr/SmallStatement forms without needing an ignore.
+    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> cst.BaseSmallStatement | cst.BaseExpression | cst.FlattenSentinel[cst.BaseSmallStatement] | cst.RemovalSentinel:
         # handle functional form: self.assertRaises(E, func, *args)
         if isinstance(updated_node.value, cst.Call):
             call = updated_node.value

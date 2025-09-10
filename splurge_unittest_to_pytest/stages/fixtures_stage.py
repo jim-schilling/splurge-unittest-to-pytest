@@ -61,8 +61,7 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], rem
     # params and rely on the autouse attach fixture to set instance attrs.
     if remove_first:
         for fname in fixture_names:
-            if not any(getattr(p.name, 'value', None) == fname for p in params):
-                params.append(cst.Param(name=cst.Name(fname)))
+            params.append(cst.Param(name=cst.Name(fname)))
 
     new_params = fn.params.with_changes(params=params)
     return fn.with_changes(params=new_params)
@@ -87,13 +86,17 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     def _is_teardown_name(name: str) -> bool:
         return name in ("tearDown", "tearDownClass")
 
-    new_body: list[cst.BaseStatement] = []
+    # module body may contain BaseStatement elements; some class members
+    # and injected lines are BaseSmallStatement variants. Use a list that
+    # accepts either to avoid append type errors when inserting existing
+    # nodes from the original tree.
+    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
             cls_info = classes[stmt.name.value]
-            new_class_body: list[cst.BaseStatement] = []
+            new_class_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
             # per-class fixture names come from setup_assignments keys (stable order)
             fixture_names = list(cls_info.setup_assignments.keys())
 
@@ -117,14 +120,14 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 if mname.startswith("test") or member in cls_info.test_methods:
                     # Decide per-class whether to remove the first param by checking
                     # if the class originally inherited from unittest.TestCase.
-                    # Decide per-class whether to remove the first param by checking
-                    # the collector's recorded original ClassDef (preserves original
-                    # bases even if a prior stage removed unittest imports/bases).
-                    cls_info = classes.get(stmt.name.value)
-                    if cls_info is None:
+                    # The collector stores the original ClassDef node which we
+                    # consult to detect unittest.TestCase inheritance.
+                    cls_info_local = classes.get(stmt.name.value)
+                    if cls_info_local is None:
                         # fallback to previously recorded class info if missing
-                        cls_info = cast(CollectorOutput, collector).classes.get(stmt.name.value)
-                    def _class_inherits_unittest_testcase_from_original(class_info) -> bool:
+                        cls_info_local = cast(Any, cast(CollectorOutput, collector).classes.get(stmt.name.value))
+
+                    def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
                         # Use the original node saved in the collector to detect
                         # unittest.TestCase inheritance.
                         node = getattr(class_info, 'node', None)
@@ -159,7 +162,8 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
             # fixtures directly. The original class and methods are retained so
             # the module remains runnable by calling instance methods.
             cls_original = cls_info
-            def _class_inherits_unittest_testcase_from_original(class_info) -> bool:
+
+            def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
                 node = getattr(class_info, 'node', None)
                 if node is None:
                     return False

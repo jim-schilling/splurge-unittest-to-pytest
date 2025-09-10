@@ -6,7 +6,7 @@ imports (similar to ImportInjector logic).
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -110,7 +110,8 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if module is None or not nodes:
         return {"module": module}
     insert_idx = _find_insertion_index(module)
-    new_body = list(module.body)
+    # allow a mix of statement and small-statement/EmptyLine nodes in the new body
+    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
     # insert an empty line then fixtures
     for i, fn in enumerate(nodes):
         new_body.insert(insert_idx + i, fn)
@@ -130,7 +131,8 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if has_unittest_usage or compat:
         fixture_names = [n.name.value for n in nodes]
         attach_fn = _make_autouse_attach(fixture_names)
-        new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
+        # insert an EmptyLine sentinel (a BaseSmallStatement) followed by the attach function
+        new_body.insert(insert_idx + len(nodes), cast(cst.BaseSmallStatement, cst.EmptyLine()))
         new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
 
     new_module = module.with_changes(body=new_body)

@@ -169,7 +169,10 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 value_expr = value
             fname = f"{attr}"
             # find teardown statements that reference this attr
-            relevant_cleanup: list[cst.BaseStatement | cst.BaseSmallStatement] = []
+            # We accept a mix of libcst statement flavors here; widen to Any to
+            # avoid variance and typeshed mismatches while preserving runtime
+            # behavior. We'll narrow later at stage boundaries where needed.
+            relevant_cleanup: list[Any] = []
             for stmt in cls.teardown_statements:
                 # inspect common containers similarly to legacy
                 def _stmt_references(s: Any) -> bool:
@@ -222,7 +225,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 try:
                     if _stmt_references(stmt):
                         # cast to the wider union to satisfy list element typing
-                        relevant_cleanup.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
+                        relevant_cleanup.append(stmt)
                 except Exception:
                     # be conservative: ignore unexpected shapes
                     pass
@@ -236,7 +239,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     try:
                         rendered = cst.Module(body=[stmt]).code
                         if "del" in rendered and (f"self.{attr}" in rendered or f"{attr}" in rendered):
-                            relevant_cleanup.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
+                            relevant_cleanup.append(stmt)
                     except Exception:
                         # ignore rendering issues; keep conservative behavior
                         pass
@@ -341,22 +344,25 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         and not force_bind_due_to_module_collision):
                     # yield the literal value and rewrite cleanup to use fixture name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cast(cst.BaseExpression, value_expr)))])
-                    body_stmts_small: List[cst.BaseSmallStatement] = [yield_stmt]
+                    body_stmts_small_small: List[cst.BaseSmallStatement | cst.RemovalSentinel | cst.FlattenSentinel[cst.BaseSmallStatement]] = [yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = cast(cst.BaseSmallStatement, stmt).visit(_AttrRewriter(attr, fname))
-                        body_stmts_small.append(new_stmt)
+                        # stmt may be several libcst statement flavors; rely on
+                        # runtime visit() behavior and treat as Any here to
+                        # avoid overly strict static typing mismatches.
+                        new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, fname))
+                        body_stmts_small_small.append(new_stmt)
                     # IndentedBlock expects Sequence[BaseStatement]; widen types here
-                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small)))
+                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small_small)))
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
                 else:
                     # bind to local_name and yield it; rewrite cleanup to local_name
                     yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                    body_stmts_small: List[cst.BaseSmallStatement] = [assign, yield_stmt]
+                    body_stmts_small_small: List[cst.BaseSmallStatement | cst.RemovalSentinel | cst.FlattenSentinel[cst.BaseSmallStatement]] = [assign, yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = cast(cst.BaseSmallStatement, stmt).visit(_AttrRewriter(attr, local_name))
-                        body_stmts_small.append(new_stmt)
-                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small)))
+                        new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, local_name))
+                        body_stmts_small_small.append(new_stmt)
+                    body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small_small)))
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
             else:

@@ -73,7 +73,7 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # original class inherited from unittest.TestCase. The check for
                 # unittest.TestCase inheritance uses the class node stored in the
                 # collector; no local assignment is required here.
-            def _class_inherits_unittest_testcase(class_info) -> bool:
+            def _class_inherits_unittest_testcase(class_info: Any) -> bool:
                 node = getattr(class_info, 'node', None)
                 if node is None:
                     return False
