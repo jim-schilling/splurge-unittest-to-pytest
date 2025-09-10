@@ -163,6 +163,5 @@ class TestInheritanceChain:
         mock_resource = MagicMock()
         base_resources.append(mock_resource)
 
-        # Resource should be closed during teardown
-        # (This will be verified when fixture cleanup runs)</content>
-<parameter name="filePath">d:\repos\splurge-unittest-to-pytest\tests\data\unittest_pytest_28.txt
+    # Resource should be closed during teardown
+    # (This will be verified when fixture cleanup runs)

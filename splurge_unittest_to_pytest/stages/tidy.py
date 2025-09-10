@@ -17,8 +17,9 @@ def tidy_stage(context: Dict[str, Any]) -> Dict[str, Any]:
             isinstance(d.decorator, cst.Attribute) and d.decorator.attr.value == "fixture" for d in getattr(stmt, "decorators", [])
         )
         if prev_was_fixture and not is_fixture:
-            # insert an empty line separation
-            new_body.append(cst.EmptyLine())
+            # insert an empty line separation, but avoid duplicate EmptyLines
+            if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
+                new_body.append(cst.EmptyLine())
         new_body.append(stmt)
         prev_was_fixture = is_fixture
     new_module = module.with_changes(body=new_body)

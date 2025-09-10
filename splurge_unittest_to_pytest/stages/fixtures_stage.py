@@ -31,10 +31,10 @@ def _should_remove_first_param(node: cst.FunctionDef) -> bool:
     return first_name == "self"
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.FunctionDef:
-    # Remove first param if appropriate and append fixture params (avoid duplicates)
+def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str], remove_self: bool) -> cst.FunctionDef:
+    # Remove first param if appropriate (and allowed by module-level unittest usage) and append fixture params (avoid duplicates)
     params = list(fn.params.params)
-    if _should_remove_first_param(fn):
+    if remove_self and _should_remove_first_param(fn):
         params = params[1:]
 
     existing = {p.name.value for p in params}
@@ -94,7 +94,22 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
 
                 # update test functions discovered by collector or named with test* prefix
                 if mname.startswith("test") or member in cls_info.test_methods:
-                    updated_fn = _update_test_function(member, fixture_names)
+                    # Decide per-class whether to remove the first param by checking
+                    # if the class originally inherited from unittest.TestCase.
+                    def _class_inherits_unittest_testcase(class_node: cst.ClassDef) -> bool:
+                        for base in getattr(class_node, 'bases', []) or []:
+                            # base is an Arg or similar in some parsers; guard accordingly
+                            bval = getattr(base, 'value', base)
+                            # unittest.TestCase or TestCase
+                            if isinstance(bval, cst.Attribute):
+                                if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                                    return True
+                            if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                                return True
+                        return False
+
+                    remove_self = _class_inherits_unittest_testcase(cls_info.node)
+                    updated_fn = _update_test_function(member, fixture_names, remove_self)
                     new_class_body.append(updated_fn)
                     continue
 

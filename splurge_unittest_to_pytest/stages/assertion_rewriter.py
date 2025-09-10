@@ -219,6 +219,10 @@ class AssertionRewriter(cst.CSTTransformer):
                 # examine kwargs in further args for 'delta' or 'places'
                 delta_arg = None
                 places_arg = None
+                # first check for a numeric third positional (treated as 'places')
+                if len(args) >= 3 and args[2].keyword is None and isinstance(args[2].value, (cst.Integer, cst.Float)):
+                    places_arg = args[2].value
+                # then inspect keyword args for explicit delta/places
                 for a in args[2:]:
                     try:
                         if a.keyword and a.keyword.value == 'delta':
@@ -250,9 +254,11 @@ class AssertionRewriter(cst.CSTTransformer):
             if len(args) >= 2:
                 left = args[0].value
                 right = args[1].value
-                # check for delta/places kwargs
+                # check for delta/places kwargs (and numeric third positional as places)
                 delta_arg = None
                 places_arg = None
+                if len(args) >= 3 and args[2].keyword is None and isinstance(args[2].value, (cst.Integer, cst.Float)):
+                    places_arg = args[2].value
                 for a in args[2:]:
                     try:
                         if a.keyword and a.keyword.value == 'delta':

@@ -37,9 +37,18 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
             name = original_node.name.value
             if not name.startswith("test"):
                 return updated_node
-            # build new params: drop first if it's self/cls
+            # build new params: drop first if it's self/cls for test methods
+            # (centralized rule). Do not remove the first param if the method
+            # is decorated as @staticmethod.
             params = list(updated_node.params.params)
-            if params and params[0].name.value in ("self", "cls"):
+            # detect staticmethod decorator on the original node
+            is_static = False
+            for dec in original_node.decorators or []:
+                if isinstance(dec.decorator, cst.Name) and dec.decorator.value == "staticmethod":
+                    is_static = True
+                    break
+
+            if params and params[0].name.value in ("self", "cls") and not is_static:
                 params = params[1:]
             # append fixture params from collector
             class_info = self._classes_map.get(self._current_class)

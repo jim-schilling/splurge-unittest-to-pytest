@@ -207,5 +207,4 @@ class TestFileSystemSetupTeardown:
         nested_file = os.path.join(temp_dir, 'subdir1', 'nested.txt')
         with open(nested_file, 'r') as f:
             content = f.read()
-        assert content == 'Nested content'</content>
-<parameter name="filePath">d:\repos\splurge-unittest-to-pytest\tests\data\unittest_pytest_29.txt
+        assert content == 'Nested content'

@@ -200,5 +200,4 @@ class TestExceptionPropagation:
 
         # Teardown should complete even if resources are missing
         # This is tested by the fact that fixture cleanup runs without errors
-        assert True</content>
-<parameter name="filePath">d:\repos\splurge-unittest-to-pytest\tests\data\unittest_pytest_30.txt
+        assert True

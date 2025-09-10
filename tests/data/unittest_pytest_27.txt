@@ -107,5 +107,4 @@ class TestDatabaseOperations:
         with pytest.raises(sqlite3.IntegrityError):
             cursor.execute('''
                 INSERT INTO orders (user_id, amount) VALUES (?, ?)
-            ''', (999, 50.00))  # Non-existent user_id</content>
-<parameter name="filePath">d:\repos\splurge-unittest-to-pytest\tests\data\unittest_pytest_27.txt
+        ''', (999, 50.00))  # Non-existent user_id
