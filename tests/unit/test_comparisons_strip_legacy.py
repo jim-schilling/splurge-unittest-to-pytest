@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_comparisons_have_no_legacy_section():
+def test_comparisons_have_no_legacy_section() -> None:
     comp_dir = Path("tmp") / "comparisons"
     assert comp_dir.exists(), "comparisons directory should exist"
     for p in comp_dir.glob("*.txt"):

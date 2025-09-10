@@ -18,7 +18,7 @@ class MyTests(unittest.TestCase):
 '''
 
 
-def test_pipeline_runs_all_stages_and_inserts_fixtures_and_import():
+def test_pipeline_runs_all_stages_and_inserts_fixtures_and_import() -> None:
     module = cst.parse_module(SAMPLE)
     new_mod = run_pipeline(module, compat=True)
     # check pytest import exists

@@ -13,7 +13,7 @@ def _write_converted(src_path: Path, out_dir: Path) -> Path:
     return out_path
 
 
-def test_convert_and_pytest_collection(tmp_path: Path):
+def test_convert_and_pytest_collection(tmp_path: Path) -> None:
     """Convert a couple of example unittest files and run pytest collection/execution on them."""
     data_dir = Path(__file__).parents[2] / "data"
     # Pick a small sample of files to keep the test fast

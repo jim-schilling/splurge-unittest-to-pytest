@@ -13,7 +13,7 @@ def _run(src: str):
     return generator_stage({"module": module, "collector_output": out})
 
 
-def test_literal_binding_and_cleanup():
+def test_literal_binding_and_cleanup() -> None:
     src = """
 class T(unittest.TestCase):
     def setUp(self):
@@ -33,7 +33,7 @@ class T(unittest.TestCase):
     assert "yield" in s
 
 
-def test_del_self_attr_cleanup():
+def test_del_self_attr_cleanup() -> None:
     src = """
 class T(unittest.TestCase):
     def setUp(self):
@@ -51,7 +51,7 @@ class T(unittest.TestCase):
     assert "self.item" not in s
 
 
-def test_name_collision_uniqueness():
+def test_name_collision_uniqueness() -> None:
     src = """
 class T(unittest.TestCase):
     def setUp(self):

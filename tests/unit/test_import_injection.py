@@ -3,7 +3,7 @@ import textwrap
 from splurge_unittest_to_pytest.main import convert_string
 
 
-def test_import_pytest_added_for_raises():
+def test_import_pytest_added_for_raises() -> None:
     src = textwrap.dedent('''
         import unittest
 
@@ -16,7 +16,7 @@ def test_import_pytest_added_for_raises():
     assert 'import pytest' in out
 
 
-def test_import_pytest_not_added_when_unused():
+def test_import_pytest_not_added_when_unused() -> None:
     src = textwrap.dedent('''
         import unittest
 

@@ -2,7 +2,7 @@ import libcst as cst
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
 
 
-def test_import_injector_inserts_after_docstring():
+def test_import_injector_inserts_after_docstring() -> None:
     src = '"""module doc"""\n\nclass A:\n    pass\n'
     module = cst.parse_module(src)
     ctx = {"module": module}
@@ -17,7 +17,7 @@ def test_import_injector_inserts_after_docstring():
     assert import_stmt.names[0].name.value == "pytest"
 
 
-def test_import_injector_no_duplicate():
+def test_import_injector_no_duplicate() -> None:
     src = 'import pytest\n\nclass A:\n    pass\n'
     module = cst.parse_module(src)
     ctx = {"module": module}

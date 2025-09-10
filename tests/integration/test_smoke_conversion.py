@@ -3,7 +3,7 @@ from pathlib import Path
 from splurge_unittest_to_pytest.main import convert_file, find_unittest_files
 
 
-def test_convert_sample_backup(tmp_path: Path):
+def test_convert_sample_backup(tmp_path: Path) -> None:
     sample = Path('tests/data/test_schema_parser.py.bak.1757364222')
     if not sample.exists():
         pytest.skip('sample backup not present')
