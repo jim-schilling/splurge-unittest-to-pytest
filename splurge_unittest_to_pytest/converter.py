@@ -11,10 +11,6 @@ from .converter.utils import SelfReferenceRemover
 from .converter.assertions import (
     _assert_equal,
     _assert_not_equal,
-    _assert_true,
-    _assert_false,
-    _assert_is_none,
-    _assert_is_not_none,
     _assert_in,
     _assert_not_in,
     _assert_is_instance,
@@ -38,6 +34,10 @@ from .converter.fixtures import (
 from .converter.imports import add_pytest_import, remove_unittest_importfrom, remove_unittest_import
 from .converter.cleanup import extract_relevant_cleanup, references_attribute
 from .converter.params import get_fixture_param_names, make_fixture_params
+from .converter.autouse import build_attach_to_instance_fixture, insert_attach_fixture_into_module
+from .converter.placement import insert_fixtures_into_module
+from .converter.call_utils import is_self_call
+from .converter.assertion_dispatch import convert_assertion
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -396,37 +396,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def _convert_assertion(
         self, method_name: str, args: Sequence[cst.Arg]
     ) -> cst.BaseSmallStatement | None:
-        """Convert unittest assertion methods to pytest assertions."""
-        try:
-            # Skip assertRaises methods - handled in leave_With
-            if method_name in ("assertRaises", "assertRaisesRegex"):
-                return None
-                
-            assertions_map = {
-                "assertEqual": _assert_equal,
-                "assertNotEqual": _assert_not_equal,
-                "assertTrue": _assert_true,
-                "assertFalse": _assert_false,
-                "assertIsNone": _assert_is_none,
-                "assertIsNotNone": _assert_is_not_none,
-                "assertIn": _assert_in,
-                "assertNotIn": _assert_not_in,
-                "assertIsInstance": _assert_is_instance,
-                "assertNotIsInstance": _assert_not_is_instance,
-                "assertGreater": _assert_greater,
-                "assertGreaterEqual": _assert_greater_equal,
-                "assertLess": _assert_less,
-                "assertLessEqual": _assert_less_equal,
-            }
-
-            converter = assertions_map.get(method_name)
-            if converter:
-                return converter(args)
-        except (AttributeError, TypeError, ValueError):
-            # If conversion fails, return None to skip conversion
-            return None
-        
-        return None
+        """Delegate assertion conversion to a pure helper."""
+        return convert_assertion(method_name, args)
 
     def _assert_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
         return _assert_equal(args)
@@ -525,79 +496,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         if not self.has_unittest_content or not self.setup_fixtures or not self.compat:
             return module_node
 
-        # Build function body: inst = getattr(request, 'instance', None)
-        inst_assign = cst.SimpleStatementLine(
-            body=[
-                cst.Assign(
-                    targets=[cst.AssignTarget(target=cst.Name("inst"))],
-                    value=cst.Call(func=cst.Name("getattr"), args=[
-                        cst.Arg(value=cst.Name("request")),
-                        cst.Arg(value=cst.SimpleString("'instance'")),
-                        cst.Arg(value=cst.Name("None")),
-                    ])
-                )
-            ]
-        )
-
-        # Build setattr calls under if inst is truthy. Use the actual fixture names (values) not the function object names.
-        set_calls: list[cst.BaseStatement] = []
-        for name in self.setup_fixtures.keys():
-            # setattr(inst, 'name', name)
-            set_calls.append(
-                cst.SimpleStatementLine(
-                    body=[
-                        cst.Expr(
-                            value=cst.Call(
-                                func=cst.Name("setattr"),
-                                args=[
-                                    cst.Arg(value=cst.Name("inst")),
-                                    cst.Arg(value=cst.SimpleString(f"'{name}'")),
-                                    cst.Arg(value=cst.Name(name)),
-                                ],
-                            )
-                        )
-                    ]
-                )
-            )
-
-        # Build the 'if inst' block
-        if_block = cst.IndentedBlock(body=set_calls)
-        # if inst is truthy:
-        if_stmt = cst.If(test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]), body=if_block)
-
-        # Create decorator @pytest.fixture(autouse=True)
-        decorator = cst.Decorator(
-            decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=[
-                cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))
-            ])
-        )
-
-        func = cst.FunctionDef(
-            name=cst.Name("_attach_to_instance"),
-            params=cst.Parameters(params=[cst.Param(name=cst.Name("request"))]),
-            body=cst.IndentedBlock(body=[inst_assign, if_stmt]),
-            decorators=[decorator],
-        )
-
-        # Insert after pytest import (or at top)
-        new_body: list[Any] = list(module_node.body)
-        insert_pos = 0
-        for i, stmt in enumerate(new_body):
-            if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-                first = stmt.body[0]
-                if isinstance(first, cst.Import):
-                    for alias in first.names:
-                        if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
-                            insert_pos = i + 1
-                            break
-                if insert_pos:
-                    break
-
-        # Insert a blank line and the fixture
-        new_body.insert(insert_pos, cst.EmptyLine())
-        new_body.insert(insert_pos + 1, func)
-
-        return module_node.with_changes(body=new_body)
+        fixture_func = build_attach_to_instance_fixture(self.setup_fixtures)
+        return insert_attach_fixture_into_module(module_node, fixture_func)
 
     def _create_fixtures_from_setup_assignments(self) -> None:
         """Create fixtures from stored setUp assignments and tearDown cleanup."""
@@ -611,43 +511,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Add created fixtures to the module."""
         if not self.setup_fixtures:
             return module_node
-
-        new_body: list[Any] = list(module_node.body)
-
-        # Find the position to insert fixtures (after imports, before classes/functions)
-        insert_pos = 0
-        for i, stmt in enumerate(new_body):
-            if isinstance(stmt, cst.SimpleStatementLine) and isinstance(stmt.body[0], cst.ImportFrom):
-                insert_pos = i + 1
-            elif isinstance(stmt, cst.SimpleStatementLine) and isinstance(stmt.body[0], cst.Import):
-                insert_pos = i + 1
-            elif not (isinstance(stmt, cst.SimpleStatementLine) and 
-                     (isinstance(stmt.body[0], cst.ImportFrom) or isinstance(stmt.body[0], cst.Import))):
-                break
-
-        # Insert fixtures at the determined position
-        for fixture_name, fixture_node in self.setup_fixtures.items():
-            # Add a blank line before each fixture for readability
-            if insert_pos > 0:
-                new_body.insert(insert_pos, cst.EmptyLine())
-                insert_pos += 1
-
-            new_body.insert(insert_pos, fixture_node)
-            insert_pos += 1
-
-        return module_node.with_changes(body=new_body)
+        # Delegate placement to helper
+        return insert_fixtures_into_module(module_node, self.setup_fixtures)
 
     def _is_self_call(self, call_node: cst.Call) -> tuple[str, Sequence[cst.Arg]] | None:
-        """Check if call is a self.method() call and return method name and args."""
-        try:
-            if isinstance(call_node.func, cst.Attribute):
-                if isinstance(call_node.func.value, cst.Name):
-                    if call_node.func.value.value == "self":
-                        method_name = call_node.func.attr.value
-                        return method_name, call_node.args
-        except Exception:
-            pass
-        return None
+        """Delegate to pure helper to detect self.method() calls."""
+        return is_self_call(call_node)
 
     def _should_skip_assertion_conversion(self, method_name: str) -> bool:
         """Check if assertion method should be skipped (handled elsewhere)."""
