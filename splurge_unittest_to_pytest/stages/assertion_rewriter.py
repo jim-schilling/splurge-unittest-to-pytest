@@ -174,11 +174,32 @@ class AssertionRewriter(cst.CSTTransformer):
 
     def _assert_almost_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
-            # map to assert a == pytest.approx(b)
+            # Support forms: assertAlmostEqual(a, b), assertAlmostEqual(a, b, delta=..., places=...)
             if len(args) >= 2:
                 left = args[0].value
                 right = args[1].value
-                # mark that pytest.approx is required
+                # examine kwargs in further args for 'delta' or 'places'
+                delta_arg = None
+                places_arg = None
+                for a in args[2:]:
+                    try:
+                        if a.keyword and a.keyword.value == 'delta':
+                            delta_arg = a.value
+                        if a.keyword and a.keyword.value == 'places':
+                            places_arg = a.value
+                    except Exception:
+                        pass
+                if delta_arg is not None:
+                    # map to abs(left - right) <= delta
+                    abs_call = cst.Call(func=cst.Name('abs'), args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))])
+                    le_compare = cst.Comparison(left=abs_call, comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=delta_arg)])
+                    return cst.Assert(test=le_compare)
+                if places_arg is not None:
+                    # map to round(left - right, places) == 0
+                    diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
+                    round_call = cst.Call(func=cst.Name('round'), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
+                    return cst.Assert(test=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer('0'))]))
+                # default: use pytest.approx
                 self.needs_pytest_import = True
                 approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
                 return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]))
@@ -191,7 +212,26 @@ class AssertionRewriter(cst.CSTTransformer):
             if len(args) >= 2:
                 left = args[0].value
                 right = args[1].value
-                # mark that pytest.approx is required
+                # check for delta/places kwargs
+                delta_arg = None
+                places_arg = None
+                for a in args[2:]:
+                    try:
+                        if a.keyword and a.keyword.value == 'delta':
+                            delta_arg = a.value
+                        if a.keyword and a.keyword.value == 'places':
+                            places_arg = a.value
+                    except Exception:
+                        pass
+                if delta_arg is not None:
+                    abs_call = cst.Call(func=cst.Name('abs'), args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))])
+                    gt_compare = cst.Comparison(left=abs_call, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=delta_arg)])
+                    return cst.Assert(test=gt_compare)
+                if places_arg is not None:
+                    diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
+                    round_call = cst.Call(func=cst.Name('round'), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
+                    return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer('0'))])))
+                # default: use pytest.approx
                 self.needs_pytest_import = True
                 approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
                 return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)])))
