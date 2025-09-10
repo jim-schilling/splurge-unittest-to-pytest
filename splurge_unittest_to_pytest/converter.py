@@ -8,6 +8,27 @@ from libcst import matchers as m
 
 # Reuse the moved helpers from converter.utils during decomposition
 from .converter.utils import SelfReferenceRemover
+from .converter.assertions import (
+    _assert_equal,
+    _assert_not_equal,
+    _assert_true,
+    _assert_false,
+    _assert_is_none,
+    _assert_is_not_none,
+    _assert_in,
+    _assert_not_in,
+    _assert_is_instance,
+    _assert_not_is_instance,
+    _assert_greater,
+    _assert_greater_equal,
+    _assert_less,
+    _assert_less_equal,
+)
+from .converter.raises import (
+    make_pytest_raises_call,
+    make_pytest_raises_regex_call,
+    create_pytest_raises_withitem,
+)
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -377,20 +398,20 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 return None
                 
             assertions_map = {
-                "assertEqual": self._assert_equal,
-                "assertNotEqual": self._assert_not_equal,
-                "assertTrue": self._assert_true,
-                "assertFalse": self._assert_false,
-                "assertIsNone": self._assert_is_none,
-                "assertIsNotNone": self._assert_is_not_none,
-                "assertIn": self._assert_in,
-                "assertNotIn": self._assert_not_in,
-                "assertIsInstance": self._assert_is_instance,
-                "assertNotIsInstance": self._assert_not_is_instance,
-                "assertGreater": self._assert_greater,
-                "assertGreaterEqual": self._assert_greater_equal,
-                "assertLess": self._assert_less,
-                "assertLessEqual": self._assert_less_equal,
+                "assertEqual": _assert_equal,
+                "assertNotEqual": _assert_not_equal,
+                "assertTrue": _assert_true,
+                "assertFalse": _assert_false,
+                "assertIsNone": _assert_is_none,
+                "assertIsNotNone": _assert_is_not_none,
+                "assertIn": _assert_in,
+                "assertNotIn": _assert_not_in,
+                "assertIsInstance": _assert_is_instance,
+                "assertNotIsInstance": _assert_not_is_instance,
+                "assertGreater": _assert_greater,
+                "assertGreaterEqual": _assert_greater_equal,
+                "assertLess": _assert_less,
+                "assertLessEqual": _assert_less_equal,
             }
 
             converter = assertions_map.get(method_name)
@@ -403,211 +424,45 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         return None
 
     def _assert_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertEqual to assert ==."""
-        try:
-            if len(args) >= 2:
-                return cst.Assert(
-                    test=cst.Comparison(
-                        left=args[0].value,
-                        comparisons=[
-                            cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)
-                        ],
-                    )
-                )
-        except (AttributeError, TypeError, ValueError):
-            pass
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_equal(args)
 
     def _assert_not_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertNotEqual to assert !=."""
-        try:
-            if len(args) >= 2:
-                return cst.Assert(
-                    test=cst.Comparison(
-                        left=args[0].value,
-                        comparisons=[
-                            cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)
-                        ],
-                    )
-                )
-        except (AttributeError, TypeError, ValueError):
-            pass
-        return cst.Assert(test=cst.Name("False"))
-
-    def _assert_true(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertTrue to assert."""
-        try:
-            if len(args) >= 1:
-                return cst.Assert(test=args[0].value)
-        except (AttributeError, TypeError, ValueError):
-            pass
-        return cst.Assert(test=cst.Name("False"))
-
-    def _assert_false(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertFalse to assert not."""
-        try:
-            if len(args) >= 1:
-                return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=args[0].value))
-        except (AttributeError, TypeError, ValueError):
-            pass
-        return cst.Assert(test=cst.Name("False"))
-
-    def _assert_is_none(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
-        """Convert assertIsNone to assert ... is None."""
-        if len(args) >= 1:
-            left_expr = args[0].value
-            # If the original argument is a literal, skip conversion to let linters
-            # handle the questionable usage (e.g., assertIsNone(1)).
-            # Skip conversion only for numeric or string literals; convert None name to 'is None'
-            if isinstance(left_expr, (cst.Integer, cst.Float, cst.SimpleString)):
-                return None
-
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=left_expr,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
-
-    def _assert_is_not_none(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertIsNotNone to assert ... is not None."""
-        if len(args) >= 1:
-            left_expr = args[0].value
-            # Convert to 'is not None' for all arguments
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=left_expr,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_not_equal(args)
 
     def _assert_in(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertIn to assert ... in ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_in(args)
 
     def _assert_not_in(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertNotIn to assert ... not in ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_not_in(args)
 
     def _assert_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertIsInstance to assert isinstance(...)."""
-        if len(args) >= 2:
-            isinstance_call = cst.Call(
-                func=cst.Name("isinstance"), args=[args[0], args[1]]
-            )
-            return cst.Assert(test=isinstance_call)
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_is_instance(args)
 
     def _assert_not_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertNotIsInstance to assert not isinstance(...)."""
-        if len(args) >= 2:
-            isinstance_call = cst.Call(
-                func=cst.Name("isinstance"), args=[args[0], args[1]]
-            )
-            return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=isinstance_call))
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_not_is_instance(args)
 
     def _assert_greater(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertGreater to assert ... > ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_greater(args)
 
     def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertGreaterEqual to assert ... >= ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_greater_equal(args)
 
     def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertLess to assert ... < ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_less(args)
 
     def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        """Convert assertLessEqual to assert ... <= ..."""
-        if len(args) >= 2:
-            return cst.Assert(
-                test=cst.Comparison(
-                    left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)
-                    ],
-                )
-            )
-        return cst.Assert(test=cst.Name("False"))
+        return _assert_less_equal(args)
 
     def _assert_raises(self, args: Sequence[cst.Arg]) -> cst.Call:
         """Convert assertRaises to pytest.raises context manager."""
+        # Side-effect: ensure pytest will be imported in the module
         self.needs_pytest_import = True
-        if len(args) >= 1:
-            return cst.Call(
-                func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
-                args=[args[0]],
-            )
-        return cst.Call(
-            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
-            args=[cst.Arg(value=cst.Name("Exception"))],
-        )
+        return make_pytest_raises_call(args)
 
     def _assert_raises_regex(self, args: Sequence[cst.Arg]) -> cst.Call:
         """Convert assertRaisesRegex to pytest.raises with match parameter."""
         self.needs_pytest_import = True
-        if len(args) >= 2:
-            return cst.Call(
-                func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
-                args=[
-                    args[0],
-                    cst.Arg(keyword=cst.Name("match"), value=args[1].value),
-                ],
-            )
-        return self._assert_raises(args[:1] if args else [])
+        return make_pytest_raises_regex_call(args)
 
     def _is_assert_raises_context_manager(self, call_node: cst.Call) -> str | None:
         """Check if call is assertRaises/assertRaisesRegex and return method name."""
@@ -621,24 +476,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def _create_pytest_raises_item(self, method_name: str, args: Sequence[cst.Arg]) -> cst.WithItem:
         """Create pytest.raises WithItem from assertRaises/assertRaisesRegex."""
         self.needs_pytest_import = True
-        
-        if method_name == "assertRaises":
-            return cst.WithItem(
-                item=cst.Call(
-                    func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
-                    args=args,
-                )
-            )
-        else:  # assertRaisesRegex
-            return cst.WithItem(
-                item=cst.Call(
-                    func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
-                    args=[
-                        args[0],
-                        cst.Arg(keyword=cst.Name("match"), value=args[1].value),
-                    ] if len(args) >= 2 else args,
-                )
-            )
+        return create_pytest_raises_withitem(method_name, args)
+
     def _remove_self_references(self, node: cst.CSTNode) -> cst.CSTNode:
         """Remove self/cls references from attribute accesses in fixture bodies."""
         # .visit can return varied CST node types; cast to CSTNode for typing
@@ -646,14 +485,14 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _add_pytest_import(self, module_node: cst.Module) -> cst.Module:
         """Add pytest import to module at appropriate position."""
-        # Add pytest import if needed
         pytest_import = cst.SimpleStatementLine(
             body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])]
         )
-        # Use Any for list elements because libcst body can contain EmptyLine or other node types
+
+        # Work on a mutable copy of the body
         new_body: list[Any] = list(module_node.body)
 
-        # Avoid adding if pytest is already imported
+        # If pytest is already imported (direct import or from import), do nothing
         for stmt in new_body:
             if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
                 first = stmt.body[0]
@@ -665,18 +504,20 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     if first.module.value == "pytest":
                         return module_node
 
-        # If module has a top-level docstring, insert after it
+        # Default insert position is after top-level docstring (if present)
         insert_pos = 0
         if new_body:
-            first = new_body[0]
-            if isinstance(first, cst.SimpleStatementLine) and first.body:
-                expr = first.body[0]
-                if isinstance(expr, cst.Expr) and isinstance(expr.value, cst.SimpleString):
-                    insert_pos = 1
+            first_stmt = new_body[0]
+            if (
+                isinstance(first_stmt, cst.SimpleStatementLine)
+                and first_stmt.body
+                and isinstance(first_stmt.body[0], cst.Expr)
+                and isinstance(first_stmt.body[0].value, cst.SimpleString)
+            ):
+                insert_pos = 1
 
-        # Otherwise, place after existing imports but before any fixture/function/class declarations
+        # Otherwise place after existing imports
         for i, stmt in enumerate(new_body[insert_pos:], start=insert_pos):
-            # stop at first non-import statement to ensure imports precede decorators
             if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
                 insert_pos = i + 1
             else:
@@ -684,6 +525,26 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         new_body.insert(insert_pos, pytest_import)
         return module_node.with_changes(body=new_body)
+
+    def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
+        return _assert_greater_equal(args)
+
+    def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert:
+        return _assert_less(args)
+
+    def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
+        return _assert_less_equal(args)
+
+    def _assert_raises(self, args: Sequence[cst.Arg]) -> cst.Call:
+        """Convert assertRaises to pytest.raises context manager."""
+        # Side-effect: ensure pytest will be imported in the module
+        self.needs_pytest_import = True
+        return make_pytest_raises_call(args)
+
+    def _assert_raises_regex(self, args: Sequence[cst.Arg]) -> cst.Call:
+        """Convert assertRaisesRegex to pytest.raises with match parameter."""
+        self.needs_pytest_import = True
+        return make_pytest_raises_regex_call(args)
 
     def _add_autouse_instance_attachment_fixture(self, module_node: cst.Module) -> cst.Module:
         """Add an autouse fixture that attaches created fixtures to unittest-style test instances.
