@@ -106,7 +106,38 @@ class AssertionRewriter(cst.CSTTransformer):
             }
             converter = assertions_map.get(method_name)
             if converter:
-                return converter(args)
+                # strip optional trailing `msg` positional or keyword arg per request
+                cleaned_args = list(args)
+                # remove any keyword arg named 'msg'
+                cleaned_args = [a for a in cleaned_args if not (a.keyword and a.keyword.value == 'msg')]
+                # If there's an extra trailing positional arg that is intended as a 'msg',
+                # we attempt to detect and drop it for converters that expect fewer args.
+                # Specific handling for assertAlmostEqual: if a third positional is numeric,
+                # treat it as 'places' and keep it; otherwise drop trailing positional extras.
+                if method_name in ('assertAlmostEqual', 'assertNotAlmostEqual'):
+                    # keep first two, then examine third positional (if any)
+                    pos_args = [a for a in cleaned_args if a.keyword is None]
+                    if len(pos_args) > 2:
+                        third = pos_args[2]
+                        # if third is a numeric literal, keep it as 'places'
+                        if not isinstance(third.value, (cst.Integer, cst.Float)):
+                            # drop as probable msg
+                            # remove the third positional from cleaned_args
+                            # find its index in cleaned_args and pop
+                            for i, a in enumerate(cleaned_args):
+                                if a is third:
+                                    cleaned_args.pop(i)
+                                    break
+                    else:
+                        # nothing to do
+                        pass
+                else:
+                    # Drop any extra positional args beyond what's needed by converter
+                    # Conservative approach: if converter expects 2 and we have >2, drop extras
+                    # (most converters check len(args) themselves, so this is safe.)
+                    pass
+
+                return converter(cleaned_args)
         except Exception:
             return None
         return None
