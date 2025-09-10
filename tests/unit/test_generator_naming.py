@@ -5,7 +5,7 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 
-def _run(src: str):
+def _run(src: str) -> dict:
     module = cst.parse_module(src)
     visitor = Collector()
     module.visit(visitor)
@@ -16,10 +16,10 @@ def _run(src: str):
 def test_local_name_determinism() -> None:
     src = """
 class T(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.x = 1
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.x = None
 """
     res = _run(src)

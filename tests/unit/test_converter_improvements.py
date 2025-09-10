@@ -48,13 +48,13 @@ import tempfile
 import shutil
 
 class TestExample(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.temp_dir = tempfile.mkdtemp()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
 

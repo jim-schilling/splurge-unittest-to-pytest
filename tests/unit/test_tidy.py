@@ -1,4 +1,5 @@
 import libcst as cst
+from typing import cast
 from splurge_unittest_to_pytest.stages.tidy import tidy_stage
 
 
@@ -11,12 +12,13 @@ def make_fixture(name: str) -> cst.FunctionDef:
 def test_tidy_inserts_emptyline_after_fixtures() -> None:
     src = 'import pytest\n\n'
     module = cst.parse_module(src)
-    fixtures = [make_fixture("a"), make_fixture("b")]
+    fixtures: list[cst.FunctionDef] = [make_fixture("a"), make_fixture("b")]
     # create module with fixtures followed by class
-    new_body = list(module.body) + fixtures + [cst.ClassDef(name=cst.Name("A"), body=cst.IndentedBlock(body=[cst.Pass()]))]
+    class_block = cst.ClassDef(name=cst.Name("A"), body=cst.IndentedBlock(body=[cst.Pass()]))
+    new_body: list[cst.BaseStatement] = list(module.body) + fixtures + [class_block]
     mod = module.with_changes(body=new_body)
     res = tidy_stage({"module": mod})
-    new_mod = res.get("module")
+    new_mod = cast(cst.Module, res.get("module"))
     # find EmptyLine in body
     has_empty = any(isinstance(s, cst.EmptyLine) for s in new_mod.body)
     assert has_empty

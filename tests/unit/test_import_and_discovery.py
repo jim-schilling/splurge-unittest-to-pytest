@@ -4,12 +4,12 @@ from pathlib import Path
 from splurge_unittest_to_pytest.main import convert_string, find_unittest_files
 
 
-def test_pytest_import_inserted_before_fixtures():
+def test_pytest_import_inserted_before_fixtures() -> None:
     src = '''
 class TestX(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.tmp = 1
-    def test_one(self):
+    def test_one(self) -> None:
         self.assertEqual(self.tmp, 1)
 '''
     result = convert_string(src, engine="pipeline")
@@ -21,7 +21,7 @@ class TestX(unittest.TestCase):
     assert idx_import != -1 and idx_deco != -1 and idx_import < idx_deco
 
 
-def test_find_unittest_files_skips_pycache(tmp_path: Path):
+def test_find_unittest_files_skips_pycache(tmp_path: Path) -> None:
     # Create a fake __pycache__ and a binary file inside
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -32,7 +32,7 @@ def test_find_unittest_files_skips_pycache(tmp_path: Path):
 
     # create a normal unittest file outside pycache
     test_file = pkg / "test_sample.py"
-    test_file.write_text("import unittest\nclass TestA(unittest.TestCase):\n    def test_x(self):\n        pass\n")
+    test_file.write_text("import unittest\nclass TestA(unittest.TestCase):\n    def test_x(self) -> None:\n        pass\n")
 
     found = find_unittest_files(tmp_path)
     # Should find only the visible test_file, not the pyc

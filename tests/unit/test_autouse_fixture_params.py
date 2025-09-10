@@ -2,15 +2,15 @@ import textwrap
 import splurge_unittest_to_pytest.main as main
 
 
-def test_autouse_fixture_accepts_fixture_params_and_attaches():
+def test_autouse_fixture_accepts_fixture_params_and_attaches() -> None:
     src = textwrap.dedent('''
         import unittest
 
         class T(unittest.TestCase):
-            def setUp(self):
+            def setUp(self) -> None:
                 self.x = make_x()
 
-            def test_use(self):
+            def test_use(self) -> None:
                 self.assertEqual(self.x, 123)
     ''')
 

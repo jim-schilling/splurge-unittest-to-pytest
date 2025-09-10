@@ -1,12 +1,12 @@
 from splurge_unittest_to_pytest.main import convert_string
 
 
-def test_assert_raises_conversion():
+def test_assert_raises_conversion() -> None:
     src = """
 import unittest
 
 class T(unittest.TestCase):
-    def test_foo(self):
+    def test_foo(self) -> None:
         with self.assertRaises(ValueError):
             int('x')
 """
@@ -14,12 +14,12 @@ class T(unittest.TestCase):
     assert "with pytest.raises(ValueError):" in out
 
 
-def test_assert_raises_regex_conversion():
+def test_assert_raises_regex_conversion() -> None:
     src = """
 import unittest
 
 class T(unittest.TestCase):
-    def test_bar(self):
+    def test_bar(self) -> None:
         with self.assertRaisesRegex(ValueError, 'invalid'):
             int('x')
 """
@@ -29,12 +29,12 @@ class T(unittest.TestCase):
     assert "with pytest.raises(ValueError" in out and "match" in out and "invalid" in out
 
 
-def test_assert_is_none_literal_skip():
+def test_assert_is_none_literal_skip() -> None:
     src = """
 import unittest
 
 class T(unittest.TestCase):
-    def test_baz(self):
+    def test_baz(self) -> None:
         self.assertIsNone(1)
 """
     out = convert_string(src, engine="pipeline").converted_code

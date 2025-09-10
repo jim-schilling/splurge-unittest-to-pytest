@@ -7,7 +7,7 @@ provide a stable data shape for the next stages.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 
 import libcst as cst
 from libcst import matchers as m
@@ -60,7 +60,7 @@ class Collector(cst.CSTVisitor):
         # collect top-level imports
         for stmt in node.body:
             if m.matches(stmt, m.Import() | m.ImportFrom()):
-                self._imports.append(stmt)
+                self._imports.append(cast(cst.BaseStatement, stmt))
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         name = node.name.value
@@ -85,7 +85,7 @@ class Collector(cst.CSTVisitor):
             for stmt in node.body.body:
                 # look for simple self.attr = <expr>
                 if m.matches(stmt, m.SimpleStatementLine(body=[m.Assign()])):
-                    assign = stmt.body[0]
+                    assign = cast(cst.SimpleStatementLine, stmt).body[0]
                     # assign.targets may be a list; we check target attr
                     target = assign.targets[0].target
                     if m.matches(target, m.Attribute(value=m.Name("self"), attr=m.Name())):
@@ -93,7 +93,8 @@ class Collector(cst.CSTVisitor):
                         value = assign.value
                         # append assignment to list (support multiple assignments)
                         self._current_class.setup_assignments.setdefault(attr_name, []).append(value)
-                        self.output.has_unittest_usage = True
+                        if self.output is not None:
+                            self.output.has_unittest_usage = True
         elif name in ("tearDown", "tearDownClass"):
             self._current_class.teardown_methods.append(node)
             # collect teardown statements as-is

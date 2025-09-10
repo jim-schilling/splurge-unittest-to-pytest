@@ -13,7 +13,7 @@ def test_convert_string_no_changes(tmp_path):
 
 def test_convert_file_reads_and_writes(tmp_path):
     p = tmp_path / "sample.py"
-    p.write_text("""import unittest\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        self.assertTrue(True)\n""")
+    p.write_text("""import unittest\n\nclass T(unittest.TestCase):\n    def test_x(self) -> None:\n        self.assertTrue(True)\n""")
 
     res = convert_file(p, output_path=tmp_path / "out.py")
     assert res.has_changes

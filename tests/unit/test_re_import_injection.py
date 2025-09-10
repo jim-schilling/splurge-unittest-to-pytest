@@ -8,7 +8,7 @@ def test_import_re_added_for_assert_regex() -> None:
         import unittest
 
         class T(unittest.TestCase):
-            def test_foo(self):
+            def test_foo(self) -> None:
                 self.assertRegex('abc', r'b.c')
     ''')
     out = convert_string(src, engine="pipeline").converted_code
@@ -20,7 +20,7 @@ def test_import_re_not_added_when_unused() -> None:
         import unittest
 
         class T(unittest.TestCase):
-            def test_bar(self):
+            def test_bar(self) -> None:
                 assert 1 == 1
     ''')
     out = convert_string(src, engine="pipeline").converted_code

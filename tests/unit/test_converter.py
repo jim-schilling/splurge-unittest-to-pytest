@@ -15,7 +15,7 @@ class TestBasicAssertions:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1 + 1, 2)
 """
         )
@@ -30,7 +30,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         )
@@ -45,7 +45,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertFalse(False)
 """
         )
@@ -60,7 +60,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertIsNone(None)
 """
         )
@@ -75,7 +75,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertIn(1, [1, 2, 3])
 """
         )
@@ -90,7 +90,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertIsInstance(1, int)
 """
         )
@@ -106,7 +106,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertGreater(2, 1)
 """
         )
@@ -123,7 +123,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertLessEqual(2, 2)
 """
         )
@@ -139,7 +139,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertNotEqual(1, 2)
 """
         result = convert_string(unittest_code)
@@ -154,7 +154,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertIsNotNone(42)
 """
         result = convert_string(unittest_code)
@@ -169,7 +169,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertNotIn(4, [1, 2, 3])
 """
         result = convert_string(unittest_code)
@@ -184,7 +184,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertNotIsInstance("hello", int)
 """
         result = convert_string(unittest_code)
@@ -199,7 +199,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertGreaterEqual(2, 2)
 """
         result = convert_string(unittest_code)
@@ -214,7 +214,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertLess(1, 2)
 """
         result = convert_string(unittest_code)
@@ -233,7 +233,7 @@ class TestExceptionHandling:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         with self.assertRaises(ValueError):
             raise ValueError("test")
 """
@@ -249,7 +249,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         with self.assertRaisesRegex(ValueError, "test"):
             raise ValueError("test message")
 """
@@ -269,7 +269,7 @@ class TestClassStructure:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
@@ -284,10 +284,10 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.value = 42
     
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(self.value, 42)
 """
         result = convert_string(unittest_code)
@@ -305,13 +305,13 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.value = 42
         
-    def tearDown(self):
+    def tearDown(self) -> None:
         pass
     
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
@@ -335,14 +335,14 @@ from splurge_sql_generator.schema_parser import SchemaParser
 
 
 class TestSchemaParser(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.parser = SchemaParser()
         self.temp_dir = tempfile.mkdtemp()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         
-    def test_load_sql_type_mapping_default(self):
+    def test_load_sql_type_mapping_default(self) -> None:
         yaml_content = "..."
         yaml_file = os.path.join(self.temp_dir, "sql_type.yaml")
         with open(yaml_file, "w", encoding="utf-8") as f:
@@ -383,13 +383,13 @@ import unittest
 
 
 class TestExample(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.temp_dir = tempfile.mkdtemp()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_something(self):
+    def test_something(self) -> None:
         assert True
 """
 
@@ -411,7 +411,7 @@ class TestImportHandling:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
@@ -426,7 +426,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         with self.assertRaises(ValueError):
             raise ValueError("test")
 """
@@ -445,16 +445,16 @@ class TestComplexScenarios:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.value = 42
     
-    def test_addition(self):
+    def test_addition(self) -> None:
         self.assertEqual(self.value + 1, 43)
     
-    def test_boolean(self):
+    def test_boolean(self) -> None:
         self.assertTrue(self.value > 0)
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.value = None
 """
         result = convert_string(unittest_code)
@@ -494,7 +494,7 @@ def sample_fixture():
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_mixed(self):
+    def test_mixed(self) -> None:
         self.assertEqual(1, 1)
         self.assertTrue(True)
         self.assertIsNone(None)
@@ -520,7 +520,7 @@ class TestErrorHandling:
 import unittest
 
 class TestExample(unittest.TestCase
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         result = convert_string(invalid_code)

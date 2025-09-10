@@ -46,7 +46,7 @@ class TestCLIFileConversion:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
         
@@ -72,7 +72,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -96,7 +96,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
         
@@ -116,7 +116,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -149,7 +149,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
 
@@ -183,7 +183,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
 
@@ -212,7 +212,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
 
@@ -235,7 +235,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
 
@@ -277,7 +277,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
 
@@ -308,7 +308,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample1(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """)
         
@@ -318,7 +318,7 @@ class TestExample1(unittest.TestCase):
 import unittest
 
 class TestExample2(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """)
         
@@ -345,7 +345,7 @@ def test_something():
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """)
         
@@ -385,7 +385,7 @@ class TestCLIErrorHandling:
 import unittest
 
 class TestExample(unittest.TestCase
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -429,7 +429,7 @@ def test_something():
 import pytest
 
 class TestExample:
-    def test_something(self):
+    def test_something(self) -> None:
         assert 1 == 1
 """
         
@@ -450,7 +450,7 @@ class TestExample:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -465,7 +465,7 @@ def test_something():
 import unittest
 
 class TestExample(unittest.TestCase
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -496,7 +496,7 @@ class TestExample(unittest.TestCase
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -521,7 +521,7 @@ class TestExample(unittest.TestCase):
 import pytest
 
 class TestExample:
-    def test_something(self):
+    def test_something(self) -> None:
         assert True
 """
         
@@ -542,7 +542,7 @@ class TestExample:
 import unittest
 
 class TestExample(unittest.TestCase
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -562,7 +562,7 @@ class TestExample(unittest.TestCase
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         

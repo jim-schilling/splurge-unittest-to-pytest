@@ -6,7 +6,7 @@ from splurge_unittest_to_pytest.main import PatternConfigurator
 class TestConfigurableAPI:
     """Test the configurable method pattern API."""
 
-    def test_default_patterns(self):
+    def test_default_patterns(self) -> None:
         """Test that default patterns are set correctly."""
         transformer = PatternConfigurator()
 
@@ -30,7 +30,7 @@ class TestConfigurableAPI:
         }
         assert transformer.test_patterns == expected_test
 
-    def test_add_setup_pattern(self):
+    def test_add_setup_pattern(self) -> None:
         """Test adding custom setup patterns."""
         transformer = PatternConfigurator()
 
@@ -44,7 +44,7 @@ class TestConfigurableAPI:
         assert transformer._is_setup_method("before_all") is True
         assert transformer._is_setup_method("beforeAll") is True  # case insensitive
 
-    def test_add_teardown_pattern(self):
+    def test_add_teardown_pattern(self) -> None:
         """Test adding custom teardown patterns."""
         transformer = PatternConfigurator()
 
@@ -58,7 +58,7 @@ class TestConfigurableAPI:
         assert transformer._is_teardown_method("after_all") is True
         assert transformer._is_teardown_method("afterAll") is True  # case insensitive
 
-    def test_add_test_pattern(self):
+    def test_add_test_pattern(self) -> None:
         """Test adding custom test patterns."""
         transformer = PatternConfigurator()
 
@@ -71,7 +71,7 @@ class TestConfigurableAPI:
         # Test that it works for method detection
         assert transformer._is_test_method("describe_feature") is True
 
-    def test_pattern_properties_return_copies(self):
+    def test_pattern_properties_return_copies(self) -> None:
         """Test that properties return copies, not references."""
         transformer = PatternConfigurator()
 
@@ -84,7 +84,7 @@ class TestConfigurableAPI:
         # Verify original is unchanged
         assert "custom_pattern" not in transformer.setup_patterns
 
-    def test_invalid_pattern_inputs(self):
+    def test_invalid_pattern_inputs(self) -> None:
         """Test handling of invalid pattern inputs."""
         transformer = PatternConfigurator()
 
@@ -100,16 +100,16 @@ class TestConfigurableAPI:
         assert "" not in transformer.test_patterns
 
         # Test non-string inputs (should be handled gracefully)
-        transformer.add_setup_pattern(None)  # type: ignore
-        transformer.add_teardown_pattern(123)  # type: ignore
-        transformer.add_test_pattern([])  # type: ignore
+        transformer.add_setup_pattern(None)
+        transformer.add_teardown_pattern(123)
+        transformer.add_test_pattern([])
 
         # Should not crash and patterns should remain unchanged
         assert len(transformer.setup_patterns) > 0
         assert len(transformer.teardown_patterns) > 0
         assert len(transformer.test_patterns) > 0
 
-    def test_method_detection_with_custom_patterns(self):
+    def test_method_detection_with_custom_patterns(self) -> None:
         """Test method detection works with custom patterns."""
         transformer = PatternConfigurator()
 

@@ -8,7 +8,7 @@ def test_import_pytest_added_for_raises() -> None:
         import unittest
 
         class T(unittest.TestCase):
-            def test_foo(self):
+            def test_foo(self) -> None:
                 with self.assertRaises(ValueError):
                     int('x')
     ''')
@@ -21,7 +21,7 @@ def test_import_pytest_not_added_when_unused() -> None:
         import unittest
 
         class T(unittest.TestCase):
-            def test_bar(self):
+            def test_bar(self) -> None:
                 x = 1 + 1
                 assert x == 2
     ''')

@@ -20,7 +20,7 @@ class TestFileOperations:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
         
@@ -43,7 +43,7 @@ class TestExample(unittest.TestCase):
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -78,7 +78,7 @@ class TestExample(unittest.TestCase):
 import pytest
 
 class TestExample:
-    def test_something(self):
+    def test_something(self) -> None:
         assert 1 == 1
 """
         
@@ -104,8 +104,8 @@ class TestUnittestFileDetection:
             "import unittest",
             "from unittest import TestCase",
             "class TestExample(unittest.TestCase):",
-            "def setUp(self):",
-            "def tearDown(self):",
+            "def setUp(self) -> None:",
+            "def tearDown(self) -> None:",
             "self.assertEqual(1, 1)",
             "self.assertTrue(True)",
         ]
@@ -208,7 +208,7 @@ class TestDirectoryScanning:
 import unittest
 
 class TestExample1(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """)
         
@@ -218,7 +218,7 @@ class TestExample1(unittest.TestCase):
 from unittest import TestCase
 
 class TestExample2(TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertEqual(1, 1)
 """)
         
@@ -288,7 +288,7 @@ class TestEncodingHandling:
 import unittest
 
 class TestExample(unittest.TestCase):
-    def test_unicode(self):
+    def test_unicode(self) -> None:
         self.assertEqual("café", "café")
 """
         
@@ -305,7 +305,7 @@ class TestExample(unittest.TestCase):
         unittest_code = """import unittest
 
 class TestExample(unittest.TestCase):
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         
@@ -327,7 +327,7 @@ class TestEdgeCases:
 import unittest
 
 class TestExample(unittest.TestCase
-    def test_something(self):
+    def test_something(self) -> None:
         self.assertTrue(True)
 """
         

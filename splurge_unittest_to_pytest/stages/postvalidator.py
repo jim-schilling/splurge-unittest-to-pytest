@@ -3,23 +3,27 @@ serialize and parse it back, returning errors if any.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import libcst as cst
 
 
 def postvalidator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module = context.get("module")
-    if module is None:
-        maybe_module = context.get("module")
-        module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
-        if module is None:
-            return {}
+    maybe_module: Any = context.get("module")
+    if maybe_module is None:
+        return {}
+
+    # Accept either a real libcst.Module or any module-like object that
+    # exposes a .code attribute (tests provide a simple object with .code).
+    code = getattr(maybe_module, "code", None)
+    if not isinstance(code, str):
+        # Nothing to validate; return the module-like object unchanged.
+        return {"module": maybe_module}
+
     # Try to generate code and reparse
-    code = module.code
     try:
         _ = cst.parse_module(code)
     except Exception as exc:  # parse error
         # attach an error key to context for later inspection
-        return {"module": module, "postvalidator_error": str(exc)}
-    return {"module": module}
+        return {"module": maybe_module, "postvalidator_error": str(exc)}
+    return {"module": maybe_module}

@@ -4,7 +4,7 @@ from CollectorOutput.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -20,19 +20,22 @@ class FixtureSpec:
     local_value_name: Optional[str] = None
 
 
-def _is_literal(expr: cst.BaseExpression) -> bool:
+def _is_literal(expr: Optional[cst.BaseExpression]) -> bool:
+    if expr is None:
+        return False
     return isinstance(expr, (cst.Integer, cst.Float, cst.SimpleString, cst.Name))
 
 
-def generator_stage(context: dict) -> dict:
-    out: CollectorOutput = context.get("collector_output")
+def generator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+    maybe_out: Any = context.get("collector_output")
+    out: Optional[CollectorOutput] = maybe_out if isinstance(maybe_out, CollectorOutput) else None
     if out is None:
         return {}
     specs: Dict[str, FixtureSpec] = {}
     fixture_nodes: List[cst.FunctionDef] = []
     used_local_names: Set[str] = set()
     # populate used_local_names from module-level identifiers to avoid collisions
-    maybe_module = context.get("module")
+    maybe_module: Any = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is not None:
         for node in module.body:

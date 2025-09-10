@@ -6,14 +6,14 @@ SAMPLE = '''
 import os
 
 class MyTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.r = open('f')
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         if self.r is not None:
             self.r.close()
 
-    def test_one(self):
+    def test_one(self) -> None:
         assert True
 '''
 

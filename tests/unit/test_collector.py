@@ -6,15 +6,15 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 
 SAMPLE = """
 class MyTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.resource = open('file.txt')
         self.count = 42
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         if self.resource is not None:
             self.resource.close()
 
-    def test_one(self):
+    def test_one(self) -> None:
         assert self.count == 42
 """
 

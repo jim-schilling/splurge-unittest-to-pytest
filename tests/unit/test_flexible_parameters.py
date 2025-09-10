@@ -14,7 +14,8 @@ class T(unittest.TestCase):
 {func_def_src}
 """
 
-    def _convert_and_get_params(self, src: str):
+    def _convert_and_get_params(self, src: str) -> list[str]:
+        """Convert class source and return parameter name list."""
         import libcst as cst
         mod = cst.parse_module(src)
         ctx = {'module': mod, 'collector_output': None}
@@ -34,17 +35,17 @@ class T(unittest.TestCase):
                         return [p.name.value for p in item.params.params]
         return []
 
-    def test_instance_method_inserts_self(self):
+    def test_instance_method_inserts_self(self) -> None:
         src = '    def test_one(self, arg1):\n        pass\n'
         params = self._convert_and_get_params(self._make_class_module(src))
         assert params[0] in ('self',)
 
-    def test_classmethod_inserts_cls(self):
+    def test_classmethod_inserts_cls(self) -> None:
         src = '    @classmethod\n    def test_one(cls, arg1):\n        pass\n'
         params = self._convert_and_get_params(self._make_class_module(src))
         assert params[0] == 'cls'
 
-    def test_staticmethod_keeps_params(self):
+    def test_staticmethod_keeps_params(self) -> None:
         src = '    @staticmethod\n    def test_one(arg1, arg2):\n        pass\n'
         params = self._convert_and_get_params(self._make_class_module(src))
         assert params == ['arg1', 'arg2']

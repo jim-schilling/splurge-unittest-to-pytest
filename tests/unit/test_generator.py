@@ -6,15 +6,15 @@ from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 SAMPLE = """
 class MyTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.count = 5
         self.name = 'bob'
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         if self.count is not None:
             self.count = None
 
-    def test_one(self):
+    def test_one(self) -> None:
         assert self.count == 5
 """
 

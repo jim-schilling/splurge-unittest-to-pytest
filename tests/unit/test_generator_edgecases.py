@@ -5,7 +5,7 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 
-def _run(src: str):
+def _run(src: str) -> dict:
     module = cst.parse_module(src)
     visitor = Collector()
     module.visit(visitor)
@@ -16,10 +16,10 @@ def _run(src: str):
 def test_literal_binding_and_cleanup() -> None:
     src = """
 class T(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.flag = True
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         if self.flag:
             self.flag = False
 """
@@ -36,10 +36,10 @@ class T(unittest.TestCase):
 def test_del_self_attr_cleanup() -> None:
     src = """
 class T(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.item = []
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         del self.item
 """
     res = _run(src)
@@ -54,11 +54,11 @@ class T(unittest.TestCase):
 def test_name_collision_uniqueness() -> None:
     src = """
 class T(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.x = 1
         self.x = 2
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.x = None
 """
     res = _run(src)

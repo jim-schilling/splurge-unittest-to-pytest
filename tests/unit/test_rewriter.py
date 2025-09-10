@@ -4,11 +4,11 @@ from splurge_unittest_to_pytest.stages.rewriter import rewriter_stage
 
 SAMPLE = '''
 class MyTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.a = 1
         self.b = 'x'
 
-    def test_one(self):
+    def test_one(self) -> None:
         assert self.a == 1
 '''
 

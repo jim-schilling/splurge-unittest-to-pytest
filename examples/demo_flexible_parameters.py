@@ -4,7 +4,7 @@
 import libcst as cst
 from splurge_unittest_to_pytest.main import PatternConfigurator
 
-def main():
+def main() -> None:
     """Demonstrate flexible parameter handling."""
     print("=== Flexible Parameter Handling Demo ===\n")
 

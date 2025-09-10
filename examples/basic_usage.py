@@ -3,7 +3,7 @@
 
 from splurge_unittest_to_pytest import convert_string
 
-def main():
+def main() -> None:
     """Demonstrate basic usage of the unittest to pytest converter."""
     print("=== Basic Usage Example ===\n")
 

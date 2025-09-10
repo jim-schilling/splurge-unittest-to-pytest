@@ -5,7 +5,7 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 
-def _run_module(src: str):
+def _run_module(src: str) -> dict:
     module = cst.parse_module(src)
     visitor = Collector()
     module.visit(visitor)
@@ -13,15 +13,15 @@ def _run_module(src: str):
     return generator_stage({"module": module, "collector_output": out})
 
 
-def test_avoid_module_level_name_collision():
+def test_avoid_module_level_name_collision() -> None:
     src = """
 _some_global = 1
 
 class T(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.x = 1
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.x = None
 """
     res = _run_module(src)

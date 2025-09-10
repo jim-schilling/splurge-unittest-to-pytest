@@ -9,13 +9,13 @@ import tempfile
 import shutil
 
 class TestFoo(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.temp_dir = tempfile.mkdtemp()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_it(self):
+    def test_it(self) -> None:
         self.assertTrue(True)
 '''
 
@@ -33,11 +33,11 @@ def test_multiple_setup_attributes_produce_multiple_fixtures() -> None:
 import unittest
 
 class TestMany(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.a = 1
         self.b = 2
 
-    def test_vals(self):
+    def test_vals(self) -> None:
         self.assertEqual(self.a + self.b, 3)
 '''
 
@@ -57,10 +57,10 @@ def test_variable_name_consistency() -> None:
 import unittest
 
 class TestNames(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.tables = {'x': 1}
 
-    def test_lookup(self):
+    def test_lookup(self) -> None:
         self.assertEqual(self.tables['x'], 1)
 '''
 

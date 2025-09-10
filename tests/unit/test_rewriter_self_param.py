@@ -6,10 +6,10 @@ def test_rewriter_ensures_self_with_fixture() -> None:
 import unittest
 
 class TestDB(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.conn = setup_db()
 
-    def test_action(self):
+    def test_action(self) -> None:
         self.assertTrue(True)
 """
     res = main.convert_string(src, engine='pipeline')

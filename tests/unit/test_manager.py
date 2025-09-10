@@ -7,13 +7,13 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 
 SAMPLE = """
 class MyTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.x = 1
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.x = None
 
-    def test_one(self):
+    def test_one(self) -> None:
         assert self.x == 1
 """
 
@@ -25,11 +25,11 @@ def collector_stage(context: dict) -> dict:
     return {"collector_output": visitor.as_output()}
 
 
-def test_stage_manager_runs_collector():
+def test_stage_manager_runs_collector() -> None:
     module = cst.parse_module(SAMPLE)
     mgr = StageManager()
     mgr.register(collector_stage)
-    ctx = mgr.run(module)
+    ctx: dict = mgr.run(module)
     assert "collector_output" in ctx
     co = ctx["collector_output"]
     assert 'MyTests' in co.classes
