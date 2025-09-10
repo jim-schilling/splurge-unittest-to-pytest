@@ -29,6 +29,10 @@ from .converter.raises import (
     make_pytest_raises_regex_call,
     create_pytest_raises_withitem,
 )
+from .converter.fixtures import (
+    create_fixture_with_cleanup,
+    create_simple_fixture,
+)
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -821,10 +825,10 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             
             if relevant_cleanup:
                 # Create fixture with yield and cleanup
-                fixture_node = self._create_fixture_with_cleanup(attr_name, value_expr, relevant_cleanup)
+                fixture_node = create_fixture_with_cleanup(attr_name, value_expr, relevant_cleanup)
             else:
                 # Create simple fixture with return
-                fixture_node = self._create_simple_fixture(attr_name, value_expr)
+                fixture_node = create_simple_fixture(attr_name, value_expr)
             
             self.setup_fixtures[attr_name] = fixture_node
         
@@ -1014,26 +1018,6 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     
     def _create_simple_fixture(self, attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
         """Create a simple fixture with return (no cleanup needed)."""
-        # Create the @pytest.fixture decorator
-        fixture_decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture"))
-            )
-        )
-        # Bind produced resource to a local name and return it (keeps behavior consistent with cleanup fixtures)
-        value_name = f"_{attr_name}_value"
-        value_assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(value_name))], value=value_expr)])
-        return_stmt = cst.SimpleStatementLine(body=[cst.Return(value=cst.Name(value_name))])
-        body = cst.IndentedBlock(body=[value_assign, return_stmt])
-
-        # Create the fixture function
-        fixture_func = cst.FunctionDef(
-            name=cst.Name(attr_name),
-            params=cst.Parameters(),
-            body=body,
-            decorators=[fixture_decorator],
-            returns=None,
-            asynchronous=None
-        )
-
-        return fixture_func
+        # Delegate to extracted helper to keep method thin for easier testing
+        self.needs_pytest_import = True
+        return create_simple_fixture(attr_name, value_expr)

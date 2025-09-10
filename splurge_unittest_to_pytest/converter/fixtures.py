@@ -1,9 +1,96 @@
-"""Fixture conversion helpers (skeleton).
+"""Fixture helper creators extracted from the monolithic converter.
 
-This will host setup/teardown -> fixture helpers during decomposition.
+These functions are pure-ish: they accept the needed inputs and return libcst
+nodes. The class in `converter.py` keeps thin wrappers that manage transformer
+state (e.g., setting self.needs_pytest_import) and call these helpers.
 """
-from __future__ import annotations
-
 from typing import List
 
-__all__: List[str] = []
+import libcst as cst
+from typing import cast
+
+__all__: List[str] = [
+    "create_fixture_with_cleanup",
+    "create_simple_fixture",
+]
+
+
+def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: List[cst.BaseStatement]) -> cst.FunctionDef:
+    """Create a fixture with yield pattern and cleanup.
+
+    This mirrors the logic previously inside UnittestToPytestTransformer._create_fixture_with_cleanup.
+    """
+    fixture_decorator = cst.Decorator(
+        decorator=cst.Call(
+            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture"))
+        )
+    )
+
+    simple_types = (cst.Integer, cst.Float, cst.SimpleString)
+    if isinstance(value_expr, simple_types):
+        yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=value_expr))])
+        body = cst.IndentedBlock(body=[yield_stmt] + cleanup_statements)
+    else:
+        value_name = f"_{attr_name}_value"
+        value_assign = cst.SimpleStatementLine(
+            body=[
+                cst.Assign(
+                    targets=[cst.AssignTarget(target=cst.Name(value_name))],
+                    value=value_expr,
+                )
+            ]
+        )
+        yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
+
+        # Replace references to attr_name within cleanup_statements with the local value_name
+        safe_cleanup: List[cst.BaseStatement] = []
+        for stmt in cleanup_statements:
+            class ReplaceName(cst.CSTTransformer):
+                def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+                    if original_node.value == attr_name:
+                        return cst.Name(value_name)
+                    return updated_node
+
+                def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.BaseExpression:
+                    if isinstance(updated_node.value, cst.Name) and updated_node.attr.value == attr_name and updated_node.value.value in {"self", "cls"}:
+                        return cst.Name(value_name)
+                    return updated_node
+
+            replaced = stmt.visit(ReplaceName())
+            safe_cleanup.append(cast(cst.BaseStatement, replaced))
+
+        body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
+
+    fixture_func = cst.FunctionDef(
+        name=cst.Name(attr_name),
+        params=cst.Parameters(),
+        body=body,
+        decorators=[fixture_decorator],
+        returns=None,
+        asynchronous=None,
+    )
+
+    return fixture_func
+
+
+def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
+    """Create a simple fixture with return (no cleanup needed)."""
+    fixture_decorator = cst.Decorator(
+        decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
+    )
+
+    value_name = f"_{attr_name}_value"
+    value_assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(value_name))], value=value_expr)])
+    return_stmt = cst.SimpleStatementLine(body=[cst.Return(value=cst.Name(value_name))])
+    body = cst.IndentedBlock(body=[value_assign, return_stmt])
+
+    fixture_func = cst.FunctionDef(
+        name=cst.Name(attr_name),
+        params=cst.Parameters(),
+        body=body,
+        decorators=[fixture_decorator],
+        returns=None,
+        asynchronous=None,
+    )
+
+    return fixture_func
