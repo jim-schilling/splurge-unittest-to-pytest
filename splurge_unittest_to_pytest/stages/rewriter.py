@@ -37,19 +37,31 @@ def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
             name = original_node.name.value
             if not name.startswith("test"):
                 return updated_node
-            # build new params: drop first if it's self/cls for test methods
-            # (centralized rule). Do not remove the first param if the method
-            # is decorated as @staticmethod.
+            # build new params: ensure instance methods inside classes include
+            # `self` as the first parameter (or `cls` for @classmethod). Do not
+            # add/remove params for @staticmethod methods.
             params = list(updated_node.params.params)
-            # detect staticmethod decorator on the original node
+            # detect staticmethod/classmethod decorators on the original node
             is_static = False
+            is_classmethod = False
             for dec in original_node.decorators or []:
-                if isinstance(dec.decorator, cst.Name) and dec.decorator.value == "staticmethod":
-                    is_static = True
-                    break
-
-            if params and params[0].name.value in ("self", "cls") and not is_static:
-                params = params[1:]
+                if isinstance(dec.decorator, cst.Name):
+                    if dec.decorator.value == "staticmethod":
+                        is_static = True
+                        break
+                    if dec.decorator.value == "classmethod":
+                        is_classmethod = True
+            # If it's a staticmethod, leave params as-is.
+            if not is_static:
+                desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
+                if not params:
+                    # no params; insert desired first param
+                    params.insert(0, cst.Param(name=desired_first))
+                else:
+                    first_name = getattr(params[0].name, 'value', None)
+                    if first_name not in ("self", "cls"):
+                        # insert desired first param before existing params
+                        params.insert(0, cst.Param(name=desired_first))
             # append fixture params from collector
             class_info = self._classes_map.get(self._current_class)
             if class_info:

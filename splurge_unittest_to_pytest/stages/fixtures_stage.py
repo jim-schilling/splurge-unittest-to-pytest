@@ -31,13 +31,33 @@ def _should_remove_first_param(node: cst.FunctionDef) -> bool:
     return first_name == "self"
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str], remove_self: bool) -> cst.FunctionDef:
-    # Remove first param if appropriate (and allowed by module-level unittest usage) and append fixture params (avoid duplicates)
-    params = list(fn.params.params)
-    if remove_self and _should_remove_first_param(fn):
-        params = params[1:]
+def _update_test_function(fn: cst.FunctionDef, fixture_names: List[str]) -> cst.FunctionDef:
+    """Ensure instance methods keep `self`/`cls` (unless staticmethod) and append fixtures.
 
-    existing = {p.name.value for p in params}
+    We intentionally do not remove the first parameter; instead we make sure runnable
+    instance methods accept `self` (or `cls` for classmethods) and have fixture
+    parameters appended after existing parameters.
+    """
+    params = list(fn.params.params)
+    # detect staticmethod/classmethod decorators
+    is_static = False
+    is_classmethod = False
+    for dec in fn.decorators or []:
+        if isinstance(dec.decorator, cst.Name):
+            if dec.decorator.value == "staticmethod":
+                is_static = True
+                break
+            if dec.decorator.value == "classmethod":
+                is_classmethod = True
+
+    if not is_static:
+        desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
+        first_name = getattr(params[0].name, 'value', None) if params else None
+        if first_name not in ("self", "cls"):
+            # insert desired first param
+            params.insert(0, cst.Param(name=desired_first))
+
+    existing = {getattr(p.name, 'value', '') for p in params}
     for name in fixture_names:
         if name in existing:
             continue
@@ -108,8 +128,9 @@ def fixtures_stage(context: Dict[str, Any]) -> Dict[str, Any]:
                                 return True
                         return False
 
-                    remove_self = _class_inherits_unittest_testcase(cls_info.node)
-                    updated_fn = _update_test_function(member, fixture_names, remove_self)
+                    # legacy "remove_self" decision removed; keep methods runnable
+                    # by ensuring `self`/`cls` are present in _update_test_function
+                    updated_fn = _update_test_function(member, fixture_names)
                     new_class_body.append(updated_fn)
                     continue
 

@@ -80,7 +80,13 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     if_stmt = cst.If(test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]), body=cst.IndentedBlock(body=inner))
     body.append(if_stmt)
     body.append(cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))]))
-    params = cst.Parameters(params=[cst.Param(name=cst.Name("request"))])
+    # make the autouse fixture accept `request` plus each fixture name so
+    # pytest will inject the fixture values and the function can attach them
+    # onto the test instance.
+    params_list: List[cst.Param] = [cst.Param(name=cst.Name("request"))]
+    for nm in fixture_names:
+        params_list.append(cst.Param(name=cst.Name(nm)))
+    params = cst.Parameters(params=params_list)
     # decorator @pytest.fixture(autouse=True)
     decorator = cst.Decorator(
         decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))])
