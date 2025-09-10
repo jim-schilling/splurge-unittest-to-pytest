@@ -5,7 +5,7 @@ uses of assertRaises/assertRaisesRegex into pytest.raises equivalents.
 """
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, Optional
 
 import libcst as cst
 
@@ -102,7 +102,8 @@ class RaisesRewriter(cst.CSTTransformer):
 
 
 def raises_stage(context: dict) -> dict:
-    module: cst.Module = context.get('module')
+    maybe_module = context.get('module')
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {}
     transformer = RaisesRewriter()

@@ -1,13 +1,14 @@
 """Tidy stage: insert EmptyLine separators between top-level fixtures and classes for readability."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, cast
 
 import libcst as cst
 
 
 def tidy_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module = context.get("module")
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {"module": module}
     new_body: List[cst.BaseStatement] = []
@@ -18,9 +19,9 @@ def tidy_stage(context: Dict[str, Any]) -> Dict[str, Any]:
         )
         if prev_was_fixture and not is_fixture:
             # insert an empty line separation, but avoid duplicate EmptyLines
-            if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
-                new_body.append(cst.EmptyLine())
-        new_body.append(stmt)
+                if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
+                    new_body.append(cast(cst.BaseStatement, cst.EmptyLine()))
+        new_body.append(cast(cst.BaseStatement, stmt))
         prev_was_fixture = is_fixture
     new_module = module.with_changes(body=new_body)
     # Ensure test methods inside classes have a 'self' parameter when missing

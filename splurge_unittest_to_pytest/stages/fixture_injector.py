@@ -6,7 +6,7 @@ imports (similar to ImportInjector logic).
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -102,7 +102,8 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
 
 
 def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module = context.get("module")
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     nodes: List[cst.FunctionDef] = context.get("fixture_nodes") or []
     collector: CollectorOutput | None = context.get("collector_output")
     compat: bool = context.get("compat", False)
@@ -122,7 +123,6 @@ def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     # is requested), add an autouse attach fixture that will attach fixture
     # values onto test instances during pytest runs. This keeps converted
     # modules runnable while allowing pytest to inject fixtures.
-    collector: CollectorOutput | None = context.get("collector_output")
     has_unittest_usage = False
     if collector is not None:
         has_unittest_usage = getattr(collector, 'has_unittest_usage', False)

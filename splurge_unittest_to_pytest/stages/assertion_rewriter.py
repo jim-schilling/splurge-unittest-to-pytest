@@ -6,7 +6,7 @@ to migrate assertion rewriting into the staged pipeline.
 """
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Optional
 
 import libcst as cst
 
@@ -18,7 +18,7 @@ class AssertionRewriter(cst.CSTTransformer):
         super().__init__()
         self.needs_pytest_import = False
 
-    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr):
+    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> cst.BaseSmallStatement | cst.Expr:
         # Only handle call expressions like self.assertX(...)
         if isinstance(updated_node.value, cst.Call):
             conv = self._convert_self_assertion_to_pytest(updated_node.value)
@@ -41,7 +41,7 @@ class AssertionRewriter(cst.CSTTransformer):
         return updated_node
 
     # --- helpers (small subset mirrored from legacy transformer) ---
-    def _is_self_call(self, call_node: cst.Call) -> Tuple[str, Sequence[cst.Arg]] | None:
+    def _is_self_call(self, call_node: cst.Call) -> Optional[Tuple[str, Sequence[cst.Arg]]]:
         try:
             if isinstance(call_node.func, cst.Attribute):
                 if isinstance(call_node.func.value, cst.Name):
@@ -56,7 +56,7 @@ class AssertionRewriter(cst.CSTTransformer):
         # include older alias assertRaisesRegexp
         return method_name in ("assertRaises", "assertRaisesRegex", "assertRaisesRegexp")
 
-    def _convert_self_assertion_to_pytest(self, call_node: cst.Call) -> cst.BaseSmallStatement | None:
+    def _convert_self_assertion_to_pytest(self, call_node: cst.Call) -> Optional[cst.BaseSmallStatement]:
         try:
             call_info = self._is_self_call(call_node)
             if call_info:

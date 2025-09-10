@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from typing import Dict, Any
+from typing import Optional
 
 import libcst as cst
 
 
 def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module = context.get("module")
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     # If flags are absent, default to adding pytest import to support
     # tests that expect import injector to add pytest for bare modules.
     needs_pytest: bool = context.get("needs_pytest_import") if "needs_pytest_import" in context else True

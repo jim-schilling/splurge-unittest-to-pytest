@@ -4,7 +4,7 @@ from CollectorOutput.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -13,7 +13,8 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 @dataclass
 class FixtureSpec:
     name: str
-    value_expr: cst.BaseExpression
+    # value_expr can legitimately be None when collector recorded no value
+    value_expr: Optional[cst.BaseExpression]
     cleanup_statements: List[cst.BaseStatement]
     yield_style: bool
     local_value_name: Optional[str] = None
@@ -29,9 +30,10 @@ def generator_stage(context: dict) -> dict:
         return {}
     specs: Dict[str, FixtureSpec] = {}
     fixture_nodes: List[cst.FunctionDef] = []
-    used_local_names: set[str] = set()
+    used_local_names: Set[str] = set()
     # populate used_local_names from module-level identifiers to avoid collisions
-    module: cst.Module | None = context.get("module")
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is not None:
         for node in module.body:
             # assignments
@@ -159,9 +161,10 @@ def generator_stage(context: dict) -> dict:
                             if _references_attribute(expr.value, attr):
                                 return True
                         # delete statements: del self.attr
-                        if isinstance(expr, cst.Delete):
-                            # Delete.targets is a list of targets (like Assign.targets)
-                            for t in expr.targets:
+                        # Some libcst versions/typeshed don't expose a Delete symbol
+                        # that mypy recognizes. Detect by class name to avoid mypy errors.
+                        if getattr(expr, "__class__", None).__name__ == "Delete":
+                            for t in getattr(expr, 'targets', []):
                                 target = getattr(t, 'target', t)
                                 if _references_attribute(target, attr):
                                     return True
@@ -190,7 +193,7 @@ def generator_stage(context: dict) -> dict:
 
                 try:
                     if _stmt_references(stmt):
-                        relevant_cleanup.append(stmt)
+                        relevant_cleanup.append(cast(cst.BaseStatement, stmt))
                 except Exception:
                     # be conservative: ignore unexpected shapes
                     pass
@@ -237,7 +240,15 @@ def generator_stage(context: dict) -> dict:
             spec.local_value_name = local_name
 
             # bind value to local variable in all cases to make cleanup rewriting consistent
-            assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(local_name))], value=value_expr)])
+            # libcst.Assign.value expects a BaseExpression; value_expr may be None
+            assign = cst.SimpleStatementLine(
+                body=[
+                    cst.Assign(
+                        targets=[cst.AssignTarget(target=cst.Name(local_name))],
+                        value=cast(cst.BaseExpression, value_expr),
+                    )
+                ]
+            )
 
             # helper rewriter to replace self.attr or cls.attr with local_name
             class _AttrRewriter(cst.CSTTransformer):
@@ -296,7 +307,7 @@ def generator_stage(context: dict) -> dict:
                 if (not multi_assigned and _is_literal(value_expr) and all(_is_simple_cleanup_statement(s) for s in spec.cleanup_statements)
                         and not force_bind_due_to_module_collision):
                     # yield the literal value and rewrite cleanup to use fixture name
-                    yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(value_expr))])
+                    yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cast(cst.BaseExpression, value_expr)))])
                     body_stmts = [yield_stmt]
                     for stmt in spec.cleanup_statements:
                         new_stmt = stmt.visit(_AttrRewriter(attr, fname))
@@ -320,7 +331,7 @@ def generator_stage(context: dict) -> dict:
                 # (e.g., return 42). For non-literals we still bind to a local
                 # name and return it to keep cleanup rewriting consistent.
                 if _is_literal(value_expr):
-                    return_stmt = cst.SimpleStatementLine(body=[cst.Return(value_expr)])
+                    return_stmt = cst.SimpleStatementLine(body=[cst.Return(cast(cst.BaseExpression, value_expr))])
                     body = cst.IndentedBlock(body=[return_stmt])
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)

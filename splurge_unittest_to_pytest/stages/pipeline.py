@@ -58,4 +58,9 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
 
     # execute the pipeline and return the final module
     context = mgr.run(module)
-    return context.get("module")
+    result = context.get("module")
+    # context.get can return Any | None; ensure we return a Module instance
+    if isinstance(result, cst.Module):
+        return result
+    # Fallback: return original module to keep behavior safe
+    return module

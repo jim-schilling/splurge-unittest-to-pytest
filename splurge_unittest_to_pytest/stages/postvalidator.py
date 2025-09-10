@@ -11,7 +11,10 @@ import libcst as cst
 def postvalidator_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     module: cst.Module = context.get("module")
     if module is None:
-        return {"module": module}
+        maybe_module = context.get("module")
+        module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
+        if module is None:
+            return {}
     # Try to generate code and reparse
     code = module.code
     try:

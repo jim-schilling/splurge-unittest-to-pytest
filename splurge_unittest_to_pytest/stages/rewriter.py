@@ -6,13 +6,14 @@ parameters inferred from the class's `setup_assignments` keys.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import libcst as cst
 
 
 def rewriter_stage(context: Dict[str, Any]) -> Dict[str, Any]:
-    module: cst.Module = context.get("module")
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     collector = context.get("collector_output")
     if module is None or collector is None:
         return {"module": module}
