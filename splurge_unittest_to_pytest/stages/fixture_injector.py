@@ -70,7 +70,16 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
                         args=[
                             cst.Arg(value=cst.Name("inst")),
                             cst.Arg(value=cst.SimpleString(f"'{name}'")),
-                            cst.Arg(value=cst.Name(name)),
+                            # use request.getfixturevalue('<name>') to deterministically
+                            # retrieve the fixture value instead of relying on
+                            # pytest to inject it as a parameter to the autouse
+                            # function.
+                            cst.Arg(
+                                value=cst.Call(
+                                    func=cst.Attribute(value=cst.Name("request"), attr=cst.Name("getfixturevalue")),
+                                    args=[cst.Arg(value=cst.SimpleString(f"'{name}'"))],
+                                )
+                            ),
                         ],
                     )
                 )
@@ -80,12 +89,9 @@ def _make_autouse_attach(fixture_names: List[str]) -> cst.FunctionDef:
     if_stmt = cst.If(test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]), body=cst.IndentedBlock(body=inner))
     body.append(if_stmt)
     body.append(cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))]))
-    # make the autouse fixture accept `request` plus each fixture name so
-    # pytest will inject the fixture values and the function can attach them
-    # onto the test instance.
+    # make the autouse fixture accept only `request` and use
+    # request.getfixturevalue(...) to retrieve fixture values.
     params_list: List[cst.Param] = [cst.Param(name=cst.Name("request"))]
-    for nm in fixture_names:
-        params_list.append(cst.Param(name=cst.Name(nm)))
     params = cst.Parameters(params=params_list)
     # decorator @pytest.fixture(autouse=True)
     decorator = cst.Decorator(
@@ -107,12 +113,15 @@ def fixture_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     # insert an empty line then fixtures
     for i, fn in enumerate(nodes):
         new_body.insert(insert_idx + i, fn)
-    # add compat autouse fixture if requested
-    if compat and collector and collector.has_unittest_usage:
-        fixture_names = [n.name.value for n in nodes]
-        attach_fn = _make_autouse_attach(fixture_names)
-        # insert a blank line before the autouse fixture
-        new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
-        new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
+    # Always add an autouse attach fixture when we generated fixture nodes.
+    # This intentionally drops the legacy/compat gating so staged output is
+    # runnable and deterministic (we attach generated fixture values to the
+    # test instance on conversion).
+    fixture_names = [n.name.value for n in nodes]
+    attach_fn = _make_autouse_attach(fixture_names)
+    # insert a blank line before the autouse fixture
+    new_body.insert(insert_idx + len(nodes), cst.EmptyLine())
+    new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
     new_module = module.with_changes(body=new_body)
-    return {"module": new_module}
+    # Signal that pytest import is needed so ImportInjector will insert it
+    return {"module": new_module, "needs_pytest_import": True}

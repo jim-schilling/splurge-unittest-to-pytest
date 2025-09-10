@@ -17,6 +17,13 @@ def import_injector_stage(context: Dict[str, Any]) -> Dict[str, Any]:
     needs_re: bool = bool(context.get("needs_re_import", False))
     if module is None:
         return {}
+    # Defensive detection: if any stage introduced direct 'pytest' usage
+    # (e.g., pytest.raises) but failed to set the need flag, detect it by
+    # scanning the module source and treat that as requiring the import.
+    module_text = getattr(module, 'code', '')
+    if not needs_pytest and ('pytest.' in module_text or '@pytest.' in module_text):
+        needs_pytest = True
+
     # If no stage signaled that pytest or re is required and the caller
     # explicitly provided flags, skip insertion to keep imports minimal.
     # However, when flags are absent (caller didn't set them), we default

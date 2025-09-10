@@ -415,13 +415,19 @@ class AssertionRewriter(cst.CSTTransformer):
         return None
 
     def _create_pytest_raises_item(self, method_name: str, args: Sequence[cst.Arg]) -> cst.WithItem:
+        # creation of a pytest.raises call implies we'll need pytest imported
+        try:
+            self.needs_pytest_import = True
+        except Exception:
+            pass
+
         if method_name == "assertRaises":
-            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=args))
+            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args)))
         else:
             # assertRaisesRegex -> pytest.raises(..., match=...)
             if len(args) >= 2:
                 return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=[args[0], cst.Arg(keyword=cst.Name("match"), value=args[1].value)]))
-            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=args))
+        return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args)))
 
 
 def assertion_rewriter_stage(context: dict) -> dict:

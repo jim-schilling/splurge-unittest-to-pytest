@@ -1,4 +1,3 @@
-import pytest
 from splurge_unittest_to_pytest import main
 
 
