@@ -49,6 +49,10 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     mgr.register(generator_stage)
     mgr.register(import_injector_stage)
     mgr.register(rewriter_stage)
+    # Insert fixtures stage to convert class setUp/tearDown to fixtures and
+    # update test function signatures before injecting fixture FunctionDefs
+    from .fixtures_stage import fixtures_stage
+    mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
     mgr.register(postvalidator_stage)
     mgr.register(tidy_stage)
