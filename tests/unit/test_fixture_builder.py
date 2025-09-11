@@ -1,8 +1,18 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter.fixture_builder import (
-    replace_attr_references_in_statements,
-)
+from splurge_unittest_to_pytest.converter.fixture_builder import replace_attr_references_in_statements
+
+
+def test_replace_attr_references_replaces_name_and_attribute():
+    src = """foo = bar\ninst = self.baz\n"""
+    module = cst.parse_module(src)
+    stmts = list(module.body)
+    replaced = replace_attr_references_in_statements(stmts, "baz", "_baz_value")
+    mod = cst.Module(body=replaced)
+    code = mod.code
+    assert "_baz_value" in code
+    assert "self.baz" not in code
+
 
 
 def _parse_stmt(src: str) -> cst.BaseStatement:
