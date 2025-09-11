@@ -37,5 +37,18 @@ jobs:
       - name: Run mypy
         run: mypy splurge_unittest_to_pytest || true
 
-      - name: Run tests
-        run: pytest -q
+      - name: Run tests with coverage
+        run: |
+          pytest --maxfail=1 --disable-warnings -q --cov=splurge_unittest_to_pytest --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov
