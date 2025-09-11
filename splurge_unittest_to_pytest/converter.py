@@ -34,6 +34,11 @@ from .converter.method_patterns import (
 from .converter.class_checks import is_unittest_testcase_base
 from .converter.assertion_dispatch import convert_assertion
 from .converter.fixture_builder import replace_attr_references_in_statements
+from .converter.method_params import (
+    should_remove_first_param as _should_remove_first_param_helper,
+    remove_method_self_references as _remove_method_self_references_helper,
+)
+from .converter.decorators import build_pytest_fixture_decorator
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -175,58 +180,14 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         return updated_node
 
     def _should_remove_first_param(self, node: cst.FunctionDef) -> bool:
-        """Determine if the first parameter should be removed based on method type."""
-        if not node.params.params:
-            return False
-            
-        first_param = node.params.params[0]
-        first_param_name = first_param.name.value if hasattr(first_param, 'name') else ""
-        
-        # Check for decorators that indicate method type
-        has_classmethod = any(
-            (isinstance(decorator, cst.Decorator) and 
-             isinstance(decorator.decorator, cst.Name) and 
-             decorator.decorator.value == "classmethod")
-            for decorator in (node.decorators or [])
-        )
-        
-        has_staticmethod = any(
-            (isinstance(decorator, cst.Decorator) and 
-             isinstance(decorator.decorator, cst.Name) and 
-             decorator.decorator.value == "staticmethod")
-            for decorator in (node.decorators or [])
-        )
-        
-        # For staticmethods, remove no parameters (they don't have self/cls)
-        if has_staticmethod:
-            return False
-            
-        # For classmethods, only remove if first param is 'cls'
-        if has_classmethod:
-            return first_param_name == "cls"
-            
-        # For regular instance methods, remove if first param is 'self'
-        return first_param_name == "self"
+        """Delegate to helper for first-parameter removal logic."""
+        return _should_remove_first_param_helper(node)
 
     def _remove_method_self_references(self, node: cst.FunctionDef) -> tuple[list[cst.Param], cst.BaseSuite]:
-        """Remove self/cls parameters and references based on method type."""
-        new_params = list(node.params.params)
-        new_body = node.body
-        
-        if self._should_remove_first_param(node):
-            # Get the parameter name being removed
-            first_param = node.params.params[0]
-            param_name = first_param.name.value if hasattr(first_param, 'name') else ""
-            
-            # Remove the first parameter (self/cls)
-            new_params = new_params[1:]
-            
-            # Remove self/cls references from the function body
-            remover = SelfReferenceRemover({param_name})
-            # .visit can return different CST node types; cast to BaseSuite for typing
-            new_body = cast(cst.BaseSuite, node.body.visit(remover))
-        
-        return new_params, new_body
+        """Delegate removal to helper to keep transformer thin and testable."""
+        new_params, new_body = _remove_method_self_references_helper(node)
+        # Ensure returned body is typed as BaseSuite for callers
+        return list(new_params), cast(cst.BaseSuite, new_body)
 
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
@@ -553,11 +514,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     def _create_fixture_with_cleanup(self, attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]) -> cst.FunctionDef:
         """Create a fixture with yield pattern and cleanup."""
         # Create the @pytest.fixture decorator
-        fixture_decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture"))
-            )
-        )
+        fixture_decorator = build_pytest_fixture_decorator()
         # Decide whether to bind the produced resource to a local name.
         # For simple literal values, yield the literal directly to preserve previous output (e.g., 'yield 42').
         simple_types = (cst.Integer, cst.Float, cst.SimpleString)
@@ -577,7 +534,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             safe_cleanup = replace_attr_references_in_statements(cast(list[cst.BaseStatement], cleanup_statements), attr_name, value_name)
 
             body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
-        
+
         # Create the fixture function
         fixture_func = cst.FunctionDef(
             name=cst.Name(attr_name),
@@ -585,9 +542,9 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             body=body,
             decorators=[fixture_decorator],
             returns=None,
-            asynchronous=None
+            asynchronous=None,
         )
-        
+
         return fixture_func
     
     def _create_simple_fixture(self, attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
