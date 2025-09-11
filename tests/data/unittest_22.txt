@@ -1,0 +1,10 @@
+import unittest
+
+class TestNestedStructures(unittest.TestCase):
+    def setUp(self):
+        self.nested = {"a": {"b": {"c": 1}}}
+    
+    def test_nested_access(self):
+        self.assertEqual(self.nested["a"]["b"]["c"], 1)
+        with self.assertRaises(KeyError):
+            _ = self.nested["x"]

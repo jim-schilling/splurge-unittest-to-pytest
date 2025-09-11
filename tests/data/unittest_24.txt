@@ -1,0 +1,14 @@
+import unittest
+
+class TestComplexSetupTearDown(unittest.TestCase):
+    def setUp(self):
+        self.resources = []
+        for i in range(5):
+            self.resources.append(f"resource_{i}")
+    
+    def tearDown(self):
+        self.resources.clear()
+    
+    def test_resources(self):
+        self.assertEqual(len(self.resources), 5)
+        self.assertIn("resource_0", self.resources)

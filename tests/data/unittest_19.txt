@@ -1,0 +1,8 @@
+import unittest
+
+class TestComplexAssertions(unittest.TestCase):
+    def test_complex_assert(self):
+        result = [x for x in range(10) if x % 2 == 0]
+        self.assertEqual(len(result), 5)
+        self.assertIn(4, result)
+        self.assertGreater(result[-1], result[0])

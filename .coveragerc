@@ -1,0 +1,6 @@
+[run]
+parallel = False
+source = splurge_unittest_to_pytest
+
+[report]
+show_missing = True

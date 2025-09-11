@@ -1,0 +1,11 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_raises(self):
+        with self.assertRaises(ValueError):
+            raise ValueError("test")
+
+def test_pytest_raises():
+    with pytest.raises(ValueError):
+        raise ValueError("test")

@@ -1,0 +1,8 @@
+import unittest
+
+class TestBasicAssertions(unittest.TestCase):
+    def test_assert_true(self):
+        self.assertTrue(True)
+    
+    def test_assert_false(self):
+        self.assertFalse(False)

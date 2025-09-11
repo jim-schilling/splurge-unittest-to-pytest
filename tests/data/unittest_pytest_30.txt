@@ -1,0 +1,203 @@
+import pytest
+from unittest.mock import MagicMock
+import os
+import tempfile
+import json
+import logging
+
+@pytest.fixture
+def error_handling_setup():
+    """Setup fixture with potential error conditions."""
+    setup_errors = []
+    temp_files = []
+
+    try:
+        # Create temporary file that might fail
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        temp_files.append(temp_file.name)
+
+        # Write test data
+        test_data = {'test': 'data', 'number': 42}
+        json.dump(test_data, temp_file)
+        temp_file.close()
+
+    except Exception as e:
+        setup_errors.append(f"File creation error: {e}")
+        # Continue with setup despite error
+
+    try:
+        # Setup that might fail due to permissions
+        test_dir = tempfile.mkdtemp()
+        protected_file = os.path.join(test_dir, 'protected.txt')
+
+        # This might fail on some systems
+        with open(protected_file, 'w') as f:
+            f.write('protected content')
+        temp_files.append(protected_file)
+
+    except (OSError, PermissionError) as e:
+        setup_errors.append(f"Directory setup error: {e}")
+
+    # Setup mock that might fail
+    try:
+        mock_service = MagicMock()
+        mock_service.connect.side_effect = ConnectionError("Connection failed")
+    except Exception as e:
+        setup_errors.append(f"Mock setup error: {e}")
+
+    # Always set this flag
+    setup_completed = True
+
+    yield setup_errors, temp_files, mock_service, setup_completed
+
+    # Teardown with error handling and cleanup
+    teardown_errors = []
+
+    # Clean up files with error handling
+    for file_path in temp_files:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except (OSError, PermissionError) as e:
+            teardown_errors.append(f"File cleanup error for {file_path}: {e}")
+
+    # Clean up directory with error handling
+    if 'test_dir' in locals() and os.path.exists(test_dir):
+        try:
+            os.rmdir(test_dir)
+        except OSError as e:
+            teardown_errors.append(f"Directory cleanup error: {e}")
+
+    # Log any errors that occurred
+    if setup_errors or teardown_errors:
+        print(f"Setup errors: {setup_errors}")
+        print(f"Teardown errors: {teardown_errors}")
+
+@pytest.fixture
+def exception_propagation_setup():
+    """Setup fixture that may raise exceptions."""
+    setup_call_count = 0
+    setup_exceptions = []
+
+    # First operation - might fail
+    try:
+        setup_call_count += 1
+        # Simulate a setup operation that might fail
+        if not hasattr(exception_propagation_setup, '_simulate_setup_failure'):
+            resource1 = "resource1"
+    except Exception as e:
+        setup_exceptions.append(e)
+
+    # Second operation - depends on first
+    try:
+        setup_call_count += 1
+        if 'resource1' in locals():
+            resource2 = "resource2"
+    except Exception as e:
+        setup_exceptions.append(e)
+
+    # Third operation - always succeeds
+    try:
+        setup_call_count += 1
+        resource3 = "resource3"
+    except Exception as e:
+        setup_exceptions.append(e)
+
+    yield setup_call_count, setup_exceptions, resource3
+
+    # Teardown with exception handling
+    teardown_call_count = 0
+    teardown_exceptions = []
+
+    # Cleanup in reverse order
+    try:
+        teardown_call_count += 1
+        if 'resource3' in locals():
+            del resource3
+    except Exception as e:
+        teardown_exceptions.append(e)
+
+    try:
+        teardown_call_count += 1
+        if 'resource2' in locals():
+            del resource2
+    except Exception as e:
+        teardown_exceptions.append(e)
+
+    try:
+        teardown_call_count += 1
+        if 'resource1' in locals():
+            del resource1
+    except Exception as e:
+        teardown_exceptions.append(e)
+
+class TestErrorHandlingSetupTeardown:
+    """Test case demonstrating error handling in setup and teardown."""
+
+    def test_setup_error_handling(self, error_handling_setup):
+        """Test that setup errors are handled gracefully."""
+        setup_errors, temp_files, mock_service, setup_completed = error_handling_setup
+
+        # Verify setup completed despite potential errors
+        assert setup_completed
+
+        # If there were setup errors, they should be recorded
+        if setup_errors:
+            assert isinstance(setup_errors, list)
+            for error in setup_errors:
+                assert isinstance(error, str)
+
+    def test_mock_error_simulation(self, error_handling_setup):
+        """Test handling of mock errors."""
+        setup_errors, temp_files, mock_service, setup_completed = error_handling_setup
+
+        # Test that mock connection fails as expected
+        with pytest.raises(ConnectionError):
+            mock_service.connect()
+
+        # Verify the error was recorded in setup
+        assert "Connection failed" in str(mock_service.connect.side_effect)
+
+    def test_file_operation_errors(self, error_handling_setup):
+        """Test file operations with error conditions."""
+        setup_errors, temp_files, mock_service, setup_completed = error_handling_setup
+
+        if temp_files and os.path.exists(temp_files[0]):
+            # Test successful file operation
+            with open(temp_files[0], 'r') as f:
+                data = json.load(f)
+            assert data['test'] == 'data'
+        else:
+            # File creation failed, but test should still pass
+            assert True  # Test passes even with setup errors
+
+class TestExceptionPropagation:
+    """Test case demonstrating exception handling in setup/teardown chains."""
+
+    def test_exception_isolation(self, exception_propagation_setup):
+        """Test that exceptions in one part don't affect others."""
+        setup_call_count, setup_exceptions, resource3 = exception_propagation_setup
+
+        # Verify setup call count
+        assert setup_call_count >= 1
+
+    def test_partial_setup_success(self, exception_propagation_setup):
+        """Test that partial setup success is handled correctly."""
+        setup_call_count, setup_exceptions, resource3 = exception_propagation_setup
+
+        # At minimum, the third resource should be created
+        if setup_call_count >= 3:
+            assert resource3 == "resource3"
+
+        # Earlier resources might or might not exist depending on errors
+        if setup_exceptions:
+            # If there were exceptions, some resources might be missing
+            assert isinstance(setup_exceptions, list)
+
+    def test_teardown_resilience(self, exception_propagation_setup):
+        """Test that teardown handles missing resources gracefully."""
+        setup_call_count, setup_exceptions, resource3 = exception_propagation_setup
+
+        # Teardown should complete even if resources are missing
+        # This is tested by the fact that fixture cleanup runs without errors
+        assert True

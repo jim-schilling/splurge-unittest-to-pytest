@@ -1,0 +1,9 @@
+import unittest
+
+class TestSkip(unittest.TestCase):
+    @unittest.skip("reason")
+    def test_skipped(self):
+        self.assertTrue(False)
+    
+    def test_not_skipped(self):
+        self.assertTrue(True)

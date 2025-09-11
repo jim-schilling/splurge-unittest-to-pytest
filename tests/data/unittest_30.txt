@@ -1,0 +1,199 @@
+import unittest
+from unittest.mock import patch, MagicMock, side_effect
+import os
+import tempfile
+import json
+import logging
+
+class TestErrorHandlingSetupTeardown(unittest.TestCase):
+    """Test case demonstrating error handling in setup and teardown."""
+
+    def setUp(self):
+        """Setup with potential error conditions."""
+        self.setup_errors = []
+        self.temp_files = []
+
+        try:
+            # Create temporary file that might fail
+            self.temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+            self.temp_files.append(self.temp_file.name)
+
+            # Write test data
+            test_data = {'test': 'data', 'number': 42}
+            json.dump(test_data, self.temp_file)
+            self.temp_file.close()
+
+        except Exception as e:
+            self.setup_errors.append(f"File creation error: {e}")
+            # Continue with setup despite error
+
+        try:
+            # Setup that might fail due to permissions
+            self.test_dir = tempfile.mkdtemp()
+            self.protected_file = os.path.join(self.test_dir, 'protected.txt')
+
+            # This might fail on some systems
+            with open(self.protected_file, 'w') as f:
+                f.write('protected content')
+            self.temp_files.append(self.protected_file)
+
+        except (OSError, PermissionError) as e:
+            self.setup_errors.append(f"Directory setup error: {e}")
+
+        # Setup mock that might fail
+        try:
+            self.mock_service = MagicMock()
+            self.mock_service.connect.side_effect = ConnectionError("Connection failed")
+        except Exception as e:
+            self.setup_errors.append(f"Mock setup error: {e}")
+
+        # Always set this flag
+        self.setup_completed = True
+
+    def tearDown(self):
+        """Teardown with error handling and cleanup."""
+        self.teardown_errors = []
+
+        # Clean up files with error handling
+        for file_path in self.temp_files:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except (OSError, PermissionError) as e:
+                self.teardown_errors.append(f"File cleanup error for {file_path}: {e}")
+
+        # Clean up directory with error handling
+        if hasattr(self, 'test_dir') and os.path.exists(self.test_dir):
+            try:
+                os.rmdir(self.test_dir)
+            except OSError as e:
+                self.teardown_errors.append(f"Directory cleanup error: {e}")
+
+        # Log any errors that occurred
+        if self.setup_errors or self.teardown_errors:
+            print(f"Setup errors: {self.setup_errors}")
+            print(f"Teardown errors: {self.teardown_errors}")
+
+        self.teardown_completed = True
+
+    def test_setup_error_handling(self):
+        """Test that setup errors are handled gracefully."""
+        # Verify setup completed despite potential errors
+        self.assertTrue(self.setup_completed)
+
+        # If there were setup errors, they should be recorded
+        if self.setup_errors:
+            self.assertIsInstance(self.setup_errors, list)
+            for error in self.setup_errors:
+                self.assertIsInstance(error, str)
+
+    def test_teardown_error_handling(self):
+        """Test that teardown errors are handled gracefully."""
+        # This test will pass even if teardown has errors
+        # because tearDown runs after the test completes
+        self.assertTrue(self.setup_completed)
+
+    def test_mock_error_simulation(self):
+        """Test handling of mock errors."""
+        # Test that mock connection fails as expected
+        with self.assertRaises(ConnectionError):
+            self.mock_service.connect()
+
+        # Verify the error was recorded in setup
+        self.assertIn("Connection failed", str(self.mock_service.connect.side_effect))
+
+    def test_file_operation_errors(self):
+        """Test file operations with error conditions."""
+        if hasattr(self, 'temp_file') and os.path.exists(self.temp_file.name):
+            # Test successful file operation
+            with open(self.temp_file.name, 'r') as f:
+                data = json.load(f)
+            self.assertEqual(data['test'], 'data')
+        else:
+            # File creation failed, but test should still pass
+            self.assertTrue(True)  # Test passes even with setup errors
+
+class TestExceptionPropagation(unittest.TestCase):
+    """Test case demonstrating exception handling in setup/teardown chains."""
+
+    def setUp(self):
+        """Setup that may raise exceptions."""
+        self.setup_call_count = 0
+        self.setup_exceptions = []
+
+        # First operation - might fail
+        try:
+            self.setup_call_count += 1
+            # Simulate a setup operation that might fail
+            if not hasattr(self, '_simulate_setup_failure'):
+                self.resource1 = "resource1"
+        except Exception as e:
+            self.setup_exceptions.append(e)
+
+        # Second operation - depends on first
+        try:
+            self.setup_call_count += 1
+            if hasattr(self, 'resource1'):
+                self.resource2 = "resource2"
+        except Exception as e:
+            self.setup_exceptions.append(e)
+
+        # Third operation - always succeeds
+        try:
+            self.setup_call_count += 1
+            self.resource3 = "resource3"
+        except Exception as e:
+            self.setup_exceptions.append(e)
+
+    def tearDown(self):
+        """Teardown with exception handling."""
+        self.teardown_call_count = 0
+        self.teardown_exceptions = []
+
+        # Cleanup in reverse order
+        try:
+            self.teardown_call_count += 1
+            if hasattr(self, 'resource3'):
+                delattr(self, 'resource3')
+        except Exception as e:
+            self.teardown_exceptions.append(e)
+
+        try:
+            self.teardown_call_count += 1
+            if hasattr(self, 'resource2'):
+                delattr(self, 'resource2')
+        except Exception as e:
+            self.teardown_exceptions.append(e)
+
+        try:
+            self.teardown_call_count += 1
+            if hasattr(self, 'resource1'):
+                delattr(self, 'resource1')
+        except Exception as e:
+            self.teardown_exceptions.append(e)
+
+    def test_exception_isolation(self):
+        """Test that exceptions in one part don't affect others."""
+        # Verify setup call count
+        self.assertGreaterEqual(self.setup_call_count, 1)
+
+        # Verify teardown will work even if setup had issues
+        self.assertGreaterEqual(self.teardown_call_count, 0)
+
+    def test_partial_setup_success(self):
+        """Test that partial setup success is handled correctly."""
+        # At minimum, the third resource should be created
+        if self.setup_call_count >= 3:
+            self.assertTrue(hasattr(self, 'resource3'))
+
+        # Earlier resources might or might not exist depending on errors
+        if self.setup_exceptions:
+            # If there were exceptions, some resources might be missing
+            self.assertIsInstance(self.setup_exceptions, list)
+
+    def test_teardown_resilience(self):
+        """Test that teardown handles missing resources gracefully."""
+        # Teardown should complete even if resources are missing
+        # This is tested by the fact that tearDown runs without errors
+        self.assertTrue(True)
+

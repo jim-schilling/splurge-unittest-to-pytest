@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_greater_equal(self):
+        self.assertGreaterEqual(2, 2)
+
+def test_pytest_greater_equal():
+    assert 2 >= 2

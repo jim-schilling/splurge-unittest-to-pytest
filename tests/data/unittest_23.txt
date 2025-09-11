@@ -1,0 +1,9 @@
+import unittest
+from collections import defaultdict
+
+class TestWithExternalImports(unittest.TestCase):
+    def test_defaultdict(self):
+        d = defaultdict(int)
+        d["a"] += 1
+        self.assertEqual(d["a"], 1)
+        self.assertEqual(d["b"], 0)

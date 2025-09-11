@@ -1,0 +1,110 @@
+import pytest
+import sqlite3
+from contextlib import contextmanager
+
+@pytest.fixture(scope="class")
+def database_setup():
+    """Class-level database setup fixture."""
+    # Use in-memory database for tests
+    db_path = ':memory:'
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+
+    # Create test tables
+    cursor.execute('''
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            email TEXT UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE orders (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            amount REAL,
+            status TEXT DEFAULT 'pending',
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Insert test data
+    cursor.executemany('''
+        INSERT INTO users (username, email) VALUES (?, ?)
+    ''', [
+        ('alice', 'alice@example.com'),
+        ('bob', 'bob@example.com'),
+        ('charlie', 'charlie@example.com')
+    ])
+
+    connection.commit()
+
+    yield connection, cursor
+
+    # Cleanup
+    cursor.close()
+    connection.close()
+
+@pytest.fixture
+def db_transaction(database_setup):
+    """Fixture for database transactions per test."""
+    connection, cursor = database_setup
+
+    # Start transaction for each test
+    connection.execute('BEGIN TRANSACTION')
+
+    test_data = {
+        'user_count': cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0],
+        'initial_orders': 0
+    }
+
+    yield connection, cursor, test_data
+
+    # Rollback any changes made during the test
+    connection.rollback()
+
+class TestDatabaseOperations:
+    """Test case with database setup and teardown."""
+
+    def test_user_creation(self, db_transaction):
+        """Test creating a new user."""
+        connection, cursor, test_data = db_transaction
+
+        cursor.execute('''
+            INSERT INTO users (username, email) VALUES (?, ?)
+        ''', ('diana', 'diana@example.com'))
+
+        count = cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        assert count == test_data['user_count'] + 1
+
+    def test_order_creation(self, db_transaction):
+        """Test creating an order."""
+        connection, cursor, test_data = db_transaction
+
+        # Get a user ID
+        user_id = cursor.execute('SELECT id FROM users LIMIT 1').fetchone()[0]
+
+        cursor.execute('''
+            INSERT INTO orders (user_id, amount, status) VALUES (?, ?, ?)
+        ''', (user_id, 99.99, 'completed'))
+
+        order_count = cursor.execute('SELECT COUNT(*) FROM orders').fetchone()[0]
+        assert order_count == 1
+
+    def test_database_constraints(self, db_transaction):
+        """Test database constraints and relationships."""
+        connection, cursor, test_data = db_transaction
+
+        # Try to create user with duplicate email
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute('''
+                INSERT INTO users (username, email) VALUES (?, ?)
+            ''', ('duplicate', 'alice@example.com'))
+
+        # Test foreign key constraint
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute('''
+                INSERT INTO orders (user_id, amount) VALUES (?, ?)
+        ''', (999, 50.00))  # Non-existent user_id

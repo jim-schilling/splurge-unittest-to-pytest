@@ -1,0 +1,18 @@
+import unittest
+
+class TestAllAssertions(unittest.TestCase):
+    def test_all_basic(self):
+        self.assertEqual(1, 1)
+        self.assertNotEqual(1, 2)
+        self.assertTrue(True)
+        self.assertFalse(False)
+        self.assertIsNone(None)
+        self.assertIsNotNone(1)
+        self.assertIn(1, [1,2])
+        self.assertNotIn(3, [1,2])
+        self.assertIsInstance(1, int)
+        self.assertNotIsInstance("1", int)
+        self.assertGreater(2, 1)
+        self.assertGreaterEqual(2, 2)
+        self.assertLess(1, 2)
+        self.assertLessEqual(2, 2)

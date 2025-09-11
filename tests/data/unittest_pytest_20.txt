@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_less(self):
+        self.assertLess(1, 2)
+
+def test_pytest_less():
+    assert 1 < 2

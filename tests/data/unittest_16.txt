@@ -1,0 +1,6 @@
+import unittest
+
+class TestExpectedFailure(unittest.TestCase):
+    @unittest.expectedFailure
+    def test_expected_fail(self):
+        self.assertTrue(False)

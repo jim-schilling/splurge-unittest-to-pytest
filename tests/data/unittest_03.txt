@@ -1,0 +1,8 @@
+import unittest
+
+class TestWithSetup(unittest.TestCase):
+    def setUp(self):
+        self.value = 42
+    
+    def test_value(self):
+        self.assertEqual(self.value, 42)

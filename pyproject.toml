@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "splurge-unittest-to-pytest"
+version = "2025.0.0"
+description = "Convert unittest-style tests to modern pytest-style tests using libcst"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "Jim Schilling"}
+]
+keywords = ["unittest", "pytest", "testing", "conversion", "refactoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers", 
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "libcst>=1.0.0",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jim-schilling/splurge-unittest-to-pytest"
+Repository = "https://github.com/jim-schilling/splurge-unittest-to-pytest"
+Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
+
+[project.scripts]
+splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.mypy]
+python_version = "3.10"
+    # Keep strict checks for package code; include tests/examples now that
+    # we've added minimal casts/annotations in tests.
+    strict = true
+    warn_return_any = true
+    warn_unused_configs = true
+    files = ["splurge_unittest_to_pytest", "tests", "examples"]
+    exclude = "(^|/)(tmp|contrib)/"
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=splurge_unittest_to_pytest --cov-report=term-missing"
+pythonpath = ["."]
+    # Do not recurse into temporary output directories used by the conversion
+    # pipeline. Some CI runners may pick these up if not explicitly ignored.
+    norecursedirs = ["tmp"]

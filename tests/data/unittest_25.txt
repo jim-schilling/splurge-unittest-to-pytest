@@ -1,0 +1,23 @@
+import unittest
+
+class BaseTestCase(unittest.TestCase):
+    def setUp(self):
+        self.base_setup = True
+    
+    def tearDown(self):
+        self.base_teardown = True
+
+class DerivedTestCase(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.derived_setup = True
+    
+    def tearDown(self):
+        super().tearDown()
+        self.derived_teardown = True
+    
+    def test_inheritance_chain(self):
+        self.assertTrue(self.base_setup)
+        self.assertTrue(self.derived_setup)
+        self.assertTrue(self.base_teardown)
+        self.assertTrue(self.derived_teardown)

@@ -1,0 +1,9 @@
+import unittest
+import pytest
+
+class TestUnittest(unittest.TestCase):
+    def test_assert_not_in(self):
+        self.assertNotIn(4, [1, 2, 3])
+
+def test_pytest_not_in():
+    assert 4 not in [1, 2, 3]

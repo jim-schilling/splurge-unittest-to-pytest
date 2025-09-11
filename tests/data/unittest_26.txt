@@ -1,0 +1,96 @@
+import unittest
+import tempfile
+import os
+import json
+from unittest.mock import patch, MagicMock
+
+class TestComplexSetupTeardown(unittest.TestCase):
+    """Test case with complex setup and teardown operations."""
+
+    def setUp(self):
+        """Complex setup with multiple operations and error handling."""
+        # Create temporary directory
+        self.temp_dir = tempfile.mkdtemp()
+
+        # Create test data files
+        self.test_file = os.path.join(self.temp_dir, 'test_data.json')
+        self.config_file = os.path.join(self.temp_dir, 'config.json')
+
+        # Initialize test data
+        self.test_data = {
+            'users': [{'id': 1, 'name': 'Alice'}, {'id': 2, 'name': 'Bob'}],
+            'settings': {'debug': True, 'timeout': 30}
+        }
+
+        # Write test data to file
+        with open(self.test_file, 'w') as f:
+            json.dump(self.test_data, f)
+
+        # Create config
+        self.config = {'database_url': 'sqlite:///test.db', 'api_key': 'test123'}
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f)
+
+        # Setup mock objects
+        self.mock_api = MagicMock()
+        self.mock_db = MagicMock()
+
+        # Initialize counters and flags
+        self.setup_called = True
+        self.operation_count = 0
+
+    def tearDown(self):
+        """Complex teardown with cleanup and error handling."""
+        try:
+            # Clean up files
+            if os.path.exists(self.test_file):
+                os.remove(self.test_file)
+            if os.path.exists(self.config_file):
+                os.remove(self.config_file)
+
+            # Clean up directory
+            if os.path.exists(self.temp_dir):
+                os.rmdir(self.temp_dir)
+
+            # Reset mocks
+            self.mock_api.reset_mock()
+            self.mock_db.reset_mock()
+
+            # Log cleanup
+            self.teardown_called = True
+
+        except Exception as e:
+            # Handle cleanup errors gracefully
+            print(f"Warning: Cleanup error in tearDown: {e}")
+            self.cleanup_error = str(e)
+
+    def test_data_operations(self):
+        """Test operations on setup data."""
+        self.assertTrue(self.setup_called)
+        self.assertTrue(os.path.exists(self.test_file))
+
+        # Read and verify data
+        with open(self.test_file, 'r') as f:
+            data = json.load(f)
+        self.assertEqual(len(data['users']), 2)
+        self.assertTrue(data['settings']['debug'])
+
+    def test_mock_interactions(self):
+        """Test mock object interactions."""
+        self.mock_api.get_user.return_value = {'id': 1, 'name': 'Alice'}
+        result = self.mock_api.get_user(1)
+        self.assertEqual(result['name'], 'Alice')
+        self.mock_api.get_user.assert_called_once_with(1)
+
+    def test_file_operations(self):
+        """Test file operations with setup files."""
+        # Modify config
+        self.config['timeout'] = 60
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f)
+
+        # Read back and verify
+        with open(self.config_file, 'r') as f:
+            updated_config = json.load(f)
+        self.assertEqual(updated_config['timeout'], 60)
+
