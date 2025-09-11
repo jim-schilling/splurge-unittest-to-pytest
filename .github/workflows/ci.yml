@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [ main, update-2025.0.0 ]
+    branches: [ main, update-2025.0.1 ]
   push:
-    branches: [ main, update-2025.0.0 ]
+    branches: [ main, update-2025.0.1 ]
 
 jobs:
   quick:
