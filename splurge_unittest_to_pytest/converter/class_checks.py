@@ -22,3 +22,8 @@ def is_unittest_testcase_base(base: cst.Arg) -> bool:
         if base.value.value == "TestCase":
             return True
     return False
+
+
+def remove_unittest_bases(bases: list[cst.Arg]) -> list[cst.Arg]:
+    """Return a new list of bases with unittest.TestCase/TestCase removed."""
+    return [b for b in bases if not is_unittest_testcase_base(b)]

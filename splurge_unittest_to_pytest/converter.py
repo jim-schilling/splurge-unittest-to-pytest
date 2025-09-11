@@ -164,16 +164,15 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     self.has_unittest_content = True
                 
                 # Filter out unittest.TestCase inheritance
-                new_bases = []
-                for base in updated_node.bases:
-                    if not self._is_unittest_testcase(base):
-                        new_bases.append(base)
+                from .converter.class_checks import remove_unittest_bases
+
+                filtered = remove_unittest_bases(list(updated_node.bases))
 
                 # If no bases remain, create a simple class without inheritance
-                if not new_bases:
+                if not filtered:
                     updated_node = updated_node.with_changes(bases=[])
                 else:
-                    updated_node = updated_node.with_changes(bases=new_bases)
+                    updated_node = updated_node.with_changes(bases=filtered)
         except (AttributeError, TypeError, ValueError):
             return original_node
 
@@ -472,11 +471,9 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         else:
             # Store cleanup for later if setUp hasn't been processed yet
             # Associate cleanup with all current setup fixtures
-            for fixture_name in self.setup_fixtures.keys():
-                if fixture_name not in self.teardown_cleanup:
-                    self.teardown_cleanup[fixture_name] = []
-                # cleanup_statements may contain sentinels or various node types after visits; extend as Any
-                self.teardown_cleanup[fixture_name].extend(cast(list[Any], cleanup_statements))
+            from .converter.teardown_helpers import associate_cleanup_with_fixtures
+
+            associate_cleanup_with_fixtures(self.teardown_cleanup, self.setup_fixtures.keys(), cleanup_statements)
         
         # Remove the original tearDown method
         return cst.RemovalSentinel.REMOVE
