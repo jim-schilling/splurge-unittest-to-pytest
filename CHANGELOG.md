@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2025.0.0] - 2025-09-09
 
+## [2025.0.1] - 2025-09-11
+
+### Changed
+- Update package version to 2025.0.1
+- Use dynamic package __version__ in CLI tests to avoid hard-coded version failures
+- CI: run coverage job on Python 3.12 only to stabilize artifact uploads
+- Docs: added coverage workflow badge and adjusted CI references for the 3.12 coverage job
+
+
 ### Added
 - **pytest-mock integration**: Added pytest-mock to dev dependencies for better mocking support
 - **Enhanced pytest configuration**: Added `pythonpath = ["."]` to pytest configuration for improved module discovery
