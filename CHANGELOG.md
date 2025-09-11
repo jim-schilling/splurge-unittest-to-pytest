@@ -5,17 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
 
-- Add `--compat` flag to control emission of autouse compatibility fixture
-- Skip `__pycache__` and unreadable files during discovery to avoid Unicode/IO errors
-- Ensure `import pytest` inserted before generated fixtures and respect module docstrings
- - Archive legacy `UnittestToPytestTransformer` implementation under `contrib/legacy_converter.py`;
-   the staged pipeline is now the authoritative conversion engine.
- - Add an end-to-end integration test verifying converted modules are executable and
-   autouse fixtures attach correctly.
+## [2025.0.2] - 2025-09-11
 
-## [2025.0.0] - 2025-09-09
+### Unreleased notes
+- (empty placeholder)
+
 
 ## [2025.0.1] - 2025-09-11
 
@@ -76,6 +71,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced matching**: Case-insensitive pattern matching with camelCase/snake_case support
 - **Flexible CLI**: Multiple ways to specify patterns (comma-separated or multiple flags)
 - **Robust parsing**: Comprehensive whitespace handling and edge case management
+
+## [2025.0.0] - 2025-09-09
+- **Initial commit**
+- Add `--compat` flag to control emission of autouse compatibility fixture
+- Skip `__pycache__` and unreadable files during discovery to avoid Unicode/IO errors
+- Ensure `import pytest` inserted before generated fixtures and respect module docstrings
+ - Archive legacy `UnittestToPytestTransformer` implementation under `contrib/legacy_converter.py`;
+   the staged pipeline is now the authoritative conversion engine.
+ - Add an end-to-end integration test verifying converted modules are executable and
+   autouse fixtures attach correctly.
 
 ## Previous Versions
 

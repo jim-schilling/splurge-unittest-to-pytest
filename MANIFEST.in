@@ -1,0 +1,9 @@
+# Exclude tmp/ directory and its contents from sdist/wheel distributions
+exclude tmp/
+recursive-exclude tmp *
+
+# Include package data files
+recursive-include splurge_unittest_to_pytest/data *.json
+
+# Include test data when tests are included in source distributions
+recursive-include tests/data *.txt
