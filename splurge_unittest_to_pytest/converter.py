@@ -8,18 +8,6 @@ import libcst as cst
 
 # Reuse the moved helpers from converter.utils during decomposition
 from .converter.utils import SelfReferenceRemover
-from .converter.assertions import (
-    _assert_equal,
-    _assert_not_equal,
-    _assert_in,
-    _assert_not_in,
-    _assert_is_instance,
-    _assert_not_is_instance,
-    _assert_greater,
-    _assert_greater_equal,
-    _assert_less,
-    _assert_less_equal,
-)
 from .converter.raises import (
     make_pytest_raises_call,
     make_pytest_raises_regex_call,
@@ -37,7 +25,15 @@ from .converter.params import get_fixture_param_names, make_fixture_params
 from .converter.autouse import build_attach_to_instance_fixture, insert_attach_fixture_into_module
 from .converter.placement import insert_fixtures_into_module
 from .converter.call_utils import is_self_call
+from .converter.method_patterns import (
+    normalize_method_name as _normalize_method_name,
+    is_setup_method as _is_setup_method_helper,
+    is_teardown_method as _is_teardown_method_helper,
+    is_test_method as _is_test_method_helper,
+)
+from .converter.class_checks import is_unittest_testcase_base
 from .converter.assertion_dispatch import convert_assertion
+from .converter.fixture_builder import replace_attr_references_in_statements
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -339,95 +335,30 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         return updated_node
 
     def _is_unittest_testcase(self, base: cst.Arg) -> bool:
-        """Check if base class is unittest.TestCase."""
-        if isinstance(base.value, cst.Attribute):
-            if (isinstance(base.value.value, cst.Name) and 
-                base.value.value.value == "unittest" and
-                base.value.attr.value == "TestCase"):
-                return True
-        elif isinstance(base.value, cst.Name):
-            if base.value.value == "TestCase":
-                return True
-        return False
+        """Delegate to class_checks helper to detect unittest TestCase bases."""
+        return is_unittest_testcase_base(base)
 
     def _normalize_method_name(self, name: str) -> str:
-        """Normalize method name for pattern matching (convert camelCase to snake_case)."""
-        import re
-        # Convert camelCase to snake_case
-        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+        """Delegate normalization to helper module."""
+        return _normalize_method_name(name)
 
     def _is_setup_method(self, method_name: str) -> bool:
-        """Check if method name matches setup patterns (case insensitive)."""
-        method_lower = method_name.lower()
-        method_normalized = self._normalize_method_name(method_name)
-        
-        return any(
-            pattern.lower() in method_lower or 
-            pattern.lower() in method_normalized or
-            self._normalize_method_name(pattern) in method_normalized
-            for pattern in self._setup_patterns
-        )
+        """Delegate to helper that encapsulates matching rules."""
+        return _is_setup_method_helper(method_name, self._setup_patterns)
 
     def _is_teardown_method(self, method_name: str) -> bool:
-        """Check if method name matches teardown patterns (case insensitive)."""
-        method_lower = method_name.lower()
-        method_normalized = self._normalize_method_name(method_name)
-        
-        return any(
-            pattern.lower() in method_lower or 
-            pattern.lower() in method_normalized or
-            self._normalize_method_name(pattern) in method_normalized
-            for pattern in self._teardown_patterns
-        )
+        """Delegate to helper that encapsulates matching rules."""
+        return _is_teardown_method_helper(method_name, self._teardown_patterns)
 
     def _is_test_method(self, method_name: str) -> bool:
-        """Check if method name matches test patterns (case insensitive)."""
-        method_lower = method_name.lower()
-        method_normalized = self._normalize_method_name(method_name)
-        
-        return any(
-            pattern.lower() in method_lower or 
-            pattern.lower() in method_normalized or
-            self._normalize_method_name(pattern) in method_normalized
-            for pattern in self._test_patterns
-        )
+        """Delegate to helper that encapsulates matching rules."""
+        return _is_test_method_helper(method_name, self._test_patterns)
 
     def _convert_assertion(
         self, method_name: str, args: Sequence[cst.Arg]
     ) -> cst.BaseSmallStatement | None:
         """Delegate assertion conversion to a pure helper."""
         return convert_assertion(method_name, args)
-
-    def _assert_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_equal(args)
-
-    def _assert_not_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_not_equal(args)
-
-    def _assert_in(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_in(args)
-
-    def _assert_not_in(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_not_in(args)
-
-    def _assert_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_is_instance(args)
-
-    def _assert_not_is_instance(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_not_is_instance(args)
-
-    def _assert_greater(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_greater(args)
-
-    def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_greater_equal(args)
-
-    def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_less(args)
-
-    def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_less_equal(args)
 
     def _assert_raises(self, args: Sequence[cst.Arg]) -> cst.Call:
         """Convert assertRaises to pytest.raises context manager."""
@@ -466,26 +397,6 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         before delegating to the pure function if necessary.
         """
         return add_pytest_import(module_node)
-
-    def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_greater_equal(args)
-
-    def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_less(args)
-
-    def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert:
-        return _assert_less_equal(args)
-
-    def _assert_raises(self, args: Sequence[cst.Arg]) -> cst.Call:
-        """Convert assertRaises to pytest.raises context manager."""
-        # Side-effect: ensure pytest will be imported in the module
-        self.needs_pytest_import = True
-        return make_pytest_raises_call(args)
-
-    def _assert_raises_regex(self, args: Sequence[cst.Arg]) -> cst.Call:
-        """Convert assertRaisesRegex to pytest.raises with match parameter."""
-        self.needs_pytest_import = True
-        return make_pytest_raises_regex_call(args)
 
     def _add_autouse_instance_attachment_fixture(self, module_node: cst.Module) -> cst.Module:
         """Add an autouse fixture that attaches created fixtures to unittest-style test instances.
@@ -663,23 +574,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
 
             # Replace references in cleanup_statements to refer to the local value name where they referenced the attribute
-            safe_cleanup: list[cst.BaseStatement] = []
-            for stmt in cleanup_statements:
-                # Replace occurrences of the attribute name (as Name or Attribute on self) with the local value_name
-                class ReplaceName(cst.CSTTransformer):
-                    def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
-                        if original_node.value == attr_name:
-                            return cst.Name(value_name)
-                        return updated_node
-                    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.BaseExpression:
-                        # Replace self.attr or cls.attr with the local name
-                        if isinstance(updated_node.value, cst.Name) and updated_node.attr.value == attr_name and updated_node.value.value in {"self", "cls"}:
-                            return cst.Name(value_name)
-                        return updated_node
-
-                replaced = stmt.visit(ReplaceName())
-                # cast to BaseStatement to satisfy typing; visitor should return a statement
-                safe_cleanup.append(cast(cst.BaseStatement, replaced))
+            safe_cleanup = replace_attr_references_in_statements(cast(list[cst.BaseStatement], cleanup_statements), attr_name, value_name)
 
             body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
         

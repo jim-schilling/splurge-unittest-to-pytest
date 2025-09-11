@@ -36,7 +36,12 @@ def references_attribute(expr: Any, attr_name: str) -> bool:
             return True
         for s in expr.slice:
             inner = getattr(s, 'slice', None) or getattr(s, 'value', None) or s
-            if isinstance(inner, cst.BaseExpression) and references_attribute(inner, attr_name):
+            # Handle Index or SubscriptElement wrappers that may contain expressions
+            if isinstance(inner, (cst.Index, cst.SubscriptElement)):
+                inner_expr = getattr(inner, 'value', getattr(inner, 'slice', None))
+            else:
+                inner_expr = inner
+            if isinstance(inner_expr, cst.BaseExpression) and references_attribute(inner_expr, attr_name):
                 return True
         return False
 
@@ -90,6 +95,11 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
                     if references_attribute(arg.value, attr_name):
                         relevant_statements.append(s)
                         return
+            elif isinstance(expr, cst.Expr):
+                # Generic expression (e.g., Subscript, Name, Attribute) may reference the attribute
+                if references_attribute(expr.value, attr_name):
+                    relevant_statements.append(s)
+                    return
             elif isinstance(expr, cst.Assign):
                 for target in expr.targets:
                     target_expr = getattr(target, 'target', target)
