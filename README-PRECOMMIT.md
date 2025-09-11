@@ -36,6 +36,21 @@ pre-commit install
 pre-commit run --all-files
 ```
 
+Global install (optional)
+
+If you prefer to install pre-commit and tools globally (not in a virtual environment), run:
+
+```bash
+python -m pip install --user pre-commit ruff mypy pytest pytest-cov
+```
+
+After installing, run the same one-time install and run commands from above:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
 Notes and troubleshooting
 
 - The pre-commit config is set to use system-installed tools and sets pass_filenames: false for mypy and pytest hooks. That prevents pre-commit from appending file lists to the hook commands (mypy disallows mixing -p with file args).
