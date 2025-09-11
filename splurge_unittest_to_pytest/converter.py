@@ -14,13 +14,14 @@ from .converter.raises import (
     create_pytest_raises_withitem,
 )
 from .converter.fixtures import (
-    create_fixture_with_cleanup,
     create_simple_fixture,
     parse_setup_assignments,
     create_fixture_for_attribute,
 )
 from .converter.imports import add_pytest_import, remove_unittest_importfrom, remove_unittest_import
 from .converter.cleanup import extract_relevant_cleanup, references_attribute
+from .converter.with_helpers import convert_assert_raises_with
+from .converter.fixture_builders import build_fixtures_from_setup_assignments
 from .converter.params import get_fixture_param_names, make_fixture_params
 from .converter.params import append_fixture_params
 from .converter.autouse import build_attach_to_instance_fixture, insert_attach_fixture_into_module
@@ -248,17 +249,12 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     ) -> cst.With:
         """Convert unittest assertRaises context managers to pytest.raises."""
         try:
-            if not updated_node.items:
-                return updated_node
-                
-            item = updated_node.items[0]
-            if not isinstance(item.item, cst.Call):
-                return updated_node
-                
-            method_name = self._is_assert_raises_context_manager(item.item)
-            if method_name:
-                new_item = self._create_pytest_raises_item(method_name, item.item.args)
-                return updated_node.with_changes(items=[new_item])
+            new_with, needs = convert_assert_raises_with(updated_node)
+            if new_with is not None:
+                # propagate import requirement to transformer state
+                if needs:
+                    self.needs_pytest_import = True
+                return new_with
         except (AttributeError, TypeError, ValueError):
             return original_node
         
@@ -480,20 +476,11 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     
     def _create_fixtures_with_cleanup(self, cleanup_statements: list[Any]) -> None:
         """Create fixtures from setup assignments with tearDown cleanup integration."""
-        for attr_name, value_expr in self.setup_assignments.items():
-            # Check if this attribute appears in cleanup statements
-            relevant_cleanup = extract_relevant_cleanup(cleanup_statements, attr_name)
-            
-            if relevant_cleanup:
-                # Create fixture with yield and cleanup
-                fixture_node = create_fixture_with_cleanup(attr_name, value_expr, relevant_cleanup)
-            else:
-                # Create simple fixture with return
-                fixture_node = create_simple_fixture(attr_name, value_expr)
-            
-            self.setup_fixtures[attr_name] = fixture_node
-        
-        self.needs_pytest_import = True
+        fixtures, needs = build_fixtures_from_setup_assignments(self.setup_assignments, self.teardown_cleanup)
+        # Merge into transformer fixtures mapping
+        self.setup_fixtures.update(fixtures)
+        if needs:
+            self.needs_pytest_import = True
     
     def _extract_relevant_cleanup(self, cleanup_statements: list[Any], attr_name: str) -> list[Any]:
         """Delegate to pure helper that extracts cleanup statements referencing attr_name."""
