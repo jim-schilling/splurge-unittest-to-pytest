@@ -22,4 +22,4 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        args: ["-q", "tests/unit"]
+        args: ["-q", "-p", "no:pytest_cov", "tests/unit"]
