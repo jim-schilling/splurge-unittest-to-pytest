@@ -364,7 +364,7 @@ Default: Any
         if tables3:
             # If it parses, it should extract the table correctly
             self.assertIn("mytable", tables3)
-            schema = tables["mytable"]
+            schema = tables3["mytable"]
             self.assertEqual(schema["id"], "TEXT")
             self.assertEqual(schema["value"], "TEXT")
 
