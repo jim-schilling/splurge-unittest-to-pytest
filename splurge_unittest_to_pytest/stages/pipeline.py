@@ -21,6 +21,16 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
         visitor = Collector()
         module = context["module"]
         module.visit(visitor)
+        # Debug: write the initial module source before any stage runs
+        try:
+            import os
+            from pathlib import Path
+            if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0") in ("1", "true", "True", "yes", "on"):
+                out_dir = Path("build") / "intermediates"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                Path(out_dir / "00_initial_input.py").write_text(getattr(module, 'code', ''), encoding='utf-8')
+        except Exception:
+            pass
         return {"collector_output": visitor.as_output()}
 
     mgr.register(collect_stage)
@@ -63,6 +73,17 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     # execute the pipeline and return the final module
     context = mgr.run(module)
     result = context.get("module")
+    # Debug: write the final module source after the pipeline (only when diagnostics enabled)
+    try:
+        import os
+        from pathlib import Path
+        if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0") in ("1", "true", "True", "yes", "on"):
+            out_dir = Path("build") / "intermediates"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            if isinstance(result, cst.Module):
+                Path(out_dir / "99_final_output.py").write_text(getattr(result, 'code', ''), encoding='utf-8')
+    except Exception:
+        pass
     # context.get can return Any | None; ensure we return a Module instance
     if isinstance(result, cst.Module):
         return result

@@ -21,18 +21,26 @@ def _find_insertion_index(module: cst.Module) -> int:
                 for name in expr.names:
                     if name.name.value == "pytest":
                         return idx + 1
-    # else after docstring
-    for idx, stmt in enumerate(module.body):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], cst.Expr) and isinstance(stmt.body[0].value, cst.SimpleString):
-            return idx + 1
-    # else after last import
-    last_import = -1
-    for idx, stmt in enumerate(module.body):
+    # Find the first index after any leading imports (and optional
+    # module docstring). This ensures fixtures are placed after the
+    # import block even if import nodes are represented in varying ways.
+    start_idx = 0
+    if module.body:
+        first = module.body[0]
+        if isinstance(first, cst.SimpleStatementLine) and first.body and isinstance(first.body[0], cst.Expr) and isinstance(first.body[0].value, cst.SimpleString):
+            # skip docstring
+            start_idx = 1
+
+    insert_idx = start_idx
+    for idx in range(start_idx, len(module.body)):
+        stmt = module.body[idx]
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
-            last_import = idx
-    if last_import >= 0:
-        return last_import + 1
-    return 0
+            insert_idx = idx + 1
+            continue
+        # stop at first non-import statement
+        break
+
+    return insert_idx
 
 
 def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
@@ -112,7 +120,10 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     insert_idx = _find_insertion_index(module)
     # allow a mix of statement and small-statement/EmptyLine nodes in the new body
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
-    # insert an empty line then fixtures
+    # Insert fixture FunctionDef nodes at the calculated insertion index.
+    # Do not add EmptyLine sentinels here; spacing is normalized by the tidy
+    # stage which runs later. This prevents multiple stages from
+    # creating cumulative blank lines.
     for i, fn in enumerate(nodes):
         new_body.insert(insert_idx + i, fn)
     # Insert fixtures into module body. We do not add an autouse attach

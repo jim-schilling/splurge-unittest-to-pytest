@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.0.2"
+version = "2025.0.3"
 description = "Convert unittest-style tests to modern pytest-style tests using libcst"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -48,10 +48,10 @@ Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
 
 [tool.setuptools.packages.find]
-# Only search for packages inside the actual package directory so that
-# top-level folders like `tmp/`, `tests/`, and `examples/` aren't
-# accidentally picked up by setuptools' package discovery.
-where = ["splurge_unittest_to_pytest"]
+# Search from the project root but limit discovery to our package name
+# so setuptools correctly finds package modules while avoiding top-level
+# directories like `tmp/` via the include/exclude patterns.
+where = ["."]
 include = ["splurge_unittest_to_pytest*"]
 exclude = ["tmp", "tmp.*"]
 
@@ -85,4 +85,4 @@ addopts = "--cov=splurge_unittest_to_pytest --cov-report=term-missing"
 pythonpath = ["."]
     # Do not recurse into temporary output directories used by the conversion
     # pipeline. Some CI runners may pick these up if not explicitly ignored.
-    norecursedirs = ["tmp"]
+    norecursedirs = ["tmp", "build"]

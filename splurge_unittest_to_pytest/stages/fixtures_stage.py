@@ -109,10 +109,13 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 mname = member.name.value
                 # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
-                    # Keep setup/teardown methods in the converted class so the
-                    # converted module remains runnable by default (calling
-                    # inst.setUp() will still populate attributes). We still
-                    # generate pytest fixtures separately for pytest runs.
+                    # Preserve setup/teardown methods on the class so the
+                    # converted module remains runnable by directly instantiating
+                    # the TestCase and calling its lifecycle methods. The
+                    # pipeline also generates fixtures/autouse attach helpers
+                    # to make pytest runs work; keeping the original methods
+                    # avoids surprising AttributeError when test code invokes
+                    # setUp/tearDown manually (integration tests rely on this).
                     new_class_body.append(member)
                     continue
 
@@ -147,10 +150,21 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # autouse attach fixture will ensure pytest runs still
                     # receive fixture values via request.getfixturevalue.
                     updated_fn = _update_test_function(member, fixture_names, remove_first=False)
+                    # Ensure one blank line between methods inside the class
+                    if new_class_body:
+                        last = new_class_body[-1]
+                        # If the last appended element is not an EmptyLine, insert one
+                        if not isinstance(last, cst.EmptyLine):
+                            new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                     new_class_body.append(updated_fn)
                     continue
 
                 # otherwise retain the member unchanged
+                # ensure spacing between methods/defs inside the class
+                if new_class_body and isinstance(member, cst.FunctionDef):
+                    last = new_class_body[-1]
+                    if not isinstance(last, cst.EmptyLine):
+                        new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                 new_class_body.append(member)
 
             new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))

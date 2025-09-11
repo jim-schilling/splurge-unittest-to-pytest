@@ -1,9 +1,17 @@
-"""Tidy stage: insert EmptyLine separators between top-level fixtures and classes for readability."""
+"""Tidy stage: central spacing and light post-processing.
+
+This stage delegates spacing normalization to the shared
+`formatting.normalize_module` helper (ensures import grouping, dedup,
+and consistent blank-line counts). It also ensures class test methods
+have a `self` parameter when appropriate.
+"""
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import libcst as cst
+
+from splurge_unittest_to_pytest.stages.formatting import normalize_module
 
 
 def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -11,21 +19,11 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {"module": module}
-    # allow insertion of EmptyLine (a BaseSmallStatement) into the module body
-    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
-    prev_was_fixture = False
-    for stmt in module.body:
-        is_fixture = isinstance(stmt, cst.FunctionDef) and any(
-            isinstance(d.decorator, cst.Attribute) and d.decorator.attr.value == "fixture" for d in getattr(stmt, "decorators", [])
-        )
-        if prev_was_fixture and not is_fixture:
-            # insert an empty line separation, but avoid duplicate EmptyLines
-                    if not new_body or not isinstance(new_body[-1], cst.EmptyLine):
-                        new_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
-        new_body.append(cast(cst.BaseStatement | cst.BaseSmallStatement, stmt))
-        prev_was_fixture = is_fixture
-    new_module = module.with_changes(body=new_body)
-    # Ensure test methods inside classes have a 'self' parameter when missing
+
+    # Centralized formatting pass
+    normalized = normalize_module(module)
+
+    # Ensure class test methods have a 'self' parameter when missing
     class EnsureSelfParam(cst.CSTTransformer):
         def __init__(self) -> None:
             super().__init__()
@@ -43,11 +41,10 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
                 return updated_node
             if not original_node.name.value.startswith("test"):
                 return updated_node
-            # if no params, add 'self'
             if not updated_node.params.params:
                 new_params = [cst.Param(name=cst.Name("self"))]
                 return updated_node.with_changes(params=updated_node.params.with_changes(params=new_params))
             return updated_node
 
-    final_module = new_module.visit(EnsureSelfParam())
+    final_module = normalized.visit(EnsureSelfParam())
     return {"module": final_module}

@@ -1,0 +1,370 @@
+"""
+Tests for the SchemaParser module.
+
+These tests validate the behavior of the SchemaParser without using mocks,
+focusing on real file operations and SQL parsing.
+"""
+
+import os
+import shutil
+import tempfile
+import unittest
+
+from splurge_sql_generator.schema_parser import SchemaParser
+
+
+class TestSchemaParser(unittest.TestCase):
+    """Test cases for SchemaParser."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.parser = SchemaParser()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        # Clean up temporary files and directories
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_load_sql_type_mapping_default(self):
+        """Test loading default SQL type mapping."""
+        # Create a default sql_type.yaml file
+        yaml_content = """
+# SQL Type to Python Type Mapping
+INTEGER: int
+TEXT: str
+DECIMAL: float
+BOOLEAN: bool
+TIMESTAMP: str
+DEFAULT: Any
+"""
+        yaml_file = os.path.join(self.temp_dir, "sql_type.yaml")
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+
+        parser = SchemaParser(sql_type_mapping_file=yaml_file)
+        mapping = parser._sql_type_mapping
+
+        self.assertEqual(mapping["INTEGER"], "int")
+        self.assertEqual(mapping["TEXT"], "str")
+        self.assertEqual(mapping["DECIMAL"], "float")
+        self.assertEqual(mapping["BOOLEAN"], "bool")
+        self.assertEqual(mapping["TIMESTAMP"], "str")
+        self.assertEqual(mapping["DEFAULT"], "Any")
+
+    def test_load_sql_type_mapping_missing_file(self):
+        """Test behavior when SQL type mapping file is missing."""
+        # Should not raise an exception, should use default mapping
+        parser = SchemaParser(sql_type_mapping_file="nonexistent_file.yaml")
+
+        # Should have some default mappings
+        self.assertIn("INTEGER", parser._sql_type_mapping)
+        self.assertIn("TEXT", parser._sql_type_mapping)
+        self.assertIn("DEFAULT", parser._sql_type_mapping)
+
+    def test_custom_yaml_mapping_case_insensitive(self):
+        """Test case insensitive lookups with custom YAML mapping."""
+        # Create a custom YAML file with mixed case
+        yaml_content = """
+# SQL Type to Python Type Mapping
+Integer: int
+Text: str
+Decimal: float
+Boolean: bool
+Timestamp: str
+Default: Any
+"""
+        yaml_file = os.path.join(self.temp_dir, "custom_sql_type.yaml")
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+
+        parser = SchemaParser(sql_type_mapping_file=yaml_file)
+
+        # Test case insensitive lookups
+        self.assertEqual(parser.get_python_type("INTEGER"), "int")
+        self.assertEqual(parser.get_python_type("integer"), "int")
+        self.assertEqual(parser.get_python_type("Integer"), "int")
+        self.assertEqual(parser.get_python_type("TEXT"), "str")
+        self.assertEqual(parser.get_python_type("text"), "str")
+        self.assertEqual(parser.get_python_type("Text"), "str")
+        self.assertEqual(parser.get_python_type("DECIMAL"), "float")
+        self.assertEqual(parser.get_python_type("decimal"), "float")
+        self.assertEqual(parser.get_python_type("Decimal"), "float")
+
+    def test_parse_create_table_statement(self):
+        """Test parsing CREATE TABLE statements."""
+        sql = """
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        # Parse the SQL content
+        tables = self.parser._parse_schema_content(sql)
+
+        # Check that table schema was parsed
+        self.assertIn("users", tables)
+        schema = tables["users"]
+
+        # Check column types
+        self.assertEqual(schema["id"], "INTEGER")
+        self.assertEqual(schema["username"], "TEXT")
+        self.assertEqual(schema["email"], "TEXT")
+        self.assertEqual(schema["password_hash"], "TEXT")
+        self.assertEqual(schema["status"], "TEXT")
+        self.assertEqual(schema["created_at"], "TIMESTAMP")
+        self.assertEqual(schema["updated_at"], "TIMESTAMP")
+
+    def test_parse_create_table_if_not_exists(self):
+        """Test parsing CREATE TABLE IF NOT EXISTS statements extracts table name."""
+        sql = """
+        CREATE TABLE IF NOT EXISTS mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_schema_prefix(self):
+        """Test parsing CREATE TABLE statements with schema prefix extracts table name."""
+        sql = """
+        CREATE TABLE my_schema.mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_bracketed_schema_prefix(self):
+        """Test parsing CREATE TABLE statements with bracketed schema prefix extracts table name."""
+        sql = """
+        CREATE TABLE [myschema].[mytable] (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_bracketed_table_name(self):
+        """Test parsing CREATE TABLE statements with bracketed table name extracts table name."""
+        sql = """
+        CREATE TABLE [mytable] (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_backtick_table_name(self):
+        """Test parsing CREATE TABLE statements with backtick-quoted table name extracts table name."""
+        sql = """
+        CREATE TABLE `mytable` (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_backtick_schema_prefix(self):
+        """Test parsing CREATE TABLE statements with backtick-quoted schema prefix extracts table name."""
+        sql = """
+        CREATE TABLE `myschema`.`mytable` (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_quoted_table_name(self):
+        """Test parsing CREATE TABLE statements with double-quoted table name extracts table name."""
+        sql = """
+        CREATE TABLE "mytable" (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_quoted_schema_prefix(self):
+        """Test parsing CREATE TABLE statements with double-quoted schema prefix extracts table name."""
+        sql = """
+        CREATE TABLE "myschema"."mytable" (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_with_mixed_quoting(self):
+        """Test parsing CREATE TABLE statements with mixed quoting styles extracts table name."""
+        sql = """
+        CREATE TABLE [myschema].`mytable` (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+
+        tables = self.parser._parse_schema_content(sql)
+
+        self.assertIn("mytable", tables)
+        schema = tables["mytable"]
+        self.assertEqual(schema["id"], "TEXT")
+        self.assertEqual(schema["value"], "TEXT")
+
+    def test_parse_create_table_malformed_if_not_exists(self):
+        """Test parsing malformed CREATE TABLE with incomplete IF NOT EXISTS sequence."""
+        # Test IF without NOT EXISTS
+        sql1 = """
+        CREATE TABLE IF mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables1 = self.parser._parse_schema_content(sql1)
+        self.assertEqual(tables1, {})  # Should not parse malformed SQL
+
+        # Test NOT without IF
+        sql2 = """
+        CREATE TABLE NOT EXISTS mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables2 = self.parser._parse_schema_content(sql2)
+        self.assertEqual(tables2, {})  # Should not parse malformed SQL
+
+        # Test EXISTS without IF NOT
+        sql3 = """
+        CREATE TABLE EXISTS mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables3 = self.parser._parse_schema_content(sql3)
+        self.assertEqual(tables3, {})  # Should not parse malformed SQL
+
+        # Test IF NOT without EXISTS
+        sql4 = """
+        CREATE TABLE IF NOT mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables4 = self.parser._parse_schema_content(sql4)
+        self.assertEqual(tables4, {})  # Should not parse malformed SQL
+
+    def test_parse_create_table_missing_table_name(self):
+        """Test parsing CREATE TABLE statements with missing table name."""
+        # Missing table name after TABLE
+        sql1 = """
+        CREATE TABLE (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables1 = self.parser._parse_schema_content(sql1)
+        self.assertEqual(tables1, {})  # Should not parse malformed SQL
+
+        # Missing table name after IF NOT EXISTS
+        sql2 = """
+        CREATE TABLE IF NOT EXISTS (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables2 = self.parser._parse_schema_content(sql2)
+        self.assertEqual(tables2, {})  # Should not parse malformed SQL
+
+    def test_parse_create_table_missing_parentheses(self):
+        """Test parsing CREATE TABLE statements with missing or malformed parentheses."""
+        # Missing opening parenthesis
+        sql1 = """
+        CREATE TABLE mytable
+            id TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        tables1 = self.parser._parse_schema_content(sql1)
+        self.assertEqual(tables1, {})  # Should not parse malformed SQL
+
+        # Missing closing parenthesis
+        sql2 = """
+        CREATE TABLE mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        """
+        tables2 = self.parser._parse_schema_content(sql2)
+        self.assertEqual(tables2, {})  # Should not parse malformed SQL
+
+        # Mismatched parentheses - this might actually parse successfully
+        # because sqlparse treats the extra ) as part of the statement
+        sql3 = """
+        CREATE TABLE mytable (
+            id TEXT PRIMARY KEY,
+            value TEXT
+        ));
+        """
+        tables3 = self.parser._parse_schema_content(sql3)
+        # This might actually succeed because sqlparse handles the extra )
+        # We'll accept either behavior as long as it's consistent
+        if tables3:
+            # If it parses, it should extract the table correctly
+            self.assertIn("mytable", tables3)
+            schema = tables["mytable"]
+            self.assertEqual(schema["id"], "TEXT")
+            self.assertEqual(schema["value"], "TEXT")
+

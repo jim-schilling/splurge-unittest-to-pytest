@@ -87,21 +87,66 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body = list(module.body)
     # insert imports in a deterministic order: first pytest (if requested), then re (if requested)
     insert_offset = 0
+    # Build a list of import nodes to insert in deterministic order
+    to_insert: list[cst.SimpleStatementLine] = []
     if needs_pytest:
-        new_body.insert(insert_idx + insert_offset, import_node)
-        insert_offset += 1
+        to_insert.append(import_node)
     if needs_re:
-        # avoid duplicate if re already present (checked above)
-        new_body.insert(insert_idx + insert_offset, re_import_node)
-        insert_offset += 1
+        to_insert.append(re_import_node)
     if needs_unittest:
-        # insert unittest import after pytest/re imports
-        new_body.insert(insert_idx + insert_offset, unittest_import_node)
-        insert_offset += 1
+        to_insert.append(unittest_import_node)
     if needs_sys:
-        new_body.insert(insert_idx + insert_offset, sys_import_node)
-        insert_offset += 1
+        to_insert.append(sys_import_node)
     if needs_os:
-        new_body.insert(insert_idx + insert_offset, os_import_node)
+        to_insert.append(os_import_node)
+
+    # Deduplicate by import name to avoid duplicate imports. We'll collect
+    # existing import names and skip inserting names already present.
+    existing_names: set[str] = set()
+    for stmt in module.body:
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.Import):
+                for name in first.names:
+                    # name.name is an Identifier node; convert to string
+                    existing_names.add(getattr(name.name, 'value', ''))
+            if isinstance(first, cst.ImportFrom):
+                module_name = getattr(first.module, 'value', None)
+                if module_name:
+                    existing_names.add(str(module_name))
+
+    insert_offset = 0
+    for node in to_insert:
+        # pick the import alias name to check for duplication
+        name_node = node.body[0]
+        insert_name = None
+        if isinstance(name_node, cst.Import) and name_node.names:
+            insert_name = getattr(name_node.names[0].name, 'value', None)
+        elif isinstance(name_node, cst.ImportFrom):
+            # module can be a Name or an Attribute; convert to dotted string
+            mod = getattr(name_node, 'module', None)
+            if isinstance(mod, cst.Name):
+                insert_name = mod.value
+            elif isinstance(mod, cst.Attribute):
+                parts: list[str] = []
+                cur: cst.BaseExpression | cst.Attribute = mod
+                while isinstance(cur, cst.Attribute):
+                    attr_name = getattr(cur.attr, 'value', None)
+                    if attr_name is not None:
+                        parts.insert(0, attr_name)
+                    cur = cur.value
+                if isinstance(cur, cst.Name):
+                    parts.insert(0, cur.value)
+                insert_name = '.'.join(parts) if parts else None
+        if insert_name and insert_name in existing_names:
+            continue
+        new_body.insert(insert_idx + insert_offset, node)
+        insert_offset += 1
+        if insert_name:
+            existing_names.add(str(insert_name))
+
+    # Spacing after imports is handled by the tidy stage to avoid duplicate
+    # EmptyLine insertions from multiple stages. Do not add EmptyLine sentinels
+    # here; tidy will normalize and ensure PEP8-compliant spacing.
     new_module = module.with_changes(body=new_body)
     return {"module": new_module}
