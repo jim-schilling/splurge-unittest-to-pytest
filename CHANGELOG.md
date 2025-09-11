@@ -12,6 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (empty placeholder)
 
 
+## [2025.0.3] - 2025-09-11
+
+### Unreleased notes
+- Diagnostics: move debug snapshots out of repository
+  - Diagnostic snapshots are now written to a per-run temporary directory when
+    `SPLURGE_ENABLE_DIAGNOSTICS` is set. A timestamped marker file is created
+    inside the diagnostics folder and contains the absolute path to the
+    diagnostics directory for easy discovery.
+
+- Mypy/type fixes and formatting improvements
+  - Addressed a number of type-checking issues across the `stages/` helpers
+    (formatting, import injection, fixtures stage, and manager) so `mypy` now
+    reports no errors for the package. A few internal helper annotations were
+    relaxed to keep libcst node handling clear and maintainable.
+
+- Internal: formatting normalization and EmptyLine handling
+  - Improved module/class-level spacing normalization to reduce formatting-only
+    diffs during conversion. This reduces noisy 'has_changes' results and
+    helps tests validate structural transformations instead of exact text.
+
+
 ## [2025.0.1] - 2025-09-11
 
 ### Changed
