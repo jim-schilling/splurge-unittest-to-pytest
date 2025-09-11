@@ -48,8 +48,12 @@ Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-exclude = ["tmp", "tmp/**"]
+# Only search for packages inside the actual package directory so that
+# top-level folders like `tmp/`, `tests/`, and `examples/` aren't
+# accidentally picked up by setuptools' package discovery.
+where = ["splurge_unittest_to_pytest"]
+include = ["splurge_unittest_to_pytest*"]
+exclude = ["tmp", "tmp.*"]
 
 [tool.setuptools]
 include-package-data = true
