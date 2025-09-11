@@ -6,6 +6,7 @@ from typing import Any
 from click.testing import CliRunner
 
 from splurge_unittest_to_pytest.cli import main
+from splurge_unittest_to_pytest import __version__
 
 
 class TestCLIBasicFunctionality:
@@ -27,7 +28,7 @@ class TestCLIBasicFunctionality:
         result = runner.invoke(main, ["--version"])
         
         assert result.exit_code == 0
-        assert "2025.0.0" in result.output
+        assert __version__ in result.output
 
     def test_cli_no_paths(self) -> None:
         """Test CLI behavior when no paths are provided."""
