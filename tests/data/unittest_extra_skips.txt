@@ -1,0 +1,18 @@
+import unittest
+
+class TestSkips(unittest.TestCase):
+    @unittest.skip('not ready')
+    def test_skip(self):
+        self.assertTrue(True)
+
+    @unittest.skipIf(True, 'cond')
+    def test_skipif(self):
+        self.assertTrue(True)
+
+    @unittest.skipUnless(False, 'cond')
+    def test_skipunless(self):
+        self.assertTrue(True)
+
+
+if __name__ == '__main__':
+    unittest.main()

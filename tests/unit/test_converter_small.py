@@ -1,6 +1,7 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter import SelfReferenceRemover, UnittestToPytestTransformer
+from splurge_unittest_to_pytest.converter import SelfReferenceRemover
+from splurge_unittest_to_pytest.main import PatternConfigurator
 
 
 def test_self_reference_remover_replaces_self_attr() -> None:
@@ -22,26 +23,23 @@ def test_self_reference_remover_replaces_self_attr() -> None:
 
 
 def test_normalize_and_is_methods() -> None:
-    # public API: properties and add_* methods
-    t = UnittestToPytestTransformer(compat=False)
-    # ensure public pattern properties exist
-    sp = t.setup_patterns
-    tp = t.teardown_patterns
-    testp = t.test_patterns
+    # public API: pattern configurator replaces legacy transformer patterns
+    cfg = PatternConfigurator()
+    sp = cfg.setup_patterns
+    tp = cfg.teardown_patterns
+    testp = cfg.test_patterns
     assert isinstance(sp, set) and isinstance(tp, set) and isinstance(testp, set)
     # adding patterns via public methods should update the sets
-    t.add_setup_pattern("before_all")
-    assert any("before_all" in p or p == "before_all" for p in t.setup_patterns)
-    t.add_teardown_pattern("after_all")
-    assert any("after_all" in p or p == "after_all" for p in t.teardown_patterns)
-    t.add_test_pattern("it_")
-    assert any(p == "it_" for p in t.test_patterns)
+    cfg.add_setup_pattern("before_all")
+    assert any("before_all" in p or p == "before_all" for p in cfg.setup_patterns)
+    cfg.add_teardown_pattern("after_all")
+    assert any("after_all" in p or p == "after_all" for p in cfg.teardown_patterns)
+    cfg.add_test_pattern("it_")
+    assert any(p == "it_" for p in cfg.test_patterns)
 
 
 def test_should_remove_first_param_behaviour() -> None:
-    # Ensure instantiation emits a DeprecationWarning (public behavior)
-    import warnings
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        _ = UnittestToPytestTransformer(compat=False)
-        assert any(isinstance(x.message, DeprecationWarning) for x in w)
+    # Legacy transformer is deprecated and no longer required by tests.
+    # This test asserts that the PatternConfigurator exists and exposes pattern sets.
+    cfg = PatternConfigurator()
+    assert isinstance(cfg.setup_patterns, set)

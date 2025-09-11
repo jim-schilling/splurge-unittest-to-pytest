@@ -1,0 +1,21 @@
+import unittest
+
+
+def factory(a):
+    def inner(x):
+        def deco(fn):
+            return fn
+        return deco
+    return inner
+
+class T(unittest.TestCase):
+
+    @factory(1)(2)
+    @unittest.expectedFailure
+    def test_nested(self):
+        self.assertEqual(1, 2)
+
+    @factory(True)(False)
+    @unittest.skipIf(True, "nested skip")
+    def test_nested_skip(self):
+        self.assertTrue(False)

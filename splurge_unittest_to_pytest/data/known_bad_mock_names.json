@@ -1,0 +1,7 @@
+{
+  "side_effect": "attribute on bound mock instances, not a top-level import",
+  "autospec": "argument name for patching utilities, not an importable symbol",
+  "sentinel": "helper factory in unittest.mock module but often used incorrectly as import name",
+  "DEFAULT": "constant used internally, not exported for from-import in conversion contexts",
+  "create_autospec": "utility function that should be accessed from module, not imported in this pattern"
+}

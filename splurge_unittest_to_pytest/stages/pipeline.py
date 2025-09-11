@@ -49,6 +49,10 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     from .fixtures_stage import fixtures_stage
     mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
+    # Run decorator and mock fixes before import injection so the injector can
+    # add imports required by pytest markers and other rewritten constructs.
+    from .decorator_and_mock_fixes import decorator_and_mock_fixes_stage
+    mgr.register(decorator_and_mock_fixes_stage)
     # Import injector should run after fixtures have been inserted so it can
     # detect the need for pytest import and place it before the @pytest.fixture
     # decorators deterministically.

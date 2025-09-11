@@ -1,0 +1,12 @@
+from unittest.mock import (
+    patch as p,
+    MagicMock,
+    side_effect,
+)
+
+class TestMultiMock(unittest.TestCase):
+    def test_multi(self):
+        m = MagicMock()
+        m.side_effect = KeyError('x')
+        with self.assertRaises(KeyError):
+            m()

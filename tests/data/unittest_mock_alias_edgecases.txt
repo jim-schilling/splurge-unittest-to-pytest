@@ -1,0 +1,10 @@
+from unittest.mock import patch as patch_alias, MagicMock as MM
+from unittest.mock import side_effect
+
+class TestAliasEdge(unittest.TestCase):
+    def test_alias(self):
+        p = patch_alias('os.remove')
+        m = MM()
+        m.side_effect = RuntimeError('boom')
+        with self.assertRaises(RuntimeError):
+            m()

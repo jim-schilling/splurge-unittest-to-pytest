@@ -1,0 +1,16 @@
+import unittest
+from unittest.mock import patch
+
+class PatchComplex(unittest.TestCase):
+
+    @patch('package.module.Class.method')
+    def test_patch_method(self, m):
+        self.assertIsNotNone(m)
+
+    def test_patch_object(self):
+        with patch.object(package.module.Class, 'attr', new=True):
+            assert True
+
+    @patch('a.b.c')
+    def test_package_target(self, mock_target):
+        self.assertIsNotNone(mock_target)

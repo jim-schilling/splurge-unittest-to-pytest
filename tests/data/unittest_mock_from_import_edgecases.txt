@@ -1,0 +1,20 @@
+from unittest.mock import (
+    Mock,
+    patch,
+    side_effect,
+)
+
+from unittest.mock import Mock, patch, autospec, sentinel
+
+
+class MockEdgeCaseTest(unittest.TestCase):
+
+    def test_side_effect_in_from_import(self):
+        m = Mock()
+        m.side_effect = lambda: None
+        self.assertIsNotNone(m)
+
+    def test_multiline_from_import(self):
+        with patch('module.func') as p:
+            p.return_value = 1
+            self.assertEqual(1, p())

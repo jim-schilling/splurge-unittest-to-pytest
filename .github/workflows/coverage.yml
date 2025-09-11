@@ -8,16 +8,18 @@ jobs:
   coverage:
     name: Coverage (main branch only)
     runs-on: ubuntu-latest
+    # Run coverage only on a single runner (Python 3.13) to avoid
+    # intermittent artifact attach failures across multiple runners.
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.13"]
 
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "${{ matrix.python-version }}"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
