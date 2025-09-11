@@ -7,6 +7,9 @@ from typing import Any
 import libcst as cst
 from libcst import matchers as m
 
+from .import_helpers import make_pytest_import_stmt
+
+
 def remove_unittest_importfrom(updated_node: cst.ImportFrom) -> cst.ImportFrom | cst.RemovalSentinel:
     """Remove ImportFrom nodes that import from unittest."""
     if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
@@ -21,8 +24,7 @@ def remove_unittest_import(updated_node: cst.Import) -> cst.Import | cst.Removal
     return updated_node
 
 
-def _make_pytest_import_stmt() -> cst.SimpleStatementLine:
-    return cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])])
+_make_pytest_import_stmt = make_pytest_import_stmt
 
 
 def has_pytest_import(module_node: cst.Module) -> bool:

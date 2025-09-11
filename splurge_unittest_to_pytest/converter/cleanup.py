@@ -7,70 +7,7 @@ from typing import Any, List
 
 import libcst as cst
 
-
-def references_attribute(expr: Any, attr_name: str) -> bool:
-    """Check if an expression references a specific attribute name.
-
-    Mirrors the logic previously defined as a method on the transformer.
-    """
-    # Direct attribute or name match
-    if isinstance(expr, cst.Attribute):
-        if expr.attr.value == attr_name:
-            return True
-        return references_attribute(expr.value, attr_name)
-    if isinstance(expr, cst.Name):
-        return expr.value == attr_name
-
-    # Calls: inspect func and args
-    if isinstance(expr, cst.Call):
-        if references_attribute(expr.func, attr_name):
-            return True
-        for a in expr.args:
-            if references_attribute(a.value, attr_name):
-                return True
-        return False
-
-    # Subscript/indexing
-    if isinstance(expr, cst.Subscript):
-        if references_attribute(expr.value, attr_name):
-            return True
-        for s in expr.slice:
-            inner = getattr(s, 'slice', None) or getattr(s, 'value', None) or s
-            # Handle Index or SubscriptElement wrappers that may contain expressions
-            if isinstance(inner, (cst.Index, cst.SubscriptElement)):
-                inner_expr = getattr(inner, 'value', getattr(inner, 'slice', None))
-            else:
-                inner_expr = inner
-            if isinstance(inner_expr, cst.BaseExpression) and references_attribute(inner_expr, attr_name):
-                return True
-        return False
-
-    # Binary operations, comparisons, boolean ops
-    if isinstance(expr, (cst.BinaryOperation, cst.Comparison, cst.BooleanOperation)):
-        parts: list[Any] = []
-        if hasattr(expr, 'left'):
-            parts.append(expr.left)
-        if hasattr(expr, 'right'):
-            parts.append(expr.right)
-        if hasattr(expr, 'comparisons'):
-            for comp in expr.comparisons:
-                comp_item = getattr(comp, 'comparison', None) or getattr(comp, 'operator', None)
-                if comp_item is not None:
-                    parts.append(comp_item)
-        for part in parts:
-            if isinstance(part, cst.BaseExpression) and references_attribute(part, attr_name):
-                return True
-        return False
-
-    # Sequences/containers
-    if isinstance(expr, (cst.Tuple, cst.List, cst.Set)):
-        for e in expr.elements:
-            val = getattr(e, 'value', e)
-            if isinstance(val, cst.BaseExpression) and references_attribute(val, attr_name):
-                return True
-        return False
-
-    return False
+from .cleanup_checks import references_attribute
 
 
 def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> List[Any]:
@@ -88,7 +25,8 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
             if isinstance(expr, cst.Expr) and isinstance(expr.value, cst.Call):
                 call = expr.value
                 func = call.func
-                if isinstance(func, cst.Attribute) and references_attribute(func.value, attr_name):
+                # If the function being called references the attribute (e.g., foo() or inst.foo())
+                if references_attribute(func, attr_name):
                     relevant_statements.append(s)
                     return
                 for arg in call.args:
@@ -109,12 +47,23 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
 
         # If statements: test/body/orelse
         if isinstance(s, cst.If):
+            # Prefer AST-aware detection
             if references_attribute(s.test, attr_name):
+                relevant_statements.append(s)
+                return
+            # Fallback: some comparison targets can be wrapped in library-specific
+            # nodes; fall back to textual scan of the test expression as a last resort.
+            test_code = getattr(s.test, "code", None)
+            if isinstance(test_code, str) and attr_name in test_code:
                 relevant_statements.append(s)
                 return
             for inner in getattr(s.body, 'body', []):
                 inspect_stmt(inner)
                 if relevant_statements and relevant_statements[-1] is inner:
+                    # Found a matching inner statement; record the enclosing If
+                    # rather than the inner statement to preserve context.
+                    relevant_statements.pop()
+                    relevant_statements.append(s)
                     return
             orelse = getattr(s, 'orelse', None)
             if orelse:
@@ -122,10 +71,15 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
                     for inner in getattr(orelse, 'body', []):
                         inspect_stmt(inner)
                         if relevant_statements and relevant_statements[-1] is inner:
+                            relevant_statements.pop()
+                            relevant_statements.append(s)
                             return
                 elif isinstance(orelse, cst.If):
                     inspect_stmt(orelse)
                     if relevant_statements and relevant_statements[-1] is orelse:
+                        # If the nested If contained the match, replace it with the outer If
+                        relevant_statements.pop()
+                        relevant_statements.append(s)
                         return
 
         # IndentedBlock: inspect contained statements

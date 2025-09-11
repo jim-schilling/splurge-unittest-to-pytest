@@ -7,12 +7,14 @@ state (e.g., setting self.needs_pytest_import) and call these helpers.
 from typing import Any, List
 
 import libcst as cst
-from typing import cast
 
 __all__: List[str] = [
     "create_fixture_with_cleanup",
     "create_simple_fixture",
+    "parse_setup_assignments",
 ]
+
+from .setup_parser import parse_setup_assignments
 
 
 def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: List[cst.BaseStatement]) -> cst.FunctionDef:
@@ -42,24 +44,12 @@ def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, 
         )
         yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
 
-        # Replace references to attr_name within cleanup_statements with the local value_name
-        safe_cleanup: List[cst.BaseStatement] = []
-        for stmt in cleanup_statements:
-            class ReplaceName(cst.CSTTransformer):
-                def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
-                    if original_node.value == attr_name:
-                        return cst.Name(value_name)
-                    return updated_node
+    # Replace references to attr_name within cleanup_statements with the local value_name
+    from .name_replacer import replace_names_in_statements
 
-                def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.BaseExpression:
-                    if isinstance(updated_node.value, cst.Name) and updated_node.attr.value == attr_name and updated_node.value.value in {"self", "cls"}:
-                        return cst.Name(value_name)
-                    return updated_node
+    safe_cleanup = replace_names_in_statements(cleanup_statements, attr_name, value_name)
 
-            replaced = stmt.visit(ReplaceName())
-            safe_cleanup.append(cast(cst.BaseStatement, replaced))
-
-        body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
+    body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
 
     fixture_func = cst.FunctionDef(
         name=cst.Name(attr_name),
@@ -182,28 +172,6 @@ def add_autouse_attach_fixture_to_module(module_node: cst.Module, setup_fixtures
     new_body.insert(insert_pos + 1, func)
 
     return module_node.with_changes(body=new_body)
-
-
-def parse_setup_assignments(node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
-    """Parse a setUp function to extract assignments to self.<attr>.
-
-    Returns a dict mapping attribute name -> assigned expression.
-    """
-    assignments: dict[str, cst.BaseExpression] = {}
-    for stmt in node.body.body:
-        if isinstance(stmt, cst.SimpleStatementLine):
-            if len(stmt.body) > 0:
-                expr = stmt.body[0]
-                if isinstance(expr, cst.Assign):
-                    if (
-                        len(expr.targets) == 1
-                        and isinstance(expr.targets[0].target, cst.Attribute)
-                        and isinstance(expr.targets[0].target.value, cst.Name)
-                        and expr.targets[0].target.value.value == "self"
-                    ):
-                        attr_name = expr.targets[0].target.attr.value
-                        assignments[attr_name] = expr.value
-    return assignments
 
 
 def create_fixture_for_attribute(attr_name: str, value_expr: cst.BaseExpression, teardown_cleanup: dict[str, list[cst.BaseStatement]]) -> cst.FunctionDef:
