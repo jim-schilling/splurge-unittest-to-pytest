@@ -22,11 +22,9 @@ def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, 
 
     This mirrors the logic previously inside UnittestToPytestTransformer._create_fixture_with_cleanup.
     """
-    fixture_decorator = cst.Decorator(
-        decorator=cst.Call(
-            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture"))
-        )
-    )
+    from .decorators import build_pytest_fixture_decorator
+
+    fixture_decorator = build_pytest_fixture_decorator()
 
     simple_types = (cst.Integer, cst.Float, cst.SimpleString)
     if isinstance(value_expr, simple_types):
@@ -65,9 +63,9 @@ def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, 
 
 def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
     """Create a simple fixture with return (no cleanup needed)."""
-    fixture_decorator = cst.Decorator(
-        decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
-    )
+    from .decorators import build_pytest_fixture_decorator
+
+    fixture_decorator = build_pytest_fixture_decorator()
 
     value_name = f"_{attr_name}_value"
     value_assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(value_name))], value=value_expr)])

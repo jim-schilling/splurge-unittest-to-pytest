@@ -33,13 +33,13 @@ from .converter.method_patterns import (
 )
 from .converter.class_checks import is_unittest_testcase_base
 from .converter.assertion_dispatch import convert_assertion
-from .converter.fixture_builder import replace_attr_references_in_statements
+from .converter.fixture_body import build_fixture_body
+from .converter.fixture_function import create_fixture_function
 from .converter.method_params import (
     should_remove_first_param as _should_remove_first_param_helper,
     remove_method_self_references as _remove_method_self_references_helper,
 )
 from .converter.decorators import build_pytest_fixture_decorator
-from .converter.value_checks import is_simple_fixture_value
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -176,9 +176,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         except (AttributeError, TypeError, ValueError):
             return original_node
 
-        return updated_node
-
-        return updated_node
+        return updated_node        
 
     def _should_remove_first_param(self, node: cst.FunctionDef) -> bool:
         """Delegate to helper for first-parameter removal logic."""
@@ -516,36 +514,11 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Create a fixture with yield pattern and cleanup."""
         # Create the @pytest.fixture decorator
         fixture_decorator = build_pytest_fixture_decorator()
-        # Decide whether to bind the produced resource to a local name.
-        # For simple literal values, yield the literal directly to preserve previous output (e.g., 'yield 42').
-        if is_simple_fixture_value(value_expr):
-            # yield the literal/expression directly and keep cleanup statements as-is
-            yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=value_expr))])
-            body = cst.IndentedBlock(body=[yield_stmt] + cleanup_statements)
-        else:
-            # Bind produced resource to a local name so cleanup references the resource, not the fixture function
-            value_name = f"_{attr_name}_value"
-            # assignment: _<attr>_value = <value_expr>
-            value_assign = cst.SimpleStatementLine(body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(value_name))], value=value_expr)])
-            # yield the value_name
-            yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
+        # Build the fixture body (literal-yield vs. bound-value + safe cleanup)
+        body = build_fixture_body(attr_name, value_expr, cleanup_statements)
 
-            # Replace references in cleanup_statements to refer to the local value name where they referenced the attribute
-            safe_cleanup = replace_attr_references_in_statements(cast(list[cst.BaseStatement], cleanup_statements), attr_name, value_name)
-
-            body = cst.IndentedBlock(body=[value_assign, yield_stmt] + safe_cleanup)
-
-        # Create the fixture function
-        fixture_func = cst.FunctionDef(
-            name=cst.Name(attr_name),
-            params=cst.Parameters(),
-            body=body,
-            decorators=[fixture_decorator],
-            returns=None,
-            asynchronous=None,
-        )
-
-        return fixture_func
+        # Create the fixture function using extracted helper
+        return create_fixture_function(attr_name, body, fixture_decorator)
     
     def _create_simple_fixture(self, attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
         """Create a simple fixture with return (no cleanup needed)."""
