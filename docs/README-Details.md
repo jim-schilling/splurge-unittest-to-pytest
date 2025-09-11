@@ -30,8 +30,8 @@ Splurge unittest-to-pytest is a comprehensive Python library and CLI tool for co
 
 ## Development Environment
 
-### Prerequisites
-- Python 3.10 or higher
+-### Prerequisites
+- Python 3.10 or higher (tested through Python 3.13)
 - Virtual environment (recommended)
 
 ### Setup
@@ -474,7 +474,7 @@ The library provides comprehensive error handling for various scenarios:
 ### Testing Requirements
 - All new code must have corresponding tests
 - Maintain or improve code coverage
-- Tests must pass on all supported Python versions
+- Tests must pass on all supported Python versions (up through Python 3.13)
 - Include both positive and negative test cases
 
 ## License and Attribution
