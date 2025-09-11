@@ -1,0 +1,15 @@
+import unittest
+from unittest.mock import *
+import unittest.mock as m
+from unittest.mock import Mock as M, patch as p
+
+class MockStarAlias(unittest.TestCase):
+
+    def test_star_and_alias(self):
+        m = M()
+        self.assertIsNotNone(m)
+
+    def test_patch_alias(self):
+        with p('os.path.exists') as mock_exists:
+            mock_exists.return_value = True
+            self.assertTrue(mock_exists('/tmp'))
