@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.0.1"
+version = "2025.0.2"
 description = "Convert unittest-style tests to modern pytest-style tests using libcst"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -48,7 +48,18 @@ Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
+# Only search for packages inside the actual package directory so that
+# top-level folders like `tmp/`, `tests/`, and `examples/` aren't
+# accidentally picked up by setuptools' package discovery.
+where = ["splurge_unittest_to_pytest"]
+include = ["splurge_unittest_to_pytest*"]
+exclude = ["tmp", "tmp.*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"splurge_unittest_to_pytest" = ["data/*.json"]
 
 [tool.mypy]
 python_version = "3.13"

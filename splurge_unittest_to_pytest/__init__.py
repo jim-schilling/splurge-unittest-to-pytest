@@ -3,7 +3,7 @@
 A Python library for converting unittest-style tests to modern pytest-style tests.
 """
 
-__version__ = "2025.0.1"
+__version__ = "2025.0.2"
 __author__ = "Jim Schilling"
 
 # Legacy transformer is deprecated and no longer exported. Use the staged

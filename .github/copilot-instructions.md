@@ -20,7 +20,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Create top-level folder: docs/.
 - Create project README.md which summarizes the project.
 - Create project CHANGELOG.md which details changes for each version/feature-branch.
-- Create docs/README-details.md which details project features, usage, errors, dependencies, etc.
+- Create docs/README-DETAILS.md which details project features, usage, errors, dependencies, etc.
 - For code projects, create top-level folders: tests/, examples/, specs/.
 - For code projects, create sub-folders under tests/: unit/, integration/, e2e/.
 - For Python projects, create modern, standardized pyproject.toml.
