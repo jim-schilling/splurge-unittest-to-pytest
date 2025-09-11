@@ -22,6 +22,7 @@ from .converter.fixtures import (
 from .converter.imports import add_pytest_import, remove_unittest_importfrom, remove_unittest_import
 from .converter.cleanup import extract_relevant_cleanup, references_attribute
 from .converter.params import get_fixture_param_names, make_fixture_params
+from .converter.params import append_fixture_params
 from .converter.autouse import build_attach_to_instance_fixture, insert_attach_fixture_into_module
 from .converter.placement import insert_fixtures_into_module
 from .converter.call_utils import is_self_call
@@ -209,19 +210,14 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 fixture_params = self._get_fixture_params_for_test_method()
                 if fixture_params:
                     # Create parameter objects for fixtures
-                    fixture_param_objects = []
-                    for fixture_name in fixture_params:
-                        fixture_param_objects.append(
-                            cst.Param(name=cst.Name(fixture_name))
-                        )
                     # Combine existing params (excluding self) with fixture params
-                    all_params = new_params + fixture_param_objects
+                    all_params = append_fixture_params(updated_node.params.with_changes(params=new_params), fixture_params).params
                 else:
                     all_params = new_params
                 
                 return updated_node.with_changes(
                     params=updated_node.params.with_changes(params=all_params),
-                    body=new_body
+                    body=new_body,
                 )
         except (AttributeError, TypeError, ValueError):
             return original_node
