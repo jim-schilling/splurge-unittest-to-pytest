@@ -8,6 +8,7 @@ from typing import Any, List
 import libcst as cst
 
 from .cleanup_checks import references_attribute
+from .cleanup_inspect import simple_stmt_references_attribute
 
 
 def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> List[Any]:
@@ -19,31 +20,11 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
     relevant_statements: List[Any] = []
 
     def inspect_stmt(s: cst.BaseStatement) -> None:
-        # Expr(Call(...)) with attribute method call or arg referencing attr
-        if isinstance(s, cst.SimpleStatementLine) and s.body:
-            expr = s.body[0]
-            if isinstance(expr, cst.Expr) and isinstance(expr.value, cst.Call):
-                call = expr.value
-                func = call.func
-                # If the function being called references the attribute (e.g., foo() or inst.foo())
-                if references_attribute(func, attr_name):
-                    relevant_statements.append(s)
-                    return
-                for arg in call.args:
-                    if references_attribute(arg.value, attr_name):
-                        relevant_statements.append(s)
-                        return
-            elif isinstance(expr, cst.Expr):
-                # Generic expression (e.g., Subscript, Name, Attribute) may reference the attribute
-                if references_attribute(expr.value, attr_name):
-                    relevant_statements.append(s)
-                    return
-            elif isinstance(expr, cst.Assign):
-                for target in expr.targets:
-                    target_expr = getattr(target, 'target', target)
-                    if references_attribute(target_expr, attr_name):
-                        relevant_statements.append(s)
-                        return
+        # Simple statement lines are delegated to a focused helper for clarity / testability
+        if isinstance(s, cst.SimpleStatementLine):
+            if simple_stmt_references_attribute(s, attr_name):
+                relevant_statements.append(s)
+                return
 
         # If statements: test/body/orelse
         if isinstance(s, cst.If):

@@ -1,6 +1,34 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter.fixture_builder import replace_attr_references_in_statements
+from splurge_unittest_to_pytest.converter.fixture_builder import (
+    replace_attr_references_in_statements,
+)
+
+
+def parse_stmt(src: str) -> cst.BaseStatement:
+    return cst.parse_statement(src)
+
+
+def stmt_to_code(stmt: cst.BaseStatement) -> str:
+    return cst.Module(body=[stmt]).code.strip()
+
+
+def test_replace_self_attribute_in_expr():
+    stmts = [parse_stmt("return self.value + 1")]
+    out = replace_attr_references_in_statements(stmts, attr_name="value", value_name="value")
+    assert len(out) == 1
+    code = stmt_to_code(out[0])
+    assert "return value + 1" in code
+
+
+def test_replace_self_attribute_in_assign():
+    stmts = [parse_stmt("self.foo = compute()")]
+    out = replace_attr_references_in_statements(stmts, attr_name="foo", value_name="foo")
+    assert len(out) == 1
+    code = stmt_to_code(out[0])
+    # assignment target should no longer be Attribute
+    assert "foo =" in code
+
 
 
 def test_replace_attr_references_replaces_name_and_attribute():

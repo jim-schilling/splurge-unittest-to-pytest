@@ -69,10 +69,10 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
             # fixture names directly.
             new_params = updated_node.params.with_changes(params=params)
 
-                # Replace self.attr occurrences with bare fixture names when the
-                # original class inherited from unittest.TestCase. The check for
-                # unittest.TestCase inheritance uses the class node stored in the
-                # collector; no local assignment is required here.
+            # Replace self.attr occurrences with bare fixture names when the
+            # original class inherited from unittest.TestCase. The check for
+            # unittest.TestCase inheritance uses the class node stored in the
+            # collector; no local assignment is required here.
             def _class_inherits_unittest_testcase(class_info: Any) -> bool:
                 node = getattr(class_info, 'node', None)
                 if node is None:

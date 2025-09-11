@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.16.4
+    hooks:
+      - id: ruff
+        args: ["check", "--fix"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        args: ["-p", "splurge_unittest_to_pytest"]
+
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest unit tests
+        entry: pytest
+        language: system
+        types: [python]
+        args: ["-q", "tests/unit"]
