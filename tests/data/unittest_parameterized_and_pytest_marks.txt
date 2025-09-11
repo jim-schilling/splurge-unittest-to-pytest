@@ -1,0 +1,16 @@
+import unittest
+from parameterized import parameterized
+import pytest
+
+class TestParam(unittest.TestCase):
+    @parameterized.expand([(1,), (2,)])
+    def test_param(self, value):
+        self.assertIn(value, (1, 2))
+
+    @unittest.skip('skip me')
+    def test_skip(self):
+        pass
+
+@pytest.mark.slow
+def test_pytest_marked():
+    assert True

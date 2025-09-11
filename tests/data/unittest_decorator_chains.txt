@@ -1,0 +1,13 @@
+import unittest
+
+class TestDecorators(unittest.TestCase):
+    @unittest.skip('a')
+    @unittest.expectedFailure
+    def test_chain(self):
+        self.assertEqual(1, 1)
+
+
+@unittest.expectedFailure
+@unittest.skip('b')
+def test_global_chain():
+    assert True

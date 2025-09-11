@@ -15,6 +15,7 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     needs_pytest_val = context.get("needs_pytest_import") if "needs_pytest_import" in context else True
     needs_pytest: bool = bool(needs_pytest_val)
     needs_re: bool = bool(context.get("needs_re_import", False))
+    needs_unittest: bool = bool(context.get("needs_unittest_import", False))
     if module is None:
         return {}
     # Defensive detection: if any stage introduced direct 'pytest' usage
@@ -23,6 +24,9 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     module_text = getattr(module, 'code', '')
     if not needs_pytest and ('pytest.' in module_text or '@pytest.' in module_text):
         needs_pytest = True
+    # Detect leftover references to the unittest module in the generated source
+    if not needs_unittest and 'unittest.' in module_text:
+        needs_unittest = True
 
     # If no stage signaled that pytest or re is required and the caller
     # explicitly provided flags, skip insertion to keep imports minimal.
@@ -42,9 +46,18 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
                 for name in expr.names:
                     if name.name.value == "pytest":
                         return {"module": module}
+            # also detect if unittest is already imported
+            if isinstance(expr, cst.ImportFrom):
+                if getattr(expr.module, "value", None) == "unittest":
+                    needs_unittest = False
+            if isinstance(expr, cst.Import):
+                for name in expr.names:
+                    if name.name.value == "unittest":
+                        needs_unittest = False
     # build import node
     import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])])
     re_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("re"))])])
+    unittest_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("unittest"))])])
     # decide insertion index: after docstring if present, else after imports, else at 0
     insert_idx = 0
     # find docstring
@@ -71,5 +84,8 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if needs_re:
         # avoid duplicate if re already present (checked above)
         new_body.insert(insert_idx + insert_offset, re_import_node)
+    if needs_unittest:
+        # insert unittest import after pytest/re imports
+        new_body.insert(insert_idx + insert_offset, unittest_import_node)
     new_module = module.with_changes(body=new_body)
     return {"module": new_module}

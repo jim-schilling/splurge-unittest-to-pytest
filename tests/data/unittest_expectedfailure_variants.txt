@@ -1,0 +1,10 @@
+import unittest
+
+class TestExpFailure(unittest.TestCase):
+    @unittest.expectedFailure
+    def test_expected(self):
+        self.assertEqual(1, 2)
+
+    @expectedFailure
+    def test_bare_expected(self):
+        self.assertEqual(2, 3)

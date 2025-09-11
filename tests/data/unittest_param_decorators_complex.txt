@@ -1,0 +1,14 @@
+import unittest
+from parameterized import parameterized
+
+class TestParamDecorators(unittest.TestCase):
+    @parameterized.expand([(1,), (2,)])
+    @unittest.skipIf(1 == 1, 'always')
+    def test_param(self, value):
+        self.assertIn(value, (1, 2))
+
+
+@unittest.skipUnless(2 > 1, 'cond2')
+@unittest.expectedFailure
+def test_global():
+    assert True

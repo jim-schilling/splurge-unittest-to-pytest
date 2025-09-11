@@ -1,0 +1,21 @@
+import unittest
+from unittest.mock import patch, MagicMock, side_effect
+from parameterized import parameterized
+import pytest
+
+class TestCombined(unittest.TestCase):
+    @parameterized.expand([(1,), (3,)])
+    @unittest.skipIf(1 < 0, 'never')
+    def test_combined(self, val):
+        m = MagicMock()
+        if val == 3:
+            m.side_effect = KeyError('x')
+        if val == 1:
+            self.assertTrue(True)
+        else:
+            with self.assertRaises(KeyError):
+                m()
+
+@pytest.mark.usefixtures('fixture_a')
+def test_pytest_with_fixture():
+    assert True
