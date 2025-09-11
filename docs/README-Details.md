@@ -172,6 +172,48 @@ pytest -k "test_convert"
 - Adds `from pytest import *` when pytest features are used
 - Preserves other imports and their formatting
 
+##### Known-bad `unittest.mock` names mapping
+
+The converter includes a small curated mapping of `unittest.mock` names that
+should not be preserved as `from unittest.mock import <name>` during conversion
+because they are not intended to be top-level importable symbols or are often
+misused in source files during automated conversion.
+
+Location
+- `splurge_unittest_to_pytest/data/known_bad_mock_names.json` — a JSON object
+   whose keys are problematic names and whose values are short reasons.
+
+Why this exists
+- Some constructs (for example `side_effect`) are attributes set on mock
+   instances rather than exported module-level symbols. Leaving them in
+   `from unittest.mock import ...` lists causes ImportError after conversion.
+- Keeping a curated list avoids over-eager rewrites while still ensuring the
+   converted output imports cleanly at module import time.
+
+Format example
+```
+{
+   "side_effect": "attribute on bound mock instances, not a top-level import",
+   "autospec": "argument name for patching utilities, not an importable symbol"
+}
+```
+
+How to extend
+- To add or remove entries, update the JSON file under `splurge_unittest_to_pytest/data/`.
+- The transformer loads the mapping at runtime; changes to this file take effect
+   immediately on the next conversion run (no code changes required).
+- When adding entries, prefer a short human-readable reason string as the value.
+
+Fallback behavior
+- If the mapping cannot be loaded for any reason (packaging, file access), the
+   transformer uses a small built-in fallback set to remain conservative and safe.
+
+Maintenance notes
+- Keep the mapping minimal and evidence-based — add names only when practical
+   conversion cases demonstrate an ImportError or runtime problem.
+- Consider adding a unit test for each newly added mapping entry that verifies
+   the transformer rewrites the corresponding `from unittest.mock` import.
+
 ### Conversion Algorithm
 
 1. **Parse Source Code**: Use libcst to parse Python code into AST

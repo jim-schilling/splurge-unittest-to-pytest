@@ -9,11 +9,21 @@ from __future__ import annotations
 
 from typing import Any, cast
 import importlib
+import json
+import importlib.resources as pkg_resources
 
 import libcst as cst
 
 
 class DecoratorAndMockTransformer(cst.CSTTransformer):
+    def __init__(self) -> None:
+        super().__init__()
+        self._module: cst.Module | None = None
+
+    def visit_Module(self, node: cst.Module) -> None:
+        # store module AST to allow context-aware decisions in later leaves
+        self._module = node
+
     def leave_Decorator(self, original: cst.Decorator, updated: cst.Decorator) -> cst.Decorator:
         expr = updated.decorator
         # Helper to build pytest.mark.<name> call
@@ -110,20 +120,65 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                 else:
                     # mypy: imp.names is a Sequence[ImportAlias]
                     names_seq = [n for n in imp.names if isinstance(n, cst.ImportAlias)]
-                # Detect names that are not attributes of the real `unittest.mock`
+                # Detect names that are not attributes of the real `unittest.mock`.
+                # Load a curated mapping of known-bad names from package data so
+                # we can maintain and extend this list without code edits.
                 bad_names: set[str] = set()
+                curated_bad: set[str] = set()
+                # Fallback mapping retained for safety when resource loading fails
+                FALLBACK_BAD = {"side_effect", "autospec", "sentinel"}
+                try:
+                    # Attempt to load curated mapping from package data
+                    data_pkg = pkg_resources.files("splurge_unittest_to_pytest").joinpath("data/known_bad_mock_names.json")
+                    if data_pkg.is_file():
+                        raw = data_pkg.read_text(encoding="utf8")
+                        parsed = json.loads(raw)
+                        curated_bad = {k for k in parsed.keys()}
+                    else:
+                        curated_bad = FALLBACK_BAD
+                except Exception:
+                    curated_bad = FALLBACK_BAD
+
                 try:
                     mock_module = importlib.import_module("unittest.mock")
                     for alias in names_seq:
                         if not isinstance(alias.name, cst.Name):
                             continue
                         name_val = alias.name.value
-                        if not hasattr(mock_module, name_val):
+                        if name_val in curated_bad or not hasattr(mock_module, name_val):
                             bad_names.add(name_val)
                 except Exception:
-                    # If we can't import the module at runtime, fall back to
-                    # the conservative rule for `side_effect` only.
-                    bad_names = {alias.name.value for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value == "side_effect"}
+                    # conservative fallback: mark curated/fallback bad names
+                    bad_names = {alias.name.value for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value in curated_bad}
+                # If the module already explicitly imports the mock module or has
+                # other `from unittest.mock` imports, prefer to skip rewriting to
+                # avoid duplicate/contradictory imports. However, when the set of
+                # bad names contains elements we consider known-problematic, we
+                # force the rewrite to ensure conversion produces importable code.
+                FORCE_REWRITE_BAD = {"side_effect", "autospec", "sentinel"}
+                if bad_names & FORCE_REWRITE_BAD:
+                    # force rewrite regardless of other imports
+                    pass
+                else:
+                    if self._module is not None:
+                        for other in self._module.body:
+                            if not (isinstance(other, cst.SimpleStatementLine) and other.body):
+                                continue
+                            other_expr = other.body[0]
+                            # import unittest.mock as m  -> skip rewrite
+                            if isinstance(other_expr, cst.Import):
+                                for n in other_expr.names:
+                                    if isinstance(n.name, cst.Attribute) and getattr(n.name.attr, "value", None) == "mock":
+                                        return updated
+                            # from unittest.mock import *  OR any from-import elsewhere -> skip
+                            if isinstance(other_expr, cst.ImportFrom):
+                                other_mod = _dotted_name(getattr(other_expr, "module", None))
+                                if other_mod == "unittest.mock":
+                                    try:
+                                        if other_expr is not stmt:
+                                            return updated
+                                    except Exception:
+                                        return updated
                 if bad_names:
                     # build import unittest.mock as mock
                     import_mock = cst.SimpleStatementLine(
