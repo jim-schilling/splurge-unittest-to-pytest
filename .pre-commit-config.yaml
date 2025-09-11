@@ -13,6 +13,7 @@ repos:
         entry: mypy
         language: system
         types: [python]
+        pass_filenames: false
         args: ["-p", "splurge_unittest_to_pytest"]
 
       - id: pytest-unit
@@ -20,4 +21,5 @@ repos:
         entry: pytest
         language: system
         types: [python]
+        pass_filenames: false
         args: ["-q", "tests/unit"]
