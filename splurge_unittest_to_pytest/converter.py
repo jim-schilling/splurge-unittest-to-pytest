@@ -39,6 +39,7 @@ from .converter.method_params import (
     remove_method_self_references as _remove_method_self_references_helper,
 )
 from .converter.decorators import build_pytest_fixture_decorator
+from .converter.value_checks import is_simple_fixture_value
 
 
 class UnittestToPytestTransformer(cst.CSTTransformer):
@@ -517,8 +518,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         fixture_decorator = build_pytest_fixture_decorator()
         # Decide whether to bind the produced resource to a local name.
         # For simple literal values, yield the literal directly to preserve previous output (e.g., 'yield 42').
-        simple_types = (cst.Integer, cst.Float, cst.SimpleString)
-        if isinstance(value_expr, simple_types):
+        if is_simple_fixture_value(value_expr):
             # yield the literal/expression directly and keep cleanup statements as-is
             yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=value_expr))])
             body = cst.IndentedBlock(body=[yield_stmt] + cleanup_statements)
