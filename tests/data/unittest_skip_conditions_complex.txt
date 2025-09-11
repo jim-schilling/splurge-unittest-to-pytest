@@ -1,0 +1,11 @@
+import unittest
+
+class SkipConditions(unittest.TestCase):
+
+    @unittest.skipIf(sys.platform == 'win32' or 'CI' in os.environ, "complex condition")
+    def test_complex_or(self):
+        self.assertTrue(True)
+
+    @unittest.skipUnless((os.getenv('RUN_SLOW') and not os.getenv('CI')) or check_env(), "complex unless")
+    def test_complex_and(self):
+        self.assertTrue(True)

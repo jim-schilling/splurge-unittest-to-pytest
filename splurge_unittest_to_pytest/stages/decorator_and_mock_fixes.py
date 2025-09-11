@@ -8,6 +8,7 @@ that include non-importable names like `side_effect`.
 from __future__ import annotations
 
 from typing import Any, cast
+import importlib
 
 import libcst as cst
 
@@ -109,7 +110,20 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                 else:
                     # mypy: imp.names is a Sequence[ImportAlias]
                     names_seq = [n for n in imp.names if isinstance(n, cst.ImportAlias)]
-                bad_names = {alias.name.value for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value == "side_effect"}
+                # Detect names that are not attributes of the real `unittest.mock`
+                bad_names: set[str] = set()
+                try:
+                    mock_module = importlib.import_module("unittest.mock")
+                    for alias in names_seq:
+                        if not isinstance(alias.name, cst.Name):
+                            continue
+                        name_val = alias.name.value
+                        if not hasattr(mock_module, name_val):
+                            bad_names.add(name_val)
+                except Exception:
+                    # If we can't import the module at runtime, fall back to
+                    # the conservative rule for `side_effect` only.
+                    bad_names = {alias.name.value for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value == "side_effect"}
                 if bad_names:
                     # build import unittest.mock as mock
                     import_mock = cst.SimpleStatementLine(

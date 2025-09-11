@@ -16,6 +16,8 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     needs_pytest: bool = bool(needs_pytest_val)
     needs_re: bool = bool(context.get("needs_re_import", False))
     needs_unittest: bool = bool(context.get("needs_unittest_import", False))
+    needs_sys: bool = bool(context.get("needs_sys_import", False))
+    needs_os: bool = bool(context.get("needs_os_import", False))
     if module is None:
         return {}
     # Defensive detection: if any stage introduced direct 'pytest' usage
@@ -27,6 +29,11 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # Detect leftover references to the unittest module in the generated source
     if not needs_unittest and 'unittest.' in module_text:
         needs_unittest = True
+    # Detect references to sys/os commonly used in skip conditions and env checks
+    if not needs_sys and 'sys.' in module_text:
+        needs_sys = True
+    if not needs_os and ('os.' in module_text or 'os.environ' in module_text or 'os.getenv' in module_text):
+        needs_os = True
 
     # If no stage signaled that pytest or re is required and the caller
     # explicitly provided flags, skip insertion to keep imports minimal.
@@ -58,6 +65,8 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])])
     re_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("re"))])])
     unittest_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("unittest"))])])
+    sys_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("sys"))])])
+    os_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("os"))])])
     # decide insertion index: after docstring if present, else after imports, else at 0
     insert_idx = 0
     # find docstring
@@ -84,8 +93,15 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if needs_re:
         # avoid duplicate if re already present (checked above)
         new_body.insert(insert_idx + insert_offset, re_import_node)
+        insert_offset += 1
     if needs_unittest:
         # insert unittest import after pytest/re imports
         new_body.insert(insert_idx + insert_offset, unittest_import_node)
+        insert_offset += 1
+    if needs_sys:
+        new_body.insert(insert_idx + insert_offset, sys_import_node)
+        insert_offset += 1
+    if needs_os:
+        new_body.insert(insert_idx + insert_offset, os_import_node)
     new_module = module.with_changes(body=new_body)
     return {"module": new_module}

@@ -1,0 +1,22 @@
+import unittest
+
+
+def decorator_factory(flag):
+    def deco(fn):
+        def wrapper(*a, **kw):
+            return fn(*a, **kw)
+        return wrapper
+    return deco
+
+
+class MyTestCase(unittest.TestCase):
+
+    @decorator_factory(True)
+    @unittest.expectedFailure
+    def test_factory_expected(self):
+        self.assertEqual(1, 2)
+
+    @decorator_factory(False)
+    @unittest.skip("skipping via factory")
+    def test_factory_skip(self):
+        self.assertTrue(False)

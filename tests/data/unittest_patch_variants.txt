@@ -1,0 +1,18 @@
+import unittest
+from unittest.mock import patch, Mock
+
+class PatchVariants(unittest.TestCase):
+
+    @patch('os.path.exists')
+    def test_patch_decorator(self, mock_exists):
+        mock_exists.return_value = True
+        self.assertTrue(mock_exists('/tmp'))
+
+    def test_patch_context_manager(self):
+        with patch('os.remove') as mock_remove:
+            mock_remove.return_value = None
+            self.assertIsNone(mock_remove('/tmp/file'))
+
+    @patch('module.name', new=Mock())
+    def test_patch_with_new(self):
+        self.assertIsNotNone(module.name)

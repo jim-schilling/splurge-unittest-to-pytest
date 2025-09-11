@@ -1,0 +1,19 @@
+import unittest
+
+
+def custom_deco(fn):
+    def wrapper(*a, **kw):
+        return fn(*a, **kw)
+    return wrapper
+
+
+@custom_deco
+@unittest.skip("skip entire class")
+class ClassDecorators(unittest.TestCase):
+
+    def test_one(self):
+        self.assertEqual(1, 1)
+
+    @unittest.skipUnless(True, "conditional")
+    def test_conditional(self):
+        self.assertTrue(True)
