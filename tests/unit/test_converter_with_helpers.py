@@ -3,32 +3,46 @@ import libcst as cst
 from splurge_unittest_to_pytest.converter import with_helpers
 
 
-def run_with(src: str):
-    module = cst.parse_module(src)
-    # assume single with statement in module body
-    node = module.body[0]
-    return with_helpers.convert_assert_raises_with(node)
+def make_with(src: str) -> cst.With:
+    mod = cst.parse_module(src)
+    for node in mod.body:
+        if isinstance(node, cst.With):
+            return node
+    raise RuntimeError("no with found")
 
 
-def test_convert_self_assert_raises_to_pytest_raises():
-    src = "with self.assertRaises(ValueError):\n    f()\n"
-    new_with, needs_pytest = run_with(src)
-    assert needs_pytest is True
-    assert new_with is not None
-    assert "pytest.raises" in cst.Module(body=[new_with]).code
+def test_convert_assert_raises_with_self_call():
+    src = "with self.assertRaises(ValueError):\n    pass\n"
+    w = make_with(src)
+    new_w, needs = with_helpers.convert_assert_raises_with(w)
+    assert needs is True
+    assert new_w is not None
+    assert "pytest.raises" in cst.Module(body=[new_w]).code
 
 
-def test_convert_bare_assert_raises_regex_to_pytest():
-    src = "with assertRaisesRegex(ValueError, 'msg'):\n    f()\n"
-    new_with, needs_pytest = run_with(src)
-    assert needs_pytest is True
-    assert new_with is not None
-    # match token may be used; ensure pytest.raises introduced
-    assert "pytest.raises" in cst.Module(body=[new_with]).code
+def test_convert_assert_raises_with_bare_call():
+    src = "with assertRaises(ValueError):\n    pass\n"
+    w = make_with(src)
+    new_w, needs = with_helpers.convert_assert_raises_with(w)
+    assert needs is True
+    assert new_w is not None
+    assert "pytest.raises" in cst.Module(body=[new_w]).code
 
 
-def test_non_matching_with_returns_none():
-    # with that doesn't call a Call item, or different function should return None
+def test_convert_assert_raises_regex():
+    src = "with self.assertRaisesRegex(ValueError, 'bad'):\n    pass\n"
+    w = make_with(src)
+    new_w, needs = with_helpers.convert_assert_raises_with(w)
+    assert needs is True
+    assert new_w is not None
+    # Inspect the inner Call for a keyword argument named 'match'
+    inner_call = new_w.items[0].item
+    assert any(a.keyword and a.keyword.value == "match" for a in inner_call.args)
+
+
+def test_convert_assert_raises_with_non_call():
     src = "with open('x') as f:\n    pass\n"
-    new_with, needs_pytest = run_with(src)
-    assert new_with is None and needs_pytest is False
+    w = make_with(src)
+    new_w, needs = with_helpers.convert_assert_raises_with(w)
+    assert new_w is None and needs is False
+# ...existing code above covers the important cases
