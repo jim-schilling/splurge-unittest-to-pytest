@@ -8,7 +8,7 @@ import libcst as cst
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
-from .converter.utils import has_meaningful_changes
+from .converter.utils import has_meaningful_changes, normalize_method_name
 
 
 @dataclass
@@ -137,10 +137,20 @@ class PatternConfigurator:
             "spec_",
         }
 
+        # Maintain normalized pattern caches for efficient matching
+        self._norm_setup_patterns: set[str] = {normalize_method_name(p) for p in self._setup_patterns}
+        self._norm_teardown_patterns: set[str] = {normalize_method_name(p) for p in self._teardown_patterns}
+        self._norm_test_patterns: set[str] = {normalize_method_name(p) for p in self._test_patterns}
+
     def add_setup_pattern(self, p: Any) -> None:
         try:
             if isinstance(p, str) and p.strip():
                 self._setup_patterns.add(p)
+                # update normalized cache
+                try:
+                    self._norm_setup_patterns.add(normalize_method_name(p))
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -148,6 +158,10 @@ class PatternConfigurator:
         try:
             if isinstance(p, str) and p.strip():
                 self._teardown_patterns.add(p)
+                try:
+                    self._norm_teardown_patterns.add(normalize_method_name(p))
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -155,20 +169,24 @@ class PatternConfigurator:
         try:
             if isinstance(p, str) and p.strip():
                 self._test_patterns.add(p)
+                try:
+                    self._norm_test_patterns.add(normalize_method_name(p))
+                except Exception:
+                    pass
         except Exception:
             pass
 
     def _is_setup_method(self, name: str) -> bool:
         try:
-            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
-            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._setup_patterns)
+            norm_name = normalize_method_name(name)
+            return any(norm_name.startswith(p) for p in self._norm_setup_patterns)
         except Exception:
             return False
 
     def _is_teardown_method(self, name: str) -> bool:
         try:
-            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
-            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._teardown_patterns)
+            norm_name = normalize_method_name(name)
+            return any(norm_name.startswith(p) for p in self._norm_teardown_patterns)
         except Exception:
             return False
 
@@ -176,8 +194,8 @@ class PatternConfigurator:
         try:
             # Test patterns are matched case-sensitively for prefix by default,
             # but normalize to alphanumeric + lowercase to support camelCase/underscore variants.
-            norm_name = "".join(ch.lower() for ch in name if ch.isalnum())
-            return any(norm_name.startswith("".join(ch.lower() for ch in p if ch.isalnum())) for p in self._test_patterns)
+            norm_name = normalize_method_name(name)
+            return any(norm_name.startswith(p) for p in self._norm_test_patterns)
         except Exception:
             return False
     
