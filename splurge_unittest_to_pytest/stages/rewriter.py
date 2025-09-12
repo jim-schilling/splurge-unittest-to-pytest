@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import libcst as cst
+from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param
 
 
 def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -38,9 +39,9 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
             name = original_node.name.value
             if not name.startswith("test"):
                 return updated_node
-            # build new params: ensure instance methods inside classes include
-            # `self` as the first parameter (or `cls` for @classmethod). Do not
-            # add/remove params for @staticmethod methods.
+            # build new params: remove leading 'self'/'cls' and append fixture
+            # params inferred from the collector's setup_assignments for the
+            # current class. Do not change staticmethod signatures.
             params = list(updated_node.params.params)
             # detect staticmethod/classmethod decorators on the original node
             is_static = False
@@ -52,44 +53,37 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
                         break
                     if dec.decorator.value == "classmethod":
                         is_classmethod = True
-            # If it's a staticmethod, leave params as-is.
+
             if not is_static:
-                desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
-                if not params:
-                    # no params; insert desired first param
-                    params.insert(0, cst.Param(name=desired_first))
+                # decide behavior based on whether this class had setup assignments
+                fixtures = []
+                if self._current_class and self._current_class in self._classes_map:
+                    class_info = self._classes_map[self._current_class]
+                    fixtures = list(class_info.setup_assignments.keys())
+
+                if fixtures:
+                    # class had setup assignments: remove leading self/cls if present
+                    if params and should_remove_first_param(original_node):
+                        params.pop(0)
+                    # append fixture params
+                    for fx in fixtures:
+                        params.append(cst.Param(name=cst.Name(fx)))
                 else:
-                    first_name = getattr(params[0].name, 'value', None)
-                    if first_name not in ("self", "cls"):
-                        # insert desired first param before existing params
+                    # no fixtures: ensure instance/class methods include self/cls
+                    is_classmethod = False
+                    for dec in original_node.decorators or []:
+                        if isinstance(dec.decorator, cst.Name) and dec.decorator.value == "classmethod":
+                            is_classmethod = True
+                            break
+                    desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
+                    if not params:
                         params.insert(0, cst.Param(name=desired_first))
-            # Under Option A we've removed self/cls from test method signatures
-            # earlier in the pipeline; here we also rewrite references inside
-            # the test body like `self.attr` -> `attr` so test code uses the
-            # fixture names directly.
+                    else:
+                        first_name = getattr(params[0].name, 'value', None)
+                        if first_name not in ("self", "cls"):
+                            params.insert(0, cst.Param(name=desired_first))
+
             new_params = updated_node.params.with_changes(params=params)
-
-            # Replace self.attr occurrences with bare fixture names when the
-            # original class inherited from unittest.TestCase. The check for
-            # unittest.TestCase inheritance uses the class node stored in the
-            # collector; no local assignment is required here.
-            def _class_inherits_unittest_testcase(class_info: Any) -> bool:
-                node = getattr(class_info, 'node', None)
-                if node is None:
-                    return False
-                for base in getattr(node, 'bases', []) or []:
-                    bval = getattr(base, 'value', base)
-                    if isinstance(bval, cst.Attribute):
-                        if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
-                            return True
-                    if isinstance(bval, cst.Name) and bval.value == 'TestCase':
-                        return True
-                return False
-
-            # Do not rewrite `self.attr` -> `attr`. Keep methods runnable
-            # by retaining instance attribute access; fixtures are appended
-            # as parameters but autouse attach will also set instance attrs
-            # when running under pytest.
             return updated_node.with_changes(params=new_params)
 
     transformer = Rewriter(collector.classes)

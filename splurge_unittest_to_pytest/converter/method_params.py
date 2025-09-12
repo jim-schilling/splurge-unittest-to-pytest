@@ -6,7 +6,7 @@ from typing import Tuple, List
 
 import libcst as cst
 
-from .utils import SelfReferenceRemover
+from .helpers import SelfReferenceRemover
 
 
 def should_remove_first_param(node: cst.FunctionDef) -> bool:
@@ -43,6 +43,38 @@ def should_remove_first_param(node: cst.FunctionDef) -> bool:
     if has_classmethod:
         return first_param_name == "cls"
     return first_param_name == "self"
+
+
+def is_staticmethod(node: cst.FunctionDef) -> bool:
+    """Return True when the function is decorated with @staticmethod."""
+    return any(
+        (
+            isinstance(decorator, cst.Decorator)
+            and isinstance(decorator.decorator, cst.Name)
+            and decorator.decorator.value == "staticmethod"
+        )
+        for decorator in (node.decorators or [])
+    )
+
+
+def is_classmethod(node: cst.FunctionDef) -> bool:
+    """Return True when the function is decorated with @classmethod."""
+    return any(
+        (
+            isinstance(decorator, cst.Decorator)
+            and isinstance(decorator.decorator, cst.Name)
+            and decorator.decorator.value == "classmethod"
+        )
+        for decorator in (node.decorators or [])
+    )
+
+
+def first_param_name(node: cst.FunctionDef) -> str | None:
+    """Return the name of the first parameter if present, otherwise None."""
+    if not node.params.params:
+        return None
+    first_param = node.params.params[0]
+    return first_param.name.value if hasattr(first_param, "name") else None
 
 
 def remove_method_self_references(node: cst.FunctionDef) -> Tuple[List[cst.Param], cst.BaseSuite]:

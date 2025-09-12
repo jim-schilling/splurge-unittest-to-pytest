@@ -214,6 +214,23 @@ Maintenance notes
 - Consider adding a unit test for each newly added mapping entry that verifies
    the transformer rewrites the corresponding `from unittest.mock` import.
 
+### ASSERTIONS_MAP (developer note)
+
+The assertion conversion functions are centrally registered in
+`splurge_unittest_to_pytest.converter.assertions.ASSERTIONS_MAP`.
+
+- Purpose: single source-of-truth for mapping unittest assertion method names
+   (e.g. `"assertEqual"`) to the converter function that produces the
+   equivalent pytest AST node.
+- Where to add new conversions: edit `splurge_unittest_to_pytest/converter/assertions.py`
+   and add the new converter function plus an entry to `ASSERTIONS_MAP`.
+- Tests: when adding a new mapping, add a small unit test under `tests/unit/`
+   that asserts `convert_assertion` returns the expected AST node for the new
+   assertion name.
+
+This central map is used by `converter.assertion_dispatch.convert_assertion` to
+perform fast lookups and keeps the dispatcher thin.
+
 ### Conversion Algorithm
 
 1. **Parse Source Code**: Use libcst to parse Python code into AST
@@ -237,3 +254,114 @@ splurge-unittest-to-pytest test_*.py
 # Recursive directory conversion
 splurge-unittest-to-pytest --recursive tests/
 ```
+
+## Diagnostics and Smoke Test Behavior
+
+Diagnostics are opt-in via the environment variable `SPLURGE_ENABLE_DIAGNOSTICS`.
+When enabled the pipeline will create a per-run diagnostics directory containing
+timestamped snapshots of the module before, during, and after each stage. This
+is intended for debugging conversions and should not be enabled in normal CI
+runs as it will create temporary files on disk.
+
+The integration "smoke" harness used by the test-suite is intentionally
+compile-only. Some example files in `examples/` depend on optional third-party
+packages (for example `parameterized`) that are not required for the
+converter library itself. To avoid test failures caused by executing example
+code that imports optional dependencies the smoke test only parses/compiles the
+converted output rather than executing it. This keeps CI robust while still
+validating the conversion output is syntactically correct.
+
+### Diagnostics root override
+
+If you prefer diagnostics artifacts to be written to a specific location (for
+example a CI-provided workspace directory), set the `SPLURGE_DIAGNOSTICS_ROOT`
+environment variable to the desired path. When set, the diagnostics directory
+will be created under that path instead of the system temp directory.
+
+Example (Unix):
+
+```bash
+export SPLURGE_ENABLE_DIAGNOSTICS=1
+export SPLURGE_DIAGNOSTICS_ROOT="$CI_WORKSPACE/tmp"
+```
+
+Example (Windows PowerShell):
+
+```powershell
+$env:SPLURGE_ENABLE_DIAGNOSTICS = '1'
+$env:SPLURGE_DIAGNOSTICS_ROOT = 'C:\ci\workspace\tmp'
+```
+
+### Inspecting diagnostics artifacts
+
+When diagnostics are enabled the pipeline creates a per-run directory containing
+timestamped snapshots and a small marker file. The marker file contains the
+absolute path to the diagnostics directory and is useful when locating the
+artifacts on CI workers or local development machines.
+
+Example marker file name: `splurge-diagnostics-2025-09-12_14-23-47`
+
+Quick manual inspection (Windows PowerShell):
+
+```powershell
+# List diagnostic dirs under override or temp
+Get-ChildItem -Path $env:SPLURGE_DIAGNOSTICS_ROOT -Directory
+
+# Read marker file
+Get-Content -Path (Get-ChildItem -Path $env:SPLURGE_DIAGNOSTICS_ROOT -Filter "splurge-diagnostics-*" -File)
+```
+
+Helper script `tools/print_diagnostics.py` is provided to discover and print
+the most recent diagnostics directory and its marker file. It can be run with
+an explicit `--root` argument or will use `SPLURGE_DIAGNOSTICS_ROOT` / system
+temp when not provided.
+
+CI notes
+--------
+
+To make diagnostics easier to find in CI we've added a small debug step in the
+`.github/workflows/upload-diagnostics.yml` workflow which prints the value of
+`SPLURGE_DIAGNOSTICS_ROOT` and lists the directory contents in the job logs.
+This helps correlate uploaded artifacts with job logs and makes local
+investigation straightforward. The workflow also sets a workspace-local
+diagnostics root (for example `$GITHUB_WORKSPACE/tmp_diagnostics`) so the
+artifact upload can use a deterministic path.
+
+Using the helper
+----------------
+
+The `splurge-print-diagnostics` console script is installed by the package and
+is a small convenience wrapper around the module runner. Use it like this after
+installing the package in a virtualenv or CI image:
+
+```bash
+splurge-print-diagnostics
+# or
+python -m splurge_unittest_to_pytest.print_diagnostics
+```
+
+You can also pass `--root <path>` to inspect a specific diagnostics root.
+
+Example
+-------
+
+Assuming diagnostics were written to `C:\ci\workspace\tmp_diagnostics` you can run:
+
+```powershell
+splurge-print-diagnostics --root C:\ci\workspace\tmp_diagnostics
+```
+
+Sample output:
+
+```
+Found diagnostics run: splurge-diagnostics-2025-09-12_14-23-47
+Marker file: C:\ci\workspace\tmp_diagnostics\splurge-diagnostics-2025-09-12_14-23-47
+Files:
+   - marker
+   - snapshots/module_before_stage1.py
+   - snapshots/module_after_stage1.py
+   - snapshots/module_after_stage2.py
+```
+
+This output prints the most recent diagnostics run directory, the marker file
+path, and a short file listing to help you locate snapshots quickly.

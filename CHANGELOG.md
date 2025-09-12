@@ -6,15 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [2025.0.2] - 2025-09-11
+## [Unreleased]
 
-### Unreleased notes
-- (empty placeholder)
+- Diagnostics: opt-in diagnostics snapshotting and helper
+  - Added `SPLURGE_ENABLE_DIAGNOSTICS` to opt in to per-run diagnostics snapshots.
+  - Diagnostics are written by default under the system temporary directory. Set
+    `SPLURGE_DIAGNOSTICS_ROOT` to override the root directory (useful on CI).
+  - Added `SPLURGE_DIAGNOSTICS_VERBOSE` to enable more verbose diagnostics logging.
+  - Added a small packaged helper `splurge-print-diagnostics` (console script) and
+    module `splurge_unittest_to_pytest.print_diagnostics` to discover and print the
+    most recent diagnostics marker and listing.
+  - CI workflow `.github/workflows/upload-diagnostics.yml` now sets a workspace-local
+    diagnostics root and uploads the diagnostics directory as an artifact. A debug
+    step was added to print the diagnostics root path in job logs for easier troubleshooting.
+
+
+
+## [2025.0.4] - 2025-09-12
+
+- Internal: consolidate small helpers into `converter/helpers`
+  - Moved small helper implementations (normalization, parsing, change-detection,
+    and self-reference remover) into `splurge_unittest_to_pytest.converter.helpers`.
+  - Removed the compatibility shim `splurge_unittest_to_pytest.converter.utils`.
+  - This is an internal refactor only; public API surface was not intentionally
+    changed for consumers of the top-level API. See the migration plan for more
+    details: `docs/plan-simplification-2025-09-12.md`.
+  - Stage 4 (Assertion helpers tidy): centralized assertion conversions via
+    `ASSERTIONS_MAP` in `splurge_unittest_to_pytest.converter.assertions` and
+    updated `converter.assertion_dispatch` to use the central map.
 
 
 ## [2025.0.3] - 2025-09-11
 
-### Unreleased notes
 - Diagnostics: move debug snapshots out of repository
   - Diagnostic snapshots are now written to a per-run temporary directory when
     `SPLURGE_ENABLE_DIAGNOSTICS` is set. A timestamped marker file is created

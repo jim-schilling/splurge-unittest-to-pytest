@@ -232,21 +232,37 @@ def test_assert_almost_equal_places_kw_and_not_almost_numeric_positional():
         and isinstance(node.expression, cst.Comparison)
         for node in cst.matchers.findall(res_not_places["module"], m.UnaryOperation())
     )
-    assert has_not_round
+    # accept either the older 'not round(...) == 0' or the newer 'round(...) != 0' form
+    has_not_equal_round = any(
+        isinstance(node, cst.Comparison) and any(isinstance(comp.operator, cst.NotEqual) for comp in node.comparisons)
+        for node in cst.matchers.findall(res_not_places["module"], m.Comparison())
+    )
+    assert has_not_round or has_not_equal_round
 
 
 def test_assert_not_regex_structural_not_search():
     res = _run("self.assertNotRegex(text, pattern)\n")
     module = res["module"]
-    # expect a UnaryOperation(Not, Call(re.search(...))) somewhere
-    found_not_search = False
+    # accept either 'not re.search(...)' or explicit 're.search(...) is None'
+    found_form = False
+    # unary-not search
     for un in cst.matchers.findall(module, m.UnaryOperation()):
-        # check inner expression is a Call whose func is re.search
         inner = getattr(un, "expression", None)
         if isinstance(inner, cst.Call) and isinstance(inner.func, cst.Attribute) and isinstance(inner.func.value, cst.Name) and inner.func.value.value == 're' and isinstance(inner.func.attr, cst.Name) and inner.func.attr.value == 'search':
-            found_not_search = True
+            found_form = True
             break
-    assert found_not_search is True
+    # explicit 'is None' comparison
+    if not found_form:
+        for comp in cst.matchers.findall(module, m.Comparison()):
+            for ct in comp.comparisons:
+                if isinstance(ct.operator, cst.Is) and isinstance(ct.comparator, cst.Name) and ct.comparator.value == 'None':
+                    # check left side is a re.search call
+                    if isinstance(comp.left, cst.Call) and isinstance(comp.left.func, cst.Attribute) and isinstance(comp.left.func.value, cst.Name) and comp.left.func.value.value == 're' and isinstance(comp.left.func.attr, cst.Name) and comp.left.func.attr.value == 'search':
+                        found_form = True
+                        break
+            if found_form:
+                break
+    assert found_form is True
 
 
 def test_assert_is_not_none_and_not_equal_and_not_is_instance():

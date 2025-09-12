@@ -17,16 +17,18 @@ def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     class Cleaner(cst.CSTTransformer):
         def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+            # Remove any top-level import of the unittest module or
+            # from unittest import ... statements. We assume the rest of the
+            # pipeline converts unittest usages to pytest equivalents.
             new_body: list[cst.BaseStatement] = []
             for stmt in updated_node.body:
-                # remove top-level imports of unittest
                 if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
                     first = stmt.body[0]
                     # import unittest or from unittest import ...
                     if isinstance(first, cst.Import):
                         skip = False
                         for alias in first.names:
-                            name = getattr(alias.name, 'value', '') if hasattr(alias, 'name') else getattr(alias.name, 'value', '')
+                            name = getattr(alias.name, 'value', '') if hasattr(alias, 'name') else ''
                             if name == 'unittest' or (isinstance(name, str) and name.split('.')[0] == 'unittest'):
                                 skip = True
                                 break
@@ -54,10 +56,11 @@ def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(bval, cst.Name) and getattr(bval, 'value', '') == 'TestCase':
                     is_unittest_testcase = True
 
-                if not is_unittest_testcase:
-                    new_bases.append(base)
-                else:
+                if is_unittest_testcase:
+                    # remove TestCase base
                     removed = True
+                else:
+                    new_bases.append(base)
 
             if removed:
                 return updated_node.with_changes(bases=new_bases)

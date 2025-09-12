@@ -11,6 +11,11 @@ from typing import Any, Optional, Sequence, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+from splurge_unittest_to_pytest.converter.method_params import (
+    is_classmethod,
+    is_staticmethod,
+    first_param_name,
+)
 
 
 # NOTE: helper to decide removal of first param was removed; the current
@@ -26,32 +31,18 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], rem
     parameters appended after existing parameters.
     """
     params = list(fn.params.params)
-    # detect staticmethod/classmethod decorators
-    is_static = False
-    is_classmethod = False
-    for dec in fn.decorators or []:
-        if isinstance(dec.decorator, cst.Name):
-            if dec.decorator.value == "staticmethod":
-                is_static = True
-                break
-            if dec.decorator.value == "classmethod":
-                is_classmethod = True
-
-    if not is_static:
-        # If the class originally inherited from unittest.TestCase we remove
-        # the instance/class first parameter and rely on fixtures being
-        # provided as function parameters. Otherwise ensure `self`/`cls` is
-        # present to keep the function runnable.
+    # detect staticmethod/classmethod decorators using consolidated helpers
+    if not is_staticmethod(fn):
         if remove_first:
             # drop first param if it's self/cls
             if params:
-                first_name = getattr(params[0].name, 'value', None)
-                if first_name in ("self", "cls"):
+                fname = first_param_name(fn)
+                if fname in ("self", "cls"):
                     params = params[1:]
         else:
-            desired_first = cst.Name("cls") if is_classmethod else cst.Name("self")
-            first_name = getattr(params[0].name, 'value', None) if params else None
-            if first_name not in ("self", "cls"):
+            desired_first = cst.Name("cls") if is_classmethod(fn) else cst.Name("self")
+            f_name = first_param_name(fn)
+            if f_name not in ("self", "cls"):
                 # insert desired first param
                 params.insert(0, cst.Param(name=desired_first))
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.0.3"
+version = "2025.0.4"
 description = "Convert unittest-style tests to modern pytest-style tests using libcst"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -46,6 +46,7 @@ Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 
 [project.scripts]
 splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
+splurge-print-diagnostics = "splurge_unittest_to_pytest.print_diagnostics:main"
 
 [tool.setuptools.packages.find]
 # Search from the project root but limit discovery to our package name

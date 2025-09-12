@@ -1,0 +1,45 @@
+name: Upload diagnostics artifacts
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tests-with-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Enable diagnostics
+        run: |
+          echo "SPLURGE_ENABLE_DIAGNOSTICS=1" >> $GITHUB_ENV
+          # Use a workspace-local diagnostics root
+          echo "SPLURGE_DIAGNOSTICS_ROOT=$GITHUB_WORKSPACE/tmp_diagnostics" >> $GITHUB_ENV
+
+      - name: Show diagnostics root
+        run: |
+          echo "Diagnostics root: $SPLURGE_DIAGNOSTICS_ROOT"
+          ls -la "$SPLURGE_DIAGNOSTICS_ROOT" || true
+
+      - name: Run tests
+        run: |
+          pytest -q || true
+
+      - name: Upload diagnostics artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: splurge-diagnostics
+          path: ${{ github.workspace }}/tmp_diagnostics

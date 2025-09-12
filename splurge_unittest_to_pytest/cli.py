@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 
 import click
+import logging
+import os
 
 from . import __version__
 from .exceptions import (
@@ -14,6 +16,14 @@ from .exceptions import (
     SplurgeError,
 )
 from .main import convert_file, find_unittest_files
+from .converter.helpers import parse_method_patterns
+
+# If diagnostics are enabled, wire up a minimal console logger so messages are visible
+if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
+    logging.basicConfig(level=logging.INFO)
+    diag_logger = logging.getLogger("splurge.diagnostics")
+    if os.environ.get("SPLURGE_DIAGNOSTICS_VERBOSE"):
+        diag_logger.setLevel(logging.DEBUG)
 
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
@@ -158,10 +168,10 @@ def main(
     if not paths:
         click.echo("Error: No paths provided", err=True)
         sys.exit(1)
-    
+
     # Collect all files to process
     files_to_convert: list[Path] = []
-    
+
     for path in paths:
         if path.is_file():
             files_to_convert.append(path)
@@ -174,18 +184,18 @@ def main(
             else:
                 click.echo(
                     f"Warning: {path} is a directory. Use --recursive to search it.",
-                    err=True
+                    err=True,
                 )
-    
+
     if not files_to_convert:
         click.echo("No unittest files found to convert")
         sys.exit(0)
-    
+
     # Parse method patterns from CLI arguments
-    setup_patterns = _parse_method_patterns(setup_methods)
-    teardown_patterns = _parse_method_patterns(teardown_methods)
-    test_patterns = _parse_method_patterns(test_methods)
-    
+    setup_patterns = parse_method_patterns(setup_methods)
+    teardown_patterns = parse_method_patterns(teardown_methods)
+    test_patterns = parse_method_patterns(test_methods)
+
     if verbose and (setup_patterns or teardown_patterns or test_patterns):
         click.echo("Using custom method patterns:")
         if setup_patterns:
@@ -194,15 +204,15 @@ def main(
             click.echo(f"  Teardown: {', '.join(teardown_patterns)}")
         if test_patterns:
             click.echo(f"  Test: {', '.join(test_patterns)}")
-    
+
     # Process each file
     converted_count = 0
     error_count = 0
-    
+
     for file_path in files_to_convert:
         if verbose:
             click.echo(f"Processing: {file_path}")
-        
+
         try:
             # Create backup if requested
             if backup and not dry_run:
@@ -211,22 +221,24 @@ def main(
                 backup_path = backup_dir / f"{file_path.name}.bak"
                 try:
                     import shutil
+
                     shutil.copy2(file_path, backup_path)
                     if verbose:
                         click.echo(f"Backup created: {backup_path}")
                 except Exception as e:
                     click.echo(f"Warning: Failed to create backup for {file_path}: {e}", err=True)
-            
+
             # Determine output path
             if output:
                 output_path = output / file_path.name
             else:
                 output_path = None  # Will overwrite in place
-            
+
             # Convert the file
             if dry_run:
                 try:
                     from .main import convert_string
+
                     source_code = file_path.read_text(encoding=encoding)
                     result = convert_string(
                         source_code,
@@ -235,7 +247,7 @@ def main(
                         test_patterns=test_patterns,
                         compat=compat,
                     )
-                    
+
                     if result.has_changes:
                         click.echo(f"Would convert: {file_path}")
                         if verbose:
@@ -244,7 +256,7 @@ def main(
                     else:
                         if verbose:
                             click.echo(f"No changes needed: {file_path}")
-                            
+
                     if result.errors:
                         for error in result.errors:
                             click.echo(f"Error in {file_path}: {error}", err=True)
@@ -260,15 +272,15 @@ def main(
             else:
                 try:
                     result = convert_file(
-                        file_path, 
-                        output_path, 
+                        file_path,
+                        output_path,
                         encoding=encoding,
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
                         test_patterns=test_patterns,
                         compat=compat,
                     )
-                    
+
                     if result.has_changes:
                         click.echo(f"Converted: {file_path}")
                         if verbose and output_path:
@@ -276,7 +288,7 @@ def main(
                         converted_count += 1
                     elif verbose:
                         click.echo(f"No changes needed: {file_path}")
-                    
+
                     if result.errors:
                         for error in result.errors:
                             click.echo(f"Error in {file_path}: {error}", err=True)
@@ -290,30 +302,30 @@ def main(
                 except EncodingError as e:
                     click.echo(f"Encoding error for {file_path}: {e}", err=True)
                     error_count += 1
-                    
+
         except SplurgeError as e:
             click.echo(f"Error processing {file_path}: {e}", err=True)
             error_count += 1
         except Exception as e:
             click.echo(f"Unexpected error processing {file_path}: {e}", err=True)
             error_count += 1
-    
+
     # Summary
     total_files = len(files_to_convert)
     click.echo(f"\nProcessed {total_files} files:")
-    
+
     if dry_run:
         click.echo(f"  {converted_count} files would be converted")
     else:
         click.echo(f"  {converted_count} files converted")
-    
+
     if error_count > 0:
         click.echo(f"  {error_count} files had errors")
-    
+
     unchanged_count = total_files - converted_count - error_count
     if unchanged_count > 0:
         click.echo(f"  {unchanged_count} files unchanged")
-    
+
     if error_count > 0:
         sys.exit(1)
 

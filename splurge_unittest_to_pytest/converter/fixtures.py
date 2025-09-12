@@ -26,21 +26,20 @@ def create_fixture_with_cleanup(attr_name: str, value_expr: cst.BaseExpression, 
 
     fixture_decorator = build_pytest_fixture_decorator()
 
-    simple_types = (cst.Integer, cst.Float, cst.SimpleString)
-    if isinstance(value_expr, simple_types):
-        yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=value_expr))])
-        body = cst.IndentedBlock(body=[yield_stmt] + cleanup_statements)
-    else:
-        value_name = f"_{attr_name}_value"
-        value_assign = cst.SimpleStatementLine(
-            body=[
-                cst.Assign(
-                    targets=[cst.AssignTarget(target=cst.Name(value_name))],
-                    value=value_expr,
-                )
-            ]
-        )
-        yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
+    # Always create a local value name and assign the value_expr to it. This
+    # ensures cleanup statements can reliably reference the local variable
+    # rather than the original attribute name.
+    value_name = f"_{attr_name}_value"
+    value_assign = cst.SimpleStatementLine(
+        body=[
+            cst.Assign(
+                targets=[cst.AssignTarget(target=cst.Name(value_name))],
+                value=value_expr,
+            )
+        ]
+    )
+    # Yield the local value name so fixtures follow the yield pattern.
+    yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=cst.Name(value_name)))])
 
     # Replace references to attr_name within cleanup_statements with the local value_name
     from .name_replacer import replace_names_in_statements

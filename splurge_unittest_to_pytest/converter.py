@@ -6,8 +6,8 @@ import warnings
 import libcst as cst
 
 
-# Reuse the moved helpers from converter.utils during decomposition
-from .converter.utils import SelfReferenceRemover
+# Reuse the moved helpers from converter.helpers during decomposition
+from .converter.helpers import SelfReferenceRemover
 from .converter.raises import (
     make_pytest_raises_call,
     make_pytest_raises_regex_call,
