@@ -2,7 +2,120 @@
 
 [![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
 [![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+[![Tests](https://img.shields.io/badge/tests-139%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Coverage](https://img.shields.io/badge/coverage-82%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
+
+[![Quick checks](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml/badge.svg?query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
+[![Coverage workflow](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml/badge.svg?query=workflow%3A%22Coverage+%28main+branch+only%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
+[![Quick status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/ci.yml?label=quick&style=flat-square&query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
+[![Coverage status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/coverage.yml?label=coverage&style=flat-square)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
+
+A small library and CLI tool to convert unittest-style tests into pytest-style tests while preserving formatting and comments using libcst.
+
+Full developer documentation is available in `docs/README-DETAILS.md`.
+
+## Quick Links
+
+- Project: https://github.com/jim-schilling/splurge-unittest-to-pytest
+- PyPI: https://pypi.org/project/splurge-unittest-to-pytest/
+
+## Installation
+
+Install from PyPI:
+
+```bash
+pip install splurge-unittest-to-pytest
+```
+
+For development, clone and install editable dependencies:
+
+```bash
+git clone https://github.com/jim-schilling/splurge-unittest-to-pytest
+cd splurge-unittest-to-pytest
+pip install -e ".[dev]"
+```
+
+## Usage
+
+Basic programmatic usage:
+
+```python
+from splurge_unittest_to_pytest import convert_string, convert_file
+
+result = convert_string(unittest_source_code)
+print(result.converted_code)
+```
+
+CLI usage:
+
+```bash
+splurge-unittest-to-pytest [OPTIONS] [PATHS]...
+```
+
+See `--help` for all CLI options.
+
+## Supported conversions (high level)
+
+- Assertion conversions (a few examples):
+  - `self.assertEqual(a, b)` → `assert a == b`
+  - `self.assertTrue(x)` → `assert x`
+  - `self.assertIsNone(x)` → `assert x is None`
+  - `self.assertRaises(Exception)` → `with pytest.raises(Exception):`
+
+- Class and fixture conversions:
+  - Remove `unittest.TestCase` inheritance where applicable
+  - Convert `setUp`/`tearDown` into pytest fixtures (yield pattern for teardown)
+
+- Import management: remove `unittest` imports and add pytest imports when required
+
+See `docs/README-DETAILS.md` for a complete list of conversions and examples.
+
+## Developer guide
+
+Run tests and checks locally:
+
+```bash
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=splurge_unittest_to_pytest --cov-report=term-missing
+
+# Lint and format
+ruff check . && ruff format .
+
+# Type check
+mypy splurge_unittest_to_pytest/
+```
+
+Key developer notes:
+- Internal helper utilities live in `splurge_unittest_to_pytest.converter.helpers`.
+- The converter uses libcst to perform safe, formatting-preserving transformations.
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Add or update tests in `tests/unit/`.
+3. Run the test suite and linters locally.
+4. Open a pull request describing the change.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+## Acknowledgments
+
+- Built with libcst for robust code transformations.
+- Inspired by existing unittest→pytest conversion tools and projects.
+# Splurge unittest-to-pytest
+
+[![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
+[![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 [![Tests](https://img.shields.io/badge/tests-139%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
 [![Code Coverage](https://img.shields.io/badge/coverage-82%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
@@ -18,7 +131,6 @@ A Python library and CLI tool for converting unittest-style tests to modern pyte
 
 ## ✨ Features
 
-- **Complete assertion conversion**: Converts all common unittest assertions to pytest assertions
 # Splurge unittest-to-pytest
 
 A small tool to convert unittest-style tests into pytest-style tests while preserving formatting and comments.
