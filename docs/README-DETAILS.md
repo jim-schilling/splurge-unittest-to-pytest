@@ -214,6 +214,23 @@ Maintenance notes
 - Consider adding a unit test for each newly added mapping entry that verifies
    the transformer rewrites the corresponding `from unittest.mock` import.
 
+### ASSERTIONS_MAP (developer note)
+
+The assertion conversion functions are centrally registered in
+`splurge_unittest_to_pytest.converter.assertions.ASSERTIONS_MAP`.
+
+- Purpose: single source-of-truth for mapping unittest assertion method names
+   (e.g. `"assertEqual"`) to the converter function that produces the
+   equivalent pytest AST node.
+- Where to add new conversions: edit `splurge_unittest_to_pytest/converter/assertions.py`
+   and add the new converter function plus an entry to `ASSERTIONS_MAP`.
+- Tests: when adding a new mapping, add a small unit test under `tests/unit/`
+   that asserts `convert_assertion` returns the expected AST node for the new
+   assertion name.
+
+This central map is used by `converter.assertion_dispatch.convert_assertion` to
+perform fast lookups and keeps the dispatcher thin.
+
 ### Conversion Algorithm
 
 1. **Parse Source Code**: Use libcst to parse Python code into AST

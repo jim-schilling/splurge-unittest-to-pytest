@@ -6,7 +6,7 @@ transformer will delegate to these functions.
 """
 from __future__ import annotations
 
-from typing import Sequence, List
+from typing import Sequence, List, Callable
 
 import libcst as cst
 
@@ -214,3 +214,25 @@ __all__: List[str] = [
     "_assert_less",
     "_assert_less_equal",
 ]
+
+# Public mapping of unittest assertion method names to converter functions.
+# This lets callers use a single source-of-truth for dispatching conversions.
+ASSERTIONS_MAP: dict[str, Callable[[Sequence[cst.Arg]], cst.Assert | None]] = {
+    "assertEqual": _assert_equal,
+    "assertNotEqual": _assert_not_equal,
+    "assertTrue": _assert_true,
+    "assertFalse": _assert_false,
+    "assertIsNone": _assert_is_none,
+    "assertIsNotNone": _assert_is_not_none,
+    "assertIn": _assert_in,
+    "assertNotIn": _assert_not_in,
+    "assertIsInstance": _assert_is_instance,
+    "assertNotIsInstance": _assert_not_is_instance,
+    "assertGreater": _assert_greater,
+    "assertGreaterEqual": _assert_greater_equal,
+    "assertLess": _assert_less,
+    "assertLessEqual": _assert_less_equal,
+}
+
+# Export the map as part of the module's public API
+__all__.append("ASSERTIONS_MAP")

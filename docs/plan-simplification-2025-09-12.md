@@ -39,9 +39,13 @@ Status: Draft
   - [x] Run full test suite and linters
 
 - [ ] Stage 4 — Assertion helpers tidy (medium risk)
-  - [ ] Consider grouping similar functions in `converter/assertions.py` into a map
-  - [ ] Add tests for assertion conversion helpers
-  - [ ] Ensure consumer stages call the mapping instead of individual functions
+ - [x] Stage 4 — Assertion helpers tidy (medium risk)
+  - [x] Consider grouping similar functions in `converter/assertions.py` into a map
+  - [x] Add tests for assertion conversion helpers
+  - [x] Ensure consumer stages call the mapping instead of individual functions
+  - Note: Added `ASSERTIONS_MAP` to `converter/assertions.py` and updated
+    `converter/assertion_dispatch.py` to use it. This centralizes the mapping
+    of unittest assertion names to converter functions and simplifies dispatch.
 
 - [ ] Stage 5 — Pipeline & diagnostics (opt-in)
   - [ ] Move diagnostic writes out of `stages/pipeline.py` into a diagnostics helper or StageManager hook
