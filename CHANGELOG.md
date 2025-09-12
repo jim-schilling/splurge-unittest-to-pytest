@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This is an internal refactor only; public API surface was not intentionally
     changed for consumers of the top-level API. See the migration plan for more
     details: `docs/plan-simplification-2025-09-12.md`.
+  - Stage 4 (Assertion helpers tidy): centralized assertion conversions via
+    `ASSERTIONS_MAP` in `splurge_unittest_to_pytest.converter.assertions` and
+    updated `converter.assertion_dispatch` to use the central map.
 
 
 ## [2025.0.3] - 2025-09-11
