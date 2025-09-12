@@ -10,9 +10,7 @@ from typing import Any, Callable
 
 import libcst as cst
 from pathlib import Path
-import os
-import tempfile
-from datetime import datetime
+from . import diagnostics
 
 StageCallable = Callable[[dict[str, Any]], dict[str, Any]]
 
@@ -25,28 +23,15 @@ class StageManager:
         # callers can discover diagnostics artifacts. The marker file is an
         # empty file named splurge-diagnostics-YYYY-MM-DD_HH-MM-SS in the
         # system temporary directory.
-        self._diagnostics_dir: Path | None = None
-        if self._diagnostics_enabled():
-            # Create a temp directory specific to this run
-            tmpdir = tempfile.mkdtemp(prefix="splurge-diagnostics-")
-            self._diagnostics_dir = Path(tmpdir)
-            # Create the marker file inside the diagnostics temp directory
-            ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            marker = self._diagnostics_dir / f"splurge-diagnostics-{ts}"
-            try:
-                # Write the absolute diagnostics folder path into the marker
-                # file so callers can easily discover where artifacts live.
-                marker.write_text(str(self._diagnostics_dir.resolve()), encoding="utf-8")
-            except Exception:
-                # Swallow errors creating the marker; diagnostics are opt-in
-                self._diagnostics_dir = None
+        # Diagnostics directory (created when diagnostics are enabled)
+        self._diagnostics_dir: Path | None = diagnostics.create_diagnostics_dir()
 
     def _diagnostics_enabled(self) -> bool:
-        """Return True when the SPLURGE_ENABLE_DIAGNOSTICS env var is set to a
-        truthy value. Accept common truthy strings for convenience.
+        """Return True when diagnostics are enabled via environment.
+
+        Delegates to the `diagnostics` helper to centralize truthiness checks.
         """
-        val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")
-        return val in ("1", "true", "True", "yes", "on")
+        return diagnostics.diagnostics_enabled()
 
     def dump_initial(self, module: cst.Module) -> None:
         """Write an initial snapshot of the module to the diagnostics dir.
@@ -55,42 +40,14 @@ class StageManager:
         can request a named initial snapshot without embedding write logic.
         """
         try:
-            if self._diagnostics_dir is None:
-                return
-            if not isinstance(module, cst.Module):
-                return
-            out_dir = self._diagnostics_dir
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / "00_initial_input.py"
-            src = getattr(module, "code", None)
-            if src is None:
-                try:
-                    src = module.code
-                except Exception:
-                    src = None
-            if src is not None:
-                out_path.write_text(src, encoding="utf-8")
+            diagnostics.write_snapshot(self._diagnostics_dir, "00_initial_input.py", module)
         except Exception:
             pass
 
     def dump_final(self, module: cst.Module) -> None:
         """Write the final module snapshot to the diagnostics dir."""
         try:
-            if self._diagnostics_dir is None:
-                return
-            if not isinstance(module, cst.Module):
-                return
-            out_dir = self._diagnostics_dir
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / "99_final_output.py"
-            src = getattr(module, "code", None)
-            if src is None:
-                try:
-                    src = module.code
-                except Exception:
-                    src = None
-            if src is not None:
-                out_path.write_text(src, encoding="utf-8")
+            diagnostics.write_snapshot(self._diagnostics_dir, "99_final_output.py", module)
         except Exception:
             pass
 
@@ -109,21 +66,10 @@ class StageManager:
                 # explicitly enabled via environment variable. This prevents
                 # the pipeline from creating 'build/intermediates' during
                 # normal development or test runs.
-                if self._diagnostics_dir is not None:
-                    if isinstance(current_module, cst.Module):
-                        out_dir = self._diagnostics_dir
-                        out_dir.mkdir(parents=True, exist_ok=True)
-                        stage_name = getattr(stage, "__name__", "<stage>")
-                        idx = len(list(out_dir.iterdir()))
-                        out_path = out_dir / f"{idx:02d}_{stage_name}.py"
-                        src = getattr(current_module, "code", None)
-                        if src is None:
-                            try:
-                                src = current_module.code
-                            except Exception:
-                                src = None
-                        if src is not None:
-                            out_path.write_text(src, encoding="utf-8")
+                if self._diagnostics_dir is not None and isinstance(current_module, cst.Module):
+                    stage_name = getattr(stage, "__name__", "<stage>")
+                    idx = len(list(self._diagnostics_dir.iterdir()))
+                    diagnostics.write_snapshot(self._diagnostics_dir, f"{idx:02d}_{stage_name}.py", current_module)
             except Exception:
                 pass
             return result
