@@ -26,7 +26,7 @@ class StageManager:
         # empty file named splurge-diagnostics-YYYY-MM-DD_HH-MM-SS in the
         # system temporary directory.
         self._diagnostics_dir: Path | None = None
-        if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
+        if self._diagnostics_enabled():
             # Create a temp directory specific to this run
             tmpdir = tempfile.mkdtemp(prefix="splurge-diagnostics-")
             self._diagnostics_dir = Path(tmpdir)
@@ -40,6 +40,59 @@ class StageManager:
             except Exception:
                 # Swallow errors creating the marker; diagnostics are opt-in
                 self._diagnostics_dir = None
+
+    def _diagnostics_enabled(self) -> bool:
+        """Return True when the SPLURGE_ENABLE_DIAGNOSTICS env var is set to a
+        truthy value. Accept common truthy strings for convenience.
+        """
+        val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")
+        return val in ("1", "true", "True", "yes", "on")
+
+    def dump_initial(self, module: cst.Module) -> None:
+        """Write an initial snapshot of the module to the diagnostics dir.
+
+        This is a public helper so callers (for example the pipeline runner)
+        can request a named initial snapshot without embedding write logic.
+        """
+        try:
+            if self._diagnostics_dir is None:
+                return
+            if not isinstance(module, cst.Module):
+                return
+            out_dir = self._diagnostics_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / "00_initial_input.py"
+            src = getattr(module, "code", None)
+            if src is None:
+                try:
+                    src = module.code
+                except Exception:
+                    src = None
+            if src is not None:
+                out_path.write_text(src, encoding="utf-8")
+        except Exception:
+            pass
+
+    def dump_final(self, module: cst.Module) -> None:
+        """Write the final module snapshot to the diagnostics dir."""
+        try:
+            if self._diagnostics_dir is None:
+                return
+            if not isinstance(module, cst.Module):
+                return
+            out_dir = self._diagnostics_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / "99_final_output.py"
+            src = getattr(module, "code", None)
+            if src is None:
+                try:
+                    src = module.code
+                except Exception:
+                    src = None
+            if src is not None:
+                out_path.write_text(src, encoding="utf-8")
+        except Exception:
+            pass
 
     def register(self, stage: StageCallable) -> None:
         # Wrap the stage so we can dump the module after it runs for
