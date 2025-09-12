@@ -8,9 +8,15 @@ def _make_expr_from_code(src: str) -> cst.BaseExpression:
     # Expect a single simple statement line with an expression
     node = module.body[0]
     if isinstance(node, cst.SimpleStatementLine):
-        expr = node.body[0]
-        # type: ignore
-        return expr
+        # node.body[0] is a BaseSmallStatement; if it's an Expr, return its value
+        small = node.body[0]
+        if isinstance(small, cst.Expr):
+            return small.value
+        # Fallback: try parsing a simple assignment RHS
+        # mypy: cast to BaseExpression to satisfy return type
+        from typing import cast
+
+        return cast(cst.BaseExpression, small)
     raise AssertionError("unexpected node shape")
 
 

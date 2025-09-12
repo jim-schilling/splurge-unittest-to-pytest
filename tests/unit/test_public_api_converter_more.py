@@ -3,6 +3,70 @@ import libcst as cst
 from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
 
 
+def test_pattern_adders_and_props() -> None:
+    t = UnittestToPytestTransformer()
+
+    # default patterns contain typical values
+    assert any(p.lower().startswith("test") for p in t.test_patterns)
+
+    # add custom patterns and verify they're present
+    t.add_setup_pattern("setup_class")
+    assert any("setup_class" == p or "setup_class" in p for p in t.setup_patterns)
+
+    t.add_teardown_pattern("teardown_class")
+    assert any("teardown_class" == p or "teardown_class" in p for p in t.teardown_patterns)
+
+    t.add_test_pattern("describe_")
+    assert any(p.startswith("describe_") for p in t.test_patterns)
+
+
+def test_assert_raises_helpers_and_import_flag() -> None:
+    t = UnittestToPytestTransformer()
+
+    # Initially, transformer should not require pytest import
+    assert not t.needs_pytest_import
+
+    # Build a fake assertRaises call args (Exception, func)
+    exc = cst.Name("Exception")
+    # create a dummy call arg list; actual structure isn't deeply inspected here
+    args = (cst.Arg(value=exc),)
+
+    call_node = t._assert_raises(args)
+    # Using the helper should set the flag and return a Call node
+    assert t.needs_pytest_import
+    assert isinstance(call_node, cst.Call)
+
+    # Reset flag and test assertRaisesRegex helper
+    t.needs_pytest_import = False
+    regex_call = t._assert_raises_regex(args)
+    assert t.needs_pytest_import
+    assert isinstance(regex_call, cst.Call)
+
+
+def test_add_pytest_import_wrapper_returns_module_with_import() -> None:
+    t = UnittestToPytestTransformer()
+    module = cst.parse_module("\n")
+    new_module = t._add_pytest_import(module)
+
+    # The returned module code should contain 'import pytest' somewhere
+    assert "pytest" in new_module.code
+
+
+def test_fixture_creation_delegation_simple_and_attribute() -> None:
+    t = UnittestToPytestTransformer()
+
+    # Create a simple literal expression and ensure a fixture function is created
+    expr = cst.parse_expression("1")
+    fx = t._create_simple_fixture("my_attr", expr)
+    assert isinstance(fx, cst.FunctionDef)
+    assert fx.name.value == "my_attr"
+
+    # Creating fixture for attribute should return a FunctionDef as well
+    fx2 = t._create_fixture_for_attribute("other", expr)
+    assert isinstance(fx2, cst.FunctionDef)
+
+
+
 def test_remove_self_references_simple_attribute():
     t = UnittestToPytestTransformer(compat=False)
     node = cst.parse_expression("self.value")

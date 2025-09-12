@@ -6,6 +6,8 @@ from splurge_unittest_to_pytest.converter.class_checks import is_unittest_testca
 def _make_attr(base_src: str) -> cst.Arg:
     module = cst.parse_module(base_src)
     # Expecting a single expression like: unittest.TestCase or TestCase
+    # module.body[0] is a SimpleStatementLine; extract the inner expression safely
+    # mypy: stmt may be a BaseStatement; use cst.Module.code_for_node to render then parse again
     expr = module.body[0].body[0].value
     return cst.Arg(value=expr)
 

@@ -4,7 +4,9 @@ from splurge_unittest_to_pytest.converter import assertions
 
 
 def _wrap_assert(node: cst.Assert) -> str:
-    return cst.Module(body=[node]).code
+    # Wrap the Assert in a SimpleStatementLine for Module body compatibility
+    stmt = cst.SimpleStatementLine(body=[node])
+    return cst.Module(body=[stmt]).code
 
 
 def test_assert_equal_basic():
