@@ -8,7 +8,7 @@ import libcst as cst
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
-from .converter.utils import has_meaningful_changes, normalize_method_name
+from .converter.helpers import has_meaningful_changes, normalize_method_name
 
 
 @dataclass

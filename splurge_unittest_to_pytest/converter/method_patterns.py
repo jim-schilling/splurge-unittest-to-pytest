@@ -4,21 +4,9 @@ These are extracted from `converter.py` to make them easier to test.
 """
 from __future__ import annotations
 
-import re
 from typing import Iterable
 
-
-def normalize_method_name(name: str) -> str:
-    """Normalize method name for pattern matching (convert camelCase to snake_case).
-
-    Args:
-        name: The method name to normalize.
-
-    Returns:
-        The normalized, lower-cased snake_case name.
-    """
-    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+from .helpers import normalize_method_name
 
 
 def _pattern_in_name(method_name: str, pattern: str) -> bool:

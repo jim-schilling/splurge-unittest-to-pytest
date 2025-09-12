@@ -28,17 +28,15 @@ Status: Draft
   - [x] Add unit tests for `has_meaningful_changes` and `parse_method_patterns`
   - [x] Run ruff/mypy/pytest and fix issues
 
-- [ ] Stage 2 — Consolidate normalization (low-to-medium risk)
-  - [ ] Ensure `normalize_method_name` is the single normalization function used
-  - [ ] Update `PatternConfigurator` and any other callers to use `normalize_method_name`
-  - [ ] Add unit tests for `normalize_method_name` edge cases (camelCase, underscores, digits)
+ - [x] Stage 2 — Consolidate normalization (low-to-medium risk)
+  - [x] Ensure `normalize_method_name` is the single normalization function used
+  - [x] Update `PatternConfigurator` and any other callers to use `normalize_method_name`
+  - [x] Add unit tests for `normalize_method_name` edge cases (camelCase, underscores, digits)
 
-- [ ] Stage 3 — Reduce micro-modules (medium risk)
-  - [ ] Evaluate small re-exports in `converter/core.py` and either:
-    - [ ] Move implementations into `converter/utils.py` and keep `core.py` as a shim, or
-    - [ ] Consolidate closely-related helpers into `converter/helpers.py`
-  - [ ] Update internal imports; add a compatibility import in `core.py` to avoid breaking consumers
-  - [ ] Run full test suite and linters
+ - [x] Stage 3 — Reduce micro-modules (medium risk)
+  - [x] Consolidate closely-related helpers into `converter/helpers.py` and remove compatibility shim
+  - [x] Update internal imports to use `converter.helpers` (no backwards-compatibility shim retained)
+  - [x] Run full test suite and linters
 
 - [ ] Stage 4 — Assertion helpers tidy (medium risk)
   - [ ] Consider grouping similar functions in `converter/assertions.py` into a map
@@ -55,7 +53,7 @@ Status: Draft
 
 ## Tasks (detailed)
 
-1. Create `converter/utils.py` helpers
+1. Create `converter/helpers.py` helpers
    - Implement `has_meaningful_changes(original, converted) -> bool` which:
      - Normalizes both modules (using existing `formatting.normalize_module`), compare normalized code
      - Fall back to AST compare via `ast.parse`/`ast.dump` if normalization fails

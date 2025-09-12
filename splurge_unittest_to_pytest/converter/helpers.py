@@ -1,9 +1,17 @@
-"""Utility helpers extracted from the large converter module.
+"""Canonical small helper implementations for the converter package.
 
-Start with small, well-tested helpers and move more pieces here iteratively.
+This module centralizes small, well-tested helpers used internally by the
+converter. It is the canonical location for normalization, parsing, and
+change-detection helpers. These implementations were moved here during the
+simplification refactor. Note: `converter.core` (a prior thin shim) was
+removed to reduce indirection; consumers should import from this module if
+they must access internal helpers.
 """
 from __future__ import annotations
 
+import ast
+import re
+from typing import List
 
 import libcst as cst
 
@@ -22,13 +30,11 @@ class SelfReferenceRemover(cst.CSTTransformer):
 
 def normalize_method_name(name: str) -> str:
     """Normalize method name for pattern matching (convert camelCase to snake_case)."""
-    import re
-
-    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
-def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> list[str]:
+def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> List[str]:
     """Parse method patterns supporting comma-separated values and multiple flags.
 
     Returns a list of unique patterns preserving order.
@@ -64,9 +70,6 @@ def has_meaningful_changes(original_code: str, converted_code: str) -> bool:
     2. Compare the ASTs (ignoring formatting-only differences).
     3. Fallback to direct text comparison.
     """
-    import ast
-    import libcst as cst
-
     # Try formatting-normalized comparison first. If normalized modules are
     # identical, then there is no meaningful change. If they differ, do not
     # immediately declare a change -- fall back to AST comparison below so

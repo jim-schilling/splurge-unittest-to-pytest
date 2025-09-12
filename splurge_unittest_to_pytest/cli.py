@@ -14,7 +14,7 @@ from .exceptions import (
     SplurgeError,
 )
 from .main import convert_file, find_unittest_files
-from .converter.utils import parse_method_patterns
+from .converter.helpers import parse_method_patterns
 
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:

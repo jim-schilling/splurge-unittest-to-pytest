@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2025.0.4] - 2025-09-12
 
+- Internal: consolidate small helpers into `converter/helpers`
+  - Moved small helper implementations (normalization, parsing, change-detection,
+    and self-reference remover) into `splurge_unittest_to_pytest.converter.helpers`.
+  - Removed the compatibility shim `splurge_unittest_to_pytest.converter.utils`.
+  - This is an internal refactor only; public API surface was not intentionally
+    changed for consumers of the top-level API. See the migration plan for more
+    details: `docs/plan-simplification-2025-09-12.md`.
+
 
 ## [2025.0.3] - 2025-09-11
 

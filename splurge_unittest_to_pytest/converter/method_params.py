@@ -6,7 +6,7 @@ from typing import Tuple, List
 
 import libcst as cst
 
-from .utils import SelfReferenceRemover
+from .helpers import SelfReferenceRemover
 
 
 def should_remove_first_param(node: cst.FunctionDef) -> bool:
