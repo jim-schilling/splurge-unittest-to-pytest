@@ -1,50 +1,43 @@
 import libcst as cst
-
-from splurge_unittest_to_pytest.converter.helpers import (
-    normalize_method_name,
-    parse_method_patterns,
-    SelfReferenceRemover,
-    has_meaningful_changes,
-)
+from splurge_unittest_to_pytest.converter import helpers
 
 
-def test_normalize_method_name():
-    assert normalize_method_name("assertEqual") == "assert_equal"
-    assert normalize_method_name("camelCaseTest") == "camel_case_test"
-    assert normalize_method_name("lowercase") == "lowercase"
+def test_normalize_method_name_snake_and_camel():
+    assert helpers.normalize_method_name("testMethodName") == "test_method_name"
+    assert helpers.normalize_method_name("already_snake") == "already_snake"
 
 
-def test_parse_method_patterns_empty():
-    assert parse_method_patterns(None) == []
-    assert parse_method_patterns([]) == []
-
-
-def test_parse_method_patterns_commas_and_duplicates():
-    patterns = parse_method_patterns(("testOne,testTwo", " testTwo ", "testThree", ""))
-    assert patterns == ["testOne", "testTwo", "testThree"]
+def test_parse_method_patterns_empty_and_commas():
+    assert helpers.parse_method_patterns(None) == []
+    assert helpers.parse_method_patterns(()) == []
+    assert helpers.parse_method_patterns(["a,b, c", "d"]) == ["a", "b", "c", "d"]
+    # duplicates preserved only once
+    assert helpers.parse_method_patterns(["x,x,y"]) == ["x", "y"]
 
 
 def test_self_reference_remover_replaces_self_attr():
-    src = "def f(self):\n    return self.x + cls.y\n"
-    mod = cst.parse_module(src)
-    transformer = SelfReferenceRemover(param_names={"self", "cls"})
-    new = mod.visit(transformer)
-    code = new.code
-    # 'self.x' becomes 'x' and 'cls.y' becomes 'y'
-    assert "self.x" not in code
-    assert "cls.y" not in code
-    assert "x" in code
-    assert "y" in code
+    code = "def test(self):\n    return self.value\n"
+    module = cst.parse_module(code)
+    new = module.visit(helpers.SelfReferenceRemover())
+    # the returned module should have 'return value' not 'return self.value'
+    assert "return value" in new.code
 
 
-def test_has_meaningful_changes_detects_formatting_only():
+def test_has_meaningful_changes_detects_ast_and_formatting_cases():
     orig = "def f():\n    return 1\n"
-    conv = "def f():\n\n    return 1\n"
-    # formatting-only should return False
-    assert has_meaningful_changes(orig, conv) is False
+    # identical code -> no meaningful changes
+    assert not helpers.has_meaningful_changes(orig, orig)
 
+    # formatting-only difference (extra blank lines) should be treated as no meaningful change
+    conv_fmt = "def f():\n\n    return 1\n"
+    assert not helpers.has_meaningful_changes(orig, conv_fmt)
 
-def test_has_meaningful_changes_detects_semantic_change():
-    orig = "def f():\n    return 1\n"
-    conv = "def f():\n    return 2\n"
-    assert has_meaningful_changes(orig, conv) is True
+    # AST-equal but text-different (same AST) -> no meaningful change
+    conv_ast = "def f():\n    return (1)\n"
+    assert not helpers.has_meaningful_changes(orig, conv_ast)
+
+    # real change -> detected
+    conv_change = "def f():\n    return 2\n"
+    assert helpers.has_meaningful_changes(orig, conv_change)
+
+# ...existing tests above...

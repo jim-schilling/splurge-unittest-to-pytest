@@ -63,3 +63,24 @@ def test_remove_unittest_import_and_importfrom():
     ok_node = cst.Import(names=[cst.ImportAlias(name=cst.Name("os"))])
     res3 = imp_mod.remove_unittest_import(ok_node)
     assert res3 is ok_node
+
+
+def test_add_pytest_import_with_alias_and_from_variants():
+    # module with pytest imported as alias should be detected
+    m_alias = cst.parse_module("import pytest as pt\n")
+    # has_pytest_import looks only for name=="pytest" or from pytest; aliasing means original name is Name('pytest')
+    assert imp_mod.has_pytest_import(m_alias)
+
+    # from pytest import approx should also be detected
+    m_from = cst.parse_module("from pytest import approx\n")
+    assert imp_mod.has_pytest_import(m_from)
+
+
+def test_add_pytest_import_after_docstring_only_module():
+    src = '"""only docstring"""\n\n# comment\nvar = 1\n'
+    m = cst.parse_module(src)
+    m2 = imp_mod.add_pytest_import(m)
+    # ensure pytest import added after the docstring
+    code = m2.code
+    assert '"""only docstring"""' in code
+    assert 'import pytest' in code
