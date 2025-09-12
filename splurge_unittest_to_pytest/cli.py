@@ -14,6 +14,7 @@ from .exceptions import (
     SplurgeError,
 )
 from .main import convert_file, find_unittest_files
+from .converter.utils import parse_method_patterns
 
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
@@ -182,9 +183,9 @@ def main(
         sys.exit(0)
     
     # Parse method patterns from CLI arguments
-    setup_patterns = _parse_method_patterns(setup_methods)
-    teardown_patterns = _parse_method_patterns(teardown_methods)
-    test_patterns = _parse_method_patterns(test_methods)
+    setup_patterns = parse_method_patterns(setup_methods)
+    teardown_patterns = parse_method_patterns(teardown_methods)
+    test_patterns = parse_method_patterns(test_methods)
     
     if verbose and (setup_patterns or teardown_patterns or test_patterns):
         click.echo("Using custom method patterns:")

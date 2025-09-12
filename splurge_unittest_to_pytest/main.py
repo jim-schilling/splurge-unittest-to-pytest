@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import libcst as cst
-import ast
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
-from .stages import formatting
+from .converter.utils import has_meaningful_changes
 
 
 @dataclass
@@ -63,18 +62,10 @@ def convert_string(
                 " the staged pipeline."
             )
 
-        # Check if any changes were made. Treat formatting-only differences
-        # (whitespace, blank lines, import grouping) as no-change by
-        # normalizing both the original and converted modules and comparing
-        # their canonicalized code. This keeps CLI "no changes needed"
-        # behavior stable when only formatting is applied.
+        # Determine whether any meaningful conversion changes were made.
         try:
-            original_tree = cst.parse_module(source_code)
-            norm_original = formatting.normalize_module(original_tree).code
-            norm_converted = formatting.normalize_module(cst.parse_module(converted_code)).code
-            if norm_original == norm_converted:
-                # No meaningful change: return original source and mark
-                # as unchanged.
+            changed = has_meaningful_changes(source_code, converted_code)
+            if not changed:
                 return ConversionResult(
                     original_code=source_code,
                     converted_code=source_code,
@@ -82,35 +73,14 @@ def convert_string(
                     errors=errors,
                 )
         except Exception:
-            # If normalization or parsing fails for some reason, fall back
-            # to AST comparison below.
+            # If our change-detection helper fails for any reason, fall back
+            # to conservative behavior and treat textual differences as changes.
             pass
-
-        # As a secondary, more robust check, compare the ASTs of the
-        # original and converted code. This ignores formatting-only
-        # differences (blank lines, spacing) while catching real code
-        # changes like added/removed imports or statements.
-        try:
-            ast_orig = ast.parse(source_code)
-            ast_conv = ast.parse(converted_code)
-            if ast.dump(ast_orig, include_attributes=False) == ast.dump(ast_conv, include_attributes=False):
-                return ConversionResult(
-                    original_code=source_code,
-                    converted_code=source_code,
-                    has_changes=False,
-                    errors=errors,
-                )
-        except Exception:
-            # If AST comparison also fails, fall back to text comparison.
-            pass
-
-        # Check if any non-formatting changes were made
-        has_changes = converted_code != source_code
 
         return ConversionResult(
             original_code=source_code,
             converted_code=converted_code,
-            has_changes=has_changes,
+            has_changes=converted_code != source_code,
             errors=errors,
         )
 
