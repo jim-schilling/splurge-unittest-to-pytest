@@ -4,6 +4,27 @@ from splurge_unittest_to_pytest.converter.cleanup_checks import references_attri
 from splurge_unittest_to_pytest.converter.cleanup import extract_relevant_cleanup
 
 
+def test_references_attribute_simple_and_call():
+    expr = cst.parse_expression("self.foo")
+    assert references_attribute(expr, "foo")
+
+    call = cst.parse_expression("obj.foo(bar)")
+    assert references_attribute(call, "foo")
+
+
+def test_extract_relevant_cleanup_finds_simple_statement():
+    stmt = cst.parse_statement("cleanup(self.x)")
+    found = extract_relevant_cleanup([stmt], "x")
+    assert found and isinstance(found[0], cst.SimpleStatementLine)
+
+
+def test_extract_relevant_cleanup_finds_in_if_and_orelse():
+    src = "if cond:\n    cleanup(self.a)\nelse:\n    pass\n"
+    module = cst.parse_module(src)
+    found = extract_relevant_cleanup(list(module.body), "a")
+    assert found and isinstance(found[0], cst.If)
+
+
 def test_references_attribute_simple_attribute_and_name():
     a = cst.parse_expression("self.x")
     assert references_attribute(a, "x")
