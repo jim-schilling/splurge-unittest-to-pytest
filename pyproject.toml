@@ -46,6 +46,7 @@ Issues = "https://github.com/jim-schilling/splurge-unittest-to-pytest/issues"
 
 [project.scripts]
 splurge-unittest-to-pytest = "splurge_unittest_to_pytest.cli:main"
+splurge-print-diagnostics = "splurge_unittest_to_pytest.print_diagnostics:main"
 
 [tool.setuptools.packages.find]
 # Search from the project root but limit discovery to our package name

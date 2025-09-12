@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+- Diagnostics: opt-in diagnostics snapshotting and helper
+  - Added `SPLURGE_ENABLE_DIAGNOSTICS` to opt in to per-run diagnostics snapshots.
+  - Diagnostics are written by default under the system temporary directory. Set
+    `SPLURGE_DIAGNOSTICS_ROOT` to override the root directory (useful on CI).
+  - Added `SPLURGE_DIAGNOSTICS_VERBOSE` to enable more verbose diagnostics logging.
+  - Added a small packaged helper `splurge-print-diagnostics` (console script) and
+    module `splurge_unittest_to_pytest.print_diagnostics` to discover and print the
+    most recent diagnostics marker and listing.
+  - CI workflow `.github/workflows/upload-diagnostics.yml` now sets a workspace-local
+    diagnostics root and uploads the diagnostics directory as an artifact. A debug
+    step was added to print the diagnostics root path in job logs for easier troubleshooting.
+
+
+
 ## [2025.0.4] - 2025-09-12
 
 - Internal: consolidate small helpers into `converter/helpers`

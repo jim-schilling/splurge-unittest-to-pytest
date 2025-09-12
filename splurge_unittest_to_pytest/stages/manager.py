@@ -91,24 +91,13 @@ class StageManager:
             # build/intermediates/<index>_<stage_name>.py
             try:
                 # Only write intermediate debug snapshots when diagnostics are
-                # explicitly enabled.
-                if self._diagnostics_dir is not None:
-                    current_module = context.get("module")
-                    if isinstance(current_module, cst.Module):
-                        out_dir = self._diagnostics_dir
-                        out_dir.mkdir(parents=True, exist_ok=True)
-                        stage_name = getattr(stage, "__name__", f"stage_{len(list(out_dir.iterdir()))}")
-                        idx = len(list(out_dir.iterdir()))
-                        out_path = out_dir / f"{idx:02d}_{stage_name}.py"
-                        # libcst.Module provides .code attribute
-                        src = getattr(current_module, "code", None)
-                        if src is None:
-                            try:
-                                src = current_module.code
-                            except Exception:
-                                src = None
-                        if src is not None:
-                            out_path.write_text(src, encoding="utf-8")
+                # explicitly enabled. Delegate to diagnostics.write_snapshot
+                # which is defensive and will no-op on None/invalid inputs.
+                current_module = context.get("module")
+                if self._diagnostics_dir is not None and isinstance(current_module, cst.Module):
+                    stage_name = getattr(stage, "__name__", "<stage>")
+                    idx = len(list(self._diagnostics_dir.iterdir()))
+                    diagnostics.write_snapshot(self._diagnostics_dir, f"{idx:02d}_{stage_name}.py", current_module)
             except Exception:
                 # Do not let debugging instrumentation break the pipeline
                 pass

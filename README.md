@@ -386,3 +386,29 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - CLI built with [Click](https://click.palletsprojects.com/)
 - Modern testing infrastructure powered by [pytest](https://pytest.org/) and [pytest-mock](https://pytest-mock.readthedocs.io/)
 - Code quality maintained with [ruff](https://beta.ruff.rs/docs/)
+
+## Inspecting diagnostics artifacts
+
+When diagnostics are enabled (SPLURGE_ENABLE_DIAGNOSTICS=1) the tool writes a
+run-specific diagnostics directory under the system temporary folder by
+default. You can override the root location with the environment variable
+`SPLURGE_DIAGNOSTICS_ROOT`.
+
+Quick install (development):
+
+```bash
+pip install -e .
+```
+
+After installing, a small console script is available to inspect the latest
+diagnostics run:
+
+```bash
+splurge-print-diagnostics
+```
+
+Or run the module directly without installing:
+
+```bash
+python -m splurge_unittest_to_pytest.print_diagnostics
+```

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import libcst as cst
+from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param
 
 
 def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -62,10 +63,8 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
 
                 if fixtures:
                     # class had setup assignments: remove leading self/cls if present
-                    if params:
-                        first_name = getattr(params[0].name, 'value', None)
-                        if first_name in ("self", "cls"):
-                            params.pop(0)
+                    if params and should_remove_first_param(original_node):
+                        params.pop(0)
                     # append fixture params
                     for fx in fixtures:
                         params.append(cst.Param(name=cst.Name(fx)))
