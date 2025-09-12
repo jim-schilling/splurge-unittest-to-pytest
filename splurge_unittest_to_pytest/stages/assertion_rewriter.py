@@ -274,11 +274,13 @@ class AssertionRewriter(cst.CSTTransformer):
                 if places_arg is not None:
                     diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
                     round_call = cst.Call(func=cst.Name('round'), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
-                    return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer('0'))])))
+                    # prefer explicit 'round(...) != 0' over 'not round(...) == 0'
+                    return cst.Assert(test=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=cst.Integer('0'))]))
                 # default: use pytest.approx
                 self.needs_pytest_import = True
                 approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
-                return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)])))
+                # prefer explicit 'left != pytest.approx(right)'
+                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=approx_call)]))
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -391,7 +393,8 @@ class AssertionRewriter(cst.CSTTransformer):
                 pattern = args[1].value
                 setattr(self, "needs_re_import", True)
                 search_call = cst.Call(func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")), args=[cst.Arg(value=pattern), cst.Arg(value=text)])
-                return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=search_call))
+                # prefer explicit comparison 're.search(...) is None' over unary 'not re.search(...)'
+                return cst.Assert(test=cst.Comparison(left=search_call, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))]))
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))

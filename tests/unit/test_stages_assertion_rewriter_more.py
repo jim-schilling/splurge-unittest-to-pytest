@@ -59,4 +59,4 @@ def test_assert_not_regex_sets_re_import_and_not_search():
     code = mod.code
     assert "re.search" in code
     assert needs_re is True
-    assert "not" in code
+    assert ("not" in code) or ("re.search(" in code and "is None" in code)

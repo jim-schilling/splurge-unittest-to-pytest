@@ -54,7 +54,8 @@ def test_regex_and_not_regex_and_re_import():
     out = run(src)
     code = out["module"].code
     assert "re.search" in code
-    assert "not re.search" in code or "not(" in code
+    # accept either 'not re.search' or 're.search(...) is None'
+    assert ("not re.search" in code or "not(" in code) or ("re.search(" in code and "is None" in code)
     assert out.get("needs_re_import", False) is True
 
 
@@ -78,15 +79,18 @@ def test_raises_call_and_with_are_handled():
         ("def test():\n    self.assertRegex(text, pattern)\n", ["re.search"], True),
         ("def test():\n    assertRegex(text, pattern)\n", ["re.search"], True),
         ("def test():\n    self.assertRegexpMatches(text, pattern)\n", ["re.search"], True),
-        ("def test():\n    self.assertNotRegex(text, pattern)\n", ["re.search", "not"], True),
-        ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", "not"], True),
+    ("def test():\n    self.assertNotRegex(text, pattern)\n", ["re.search", ("not", "is None")], True),
+    ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
     ],
 )
 def test_regex_variants(src: str, expected_parts: list[str], needs_re: bool):
     out = run(src)
     code = out["module"].code
     for part in expected_parts:
-        assert part in code
+        if isinstance(part, (list, tuple)):
+            assert any(p in code for p in part)
+        else:
+            assert part in code
     assert out.get("needs_re_import", False) is needs_re
 
 
@@ -175,3 +179,61 @@ def test_regex_with_msg_dropped(src: str, expected: str):
     out = run(src)
     code = out["module"].code
     assert expected in code
+
+
+@pytest.mark.parametrize(
+    "src, expected",
+    [
+        # assertTrue/False with message should drop message
+        ("def test():\n    self.assertTrue(cond, 'oops')\n", "cond"),
+        ("def test():\n    self.assertFalse(cond2, msg='nope')\n", "not cond2"),
+        # in/not-in with message
+        ("def test():\n    self.assertIn(x, y, 'm')\n", "x in y"),
+        ("def test():\n    self.assertNotIn(x2, y2, msg='m')\n", "x2 not in y2"),
+    ],
+)
+def test_boolean_and_membership_msg_dropped(src: str, expected: str):
+    out = run(src)
+    code = out["module"].code
+    assert expected in code
+
+
+@pytest.mark.parametrize(
+    "src, expected_parts, needs_re",
+    [
+        ("def test():\n    self.assertRegex(text, pattern)\n", ["re.search"], True),
+        ("def test():\n    self.assertRegexpMatches(text, pattern)\n", ["re.search"], True),
+        ("def test():\n    assertRegexpMatches(text, pattern)\n", ["re.search"], True),
+    ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
+    ],
+)
+def test_additional_regex_aliases(src: str, expected_parts: list[str], needs_re: bool):
+    out = run(src)
+    code = out["module"].code
+    for part in expected_parts:
+        if isinstance(part, (list, tuple)):
+            assert any(p in code for p in part)
+        else:
+            assert part in code
+    assert out.get("needs_re_import", False) is needs_re
+
+
+@pytest.mark.parametrize(
+    "src, expected_contains",
+    [
+        # not-almost-equal with delta kw (expect '> delta' or 'not pytest.approx')
+        ("def test():\n    self.assertNotAlmostEqual(a, b, delta=0.2)\n", ["abs(", "> 0.2"]),
+        # not-almost-equal default -> pytest.approx or not round
+    ("def test():\n    self.assertNotAlmostEqual(a, b)\n", [("pytest.approx", "!= 0", "not round")]),
+        # almost-equal with places=0 -> rounding to 0 places -> expect 'round(' or 'pytest.approx'
+    ("def test():\n    self.assertAlmostEqual(a, b, places=0)\n", [("round(", "pytest.approx")]),
+    ],
+)
+def test_more_almost_not_almost_permutations(src: str, expected_contains: list[str]):
+    out = run(src)
+    code = out["module"].code
+    for part in expected_contains:
+        if isinstance(part, (list, tuple)):
+            assert any(p in code for p in part)
+        else:
+            assert part in code

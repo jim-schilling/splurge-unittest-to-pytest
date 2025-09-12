@@ -25,7 +25,8 @@ def test_it():
 """
     out = assertion_rewriter_stage({"module": _mod(src)})
     new = out["module"]
-    assert "not re.search" in new.code
+    # accept either 'not re.search' or the explicit 're.search(...) is None' form
+    assert "not re.search" in new.code or "re.search(" in new.code and "is None" in new.code
     assert out.get("needs_re_import") is True
 
 

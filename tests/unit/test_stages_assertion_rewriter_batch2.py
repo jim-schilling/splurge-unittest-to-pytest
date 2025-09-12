@@ -20,7 +20,8 @@ def test_assert_not_almost_equal_places_keyword_not_rounds():
     src = "def test():\n    self.assertNotAlmostEqual(a, b, places=2)\n"
     mod, _, _ = run_stage(src)
     code = mod.code
-    assert "round(" in code and "== 0" in code
+    # accept either the 'round(...) == 0' wrapped in a not(), or the explicit 'round(...) != 0' form
+    assert "round(" in code and ("== 0" in code or "!= 0" in code)
 
 
 def test_assert_raises_regex_creates_match_kw():
