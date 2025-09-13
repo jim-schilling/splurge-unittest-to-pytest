@@ -3,6 +3,7 @@
 Run this script from the repo root to update the generated comparison files so
 they no longer contain the LEGACY section.
 """
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

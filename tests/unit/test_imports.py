@@ -11,7 +11,7 @@ def test_add_pytest_import_inserts_after_docstring():
 
 
 def test_add_pytest_import_after_existing_imports():
-    src = 'import os\nimport sys\n'
+    src = "import os\nimport sys\n"
     module = cst.parse_module(src)
     new_module = add_pytest_import(module)
     assert has_pytest_import(new_module)

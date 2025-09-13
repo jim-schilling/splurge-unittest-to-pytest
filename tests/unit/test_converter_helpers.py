@@ -46,4 +46,3 @@ def test_has_meaningful_changes_detects_formatting_and_semantic_differences():
     # real change -> detected
     conv_change = "def f():\n    return 2\n"
     assert helpers.has_meaningful_changes(orig, conv_change)
-

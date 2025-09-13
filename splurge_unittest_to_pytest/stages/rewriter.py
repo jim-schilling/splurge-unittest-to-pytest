@@ -4,6 +4,7 @@ This stage expects `collector_output` in the context and will remove the
 first parameter from test methods if it's `self` or `cls`, then append fixture
 parameters inferred from the class's `setup_assignments` keys.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -79,7 +80,7 @@ def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
                     if not params:
                         params.insert(0, cst.Param(name=desired_first))
                     else:
-                        first_name = getattr(params[0].name, 'value', None)
+                        first_name = getattr(params[0].name, "value", None)
                         if first_name not in ("self", "cls"):
                             params.insert(0, cst.Param(name=desired_first))
 

@@ -1,0 +1,6 @@
+import pytest
+from typing import Tuple
+
+@pytest.fixture
+def pair() -> Tuple[str, int]:
+    return ("a", 1)

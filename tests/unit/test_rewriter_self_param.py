@@ -12,6 +12,6 @@ class TestDB(unittest.TestCase):
     def test_action(self) -> None:
         self.assertTrue(True)
 """
-    res = main.convert_string(src, engine='pipeline')
+    res = main.convert_string(src, engine="pipeline")
     # Option A: methods are converted to plain pytest functions receiving fixtures
-    assert 'def test_action(conn' in res.converted_code
+    assert "def test_action(conn" in res.converted_code

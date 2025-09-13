@@ -28,10 +28,10 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
     """Parse method patterns from CLI arguments.
-    
+
     Supports both comma-separated values and multiple flags.
     Properly trims whitespace from all values.
-    Examples: 
+    Examples:
         ('setUp,beforeAll', 'teardown') -> ['setUp', 'beforeAll', 'teardown']
         ('  setUp  ,  beforeAll  ',) -> ['setUp', 'beforeAll']
     """
@@ -41,11 +41,11 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
         trimmed_arg = arg.strip()
         if trimmed_arg:  # Skip empty arguments
             # Split on commas and strip each pattern
-            for pattern in trimmed_arg.split(','):
+            for pattern in trimmed_arg.split(","):
                 trimmed_pattern = pattern.strip()
                 if trimmed_pattern:  # Skip empty patterns
                     patterns.append(trimmed_pattern)
-    
+
     # Remove duplicates while preserving order
     seen = set()
     unique_patterns = []
@@ -53,7 +53,7 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
         if pattern not in seen:
             seen.add(pattern)
             unique_patterns.append(pattern)
-    
+
     return unique_patterns
 
 
@@ -101,7 +101,7 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
     help="Setup method patterns (comma-separated or multiple flags). Examples: --setup-methods 'setUp,beforeAll' --setup-methods teardown",
 )
 @click.option(
-    "--teardown-methods", 
+    "--teardown-methods",
     multiple=True,
     help="Teardown method patterns (comma-separated or multiple flags)",
 )
@@ -141,39 +141,39 @@ def main(
     autocreate: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
-    
+
     PATHS can be individual files or directories. Files can have any extension.
     If directories are provided, use --recursive to search for unittest files within them.
-    
+
     Examples:
-    
+
         # Convert a single file
         splurge-unittest-to-pytest test_example.py
-        
+
         # Convert files with any extension
         splurge-unittest-to-pytest test_example.txt test_example.md
-        
-        # Convert multiple files  
+
+        # Convert multiple files
         splurge-unittest-to-pytest test_*.py
-        
+
         # Convert all unittest files in a directory
         splurge-unittest-to-pytest --recursive tests/
-        
+
         # Dry run to see what would be changed
         splurge-unittest-to-pytest --dry-run --recursive tests/
-        
+
         # Convert to a different directory
         splurge-unittest-to-pytest --output converted_tests/ test_*.py
-        
+
         # Create backups before conversion
         splurge-unittest-to-pytest --backup backups/ test_*.py
-        
+
         # Use custom method patterns (comma-separated)
         splurge-unittest-to-pytest --setup-methods "setUp,beforeAll,setup_class" test.py
-        
+
         # Use custom method patterns (multiple flags)
         splurge-unittest-to-pytest --setup-methods setUp --setup-methods beforeAll test.py
-        
+
         # Configure all method types
         splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" --teardown-methods "tearDown,afterAll" --test-methods "test_,it_,spec_" test.py
     """
@@ -256,9 +256,9 @@ def main(
                         source_code,
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
-                                test_patterns=test_patterns,
-                                compat=compat,
-                                autocreate=autocreate,
+                        test_patterns=test_patterns,
+                        compat=compat,
+                        autocreate=autocreate,
                     )
 
                     if result.has_changes:
@@ -348,24 +348,24 @@ def _show_diff_summary(original: str, converted: str) -> None:
     """Show a brief summary of changes made."""
     original_lines = original.splitlines()
     converted_lines = converted.splitlines()
-    
+
     # Simple diff summary
     if len(original_lines) != len(converted_lines):
         click.echo(f"    Lines changed: {len(original_lines)} -> {len(converted_lines)}")
-    
+
     # Count assertion changes (rough heuristic)
     original_asserts = sum(1 for line in original_lines if "self.assert" in line)
     converted_asserts = sum(1 for line in converted_lines if "assert " in line)
-    
+
     if original_asserts > 0:
         click.echo(f"    Unittest assertions converted: {original_asserts}")
         if converted_asserts > 0:
             click.echo(f"    Pytest assertions created: {converted_asserts}")
-    
+
     # Check for unittest.TestCase removal
     if any("unittest.TestCase" in line for line in original_lines):
         click.echo("    Removed unittest.TestCase inheritance")
-    
+
     # Check for pytest import addition
     if any("import pytest" in line or "from pytest" in line for line in converted_lines):
         click.echo("    Added pytest import")

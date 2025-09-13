@@ -3,7 +3,7 @@ from typing import cast
 from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.rewriter import rewriter_stage
 
-SAMPLE = '''
+SAMPLE = """
 class MyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.a = 1
@@ -11,7 +11,7 @@ class MyTests(unittest.TestCase):
 
     def test_one(self) -> None:
         assert self.a == 1
-'''
+"""
 
 
 def test_rewriter_adds_fixture_params_and_removes_self() -> None:

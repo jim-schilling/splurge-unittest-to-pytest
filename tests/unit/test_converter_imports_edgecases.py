@@ -13,7 +13,7 @@ def test_add_pytest_import_after_docstring_and_imports():
 
 
 def test_add_pytest_import_idempotent_when_present():
-    src = 'import pytest\n\nimport os\n'
+    src = "import pytest\n\nimport os\n"
     module = cst.parse_module(src)
     new_mod = imports.add_pytest_import(module)
     # Should be unchanged structurally when pytest already imported

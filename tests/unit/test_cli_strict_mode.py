@@ -26,4 +26,3 @@ class TestX(unittest.TestCase):
     assert "def _attach_to_instance(" not in code
     # Top-level pytest test should exist
     assert "def test_a(" in code
-

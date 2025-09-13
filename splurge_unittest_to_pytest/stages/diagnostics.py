@@ -8,7 +8,6 @@ from typing import Optional, Any
 import logging
 
 
-
 def diagnostics_enabled() -> bool:
     val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")
     return val in ("1", "true", "True", "yes", "on")

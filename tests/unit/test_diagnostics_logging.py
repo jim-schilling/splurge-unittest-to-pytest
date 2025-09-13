@@ -25,7 +25,9 @@ def test_write_snapshot_logs_on_failure(monkeypatch, caplog, tmp_path: Path) -> 
         diagnostics.write_snapshot(d, "bad_snapshot.py", cst.parse_module("x = 1"))
 
         assert any("splurge.diagnostics" in r.name or r.name == "splurge.diagnostics" for r in caplog.records)
-        assert any("write_snapshot failed" in r.getMessage() or "failed to write" in r.getMessage() for r in caplog.records)
+        assert any(
+            "write_snapshot failed" in r.getMessage() or "failed to write" in r.getMessage() for r in caplog.records
+        )
     finally:
         os.environ.pop("SPLURGE_ENABLE_DIAGNOSTICS", None)
         # restore write_text to be safe

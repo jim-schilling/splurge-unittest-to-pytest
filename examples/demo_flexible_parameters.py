@@ -5,6 +5,7 @@
 import libcst as cst
 from splurge_unittest_to_pytest.main import PatternConfigurator
 
+
 def main() -> None:
     """Demonstrate flexible parameter handling."""
     print("=== Flexible Parameter Handling Demo ===\n")
@@ -21,7 +22,7 @@ def test_example(self, arg1, arg2):
     result = self.helper_method(arg2)
     return result
 """,
-            "decorators": []
+            "decorators": [],
         },
         {
             "name": "Class Method (cls)",
@@ -31,7 +32,7 @@ def test_class_example(cls, arg1):
     cls.assertEqual(cls.class_value, arg1)
     return cls.create_instance()
 """,
-            "decorators": ["classmethod"]
+            "decorators": ["classmethod"],
         },
         {
             "name": "Static Method",
@@ -41,7 +42,7 @@ def test_static_example(arg1, arg2):
     assert arg1 == arg2
     return helper_function(arg1)
 """,
-            "decorators": ["staticmethod"]
+            "decorators": ["staticmethod"],
         },
         {
             "name": "Method without conventional first param",
@@ -50,8 +51,8 @@ def test_custom_example(obj, arg1):
     obj.assertEqual(obj.value, arg1)
     return obj.process(arg1)
 """,
-            "decorators": []
-        }
+            "decorators": [],
+        },
     ]
 
     for i, test_case in enumerate(test_cases, 1):
@@ -60,13 +61,13 @@ def test_custom_example(obj, arg1):
 
         # Parse the code
         try:
-            module = cst.parse_module(test_case['code'])
+            module = cst.parse_module(test_case["code"])
             func_def = module.body[0]  # Get the function definition
 
             # Add decorators if specified
-            if test_case['decorators']:
+            if test_case["decorators"]:
                 decorators = []
-                for decorator_name in test_case['decorators']:
+                for decorator_name in test_case["decorators"]:
                     decorators.append(cst.Decorator(decorator=cst.Name(decorator_name)))
                 func_def = func_def.with_changes(decorators=decorators)
 
@@ -94,6 +95,7 @@ def test_custom_example(obj, arg1):
     print("✅ Static methods -> no parameters removed")
     print("✅ Methods without conventional params -> no parameters removed")
     print("✅ References to removed parameters are also cleaned up")
+
 
 if __name__ == "__main__":
     main()

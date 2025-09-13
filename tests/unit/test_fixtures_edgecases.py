@@ -2,7 +2,7 @@ from splurge_unittest_to_pytest.main import convert_string
 
 
 def test_fixture_with_multiple_cleanup_statements() -> None:
-    src = '''
+    src = """
 import unittest
 
 class TestC(unittest.TestCase):
@@ -16,7 +16,7 @@ class TestC(unittest.TestCase):
 
     def test_use(self) -> None:
         self.assertTrue(True)
-'''
+"""
     result = convert_string(src, engine="pipeline")
     assert result.has_changes
     out = result.converted_code
@@ -26,7 +26,7 @@ class TestC(unittest.TestCase):
 
 
 def test_complex_teardown_pattern() -> None:
-    src = '''
+    src = """
 import unittest
 
 class TestD(unittest.TestCase):
@@ -39,7 +39,7 @@ class TestD(unittest.TestCase):
 
     def test_it(self) -> None:
         self.assertIsNotNone(self.tmp)
-'''
+"""
     result = convert_string(src, engine="pipeline")
     assert result.has_changes
     out = result.converted_code

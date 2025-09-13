@@ -25,7 +25,7 @@ def test_replace_only_attribute_occurrences():
     code = stmt_code(out[0])
     # only self.count should be replaced
     assert "val = count + count" in code
-    
+
 
 def test_replace_names_in_statements_replaces_attr_and_name():
     src = """

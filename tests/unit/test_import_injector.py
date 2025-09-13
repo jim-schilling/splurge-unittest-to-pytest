@@ -19,7 +19,7 @@ def test_import_injector_inserts_after_docstring() -> None:
 
 
 def test_import_injector_no_duplicate() -> None:
-    src = 'import pytest\n\nclass A:\n    pass\n'
+    src = "import pytest\n\nclass A:\n    pass\n"
     module = cst.parse_module(src)
     ctx: dict[str, object] = {"module": module}
     res = import_injector_stage(ctx)

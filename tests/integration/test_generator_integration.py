@@ -8,7 +8,9 @@ from splurge_unittest_to_pytest.stages import generator
 def test_generator_creates_fixture_from_collector_and_handles_collision():
     # Module with a top-level name that would collide with conventional local
     # name `_a_value` to force binding to a unique local name.
-    module = cst.parse_module("_a_value = 99\n\nclass C:\n    def setUp(self):\n        self.a = 1\n\n    def tearDown(self):\n        del self.a\n")
+    module = cst.parse_module(
+        "_a_value = 99\n\nclass C:\n    def setUp(self):\n        self.a = 1\n\n    def tearDown(self):\n        del self.a\n"
+    )
 
     wrapper = MetadataWrapper(module)
     coll = Collector()

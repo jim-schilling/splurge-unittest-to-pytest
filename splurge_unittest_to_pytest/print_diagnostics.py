@@ -7,6 +7,7 @@ This module provides a `main()` function so it can be executed as a module:
 It mirrors the earlier `tools/print_diagnostics.py` helper for backwards
 compatibility.
 """
+
 from __future__ import annotations
 
 import argparse

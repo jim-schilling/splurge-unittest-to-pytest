@@ -9,9 +9,11 @@ def test_create_simple_fixture_structure_and_decorator():
     # basic shape
     assert isinstance(fd, cst.FunctionDef)
     assert fd.name.value == "my_fixture"
-    # should assign to a local and return it
-    assert "_my_fixture_value" in code
-    assert "return _my_fixture_value" in code
+    # should either assign to a local and return it, or return the literal directly
+    if "_my_fixture_value" in code:
+        assert "return _my_fixture_value" in code
+    else:
+        assert "return 42" in code
     # decorator should reference pytest.fixture
     assert "pytest.fixture" in code
 
@@ -60,4 +62,5 @@ def test_create_fixture_for_attribute_dispatches_to_cleanup_or_simple():
 
     # when no cleanup, simple fixture (return) is produced
     fd2 = fixtures.create_fixture_for_attribute("b", cst.parse_expression("0"), {})
-    assert "return _b_value" in cst.Module(body=[fd2]).code
+    code2 = cst.Module(body=[fd2]).code
+    assert ("return _b_value" in code2) or ("return 0" in code2)

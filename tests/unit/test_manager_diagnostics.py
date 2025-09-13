@@ -59,6 +59,7 @@ def test_register_and_run_writes_stage_snapshot(monkeypatch):
     monkeypatch.setenv("SPLURGE_ENABLE_DIAGNOSTICS", "1")
     mgr = StageManager()
     try:
+
         def my_stage(ctx: dict) -> dict:
             # simple stage that returns a small dict
             ctx["stage_marker"] = True

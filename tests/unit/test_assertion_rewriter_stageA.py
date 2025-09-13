@@ -18,8 +18,8 @@ def test_assert_equal_rewrites_to_comparison():
 
 
 def test_assert_true_and_false_rewrite():
-    src = '''self.assertTrue(x)
-self.assertFalse(y)'''
+    src = """self.assertTrue(x)
+self.assertFalse(y)"""
     code = _run_rewriter_and_code(src)
     assert "assert x" in code
     assert "assert not y" in code

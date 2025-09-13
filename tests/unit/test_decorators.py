@@ -29,5 +29,7 @@ def test_build_fixture_decorator_rejects_kwargs():
 def test_build_pytest_fixture_decorator_renders_pytest_fixture():
     dec = build_pytest_fixture_decorator()
     # Render decorator to code via a Module so we get a string representation
-    code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value=cast(cst.BaseExpression, dec.decorator))])]).code
+    code = cst.Module(
+        body=[cst.SimpleStatementLine(body=[cst.Expr(value=cast(cst.BaseExpression, dec.decorator))])]
+    ).code
     assert "pytest.fixture" in code

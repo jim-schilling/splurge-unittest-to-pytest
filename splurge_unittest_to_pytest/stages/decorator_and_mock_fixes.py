@@ -5,6 +5,7 @@ This stage is conservative and focused on the common patterns seen in the
 sample data: `@unittest.skip`, `@unittest.expectedFailure`, and import lists
 that include non-importable names like `side_effect`.
 """
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -26,9 +27,12 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
 
     def leave_Decorator(self, original: cst.Decorator, updated: cst.Decorator) -> cst.Decorator:
         expr = updated.decorator
+
         # Helper to build pytest.mark.<name> call
         def _make_mark(name: str, args: list[cst.Arg] | None = None) -> cst.Call:
-            mark_attr = cst.Attribute(value=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("mark")), attr=cst.Name(name))
+            mark_attr = cst.Attribute(
+                value=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("mark")), attr=cst.Name(name)
+            )
             return cst.Call(func=mark_attr, args=args or [])
 
         # Case: Call-style decorators like @unittest.skip(...), @unittest.skipIf(...), @unittest.skipUnless(...)
@@ -74,7 +78,12 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                         args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
                     return updated.with_changes(decorator=_make_mark("skipif", args))
         # Case: @unittest.expectedFailure (attribute, no call) or bare expectedFailure/name
-        if isinstance(expr, cst.Attribute) and isinstance(expr.value, cst.Name) and expr.value.value == "unittest" and expr.attr.value == "expectedFailure":
+        if (
+            isinstance(expr, cst.Attribute)
+            and isinstance(expr.value, cst.Name)
+            and expr.value.value == "unittest"
+            and expr.attr.value == "expectedFailure"
+        ):
             return updated.with_changes(decorator=_make_mark("xfail", []))
         if isinstance(expr, cst.Name) and expr.value == "expectedFailure":
             return updated.with_changes(decorator=_make_mark("xfail", []))
@@ -129,7 +138,9 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                 FALLBACK_BAD = {"side_effect", "autospec", "sentinel"}
                 try:
                     # Attempt to load curated mapping from package data
-                    data_pkg = pkg_resources.files("splurge_unittest_to_pytest").joinpath("data/known_bad_mock_names.json")
+                    data_pkg = pkg_resources.files("splurge_unittest_to_pytest").joinpath(
+                        "data/known_bad_mock_names.json"
+                    )
                     if data_pkg.is_file():
                         raw = data_pkg.read_text(encoding="utf8")
                         parsed = json.loads(raw)
@@ -149,7 +160,11 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                             bad_names.add(name_val)
                 except Exception:
                     # conservative fallback: mark curated/fallback bad names
-                    bad_names = {alias.name.value for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value in curated_bad}
+                    bad_names = {
+                        alias.name.value
+                        for alias in names_seq
+                        if isinstance(alias.name, cst.Name) and alias.name.value in curated_bad
+                    }
                 # If the module already explicitly imports the mock module or has
                 # other `from unittest.mock` imports, prefer to skip rewriting to
                 # avoid duplicate/contradictory imports. However, when the set of
@@ -168,7 +183,10 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                             # import unittest.mock as m  -> skip rewrite
                             if isinstance(other_expr, cst.Import):
                                 for n in other_expr.names:
-                                    if isinstance(n.name, cst.Attribute) and getattr(n.name.attr, "value", None) == "mock":
+                                    if (
+                                        isinstance(n.name, cst.Attribute)
+                                        and getattr(n.name.attr, "value", None) == "mock"
+                                    ):
                                         return updated
                             # from unittest.mock import *  OR any from-import elsewhere -> skip
                             if isinstance(other_expr, cst.ImportFrom):
@@ -193,7 +211,11 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                             )
                         ]
                     )
-                    safe = [alias for alias in names_seq if isinstance(alias.name, cst.Name) and alias.name.value not in bad_names]
+                    safe = [
+                        alias
+                        for alias in names_seq
+                        if isinstance(alias.name, cst.Name) and alias.name.value not in bad_names
+                    ]
                     nodes: list[cst.SimpleStatementLine] = [import_mock]
                     if safe:
                         # rebuild ImportFrom explicitly to avoid preserving stray
@@ -204,7 +226,9 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                             name_node = cst.Name(cast(str, alias.name.value))
                             asname = alias.asname if getattr(alias, "asname", None) is not None else None
                             new_names.append(cst.ImportAlias(name=name_node, asname=asname))
-                        new_imp = cst.ImportFrom(module=cst.Attribute(value=cst.Name("unittest"), attr=cst.Name("mock")), names=new_names)
+                        new_imp = cst.ImportFrom(
+                            module=cst.Attribute(value=cst.Name("unittest"), attr=cst.Name("mock")), names=new_names
+                        )
                         nodes.append(cst.SimpleStatementLine(body=[new_imp]))
                     return cst.FlattenSentinel(nodes)
         except Exception:

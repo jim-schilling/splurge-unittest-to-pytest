@@ -4,6 +4,7 @@ This stage expects `fixture_nodes` in the context (list of cst.FunctionDef) and
 inserts them after the pytest import if present, else after module docstring or
 imports (similar to ImportInjector logic).
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional, cast
@@ -27,14 +28,23 @@ def _find_insertion_index(module: cst.Module) -> int:
     start_idx = 0
     if module.body:
         first = module.body[0]
-        if isinstance(first, cst.SimpleStatementLine) and first.body and isinstance(first.body[0], cst.Expr) and isinstance(first.body[0].value, cst.SimpleString):
+        if (
+            isinstance(first, cst.SimpleStatementLine)
+            and first.body
+            and isinstance(first.body[0], cst.Expr)
+            and isinstance(first.body[0].value, cst.SimpleString)
+        ):
             # skip docstring
             start_idx = 1
 
     insert_idx = start_idx
     for idx in range(start_idx, len(module.body)):
         stmt = module.body[idx]
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
+        if (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and stmt.body
+            and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+        ):
             insert_idx = idx + 1
             continue
         # stop at first non-import statement
@@ -52,19 +62,21 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
     #     return None
     body: list[cst.BaseStatement] = []
     # inst = getattr(request, 'instance', None)
-    assign = cst.SimpleStatementLine(body=[
-        cst.Assign(
-            targets=[cst.AssignTarget(target=cst.Name("inst"))],
-            value=cst.Call(
-                func=cst.Name("getattr"),
-                args=[
-                    cst.Arg(value=cst.Name("request")),
-                    cst.Arg(value=cst.SimpleString("'instance'")),
-                    cst.Arg(value=cst.Name("None")),
-                ],
-            ),
-        )
-    ])
+    assign = cst.SimpleStatementLine(
+        body=[
+            cst.Assign(
+                targets=[cst.AssignTarget(target=cst.Name("inst"))],
+                value=cst.Call(
+                    func=cst.Name("getattr"),
+                    args=[
+                        cst.Arg(value=cst.Name("request")),
+                        cst.Arg(value=cst.SimpleString("'instance'")),
+                        cst.Arg(value=cst.Name("None")),
+                    ],
+                ),
+            )
+        ]
+    )
     body.append(assign)
     # if inst is not None: attach
     inner: list[cst.BaseStatement] = []
@@ -94,7 +106,12 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
             ]
         )
         inner.append(attr_assign)
-    if_stmt = cst.If(test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]), body=cst.IndentedBlock(body=inner))
+    if_stmt = cst.If(
+        test=cst.Comparison(
+            left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]
+        ),
+        body=cst.IndentedBlock(body=inner),
+    )
     body.append(if_stmt)
     body.append(cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))]))
     # make the autouse fixture accept only `request` and use
@@ -103,9 +120,14 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
     params = cst.Parameters(params=params_list)
     # decorator @pytest.fixture(autouse=True)
     decorator = cst.Decorator(
-        decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))])
+        decorator=cst.Call(
+            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")),
+            args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))],
+        )
     )
-    func = cst.FunctionDef(name=cst.Name("_attach_to_instance"), params=params, body=cst.IndentedBlock(body=body), decorators=[decorator])
+    func = cst.FunctionDef(
+        name=cst.Name("_attach_to_instance"), params=params, body=cst.IndentedBlock(body=body), decorators=[decorator]
+    )
     return func
 
 
@@ -141,7 +163,7 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # modules runnable while allowing pytest to inject fixtures.
     has_unittest_usage = False
     if collector is not None:
-        has_unittest_usage = getattr(collector, 'has_unittest_usage', False)
+        has_unittest_usage = getattr(collector, "has_unittest_usage", False)
 
     # Only inject autouse when either:
     #  - collector detected unittest usage, OR

@@ -3,12 +3,13 @@
 
 from splurge_unittest_to_pytest import convert_string
 
+
 def main() -> None:
     """Demonstrate basic usage of the unittest to pytest converter."""
     print("=== Basic Usage Example ===\n")
 
     # Example unittest code
-    unittest_code = '''
+    unittest_code = """
 import unittest
 
 class TestCalculator(unittest.TestCase):
@@ -22,7 +23,7 @@ class TestCalculator(unittest.TestCase):
     def test_subtraction(self):
         result = self.calc.subtract(5, 3)
         self.assertEqual(result, 2)
-'''
+"""
 
     print("Original unittest code:")
     print(unittest_code)
@@ -42,6 +43,7 @@ class TestCalculator(unittest.TestCase):
     print("✅ Converted setUp() to pytest fixture (would need manual adjustment)")
     print("✅ Removed 'self.' prefixes from test methods")
     print("✅ Converted self.assertEqual() to assert statements")
+
 
 if __name__ == "__main__":
     main()

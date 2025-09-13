@@ -5,6 +5,7 @@ by the `generator_stage`. It removes the class-level setup/teardown methods and
 updates test method signatures to remove instance/class first params and add
 fixture parameters (one per setup attribute) so tests receive the generated fixtures.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
@@ -88,7 +89,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     # pure pytest-style by removing setUp/tearDown and dropping the original
     # unittest classes in favor of generated top-level test functions.
     compat_val = context.get("compat", None)
-    strict_pytest_mode = (compat_val is False)
+    strict_pytest_mode = compat_val is False
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
@@ -128,15 +129,19 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
                         # Use the original node saved in the collector to detect
                         # unittest.TestCase inheritance.
-                        node = getattr(class_info, 'node', None)
+                        node = getattr(class_info, "node", None)
                         if node is None:
                             return False
-                        for base in getattr(node, 'bases', []) or []:
-                            bval = getattr(base, 'value', base)
+                        for base in getattr(node, "bases", []) or []:
+                            bval = getattr(base, "value", base)
                             if isinstance(bval, cst.Attribute):
-                                if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                                if (
+                                    isinstance(bval.value, cst.Name)
+                                    and bval.value.value == "unittest"
+                                    and getattr(bval.attr, "value", "") == "TestCase"
+                                ):
                                     return True
-                            if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                            if isinstance(bval, cst.Name) and bval.value == "TestCase":
                                 return True
                         return False
 
@@ -179,15 +184,19 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
             cls_original = cls_info
 
             def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
-                node = getattr(class_info, 'node', None)
+                node = getattr(class_info, "node", None)
                 if node is None:
                     return False
-                for base in getattr(node, 'bases', []) or []:
-                    bval = getattr(base, 'value', base)
+                for base in getattr(node, "bases", []) or []:
+                    bval = getattr(base, "value", base)
                     if isinstance(bval, cst.Attribute):
-                        if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                        if (
+                            isinstance(bval.value, cst.Name)
+                            and bval.value.value == "unittest"
+                            and getattr(bval.attr, "value", "") == "TestCase"
+                        ):
                             return True
-                    if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                    if isinstance(bval, cst.Name) and bval.value == "TestCase":
                         return True
                 return False
 
@@ -196,14 +205,20 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     if not isinstance(member, cst.FunctionDef):
                         continue
                     mname = member.name.value
-                    if not (mname.startswith('test') or member in cls_info.test_methods):
+                    if not (mname.startswith("test") or member in cls_info.test_methods):
                         continue
 
                     # rewrite `self.attr` -> `attr` in the member body for the
                     # top-level function variant
                     class _SelfAttrRewriter(cst.CSTTransformer):
-                        def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
-                            if isinstance(original.value, cst.Name) and original.value.value == 'self' and isinstance(original.attr, cst.Name):
+                        def leave_Attribute(
+                            self, original: cst.Attribute, updated: cst.Attribute
+                        ) -> cst.BaseExpression:
+                            if (
+                                isinstance(original.value, cst.Name)
+                                and original.value.value == "self"
+                                and isinstance(original.attr, cst.Name)
+                            ):
                                 return cst.Name(original.attr.value)
                             return updated
 
@@ -214,7 +229,9 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     params = cst.Parameters(params=params_list)
 
                     # create top-level test function using the rewritten body
-                    top_fn = cst.FunctionDef(name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[])
+                    top_fn = cst.FunctionDef(
+                        name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[]
+                    )
                     new_body.append(top_fn)
         else:
             new_body.append(stmt)

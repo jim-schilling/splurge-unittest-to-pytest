@@ -25,7 +25,7 @@ def test_make_pytest_raises_regex_call_and_withitem():
     node = raises.make_pytest_raises_regex_call([exc, regex])
     assert isinstance(node, cst.Call)
     # should include a keyword arg 'match'
-    assert any(arg.keyword and getattr(arg.keyword, 'value', None) == 'match' for arg in node.args)
+    assert any(arg.keyword and getattr(arg.keyword, "value", None) == "match" for arg in node.args)
 
     # create with item from assertRaises
     with_item = raises.create_pytest_raises_withitem("assertRaises", [exc])

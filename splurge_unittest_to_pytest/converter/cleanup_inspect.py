@@ -1,4 +1,5 @@
 """Inspect simple statements for attribute references."""
+
 from __future__ import annotations
 
 
@@ -27,7 +28,7 @@ def simple_stmt_references_attribute(stmt: cst.SimpleStatementLine, attr_name: s
         return references_attribute(expr.value, attr_name)
     if isinstance(expr, cst.Assign):
         for target in expr.targets:
-            target_expr = getattr(target, 'target', target)
+            target_expr = getattr(target, "target", target)
             if references_attribute(target_expr, attr_name):
                 return True
     return False

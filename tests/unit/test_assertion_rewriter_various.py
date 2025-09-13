@@ -79,8 +79,8 @@ def test_raises_call_and_with_are_handled():
         ("def test():\n    self.assertRegex(text, pattern)\n", ["re.search"], True),
         ("def test():\n    assertRegex(text, pattern)\n", ["re.search"], True),
         ("def test():\n    self.assertRegexpMatches(text, pattern)\n", ["re.search"], True),
-    ("def test():\n    self.assertNotRegex(text, pattern)\n", ["re.search", ("not", "is None")], True),
-    ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
+        ("def test():\n    self.assertNotRegex(text, pattern)\n", ["re.search", ("not", "is None")], True),
+        ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
     ],
 )
 def test_regex_variants(src: str, expected_parts: list[str], needs_re: bool):
@@ -102,7 +102,10 @@ def test_regex_variants(src: str, expected_parts: list[str], needs_re: bool):
         # delta kw -> abs(left - right) <= delta
         ("def test():\n    self.assertAlmostEqual(a, b, delta=0.1)\n", [lambda s: "abs(" in s and "<= 0.1" in s]),
         # explicit places kw
-        ("def test():\n    self.assertAlmostEqual(a, b, places=2)\n", [lambda s: "round(" in s or "pytest.approx" in s]),
+        (
+            "def test():\n    self.assertAlmostEqual(a, b, places=2)\n",
+            [lambda s: "round(" in s or "pytest.approx" in s],
+        ),
         # default -> pytest.approx
         ("def test():\n    self.assertAlmostEqual(a, b)\n", [lambda s: "pytest.approx" in s]),
     ],
@@ -204,7 +207,7 @@ def test_boolean_and_membership_msg_dropped(src: str, expected: str):
         ("def test():\n    self.assertRegex(text, pattern)\n", ["re.search"], True),
         ("def test():\n    self.assertRegexpMatches(text, pattern)\n", ["re.search"], True),
         ("def test():\n    assertRegexpMatches(text, pattern)\n", ["re.search"], True),
-    ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
+        ("def test():\n    self.assertNotRegexpMatches(text, pattern)\n", ["re.search", ("not", "is None")], True),
     ],
 )
 def test_additional_regex_aliases(src: str, expected_parts: list[str], needs_re: bool):
@@ -224,9 +227,9 @@ def test_additional_regex_aliases(src: str, expected_parts: list[str], needs_re:
         # not-almost-equal with delta kw (expect '> delta' or 'not pytest.approx')
         ("def test():\n    self.assertNotAlmostEqual(a, b, delta=0.2)\n", ["abs(", "> 0.2"]),
         # not-almost-equal default -> pytest.approx or not round
-    ("def test():\n    self.assertNotAlmostEqual(a, b)\n", [("pytest.approx", "!= 0", "not round")]),
+        ("def test():\n    self.assertNotAlmostEqual(a, b)\n", [("pytest.approx", "!= 0", "not round")]),
         # almost-equal with places=0 -> rounding to 0 places -> expect 'round(' or 'pytest.approx'
-    ("def test():\n    self.assertAlmostEqual(a, b, places=0)\n", [("round(", "pytest.approx")]),
+        ("def test():\n    self.assertAlmostEqual(a, b, places=0)\n", [("round(", "pytest.approx")]),
     ],
 )
 def test_more_almost_not_almost_permutations(src: str, expected_contains: list[str]):

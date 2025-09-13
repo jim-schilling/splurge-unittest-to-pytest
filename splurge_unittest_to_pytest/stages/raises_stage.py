@@ -3,6 +3,7 @@
 This stage focuses on converting both context-manager uses and callable-form
 uses of assertRaises/assertRaisesRegex into pytest.raises equivalents.
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Optional, Any, cast
@@ -27,8 +28,8 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
     def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.Attribute:
         try:
             if isinstance(updated.value, cst.Name) and updated.value.value == self._target:
-                if isinstance(updated.attr, cst.Name) and updated.attr.value == 'exception':
-                    return updated.with_changes(attr=cst.Name('value'))
+                if isinstance(updated.attr, cst.Name) and updated.attr.value == "exception":
+                    return updated.with_changes(attr=cst.Name("value"))
         except Exception:
             pass
         return updated
@@ -74,7 +75,6 @@ class RaisesRewriter(cst.CSTTransformer):
             # be defensive: do not fail traversal on unexpected node shapes
             return None
 
-
     def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
         # handle with self.assertRaises(...) as cm: or without 'as'
         if not updated_node.items:
@@ -114,8 +114,8 @@ class RaisesRewriter(cst.CSTTransformer):
                 name = updated.value.value
                 # only rewrite if this name was recorded and is NOT shadowed by a binding
                 if name in self._exception_var_names and not self._is_name_bound_in_current_scope(name):
-                    if isinstance(updated.attr, cst.Name) and updated.attr.value == 'exception':
-                        return updated.with_changes(attr=cst.Name('value'))
+                    if isinstance(updated.attr, cst.Name) and updated.attr.value == "exception":
+                        return updated.with_changes(attr=cst.Name("value"))
         except Exception:
             pass
         return updated
@@ -192,13 +192,13 @@ class RaisesRewriter(cst.CSTTransformer):
             # LibCST versions differ in how comprehension nodes expose
             # their generator list; be defensive and use getattr to avoid
             # mypy/typed-visitor issues across versions.
-            gens = getattr(node, 'for_in', None)
+            gens = getattr(node, "for_in", None)
             if gens is None:
-                gens_iter = getattr(node, 'generators', []) or []
+                gens_iter = getattr(node, "generators", []) or []
             else:
-                gens_iter = getattr(gens, 'generators', []) or []
+                gens_iter = getattr(gens, "generators", []) or []
             for gen in gens_iter:
-                target = getattr(gen, 'target', None)
+                target = getattr(gen, "target", None)
                 # if the target is a Name, bind it
                 if isinstance(target, cst.Name):
                     self._add_bound_name(target.value)
@@ -231,13 +231,16 @@ class RaisesRewriter(cst.CSTTransformer):
                 func_call = cst.Call(func=args[1].value, args=list(args[2:]))
                 # wrap the function call in a with pytest.raises(...): block
                 # For assertRaisesRegex the pattern is the second arg, so pass exc_arg and pattern as needed
-                if method_name == 'assertRaises':
+                if method_name == "assertRaises":
                     with_item = self._create_pytest_raises_item(method_name, [exc_arg])
                 else:
                     # assume args like (Exc, pattern, func, ...)
                     with_item = self._create_pytest_raises_item(method_name, [exc_arg, args[1]])
                 # craft a With node
-                new_with = cst.With(items=[with_item], body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(func_call)])]))
+                new_with = cst.With(
+                    items=[with_item],
+                    body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(func_call)])]),
+                )
                 self.made_changes = True
                 return cast(Any, new_with)
         return updated_node
@@ -247,9 +250,9 @@ class RaisesRewriter(cst.CSTTransformer):
         # check for self.assertRaises or self.assertRaisesRegex
         try:
             if isinstance(call_node.func, cst.Attribute):
-                if isinstance(call_node.func.value, cst.Name) and call_node.func.value.value == 'self':
+                if isinstance(call_node.func.value, cst.Name) and call_node.func.value.value == "self":
                     name = call_node.func.attr.value
-                    if name in ('assertRaises', 'assertRaisesRegex'):
+                    if name in ("assertRaises", "assertRaisesRegex"):
                         return name
         except Exception:
             pass
@@ -264,23 +267,32 @@ class RaisesRewriter(cst.CSTTransformer):
         except Exception:
             # defensive: if something goes wrong, don't raise from transformer
             pass
-        if method_name == 'assertRaises':
-            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name('pytest'), attr=cst.Name('raises')), args=list(args)))
+        if method_name == "assertRaises":
+            return cst.WithItem(
+                item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args))
+            )
         # assertRaisesRegex: expect args like (Exc, pattern, ...)
         if len(args) >= 2:
             exc = args[0]
             pat = args[1]
-            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name('pytest'), attr=cst.Name('raises')), args=[exc, cst.Arg(keyword=cst.Name('match'), value=pat.value)]))
+            return cst.WithItem(
+                item=cst.Call(
+                    func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
+                    args=[exc, cst.Arg(keyword=cst.Name("match"), value=pat.value)],
+                )
+            )
         # fallback
-        return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name('pytest'), attr=cst.Name('raises')), args=list(args)))
+        return cst.WithItem(
+            item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args))
+        )
 
 
 def raises_stage(context: dict[str, object]) -> dict[str, object]:
-    maybe_module = context.get('module')
+    maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
         return {}
     transformer = RaisesRewriter()
     new_mod = module.visit(transformer)
     # signal the import injector only if we actually created pytest.raises usage
-    return {'module': new_mod, 'needs_pytest_import': bool(getattr(transformer, 'made_changes', False))}
+    return {"module": new_mod, "needs_pytest_import": bool(getattr(transformer, "made_changes", False))}

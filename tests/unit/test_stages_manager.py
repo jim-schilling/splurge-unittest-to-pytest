@@ -38,6 +38,7 @@ def test_diagnostics_enabled_writes_files(tmp_path, monkeypatch):
     mgr = StageManager()
     d = getattr(mgr, "_diagnostics_dir")
     assert d is not None
+
     # run a stage that mutates module
     def add_pass(ctx):
         m = ctx.get("module")

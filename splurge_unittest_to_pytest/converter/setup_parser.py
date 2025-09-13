@@ -1,4 +1,5 @@
 """Helpers to parse unittest setUp assignments."""
+
 from __future__ import annotations
 
 import libcst as cst

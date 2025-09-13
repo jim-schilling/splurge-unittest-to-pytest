@@ -1,8 +1,8 @@
-
 """Import helper utilities for the converter.
 
 Contains pure functions that inspect or modify a libcst.Module to add imports or remove them.
 """
+
 from typing import Any
 import libcst as cst
 from libcst import matchers as m
@@ -15,6 +15,7 @@ def remove_unittest_importfrom(updated_node: cst.ImportFrom) -> cst.ImportFrom |
     if m.matches(updated_node, m.ImportFrom(module=m.Name("unittest"))):
         return cst.RemovalSentinel.REMOVE
     return updated_node
+
 
 def remove_unittest_import(updated_node: cst.Import) -> cst.Import | cst.RemovalSentinel:
     """Remove Import nodes that import unittest."""
@@ -66,11 +67,14 @@ def add_pytest_import(module_node: cst.Module) -> cst.Module:
             insert_pos = 1
 
     for i, stmt in enumerate(new_body[insert_pos:], start=insert_pos):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom)):
+        if (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and stmt.body
+            and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+        ):
             insert_pos = i + 1
         else:
             break
 
     new_body.insert(insert_pos, pytest_import)
     return module_node.with_changes(body=new_body)
-

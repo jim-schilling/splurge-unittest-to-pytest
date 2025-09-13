@@ -3,6 +3,7 @@
 These are pure functions that inspect libcst statement/expression nodes to
 determine whether cleanup statements reference a given attribute name.
 """
+
 from typing import Any, List
 
 import libcst as cst
@@ -38,7 +39,7 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
             if isinstance(test_code, str) and attr_name in test_code:
                 relevant_statements.append(s)
                 return
-            for inner in getattr(s.body, 'body', []):
+            for inner in getattr(s.body, "body", []):
                 inspect_stmt(inner)
                 if relevant_statements and relevant_statements[-1] is inner:
                     # Found a matching inner statement; record the enclosing If
@@ -46,10 +47,10 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
                     relevant_statements.pop()
                     relevant_statements.append(s)
                     return
-            orelse = getattr(s, 'orelse', None)
+            orelse = getattr(s, "orelse", None)
             if orelse:
                 if isinstance(orelse, cst.IndentedBlock):
-                    for inner in getattr(orelse, 'body', []):
+                    for inner in getattr(orelse, "body", []):
                         inspect_stmt(inner)
                         if relevant_statements and relevant_statements[-1] is inner:
                             relevant_statements.pop()
@@ -65,7 +66,7 @@ def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> L
 
         # IndentedBlock: inspect contained statements
         if isinstance(s, cst.IndentedBlock):
-            for inner in getattr(s, 'body', []):
+            for inner in getattr(s, "body", []):
                 inspect_stmt(inner)
                 if relevant_statements and relevant_statements[-1] is inner:
                     return

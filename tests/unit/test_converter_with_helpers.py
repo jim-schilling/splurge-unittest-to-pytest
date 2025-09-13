@@ -45,4 +45,6 @@ def test_convert_assert_raises_with_non_call():
     w = make_with(src)
     new_w, needs = with_helpers.convert_assert_raises_with(w)
     assert new_w is None and needs is False
+
+
 # ...existing code above covers the important cases

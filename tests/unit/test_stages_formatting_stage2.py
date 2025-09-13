@@ -48,7 +48,13 @@ def after():
     assert class_node is not None
     members = list(class_node.body.body)
     # Find function positions
-    fn_indices = [i for i, m in enumerate(members) if isinstance(m, cst.SimpleStatementLine) and isinstance(m.body[0], cst.FunctionDef) or isinstance(m, cst.FunctionDef)]
+    fn_indices = [
+        i
+        for i, m in enumerate(members)
+        if isinstance(m, cst.SimpleStatementLine)
+        and isinstance(m.body[0], cst.FunctionDef)
+        or isinstance(m, cst.FunctionDef)
+    ]
     assert len(fn_indices) >= 2
     # Count EmptyLine nodes between first two functions
     start = fn_indices[0]

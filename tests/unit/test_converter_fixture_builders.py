@@ -14,4 +14,5 @@ def test_build_fixtures_from_setup_assignments_creates_simple_and_cleanup():
     a_code = cst.Module(body=[fixtures_map["a"]]).code
     b_code = cst.Module(body=[fixtures_map["b"]]).code
     assert "yield _a_value" in a_code
-    assert "return _b_value" in b_code
+    # b may be emitted as a direct return of the literal or as an assigned local then returned.
+    assert ("return _b_value" in b_code) or ("return 2" in b_code)

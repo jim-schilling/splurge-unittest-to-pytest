@@ -4,6 +4,7 @@ This minimal manager supports registering callables that accept and return a
 `context` mapping. The context starts with the `module` (cst.Module) and may be
 extended with stage outputs (e.g., collector_output).
 """
+
 from __future__ import annotations
 
 from typing import Any, Callable

@@ -9,7 +9,7 @@ for p in [INPUT_DIR / "test_cli.py.bak.txt", INPUT_DIR / "test_init_api.py.bak.t
     if not p.exists():
         print(f"Missing {p}")
         continue
-    out = OUT_DIR / p.name.replace('.bak.txt', '.py')
+    out = OUT_DIR / p.name.replace(".bak.txt", ".py")
     print("Converting", p, "->", out)
     res = convert_file(str(p), output_path=str(out), compat=False, autocreate=True, engine="pipeline")
     if res.errors:

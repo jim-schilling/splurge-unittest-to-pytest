@@ -1,4 +1,5 @@
 """Pipeline runner wiring the individual stages into a conversion pipeline."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -32,6 +33,7 @@ def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = Tru
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage
+
     mgr.register(remove_unittest_artifacts_stage)
 
     # Note: legacy transformer previously ran early here.
@@ -43,8 +45,10 @@ def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = Tru
     # core pipeline stages
     # assertion rewriter: convert self.assert* -> pytest assert and assertRaises contexts
     from .assertion_rewriter import assertion_rewriter_stage
+
     mgr.register(assertion_rewriter_stage)
     from .raises_stage import raises_stage
+
     mgr.register(raises_stage)
 
     mgr.register(generator_stage)
@@ -52,11 +56,13 @@ def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = Tru
     # Insert fixtures stage to convert class setUp/tearDown to fixtures and
     # update test function signatures before injecting fixture FunctionDefs
     from .fixtures_stage import fixtures_stage
+
     mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
     # Run decorator and mock fixes before import injection so the injector can
     # add imports required by pytest markers and other rewritten constructs.
     from .decorator_and_mock_fixes import decorator_and_mock_fixes_stage
+
     mgr.register(decorator_and_mock_fixes_stage)
     # Import injector should run after fixtures have been inserted so it can
     # detect the need for pytest import and place it before the @pytest.fixture

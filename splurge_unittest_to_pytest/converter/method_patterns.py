@@ -2,6 +2,7 @@
 
 These are extracted from `converter.py` to make them easier to test.
 """
+
 from __future__ import annotations
 
 from typing import Iterable

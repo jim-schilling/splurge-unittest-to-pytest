@@ -36,11 +36,19 @@ def test_create_fixture_for_attribute_simple_and_cleanup():
     fixture = fixtures.create_simple_fixture("answer", val_expr)
     assert isinstance(fixture, cst.FunctionDef)
     assert fixture.name.value == "answer"
-    # decorator exists and references pytest.fixture
-    assert fixture.decorators and isinstance(fixture.decorators[0].decorator, cst.Call)
+    # decorator exists and references pytest.fixture; may be an Attribute (canonical @pytest.fixture)
+    assert fixture.decorators
+    assert any(
+        getattr(d.decorator, "attr", None)
+        and d.decorator.attr.value == "fixture"
+        or getattr(d.decorator, "func", None)
+        and getattr(d.decorator.func, "attr", None)
+        and d.decorator.func.attr.value == "fixture"
+        for d in fixture.decorators
+    )
 
     # create fixture with cleanup: use create_fixture_with_cleanup
-    cleanup = [cst.SimpleStatementLine(body=[cst.Expr(value=cst.Call(func=cst.Name("cleanup")))] )]
+    cleanup = [cst.SimpleStatementLine(body=[cst.Expr(value=cst.Call(func=cst.Name("cleanup")))])]
     fixture2 = fixtures.create_fixture_with_cleanup("resource", cst.Name("obj"), cleanup)
     assert isinstance(fixture2, cst.FunctionDef)
     assert fixture2.name.value == "resource"
@@ -53,12 +61,21 @@ def test_create_fixture_for_attribute_simple_and_cleanup():
 
 def test_cleanup_replacement_and_yield_binding():
     # cleanup references self.resource -> should be replaced to local value name
-    cleanup_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Call(func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("close"))))])
+    cleanup_stmt = cst.SimpleStatementLine(
+        body=[cst.Expr(value=cst.Call(func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("close"))))]
+    )
     fixture = fixtures.create_fixture_with_cleanup("resource", cst.Call(func=cst.Name("make_resource")), [cleanup_stmt])
     # body should contain an Assign then a Yield then a cleanup where 'self' reference replaced
     body = fixture.body.body
-    assert any(isinstance(s, cst.SimpleStatementLine) and isinstance(getattr(s, 'body', [None])[0], cst.Assign) for s in body)
-    assert any(isinstance(s, cst.SimpleStatementLine) and isinstance(getattr(s, 'body', [None])[0], cst.Expr) and isinstance(getattr(s, 'body', [None])[0].value, cst.Yield) for s in body)
+    assert any(
+        isinstance(s, cst.SimpleStatementLine) and isinstance(getattr(s, "body", [None])[0], cst.Assign) for s in body
+    )
+    assert any(
+        isinstance(s, cst.SimpleStatementLine)
+        and isinstance(getattr(s, "body", [None])[0], cst.Expr)
+        and isinstance(getattr(s, "body", [None])[0].value, cst.Yield)
+        for s in body
+    )
 
 
 def test_make_autouse_attach_and_module_insertion():

@@ -26,9 +26,9 @@ def build_fixtures_from_setup_assignments(
             # file fixture that writes the content. This handles common patterns
             # where setUp used a helper to create files from content.
             content_name = None
-            if isinstance(attr_name, str) and attr_name.endswith('_file'):
+            if isinstance(attr_name, str) and attr_name.endswith("_file"):
                 # look for sibling like 'sql_content' if attr_name is 'sql_file'
-                prefix = attr_name[: -len('_file')]
+                prefix = attr_name[: -len("_file")]
                 candidate = f"{prefix}_content"
                 if candidate in setup_assignments:
                     content_name = candidate

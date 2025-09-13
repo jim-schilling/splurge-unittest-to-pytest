@@ -9,7 +9,7 @@ def _apply(src: str) -> str:
 
 
 def test_decorator_factory_expected_and_skip():
-    src = '''
+    src = """
 import unittest
 
 def deco(x):
@@ -27,7 +27,7 @@ class T(unittest.TestCase):
     @unittest.skip('skip it')
     def test_b(self):
         assert False
-'''
+"""
     out = _apply(src)
     assert "pytest.mark.xfail" in out
     assert "pytest.mark.skip" in out

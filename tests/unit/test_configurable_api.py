@@ -12,22 +12,34 @@ class TestConfigurableAPI:
 
         # Check default setup patterns
         expected_setup = {
-            "setup", "setUp", "set_up", "setup_method", "setUp_method",
-            "before_each", "beforeEach", "before_test", "beforeTest"
+            "setup",
+            "setUp",
+            "set_up",
+            "setup_method",
+            "setUp_method",
+            "before_each",
+            "beforeEach",
+            "before_test",
+            "beforeTest",
         }
         assert transformer.setup_patterns == expected_setup
 
         # Check default teardown patterns
         expected_teardown = {
-            "teardown", "tearDown", "tear_down", "teardown_method", "tearDown_method",
-            "after_each", "afterEach", "after_test", "afterTest"
+            "teardown",
+            "tearDown",
+            "tear_down",
+            "teardown_method",
+            "tearDown_method",
+            "after_each",
+            "afterEach",
+            "after_test",
+            "afterTest",
         }
         assert transformer.teardown_patterns == expected_teardown
 
         # Check default test patterns
-        expected_test = {
-            "test_", "test", "should_", "when_", "given_", "it_", "spec_"
-        }
+        expected_test = {"test_", "test", "should_", "when_", "given_", "it_", "spec_"}
         assert transformer.test_patterns == expected_test
 
     def test_add_setup_pattern(self) -> None:

@@ -18,7 +18,7 @@ def should_remove_first_param(node: cst.FunctionDef) -> bool:
         return False
 
     first_param = node.params.params[0]
-    first_param_name = first_param.name.value if hasattr(first_param, 'name') else ""
+    first_param_name = first_param.name.value if hasattr(first_param, "name") else ""
 
     has_classmethod = any(
         (
@@ -87,7 +87,7 @@ def remove_method_self_references(node: cst.FunctionDef) -> Tuple[List[cst.Param
 
     if should_remove_first_param(node):
         first_param = node.params.params[0]
-        param_name = first_param.name.value if hasattr(first_param, 'name') else ""
+        param_name = first_param.name.value if hasattr(first_param, "name") else ""
         new_params = new_params[1:]
         remover = SelfReferenceRemover({param_name})
         visited = node.body.visit(remover)
