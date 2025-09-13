@@ -16,7 +16,7 @@ class TestCLIBasicFunctionality:
         """Test that the CLI help message works."""
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
-        
+
         assert result.exit_code == 0
         assert "Convert unittest-style tests to pytest-style tests" in result.output
         assert "--dry-run" in result.output
@@ -26,7 +26,7 @@ class TestCLIBasicFunctionality:
         """Test that the CLI version command works."""
         runner = CliRunner()
         result = runner.invoke(main, ["--version"])
-        
+
         assert result.exit_code == 0
         assert __version__ in result.output
 
@@ -34,7 +34,7 @@ class TestCLIBasicFunctionality:
         """Test CLI behavior when no paths are provided."""
         runner = CliRunner()
         result = runner.invoke(main, [])
-        
+
         assert result.exit_code == 1
         assert "Error: No paths provided" in result.output
 
@@ -51,18 +51,18 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
-        
+
         temp_file = tmp_path / "test_single.py"
         temp_file.write_text(unittest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, [str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"Converted: {temp_file}" in result.output
         assert "Processed 1 files:" in result.output
         assert "1 files converted" in result.output
-        
+
         # Check that file was actually converted
         converted_content = temp_file.read_text()
         assert "assert 1 == 1" in converted_content
@@ -77,17 +77,17 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         temp_file = tmp_path / "test_dry_run.py"
         temp_file.write_text(unittest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--dry-run", str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"Would convert: {temp_file}" in result.output
         assert "1 files would be converted" in result.output
-        
+
         # Check that file was NOT actually modified
         unchanged_content = temp_file.read_text()
         assert unchanged_content == unittest_code
@@ -101,13 +101,13 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertEqual(1, 1)
 """
-        
+
         temp_file = tmp_path / "test_verbose.py"
         temp_file.write_text(unittest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--verbose", str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"Processing: {temp_file}" in result.output
         assert f"Converted: {temp_file}" in result.output
@@ -121,29 +121,28 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         input_file = tmp_path / "test_input.py"
         input_file.write_text(unittest_code)
-        
+
         output_dir = tmp_path / "converted"
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--output", str(output_dir), str(input_file)])
-        
+
         assert result.exit_code == 0
         assert f"Converted: {input_file}" in result.output
-        
+
         # Check that output file was created
         output_path = output_dir / input_file.name
         assert output_path.exists()
-        
+
         converted_content = output_path.read_text()
         assert "assert True" in converted_content
-        
+
         # Check that input file is unchanged
         original_content = input_file.read_text()
         assert original_content == unittest_code
-
 
     def test_cli_backup_basic(self, tmp_path: Path) -> None:
         """Test CLI backup functionality with long option."""
@@ -248,11 +247,7 @@ class TestExample(unittest.TestCase):
         output_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(main, [
-            "--backup", str(backup_dir),
-            "--output", str(output_dir),
-            str(input_file)
-        ])
+        result = runner.invoke(main, ["--backup", str(backup_dir), "--output", str(output_dir), str(input_file)])
 
         assert result.exit_code == 0
         assert f"Converted: {input_file}" in result.output
@@ -300,6 +295,7 @@ class TestExample(unittest.TestCase):
         # Check that input file is unchanged
         original_content = input_file.read_text()
         assert original_content == unittest_code
+
     """Test CLI directory handling functionality."""
 
     def test_cli_recursive_directory(self, tmp_path: Path) -> None:
@@ -313,7 +309,7 @@ class TestExample1(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """)
-        
+
         unittest_file2 = tmp_path / "subdir" / "test_example2.py"
         unittest_file2.parent.mkdir()
         unittest_file2.write_text("""
@@ -323,7 +319,7 @@ class TestExample2(unittest.TestCase):
     def test_something(self) -> None:
         self.assertEqual(1, 1)
 """)
-        
+
         # Create non-unittest file
         pytest_file = tmp_path / "test_pytest.py"
         pytest_file.write_text("""
@@ -332,10 +328,10 @@ import pytest
 def test_something():
     assert True
 """)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--recursive", "--verbose", str(tmp_path)])
-        
+
         assert result.exit_code == 0
         assert "Found 2 unittest files" in result.output
         assert "2 files converted" in result.output
@@ -350,10 +346,10 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, [str(tmp_path)])
-        
+
         assert result.exit_code == 0
         assert f"Warning: {tmp_path} is a directory. Use --recursive to search it." in result.output
         assert "No unittest files found to convert" in result.output
@@ -366,17 +362,17 @@ class TestCLIErrorHandling:
         """Test CLI behavior with nonexistent file."""
         runner = CliRunner()
         result = runner.invoke(main, ["nonexistent_file.py"])
-        
+
         assert result.exit_code != 0
 
     def test_cli_non_python_file(self, tmp_path: Path) -> None:
         """Test CLI behavior with non-Python file."""
         temp_file = tmp_path / "test_non_python.txt"
         temp_file.write_text("This is not a Python file")
-        
+
         runner = CliRunner()
         result = runner.invoke(main, [str(temp_file)])
-        
+
         assert result.exit_code == 1
         assert "Failed to parse source code" in result.output
         assert "1 files had errors" in result.output
@@ -390,13 +386,13 @@ class TestExample(unittest.TestCase
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         temp_file = tmp_path / "test_syntax_error.py"
         temp_file.write_text(invalid_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, [str(temp_file)])
-        
+
         assert result.exit_code == 1
         assert f"Error in {temp_file}:" in result.output
         assert "1 files had errors" in result.output
@@ -413,13 +409,13 @@ import pytest
 def test_something():
     assert True
 """
-        
+
         temp_file = tmp_path / "test_pytest.py"
         temp_file.write_text(pytest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, [str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert "Processed 1 files" in result.output
         assert "0 files converted" in result.output
@@ -434,13 +430,13 @@ class TestExample:
     def test_something(self) -> None:
         assert 1 == 1
 """
-        
+
         temp_file = tmp_path / "test_no_changes.py"
         temp_file.write_text(pytest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--verbose", str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"No changes needed: {temp_file}" in result.output
         assert "0 files converted" in result.output
@@ -455,14 +451,14 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         pytest_code = """
 import pytest
 
 def test_something():
     assert True
 """
-        
+
         invalid_code = """
 import unittest
 
@@ -470,23 +466,19 @@ class TestExample(unittest.TestCase
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         unittest_file = tmp_path / "test_unittest.py"
         unittest_file.write_text(unittest_code)
-        
+
         pytest_file = tmp_path / "test_pytest.py"
         pytest_file.write_text(pytest_code)
-        
+
         invalid_file = tmp_path / "test_invalid.py"
         invalid_file.write_text(invalid_code)
-        
+
         runner = CliRunner()
-        result = runner.invoke(main, [
-            str(unittest_file),
-            str(pytest_file), 
-            str(invalid_file)
-        ])
-        
+        result = runner.invoke(main, [str(unittest_file), str(pytest_file), str(invalid_file)])
+
         assert result.exit_code == 1  # Due to syntax error
         assert "1 files converted" in result.output
         assert "1 files had errors" in result.output
@@ -501,18 +493,18 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         temp_file = tmp_path / "test_dry_run_verbose.py"
         temp_file.write_text(unittest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--dry-run", "--verbose", str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"Would convert: {temp_file}" in result.output
         assert "Changes would be made:" in result.output
         assert "1 files would be converted" in result.output
-        
+
         # Check that file was NOT actually modified
         unchanged_content = temp_file.read_text()
         assert unchanged_content == unittest_code
@@ -526,13 +518,13 @@ class TestExample:
     def test_something(self) -> None:
         assert True
 """
-        
+
         temp_file = tmp_path / "test_dry_run_no_changes.py"
         temp_file.write_text(pytest_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--dry-run", "--verbose", str(temp_file)])
-        
+
         assert result.exit_code == 0
         assert f"No changes needed: {temp_file}" in result.output
         assert "0 files would be converted" in result.output
@@ -547,13 +539,13 @@ class TestExample(unittest.TestCase
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         temp_file = tmp_path / "test_dry_run_errors.py"
         temp_file.write_text(invalid_code)
-        
+
         runner = CliRunner()
         result = runner.invoke(main, ["--dry-run", str(temp_file)])
-        
+
         assert result.exit_code == 1
         assert f"Error in {temp_file}:" in result.output
         assert "1 files had errors" in result.output
@@ -567,17 +559,17 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        
+
         input_file = tmp_path / "test_backup_failure.py"
         input_file.write_text(unittest_code)
 
         backup_dir = tmp_path / "backups"
-        
+
         # Mock shutil.copy2 to raise an exception
-        mocker.patch('shutil.copy2', side_effect=Exception("Mock backup failure"))
+        mocker.patch("shutil.copy2", side_effect=Exception("Mock backup failure"))
         runner = CliRunner()
         result = runner.invoke(main, ["--backup", str(backup_dir), str(input_file)])
-        
+
         # Should still succeed but with warning
         assert result.exit_code == 0
         assert "Warning: Failed to create backup" in result.output
@@ -588,10 +580,10 @@ class TestExample(unittest.TestCase):
         # Create a file with invalid UTF-8 encoding
         temp_file = tmp_path / "test_encoding_error.py"
         # Write some invalid UTF-8 bytes
-        temp_file.write_bytes(b'\xff\xfe\x00\x00import unittest\n')
-        
+        temp_file.write_bytes(b"\xff\xfe\x00\x00import unittest\n")
+
         runner = CliRunner()
         result = runner.invoke(main, [str(temp_file)])
-        
+
         assert result.exit_code == 1
         assert "Encoding error" in result.output or "Failed to decode" in result.output

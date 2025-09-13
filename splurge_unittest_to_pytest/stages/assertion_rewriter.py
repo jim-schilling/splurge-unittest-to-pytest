@@ -4,6 +4,7 @@ and convert assertRaises context managers to pytest.raises.
 This is a focused stage (subset of the legacy transformer's behavior) used
 to migrate assertion rewriting into the staged pipeline.
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Optional, Any, cast
@@ -116,12 +117,12 @@ class AssertionRewriter(cst.CSTTransformer):
                 # strip optional trailing `msg` positional or keyword arg per request
                 cleaned_args = list(args)
                 # remove any keyword arg named 'msg'
-                cleaned_args = [a for a in cleaned_args if not (a.keyword and a.keyword.value == 'msg')]
+                cleaned_args = [a for a in cleaned_args if not (a.keyword and a.keyword.value == "msg")]
                 # If there's an extra trailing positional arg that is intended as a 'msg',
                 # we attempt to detect and drop it for converters that expect fewer args.
                 # Specific handling for assertAlmostEqual: if a third positional is numeric,
                 # treat it as 'places' and keep it; otherwise drop trailing positional extras.
-                if method_name in ('assertAlmostEqual', 'assertNotAlmostEqual'):
+                if method_name in ("assertAlmostEqual", "assertNotAlmostEqual"):
                     # keep first two, then examine third positional (if any)
                     pos_args = [a for a in cleaned_args if a.keyword is None]
                     if len(pos_args) > 2:
@@ -153,7 +154,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -161,7 +167,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_not_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -188,7 +199,12 @@ class AssertionRewriter(cst.CSTTransformer):
                 left_expr = args[0].value
                 if isinstance(left_expr, (cst.Integer, cst.Float, cst.SimpleString)):
                     return None
-                return cst.Assert(test=cst.Comparison(left=left_expr, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left_expr,
+                        comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -197,7 +213,12 @@ class AssertionRewriter(cst.CSTTransformer):
         try:
             if len(args) >= 1:
                 left_expr = args[0].value
-                return cst.Assert(test=cst.Comparison(left=left_expr, comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left_expr,
+                        comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -205,7 +226,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_in(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -225,26 +251,43 @@ class AssertionRewriter(cst.CSTTransformer):
                 # then inspect keyword args for explicit delta/places
                 for a in args[2:]:
                     try:
-                        if a.keyword and a.keyword.value == 'delta':
+                        if a.keyword and a.keyword.value == "delta":
                             delta_arg = a.value
-                        if a.keyword and a.keyword.value == 'places':
+                        if a.keyword and a.keyword.value == "places":
                             places_arg = a.value
                     except Exception:
                         pass
                 if delta_arg is not None:
                     # map to abs(left - right) <= delta
-                    abs_call = cst.Call(func=cst.Name('abs'), args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))])
-                    le_compare = cst.Comparison(left=abs_call, comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=delta_arg)])
+                    abs_call = cst.Call(
+                        func=cst.Name("abs"),
+                        args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))],
+                    )
+                    le_compare = cst.Comparison(
+                        left=abs_call,
+                        comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=delta_arg)],
+                    )
                     return cst.Assert(test=le_compare)
                 if places_arg is not None:
                     # map to round(left - right, places) == 0
                     diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
-                    round_call = cst.Call(func=cst.Name('round'), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
-                    return cst.Assert(test=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer('0'))]))
+                    round_call = cst.Call(func=cst.Name("round"), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
+                    return cst.Assert(
+                        test=cst.Comparison(
+                            left=round_call,
+                            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer("0"))],
+                        )
+                    )
                 # default: use pytest.approx
                 self.needs_pytest_import = True
-                approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
-                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]))
+                approx_call = cst.Call(
+                    func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)]
+                )
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -261,26 +304,43 @@ class AssertionRewriter(cst.CSTTransformer):
                     places_arg = args[2].value
                 for a in args[2:]:
                     try:
-                        if a.keyword and a.keyword.value == 'delta':
+                        if a.keyword and a.keyword.value == "delta":
                             delta_arg = a.value
-                        if a.keyword and a.keyword.value == 'places':
+                        if a.keyword and a.keyword.value == "places":
                             places_arg = a.value
                     except Exception:
                         pass
                 if delta_arg is not None:
-                    abs_call = cst.Call(func=cst.Name('abs'), args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))])
-                    gt_compare = cst.Comparison(left=abs_call, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=delta_arg)])
+                    abs_call = cst.Call(
+                        func=cst.Name("abs"),
+                        args=[cst.Arg(value=cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right))],
+                    )
+                    gt_compare = cst.Comparison(
+                        left=abs_call,
+                        comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=delta_arg)],
+                    )
                     return cst.Assert(test=gt_compare)
                 if places_arg is not None:
                     diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
-                    round_call = cst.Call(func=cst.Name('round'), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
+                    round_call = cst.Call(func=cst.Name("round"), args=[cst.Arg(value=diff), cst.Arg(value=places_arg)])
                     # prefer explicit 'round(...) != 0' over 'not round(...) == 0'
-                    return cst.Assert(test=cst.Comparison(left=round_call, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=cst.Integer('0'))]))
+                    return cst.Assert(
+                        test=cst.Comparison(
+                            left=round_call,
+                            comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=cst.Integer("0"))],
+                        )
+                    )
                 # default: use pytest.approx
                 self.needs_pytest_import = True
-                approx_call = cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)])
+                approx_call = cst.Call(
+                    func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("approx")), args=[cst.Arg(value=right)]
+                )
                 # prefer explicit 'left != pytest.approx(right)'
-                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=approx_call)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left, comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=approx_call)]
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -288,7 +348,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_not_in(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -307,7 +372,11 @@ class AssertionRewriter(cst.CSTTransformer):
             if len(args) >= 2:
                 left = args[0].value
                 right = args[1].value
-                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=right)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=right)]
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -317,7 +386,11 @@ class AssertionRewriter(cst.CSTTransformer):
             if len(args) >= 2:
                 left = args[0].value
                 right = args[1].value
-                return cst.Assert(test=cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=right)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=left, comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=right)]
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -334,7 +407,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_greater(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -342,7 +420,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_greater_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -350,7 +433,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_less(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -358,7 +446,12 @@ class AssertionRewriter(cst.CSTTransformer):
     def _assert_less_equal(self, args: Sequence[cst.Arg]) -> cst.Assert | None:
         try:
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -367,7 +460,12 @@ class AssertionRewriter(cst.CSTTransformer):
         try:
             # Map collection equality-like asserts to simple equality comparison
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -380,7 +478,10 @@ class AssertionRewriter(cst.CSTTransformer):
                 pattern = args[1].value
                 # ensure we will import re at module level
                 setattr(self, "needs_re_import", True)
-                search_call = cst.Call(func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")), args=[cst.Arg(value=pattern), cst.Arg(value=text)])
+                search_call = cst.Call(
+                    func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")),
+                    args=[cst.Arg(value=pattern), cst.Arg(value=text)],
+                )
                 return cst.Assert(test=search_call)
         except Exception:
             pass
@@ -392,9 +493,17 @@ class AssertionRewriter(cst.CSTTransformer):
                 text = args[0].value
                 pattern = args[1].value
                 setattr(self, "needs_re_import", True)
-                search_call = cst.Call(func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")), args=[cst.Arg(value=pattern), cst.Arg(value=text)])
+                search_call = cst.Call(
+                    func=cst.Attribute(value=cst.Name("re"), attr=cst.Name("search")),
+                    args=[cst.Arg(value=pattern), cst.Arg(value=text)],
+                )
                 # prefer explicit comparison 're.search(...) is None' over unary 'not re.search(...)'
-                return cst.Assert(test=cst.Comparison(left=search_call, comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=search_call,
+                        comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -403,7 +512,12 @@ class AssertionRewriter(cst.CSTTransformer):
         try:
             # map to normal equality; multi-line diffs are handled by pytest's assert rewriter
             if len(args) >= 2:
-                return cst.Assert(test=cst.Comparison(left=args[0].value, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)]))
+                return cst.Assert(
+                    test=cst.Comparison(
+                        left=args[0].value,
+                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)],
+                    )
+                )
         except Exception:
             pass
         return cst.Assert(test=cst.Name("False"))
@@ -425,12 +539,21 @@ class AssertionRewriter(cst.CSTTransformer):
             pass
 
         if method_name == "assertRaises":
-            return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args)))
+            return cst.WithItem(
+                item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args))
+            )
         else:
             # assertRaisesRegex -> pytest.raises(..., match=...)
             if len(args) >= 2:
-                return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=[args[0], cst.Arg(keyword=cst.Name("match"), value=args[1].value)]))
-        return cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args)))
+                return cst.WithItem(
+                    item=cst.Call(
+                        func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")),
+                        args=[args[0], cst.Arg(keyword=cst.Name("match"), value=args[1].value)],
+                    )
+                )
+        return cst.WithItem(
+            item=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("raises")), args=list(args))
+        )
 
 
 def assertion_rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:

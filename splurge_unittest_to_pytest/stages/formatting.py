@@ -3,6 +3,7 @@
 Provides helpers to normalize module- and class-level spacing so stages
 don't step on each other's EmptyLine insertions.
 """
+
 from __future__ import annotations
 
 from typing import Optional, cast, Any
@@ -12,21 +13,21 @@ import libcst as cst
 
 def _node_to_str(node: Optional[cst.BaseExpression] | None) -> str:
     if node is None:
-        return ''
+        return ""
     if isinstance(node, cst.Name):
         return node.value
     if isinstance(node, cst.Attribute):
         parts: list[str] = []
         cur: cst.BaseExpression | cst.Attribute = node
         while isinstance(cur, cst.Attribute):
-            attr_name = getattr(cur.attr, 'value', None)
+            attr_name = getattr(cur.attr, "value", None)
             if attr_name is not None:
                 parts.insert(0, attr_name)
             cur = cur.value
         if isinstance(cur, cst.Name):
             parts.insert(0, cur.value)
-        return '.'.join(parts)
-    return getattr(node, 'value', '') or ''
+        return ".".join(parts)
+    return getattr(node, "value", "") or ""
 
 
 def normalize_class_body(indented: cst.IndentedBlock) -> cst.IndentedBlock:
@@ -81,11 +82,20 @@ def normalize_module(module: cst.Module) -> cst.Module:
     rest = body
     if body:
         first = body[0]
-        if isinstance(first, cst.SimpleStatementLine) and first.body and isinstance(first.body[0], cst.Expr) and isinstance(first.body[0].value, cst.SimpleString):
+        if (
+            isinstance(first, cst.SimpleStatementLine)
+            and first.body
+            and isinstance(first.body[0], cst.Expr)
+            and isinstance(first.body[0].value, cst.SimpleString)
+        ):
             docstring_node = first
             rest = body[1:]
 
-    import_stmts: list[Any] = [s for s in rest if isinstance(s, cst.SimpleStatementLine) and s.body and isinstance(s.body[0], (cst.Import, cst.ImportFrom))]
+    import_stmts: list[Any] = [
+        s
+        for s in rest
+        if isinstance(s, cst.SimpleStatementLine) and s.body and isinstance(s.body[0], (cst.Import, cst.ImportFrom))
+    ]
     other_stmts: list[Any] = [s for s in rest if s not in import_stmts]
 
     # Deduplicate imports by name
@@ -97,7 +107,7 @@ def normalize_module(module: cst.Module) -> cst.Module:
             name_node = head.names[0].name if head.names else None
             name = _node_to_str(name_node)
         else:
-            name = _node_to_str(getattr(head, 'module', None))
+            name = _node_to_str(getattr(head, "module", None))
         if name and name in seen:
             continue
         if name:
@@ -114,10 +124,10 @@ def normalize_module(module: cst.Module) -> cst.Module:
             name_node = head2.names[0].name if head2.names else None
             name = _node_to_str(name_node)
         else:
-            name = _node_to_str(getattr(head2, 'module', None))
-        if 'pytest' in name:
+            name = _node_to_str(getattr(head2, "module", None))
+        if "pytest" in name:
             thirdparty.append(s)
-        elif 'splurge' in name:
+        elif "splurge" in name:
             local.append(s)
         else:
             stdlib.append(s)
@@ -171,7 +181,7 @@ def normalize_module(module: cst.Module) -> cst.Module:
             while j < len(new_body) and isinstance(new_body[j], cst.EmptyLine):
                 j += 1
             prev_non: Any = None
-            for k in range(len(normalized)-1, -1, -1):
+            for k in range(len(normalized) - 1, -1, -1):
                 if not isinstance(normalized[k], cst.EmptyLine):
                     prev_non = normalized[k]
                     break

@@ -138,9 +138,9 @@ class Test:
     found_with_raises = any(
         isinstance(call.func, cst.Attribute)
         and isinstance(call.func.value, cst.Name)
-        and call.func.value.value == 'pytest'
+        and call.func.value.value == "pytest"
         and isinstance(call.func.attr, cst.Name)
-        and call.func.attr.value == 'raises'
+        and call.func.attr.value == "raises"
         for call in cst.matchers.findall(module, m.Call())
     )
 
@@ -151,7 +151,7 @@ class Test:
     found_callable = any(
         isinstance(call.func, cst.Attribute)
         and isinstance(call.func.attr, cst.Name)
-        and call.func.attr.value == 'assertRaises'
+        and call.func.attr.value == "assertRaises"
         for call in cst.matchers.findall(module, m.Call())
     )
     assert found_callable is True
@@ -228,8 +228,7 @@ def test_assert_almost_equal_places_kw_and_not_almost_numeric_positional():
     res_not_places = _run("self.assertNotAlmostEqual(a, b, 2)\n")
     # structure: UnaryOperation(Not, Comparison(left=round(...), comparisons=[Equal(0)]))
     has_not_round = any(
-        isinstance(node, cst.UnaryOperation)
-        and isinstance(node.expression, cst.Comparison)
+        isinstance(node, cst.UnaryOperation) and isinstance(node.expression, cst.Comparison)
         for node in cst.matchers.findall(res_not_places["module"], m.UnaryOperation())
     )
     # accept either the older 'not round(...) == 0' or the newer 'round(...) != 0' form
@@ -248,16 +247,34 @@ def test_assert_not_regex_structural_not_search():
     # unary-not search
     for un in cst.matchers.findall(module, m.UnaryOperation()):
         inner = getattr(un, "expression", None)
-        if isinstance(inner, cst.Call) and isinstance(inner.func, cst.Attribute) and isinstance(inner.func.value, cst.Name) and inner.func.value.value == 're' and isinstance(inner.func.attr, cst.Name) and inner.func.attr.value == 'search':
+        if (
+            isinstance(inner, cst.Call)
+            and isinstance(inner.func, cst.Attribute)
+            and isinstance(inner.func.value, cst.Name)
+            and inner.func.value.value == "re"
+            and isinstance(inner.func.attr, cst.Name)
+            and inner.func.attr.value == "search"
+        ):
             found_form = True
             break
     # explicit 'is None' comparison
     if not found_form:
         for comp in cst.matchers.findall(module, m.Comparison()):
             for ct in comp.comparisons:
-                if isinstance(ct.operator, cst.Is) and isinstance(ct.comparator, cst.Name) and ct.comparator.value == 'None':
+                if (
+                    isinstance(ct.operator, cst.Is)
+                    and isinstance(ct.comparator, cst.Name)
+                    and ct.comparator.value == "None"
+                ):
                     # check left side is a re.search call
-                    if isinstance(comp.left, cst.Call) and isinstance(comp.left.func, cst.Attribute) and isinstance(comp.left.func.value, cst.Name) and comp.left.func.value.value == 're' and isinstance(comp.left.func.attr, cst.Name) and comp.left.func.attr.value == 'search':
+                    if (
+                        isinstance(comp.left, cst.Call)
+                        and isinstance(comp.left.func, cst.Attribute)
+                        and isinstance(comp.left.func.value, cst.Name)
+                        and comp.left.func.value.value == "re"
+                        and isinstance(comp.left.func.attr, cst.Name)
+                        and comp.left.func.attr.value == "search"
+                    ):
                         found_form = True
                         break
             if found_form:
@@ -294,7 +311,10 @@ class Test:
 
     # assertNotIsInstance -> UnaryOperation(Not, Call(func=Name('isinstance')))
     has_not_isinstance = any(
-        isinstance(u, cst.UnaryOperation) and isinstance(u.expression, cst.Call) and isinstance(u.expression.func, cst.Name) and u.expression.func.value == 'isinstance'
+        isinstance(u, cst.UnaryOperation)
+        and isinstance(u.expression, cst.Call)
+        and isinstance(u.expression.func, cst.Name)
+        and u.expression.func.value == "isinstance"
         for u in cst.matchers.findall(module, m.UnaryOperation())
     )
     assert has_not_isinstance
@@ -412,7 +432,9 @@ def test_assert_regex_sets_re_import():
 
 
 def test_basic_boolean_and_membership_and_identity_and_instance():
-    res = _run("self.assertTrue(flag)\nself.assertFalse(flag)\nself.assertIn(x, y)\nself.assertNotIn(x, y)\nself.assertIs(a, b)\nself.assertIsNot(a, b)\nself.assertIsInstance(o, T)\nself.assertNotIsInstance(o, T)\n")
+    res = _run(
+        "self.assertTrue(flag)\nself.assertFalse(flag)\nself.assertIn(x, y)\nself.assertNotIn(x, y)\nself.assertIs(a, b)\nself.assertIsNot(a, b)\nself.assertIsInstance(o, T)\nself.assertNotIsInstance(o, T)\n"
+    )
     code = res["module"].code
     # boolean
     assert "assert flag" in code

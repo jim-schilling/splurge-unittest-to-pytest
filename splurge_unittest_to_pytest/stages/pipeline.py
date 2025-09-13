@@ -1,11 +1,15 @@
 """Pipeline runner wiring the individual stages into a conversion pipeline."""
+
 from __future__ import annotations
 
 from typing import Any
 
 import libcst as cst
 from .collector import Collector
-from .generator import generator_stage
+try:
+    from .generator_v2 import generator_v2 as generator_stage
+except Exception:
+    from .generator import generator_stage
 from .fixture_injector import fixture_injector_stage
 from .rewriter import rewriter_stage
 from .import_injector import import_injector_stage
@@ -14,7 +18,7 @@ from .postvalidator import postvalidator_stage
 from .tidy import tidy_stage
 
 
-def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
+def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = True) -> cst.Module:
     mgr = StageManager()
 
     def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -32,6 +36,7 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage
+
     mgr.register(remove_unittest_artifacts_stage)
 
     # Note: legacy transformer previously ran early here.
@@ -43,8 +48,10 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     # core pipeline stages
     # assertion rewriter: convert self.assert* -> pytest assert and assertRaises contexts
     from .assertion_rewriter import assertion_rewriter_stage
+
     mgr.register(assertion_rewriter_stage)
     from .raises_stage import raises_stage
+
     mgr.register(raises_stage)
 
     mgr.register(generator_stage)
@@ -52,11 +59,13 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     # Insert fixtures stage to convert class setUp/tearDown to fixtures and
     # update test function signatures before injecting fixture FunctionDefs
     from .fixtures_stage import fixtures_stage
+
     mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
     # Run decorator and mock fixes before import injection so the injector can
     # add imports required by pytest markers and other rewritten constructs.
     from .decorator_and_mock_fixes import decorator_and_mock_fixes_stage
+
     mgr.register(decorator_and_mock_fixes_stage)
     # Import injector should run after fixtures have been inserted so it can
     # detect the need for pytest import and place it before the @pytest.fixture
@@ -66,7 +75,8 @@ def run_pipeline(module: cst.Module, compat: bool = True) -> cst.Module:
     mgr.register(tidy_stage)
 
     # execute the pipeline and return the final module
-    context = mgr.run(module)
+    # Provide flags via initial context so stages can opt-in/out deterministically
+    context = mgr.run(module, initial_context={"autocreate": autocreate, "compat": compat})
     result = context.get("module")
     try:
         # Only call dump_final when we actually have a Module instance.

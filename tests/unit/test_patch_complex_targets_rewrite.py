@@ -9,7 +9,7 @@ def _apply(src: str) -> str:
 
 
 def test_patch_object_and_package_targets():
-    src = '''
+    src = """
 from unittest.mock import patch
 
 class P:
@@ -20,7 +20,7 @@ class P:
     def test_obj(self):
         with patch.object(package.module.Class, 'attr', new=True):
             assert True
-'''
+"""
     out = _apply(src)
     # Ensure decorators referencing dotted targets are preserved as calls
     assert "pytest" not in out or "patch" in out

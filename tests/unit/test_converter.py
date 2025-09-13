@@ -10,90 +10,78 @@ class TestBasicAssertions:
     """Test conversion of basic unittest assertions."""
 
     def test_assert_equal_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertEqual(1 + 1, 2)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert 1 + 1 == 2" in result.converted_code
         assert "assertEqual" not in result.converted_code
 
     def test_assert_true_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert True" in result.converted_code
         assert "assertTrue" not in result.converted_code
 
     def test_assert_false_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertFalse(False)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert not False" in result.converted_code
         assert "assertFalse" not in result.converted_code
 
     def test_assert_is_none_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsNone(None)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert None is None" in result.converted_code
         assert "assertIsNone" not in result.converted_code
 
     def test_assert_in_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIn(1, [1, 2, 3])
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert 1 in [1, 2, 3]" in result.converted_code
         assert "assertIn" not in result.converted_code
 
     def test_assert_is_instance_conversion(self) -> None:
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsInstance(1, int)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
         assert result.has_changes
         assert "assert isinstance(1, int)" in result.converted_code
@@ -101,15 +89,13 @@ class TestExample(unittest.TestCase):
 
     def test_assert_greater_conversion(self) -> None:
         """Test assertGreater conversion to assert ... > ..."""
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertGreater(2, 1)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
 
         assert result.has_changes
@@ -118,15 +104,13 @@ class TestExample(unittest.TestCase):
 
     def test_assert_less_equal_conversion(self) -> None:
         """Test assertLessEqual conversion to assert ... <= ..."""
-        unittest_code = (
-            """
+        unittest_code = """
 import unittest
 
 class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertLessEqual(2, 2)
 """
-        )
         result = convert_string(unittest_code, engine="pipeline")
 
         assert result.has_changes
@@ -142,8 +126,8 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotEqual(1, 2)
 """
-        result = convert_string(unittest_code)
-        
+        result = convert_string(unittest_code, compat=True)
+
         assert result.has_changes
         assert "assert 1 != 2" in result.converted_code
         assert "assertNotEqual" not in result.converted_code
@@ -157,8 +141,8 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsNotNone(42)
 """
-        result = convert_string(unittest_code)
-        
+        result = convert_string(unittest_code, compat=True)
+
         assert result.has_changes
         assert "assert 42 is not None" in result.converted_code
         assert "assertIsNotNone" not in result.converted_code
@@ -172,8 +156,8 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIn(4, [1, 2, 3])
 """
-        result = convert_string(unittest_code)
-        
+        result = convert_string(unittest_code, compat=True)
+
         assert result.has_changes
         assert "assert 4 not in [1, 2, 3]" in result.converted_code
         assert "assertNotIn" not in result.converted_code
@@ -187,10 +171,10 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIsInstance("hello", int)
 """
-        result = convert_string(unittest_code)
-        
+        result = convert_string(unittest_code, compat=True)
+
         assert result.has_changes
-        assert "assert not isinstance(\"hello\", int)" in result.converted_code
+        assert 'assert not isinstance("hello", int)' in result.converted_code
         assert "assertNotIsInstance" not in result.converted_code
 
     def test_assert_greater_equal_conversion(self) -> None:
@@ -203,7 +187,7 @@ class TestExample(unittest.TestCase):
         self.assertGreaterEqual(2, 2)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "assert 2 >= 2" in result.converted_code
         assert "assertGreaterEqual" not in result.converted_code
@@ -218,7 +202,7 @@ class TestExample(unittest.TestCase):
         self.assertLess(1, 2)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "assert 1 < 2" in result.converted_code
         assert "assertLess" not in result.converted_code
@@ -238,7 +222,7 @@ class TestExample(unittest.TestCase):
             raise ValueError("test")
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "with pytest.raises(ValueError):" in result.converted_code
         assert "assertRaises" not in result.converted_code
@@ -254,7 +238,7 @@ class TestExample(unittest.TestCase):
             raise ValueError("test message")
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert 'with pytest.raises(ValueError, match = "test"):' in result.converted_code
         assert "assertRaisesRegex" not in result.converted_code
@@ -273,7 +257,7 @@ class TestExample(unittest.TestCase):
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "class TestExample():" in result.converted_code
         assert "unittest.TestCase" not in result.converted_code
@@ -291,10 +275,11 @@ class TestExample(unittest.TestCase):
         self.assertEqual(self.value, 42)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "@pytest.fixture" in result.converted_code
-        assert "def value():" in result.converted_code  # Should create fixture named after attribute
+        # Accept either annotated or unannotated fixture signature
+        assert "def value(" in result.converted_code  # Should create fixture named after attribute
         assert "def setUp_fixture():" not in result.converted_code  # Should not create old-style fixture
         assert "autouse=True" not in result.converted_code  # Should not be autouse
         assert "def test_something(value):" in result.converted_code  # Test should receive fixture as parameter
@@ -315,10 +300,11 @@ class TestExample(unittest.TestCase):
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "@pytest.fixture" in result.converted_code
-        assert "def value():" in result.converted_code  # Should create fixture for setUp attribute
+        # Accept either annotated or unannotated fixture signature
+        assert "def value(" in result.converted_code  # Should create fixture for setUp attribute
         assert "def tearDown_fixture():" not in result.converted_code  # Should not create old-style fixture
         assert "autouse=True" not in result.converted_code  # Should not be autouse
         assert "def test_something(value):" in result.converted_code  # Test should receive fixture as parameter
@@ -352,24 +338,25 @@ class TestSchemaParser(unittest.TestCase):
         mapping = parser_instance._sql_type_mapping
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
-        
+
         # Should create individual fixtures, not autouse fixtures
         assert "@pytest.fixture" in result.converted_code
         assert "autouse=True" not in result.converted_code  # Should not be autouse
-        
+
         # Should create fixtures named after the attributes
-        assert "def parser():" in result.converted_code
-        assert "def temp_dir():" in result.converted_code
-        
+        # Accept either annotated or unannotated fixture signatures
+        assert "def parser(" in result.converted_code
+        assert "def temp_dir(" in result.converted_code
+
         # Should not create the old-style fixture names
         assert "def setUp_fixture():" not in result.converted_code
         assert "def tearDown_fixture():" not in result.converted_code
-        
+
         # Test method should receive fixtures as parameters
         assert "def test_load_sql_type_mapping_default(parser, temp_dir):" in result.converted_code
-        
+
         # tearDown logic should be combined with temp_dir fixture using yield
         assert "yield temp_dir" in result.converted_code or "yield" in result.converted_code
 
@@ -415,7 +402,7 @@ class TestExample(unittest.TestCase):
         self.assertTrue(True)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "import unittest" not in result.converted_code
         assert "unittest" not in result.converted_code
@@ -431,7 +418,7 @@ class TestExample(unittest.TestCase):
             raise ValueError("test")
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "import pytest" in result.converted_code
 
@@ -458,7 +445,7 @@ class TestExample(unittest.TestCase):
         self.value = None
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "import pytest" in result.converted_code
         assert "class TestExample():" in result.converted_code
@@ -484,7 +471,7 @@ def sample_fixture():
     return 42
 """
         result = convert_string(pytest_code)
-        
+
         assert not result.has_changes
         assert result.converted_code == pytest_code
 
@@ -502,7 +489,7 @@ class TestExample(unittest.TestCase):
         self.assertGreater(2, 1)
 """
         result = convert_string(unittest_code)
-        
+
         assert result.has_changes
         assert "assert 1 == 1" in result.converted_code
         assert "assert True" in result.converted_code
@@ -524,7 +511,7 @@ class TestExample(unittest.TestCase
         self.assertTrue(True)
 """
         result = convert_string(invalid_code)
-        
+
         assert not result.has_changes
         assert len(result.errors) > 0
         assert "Failed to parse" in result.errors[0]
@@ -541,24 +528,26 @@ class TestExampleFiles:
         example_path = Path(__file__).parent.parent / "data" / filename
         with open(example_path, "r") as f:
             unittest_code = f.read()
-        
+
         # Convert the code
         result = convert_string(unittest_code)
-        
+
         # Write converted code to a temporary file
         converted_file = tmp_path / f"converted_{filename.replace('.txt', '.py')}"
         converted_file.write_text(result.converted_code)
-        
+
         # Attempt to compile the converted code
         try:
-            compile(result.converted_code, str(converted_file), 'exec')
+            compile(result.converted_code, str(converted_file), "exec")
         except SyntaxError as e:
             pytest.fail(f"Converted code from {filename} has syntax error: {e}")
-        
+
         # Verify unittest parts are converted
-        assert "unittest.TestCase" not in result.converted_code, f"unittest.TestCase inheritance should be removed from {filename}"
+        assert "unittest.TestCase" not in result.converted_code, (
+            f"unittest.TestCase inheritance should be removed from {filename}"
+        )
         assert "self.assert" not in result.converted_code, f"self.assert should be converted in {filename}"
-        
+
         # Verify changes were made
         assert result.has_changes, f"Expected changes for {filename}"
 
@@ -573,26 +562,33 @@ class TestMixedUnittestPytestFiles:
         example_path = Path(__file__).parent.parent / "data" / filename
         with open(example_path, "r") as f:
             mixed_code = f.read()
-        
+
         # Convert the code
         result = convert_string(mixed_code)
-        
+
         # Write converted code to a temporary file
         converted_file = tmp_path / f"converted_{filename.replace('.txt', '.py')}"
         converted_file.write_text(result.converted_code)
-        
+
         # Attempt to compile the converted code
         try:
-            compile(result.converted_code, str(converted_file), 'exec')
+            compile(result.converted_code, str(converted_file), "exec")
         except SyntaxError as e:
             pytest.fail(f"Converted code from {filename} has syntax error: {e}")
-        
+
         # Verify unittest parts are converted
-        assert "unittest.TestCase" not in result.converted_code, f"unittest.TestCase inheritance should be removed from {filename}"
+        assert "unittest.TestCase" not in result.converted_code, (
+            f"unittest.TestCase inheritance should be removed from {filename}"
+        )
         assert "self.assert" not in result.converted_code, f"self.assert should be converted in {filename}"
-        
+
         # Verify pytest parts remain unchanged
-        assert "import pytest" in result.converted_code or "@pytest." in result.converted_code or "pytest." in result.converted_code or "def test_" in result.converted_code, f"pytest code should remain in {filename}"
-        
+        assert (
+            "import pytest" in result.converted_code
+            or "@pytest." in result.converted_code
+            or "pytest." in result.converted_code
+            or "def test_" in result.converted_code
+        ), f"pytest code should remain in {filename}"
+
         # Verify changes were made
         assert result.has_changes, f"Expected changes for mixed file {filename}"

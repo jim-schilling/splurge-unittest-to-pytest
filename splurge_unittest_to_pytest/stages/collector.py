@@ -4,6 +4,7 @@ This is intentionally minimal: collect setUp assignments and teardown statements
 for each class, plus module docstring index and import info. The goal is to
 provide a stable data shape for the next stages.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +22,10 @@ class ClassInfo:
     test_methods: list[Any] = field(default_factory=list)
     # store list of assigned expressions per attribute to detect multiple assignments
     setup_assignments: dict[str, list[Any]] = field(default_factory=dict)
+
+    # track simple local assignments inside setUp (e.g., sql_file, schema_file = helper(...))
+
+    local_assignments: dict[str, Any] = field(default_factory=dict)
     teardown_statements: list[Any] = field(default_factory=list)
 
 
@@ -89,14 +94,34 @@ class Collector(cst.CSTVisitor):
                     # assign.targets may be a list; we check target attr
                     target = assign.targets[0].target
                     # be defensive: target can be many shapes; extract attr if present
-                    attr_node = getattr(target, 'attr', None)
-                    if isinstance(target, cst.Attribute) and isinstance(attr_node, cst.Name) and isinstance(getattr(target, 'value', None), cst.Name) and getattr(getattr(target, 'value', None), 'value', None) == 'self':
+                    attr_node = getattr(target, "attr", None)
+                    if (
+                        isinstance(target, cst.Attribute)
+                        and isinstance(attr_node, cst.Name)
+                        and isinstance(getattr(target, "value", None), cst.Name)
+                        and getattr(getattr(target, "value", None), "value", None) == "self"
+                    ):
                         attr_name = attr_node.value
                         value = assign.value
                         # append assignment to list (support multiple assignments)
                         self._current_class.setup_assignments.setdefault(attr_name, []).append(value)
                         if self.output is not None:
                             self.output.has_unittest_usage = True
+                    else:
+                        # capture simple local name assignments like `x = helper(...)` or
+                        # tuple unpacking `a, b = helper(...)` so we can trace helper
+                        # call origins later when converting self.attr placeholders.
+                        # target can be Name or Tuple
+                        if isinstance(target, cst.Name):
+                            lname = target.value
+                            self._current_class.local_assignments[lname] = (assign.value, None)
+                        elif isinstance(target, cst.Tuple):
+                            # tuple of names -> map each name to (value, index)
+                            elements = getattr(target, "elements", []) or []
+                            for idx, el in enumerate(elements):
+                                inner = getattr(el, "value", None)
+                                if isinstance(inner, cst.Name):
+                                    self._current_class.local_assignments[inner.value] = (assign.value, idx)
         elif name in ("tearDown", "tearDownClass"):
             self._current_class.teardown_methods.append(node)
             # collect teardown statements as-is

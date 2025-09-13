@@ -6,12 +6,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+
 def main() -> None:
     """Demonstrate CLI usage of the unittest to pytest converter."""
     print("=== CLI Usage Example ===\n")
 
     # Create a temporary unittest file
-    unittest_content = '''import unittest
+    unittest_content = """import unittest
 
 class TestMath(unittest.TestCase):
     def test_addition(self):
@@ -19,9 +20,9 @@ class TestMath(unittest.TestCase):
 
     def test_subtraction(self):
         self.assertEqual(5 - 3, 2)
-'''
+"""
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(unittest_content)
         temp_file = f.name
 
@@ -31,10 +32,12 @@ class TestMath(unittest.TestCase):
     try:
         # Run the CLI tool
         print("\nRunning: splurge-unittest-to-pytest --dry-run", temp_file)
-        result = subprocess.run([
-            sys.executable, '-m', 'splurge_unittest_to_pytest.cli',
-            '--dry-run', temp_file
-        ], capture_output=True, text=True, cwd=Path(__file__).parent.parent)
+        result = subprocess.run(
+            [sys.executable, "-m", "splurge_unittest_to_pytest.cli", "--dry-run", temp_file],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent,
+        )
 
         print("\nCLI Output:")
         print(result.stdout)
@@ -44,7 +47,7 @@ class TestMath(unittest.TestCase):
         print(f"Exit code: {result.returncode}")
 
         # Show what would happen without --dry-run
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("To actually convert the file, run:")
         print(f"splurge-unittest-to-pytest {temp_file}")
         print("\nOr to convert all unittest files in a directory:")
@@ -67,6 +70,7 @@ class TestMath(unittest.TestCase):
     print("  --test-methods     Configure test method patterns")
     print()
     print("For full help: splurge-unittest-to-pytest --help")
+
 
 if __name__ == "__main__":
     main()

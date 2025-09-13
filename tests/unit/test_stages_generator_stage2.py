@@ -5,7 +5,9 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassIn
 
 
 def _make_collector_output(module: cst.Module, cls_info: ClassInfo) -> CollectorOutput:
-    return CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True)
+    return CollectorOutput(
+        module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
+    )
 
 
 def test_multi_assigned_forces_binding_and_local_assignment():

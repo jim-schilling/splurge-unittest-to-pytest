@@ -1,6 +1,7 @@
 """PostValidator stage: sanity-check the generated module by attempting to
 serialize and parse it back, returning errors if any.
 """
+
 from __future__ import annotations
 
 from typing import Any

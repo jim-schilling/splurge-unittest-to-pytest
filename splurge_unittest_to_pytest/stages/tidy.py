@@ -5,6 +5,7 @@ This stage delegates spacing normalization to the shared
 and consistent blank-line counts). It also ensures class test methods
 have a `self` parameter when appropriate.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional

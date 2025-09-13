@@ -9,6 +9,7 @@ def test_self_reference_remover_replaces_self_attr() -> None:
     mod = cst.parse_module(src)
     # visit module with remover
     new_mod = mod.visit(SelfReferenceRemover())
+
     class AttrFinder(cst.CSTVisitor):
         def __init__(self) -> None:
             self.found_self_attr = False

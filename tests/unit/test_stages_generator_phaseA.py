@@ -6,7 +6,7 @@ from splurge_unittest_to_pytest.stages.collector import Collector, CollectorOutp
 
 def test_references_attribute_detects_in_if_call_and_subscript():
     module = cst.parse_module("x = 0\n")
-    cls_info = type('CI', (), {})()
+    cls_info = type("CI", (), {})()
     # setup assignment
     cls_info.setup_assignments = {"v": [cst.Integer("1")]}
     # teardown: If, Call, Subscript referencing self.v
@@ -14,7 +14,9 @@ def test_references_attribute_detects_in_if_call_and_subscript():
     call_stmt = cst.parse_statement("f(self.v)")
     sub_stmt = cst.parse_statement("a[self.v]")
     cls_info.teardown_statements = [if_stmt, call_stmt, sub_stmt]
-    out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True)
+    out = CollectorOutput(
+        module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
+    )
     res = generator.generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "v" in specs
@@ -23,12 +25,14 @@ def test_references_attribute_detects_in_if_call_and_subscript():
 
 def test_delete_detection_and_rendered_fallback():
     module = cst.parse_module("x = 0\n")
-    cls_info = type('CI', (), {})()
+    cls_info = type("CI", (), {})()
     cls_info.setup_assignments = {"y": [cst.Integer("2")]}
     # include a del self.y statement
     del_stmt = cst.parse_statement("del self.y")
     cls_info.teardown_statements = [del_stmt]
-    out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True)
+    out = CollectorOutput(
+        module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
+    )
     res = generator.generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "y" in specs
@@ -37,11 +41,13 @@ def test_delete_detection_and_rendered_fallback():
 
 def test_non_literal_return_binds_to_local_and_returns_local():
     module = cst.parse_module("x = 0\n")
-    cls_info = type('CI', (), {})()
+    cls_info = type("CI", (), {})()
     # non-literal value: Call expression
-    cls_info.setup_assignments = {"a": [cst.parse_expression("make()")]} 
+    cls_info.setup_assignments = {"a": [cst.parse_expression("make()")]}
     cls_info.teardown_statements = []
-    out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=False)
+    out = CollectorOutput(
+        module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=False
+    )
     res = generator.generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
@@ -54,7 +60,7 @@ def test_non_literal_return_binds_to_local_and_returns_local():
 
 
 def test_pipeline_integration_basic_flow():
-    src = '''
+    src = """
 class C:
     def setUp(self):
         self.x = 1
@@ -64,7 +70,7 @@ class C:
 
     def test_it(self):
         self.assertEqual(self.x, 1)
-'''
+"""
     module = cst.parse_module(src)
     # Collector: use MetadataWrapper and Collector visitor
     wrapper = cst.MetadataWrapper(module)
@@ -75,13 +81,17 @@ class C:
     gen_res = generator.generator_stage({"collector_output": out, "module": module})
     fixture_nodes = gen_res.get("fixture_nodes") or []
     # inject fixtures
-    inj_res = fixture_injector.fixture_injector_stage({"module": module, "fixture_nodes": fixture_nodes, "collector_output": out})
+    inj_res = fixture_injector.fixture_injector_stage(
+        {"module": module, "fixture_nodes": fixture_nodes, "collector_output": out}
+    )
     mod2 = inj_res.get("module")
     # rewrite asserts
     rewrite_res = assertion_rewriter.assertion_rewriter_stage({"module": mod2})
     mod3 = rewrite_res.get("module")
     # import injector
-    import_res = import_injector.import_injector_stage({"module": mod3, "needs_pytest_import": rewrite_res.get("needs_pytest_import", False)})
+    import_res = import_injector.import_injector_stage(
+        {"module": mod3, "needs_pytest_import": rewrite_res.get("needs_pytest_import", False)}
+    )
     final = import_res.get("module")
     code = final.code
     assert "import pytest" in code

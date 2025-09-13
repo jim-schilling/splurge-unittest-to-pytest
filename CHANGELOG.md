@@ -5,8 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2025.0.5] - 2025-09-13
 
-## [Unreleased]
+### Added
+- Strict mode (compat disabled) for pure pytest output
+  - `--no-compat` drops unittest classes and lifecycle methods and emits only
+    top-level pytest tests and fixtures
+  - No autouse `_attach_to_instance` fixture in strict mode
+  - Documented in `docs/README-DETAILS.md` with CLI and API examples
+- New unit test `tests/unit/test_cli_strict_mode.py` to lock strict mode behavior
+
+### Changed
+- CLI default and help: CLI now advertises strict/no-compat as the default output (use `--compat` to preserve legacy compatibility behavior).
+- Fixture injection: no-compat (strict) output now inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Compat behavior preserves the previous single-empty-line spacing.
+
+### Fixed
+- CLI dry-run verbose reporting: when a file already imports `pytest`, dry-run verbose now reports "No changes needed" (avoids noisy diffs for already-converted files).
+- Fixture autouse placement: ensure the autouse `_attach_to_instance` fixture (compat mode) is inserted after injected fixtures so golden comparisons and emitted code are stable.
+- Added unit test `tests/unit/test_fixture_spacing.py` to assert compat vs no-compat spacing behavior.
+
+### Changed
+- Compat flag now propagates through the staged pipeline so all stages can make
+  decisions deterministically
+- Autouse attachment fixture is injected only when `compat=True`; no longer
+  injected when `compat=False`
+- Fixtures stage honors compat mode:
+  - In compat mode, classes and lifecycle methods are retained for backwards
+    compatibility and tests remain runnable; top-level wrappers also generated
+  - In strict mode, classes/lifecycle methods are dropped and test methods are
+    emitted as top-level pytest tests that accept fixtures
+- CLI help text updated to clearly explain `--compat/--no-compat` semantics
+
+### Fixed
+- Guard self-referential placeholder fixtures (e.g., `schema_file`) to avoid
+  silently broken outputs; a clear `RuntimeError` is raised with guidance
+- Minor placement/spacing robustness during fixture injection under both modes
+
+### Docs
+- Extended `docs/README-DETAILS.md` with a dedicated strict mode section,
+  examples, and guidance on when to use compat vs strict
+
+
+## [2025.0.4] - 2025-09-12
 
 - Diagnostics: opt-in diagnostics snapshotting and helper
   - Added `SPLURGE_ENABLE_DIAGNOSTICS` to opt in to per-run diagnostics snapshots.
@@ -19,10 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CI workflow `.github/workflows/upload-diagnostics.yml` now sets a workspace-local
     diagnostics root and uploads the diagnostics directory as an artifact. A debug
     step was added to print the diagnostics root path in job logs for easier troubleshooting.
-
-
-
-## [2025.0.4] - 2025-09-12
 
 - Internal: consolidate small helpers into `converter/helpers`
   - Moved small helper implementations (normalization, parsing, change-detection,

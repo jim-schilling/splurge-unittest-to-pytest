@@ -10,7 +10,7 @@ def make_fixture(name: str) -> cst.FunctionDef:
 
 
 def test_tidy_inserts_emptyline_after_fixtures() -> None:
-    src = 'import pytest\n\n'
+    src = "import pytest\n\n"
     module = cst.parse_module(src)
     fixtures: list[cst.FunctionDef] = [make_fixture("a"), make_fixture("b")]
     # create module with fixtures followed by class
@@ -53,7 +53,9 @@ def test_tidy_keeps_existing_params_on_test_methods() -> None:
     new_mod = cast(cst.Module, res.get("module"))
     cls = next((s for s in new_mod.body if isinstance(s, cst.ClassDef) and s.name.value == "C"), None)
     assert isinstance(cls, cst.ClassDef)
-    func = next((m for m in cls.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_with_param"), None)
+    func = next(
+        (m for m in cls.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_with_param"), None
+    )
     assert isinstance(func, cst.FunctionDef)
     # original param should be preserved
     assert len(func.params.params) == 1

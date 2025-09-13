@@ -66,13 +66,13 @@ def test_fixture_creation_delegation_simple_and_attribute() -> None:
     assert isinstance(fx2, cst.FunctionDef)
 
 
-
 def test_remove_self_references_simple_attribute():
     t = UnittestToPytestTransformer(compat=False)
     node = cst.parse_expression("self.value")
     new_node = t._remove_self_references(node)
     # result should be the attribute name only (Name 'value')
     from libcst import Name
+
     assert isinstance(new_node, Name)
     assert new_node.value == "value"
 
@@ -106,6 +106,7 @@ def test_convert_setup_to_fixture_creates_assignments_and_fixtures():
     # call internal converter that should record assignments and create fixtures
     result = t._convert_setup_to_fixture(func)
     from libcst import RemovalSentinel
+
     assert result is RemovalSentinel.REMOVE
     # assignments and fixtures should be populated for attribute 'x'
     assert "x" in t.setup_assignments

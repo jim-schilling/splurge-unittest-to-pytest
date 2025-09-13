@@ -8,6 +8,7 @@ from splurge_unittest_to_pytest.converter.method_params import (
 
 def _parse_func(src: str) -> cst.FunctionDef:
     mod = cst.parse_module(src)
+
     class Finder(cst.CSTVisitor):
         def __init__(self) -> None:
             self.found: cst.FunctionDef | None = None
@@ -41,6 +42,6 @@ def test_should_remove_for_classmethod():
 def test_remove_method_self_references_removes_param_and_references():
     fn = _parse_func("def test(self):\n    self.x = 1\n    return self.x")
     new_params, new_body = remove_method_self_references(fn)
-    assert all(p.name.value != 'self' for p in new_params)
+    assert all(p.name.value != "self" for p in new_params)
     code = cst.Module([]).code_for_node(new_body)
-    assert 'self' not in code
+    assert "self" not in code

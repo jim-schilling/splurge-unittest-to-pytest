@@ -1,4 +1,5 @@
 """Helpers to build and insert the autouse attachment fixture for unittest compatibility."""
+
 from typing import Any, Dict, List
 
 import libcst as cst
@@ -18,11 +19,14 @@ def build_attach_to_instance_fixture(setup_fixtures: Dict[str, cst.FunctionDef])
         body=[
             cst.Assign(
                 targets=[cst.AssignTarget(target=cst.Name("inst"))],
-                value=cst.Call(func=cst.Name("getattr"), args=[
-                    cst.Arg(value=cst.Name("request")),
-                    cst.Arg(value=cst.SimpleString("'instance'")),
-                    cst.Arg(value=cst.Name("None")),
-                ])
+                value=cst.Call(
+                    func=cst.Name("getattr"),
+                    args=[
+                        cst.Arg(value=cst.Name("request")),
+                        cst.Arg(value=cst.SimpleString("'instance'")),
+                        cst.Arg(value=cst.Name("None")),
+                    ],
+                ),
             )
         ]
     )
@@ -49,7 +53,9 @@ def build_attach_to_instance_fixture(setup_fixtures: Dict[str, cst.FunctionDef])
 
     if_block = cst.IndentedBlock(body=set_calls)
     if_stmt = cst.If(
-        test=cst.Comparison(left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]),
+        test=cst.Comparison(
+            left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]
+        ),
         body=if_block,
     )
 

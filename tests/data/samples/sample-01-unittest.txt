@@ -1,0 +1,21 @@
+import unittest
+import tempfile
+import shutil
+from pathlib import Path
+
+class TestFileOperations(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.test_file = Path(self.temp_dir) / "test.txt"
+        
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        
+    def test_file_creation(self):
+        self.test_file.write_text("Hello World")
+        self.assertTrue(self.test_file.exists())
+        
+    def test_file_content(self):
+        content = "Test content"
+        self.test_file.write_text(content)
+        self.assertEqual(self.test_file.read_text(), content)

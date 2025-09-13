@@ -65,24 +65,39 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.has_unittest_content = False
         self.imports_to_remove: list[str] = []
         self.imports_to_add: list[str] = []
-        
+        # names bound by `with ... as NAME` for assertRaises conversions
+        # (used to rewrite NAME.exception -> NAME.value after module transforms)
+        self._exception_var_names: set[str] = set()
+
         # Track fixtures created from setUp methods
         self.setup_fixtures: dict[str, cst.FunctionDef] = {}
         self.teardown_cleanup: dict[str, list[cst.BaseStatement]] = {}
         self.setup_assignments: dict[str, cst.BaseExpression] = {}
-        
+
         # Configurable method name patterns
         self._setup_patterns = {
-            "setup", "setUp", "set_up", "setup_method", "setUp_method",
-            "before_each", "beforeEach", "before_test", "beforeTest"
+            "setup",
+            "setUp",
+            "set_up",
+            "setup_method",
+            "setUp_method",
+            "before_each",
+            "beforeEach",
+            "before_test",
+            "beforeTest",
         }
         self._teardown_patterns = {
-            "teardown", "tearDown", "tear_down", "teardown_method", "tearDown_method",
-            "after_each", "afterEach", "after_test", "afterTest"
+            "teardown",
+            "tearDown",
+            "tear_down",
+            "teardown_method",
+            "tearDown_method",
+            "after_each",
+            "afterEach",
+            "after_test",
+            "afterTest",
         }
-        self._test_patterns = {
-            "test_", "test", "should_", "when_", "given_", "it_", "spec_"
-        }
+        self._test_patterns = {"test_", "test", "should_", "when_", "given_", "it_", "spec_"}
 
     @property
     def setup_patterns(self) -> set[str]:
@@ -101,7 +116,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def add_setup_pattern(self, pattern: str) -> None:
         """Add a new setup method name pattern.
-        
+
         Args:
             pattern: The pattern to add (e.g., "before_all", "setup_class")
         """
@@ -111,7 +126,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def add_teardown_pattern(self, pattern: str) -> None:
         """Add a new teardown method name pattern.
-        
+
         Args:
             pattern: The pattern to add (e.g., "after_all", "teardown_class")
         """
@@ -121,7 +136,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def add_test_pattern(self, pattern: str) -> None:
         """Add a new test method name pattern.
-        
+
         Args:
             pattern: The pattern to add (e.g., "describe_", "context_")
         """
@@ -141,9 +156,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         except (AttributeError, TypeError, ValueError):
             return original_node
 
-    def leave_Import(
-        self, original_node: cst.Import, updated_node: cst.Import
-    ) -> cst.Import | cst.RemovalSentinel:
+    def leave_Import(self, original_node: cst.Import, updated_node: cst.Import) -> cst.Import | cst.RemovalSentinel:
         """Handle import statements."""
         try:
             result = remove_unittest_import(updated_node)
@@ -153,9 +166,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         except (AttributeError, TypeError, ValueError):
             return original_node
 
-    def leave_ClassDef(
-        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
-    ) -> cst.ClassDef:
+    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
         """Remove unittest.TestCase inheritance and convert class structure."""
         try:
             if updated_node.bases:
@@ -163,7 +174,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 has_unittest_base = any(self._is_unittest_testcase(base) for base in updated_node.bases)
                 if has_unittest_base:
                     self.has_unittest_content = True
-                
+
                 # Filter out unittest.TestCase inheritance
                 from .converter.class_checks import remove_unittest_bases
 
@@ -177,7 +188,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         except (AttributeError, TypeError, ValueError):
             return original_node
 
-        return updated_node        
+        return updated_node
 
     def _should_remove_first_param(self, node: cst.FunctionDef) -> bool:
         """Delegate to helper for first-parameter removal logic."""
@@ -195,7 +206,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Convert setUp/tearDown methods to pytest fixtures and remove self from test methods."""
         try:
             method_name = updated_node.name.value
-            
+
             if self._is_setup_method(method_name):
                 # Convert setup method to individual pytest fixtures
                 return self._convert_setup_to_fixture(updated_node)
@@ -205,28 +216,28 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             elif self._is_test_method(method_name) and self.has_unittest_content:
                 # Only remove self/cls parameter from test methods if converting unittest content
                 new_params, new_body = self._remove_method_self_references(updated_node)
-                
+
                 # Add fixture parameters to test methods
                 fixture_params = self._get_fixture_params_for_test_method()
                 if fixture_params:
                     # Create parameter objects for fixtures
                     # Combine existing params (excluding self) with fixture params
-                    all_params = append_fixture_params(updated_node.params.with_changes(params=new_params), fixture_params).params
+                    all_params = append_fixture_params(
+                        updated_node.params.with_changes(params=new_params), fixture_params
+                    ).params
                 else:
                     all_params = new_params
-                
+
                 return updated_node.with_changes(
                     params=updated_node.params.with_changes(params=all_params),
                     body=new_body,
                 )
         except (AttributeError, TypeError, ValueError):
             return original_node
-        
+
         return updated_node
 
-    def leave_Call(
-        self, original_node: cst.Call, updated_node: cst.Call
-    ) -> cst.BaseExpression:
+    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
         """Handle call expressions."""
         return updated_node
 
@@ -241,12 +252,10 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     return conversion_result
         except (AttributeError, TypeError, ValueError):
             return original_node
-        
+
         return updated_node
 
-    def leave_With(
-        self, original_node: cst.With, updated_node: cst.With
-    ) -> cst.With:
+    def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
         """Convert unittest assertRaises context managers to pytest.raises."""
         try:
             new_with, needs = convert_assert_raises_with(updated_node)
@@ -254,21 +263,30 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 # propagate import requirement to transformer state
                 if needs:
                     self.needs_pytest_import = True
+                # if original had an `as NAME` binding, record the name so
+                # we can perform a scope-aware rewrite of NAME.exception -> NAME.value
+                try:
+                    # look at the original_node first (pre-conversion) for asname
+                    first = original_node.items[0]
+                    asname = getattr(first, "asname", None)
+                    if asname and isinstance(asname.name, cst.Name):
+                        self._exception_var_names.add(asname.name.value)
+                except Exception:
+                    pass
+
                 return new_with
         except (AttributeError, TypeError, ValueError):
             return original_node
-        
+
         return updated_node
 
-    def leave_Module(
-        self, original_node: cst.Module, updated_node: cst.Module
-    ) -> cst.Module:
+    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
         """Add necessary imports and fixtures at module level."""
         try:
             # Add pytest import if needed
             if self.needs_pytest_import:
                 updated_node = self._add_pytest_import(updated_node)
-            
+
             # Create fixtures from stored setUp assignments (if not already created)
             if self.setup_assignments and not self.setup_fixtures:
                 self._create_fixtures_from_setup_assignments()
@@ -278,12 +296,111 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
             # Add autouse fixture to attach fixture values to unittest-style test instances
             updated_node = self._add_autouse_instance_attachment_fixture(updated_node)
-                
+
+            # Remove common unittest main guards to avoid executing tests when
+            # the converted module is imported by pytest (e.g., if __name__ == '__main__')
+            updated_node = self._remove_unittest_main_guard(updated_node)
+            # If we recorded any exception variable names from assertRaises
+            # context-manager conversions, run a scope-aware attribute rewrite
+            # pass to update NAME.exception -> NAME.value while respecting
+            # lexical shadowing. Use the existing RaisesRewriter stage logic
+            # for correct scoping behavior.
+            if self._exception_var_names:
+                try:
+                    # import here to avoid circular imports at module import time
+                    from .stages.raises_stage import RaisesRewriter
+
+                    rewriter = RaisesRewriter()
+                    # pre-seed the rewriter with the recorded names so it will
+                    # perform attribute rewrites while still performing proper
+                    # scope tracking for shadowed names.
+                    rewriter._exception_var_names = set(self._exception_var_names)
+                    updated_node = updated_node.visit(rewriter)
+                except Exception:
+                    # be conservative: if the rewriter fails for any reason,
+                    # don't break conversion; keep original updated_node
+                    pass
+
         except (AttributeError, TypeError, ValueError, cst.ParserSyntaxError):
             # If processing fails due to node shape or parse issues, return original node unchanged
             return original_node
-        
+
         return updated_node
+
+    def _remove_unittest_main_guard(self, module_node: cst.Module) -> cst.Module:
+        """Remove top-level `if __name__ == '__main__': unittest.main()` guards.
+
+        This is a conservative pass that strips If statements at module level
+        whose test is a comparison of __name__ == '__main__' and whose body
+        calls unittest.main(). Removing these prevents accidental test runs
+        when pytest imports converted modules.
+        """
+
+        def _is_main_test(node: cst.BaseExpression) -> bool:
+            # Accept Comparison nodes where left is __name__ and any comparator
+            # equals the literal '__main__' (allow single/double quotes)
+            if isinstance(node, cst.Comparison) and isinstance(node.left, cst.Name) and node.left.value == "__name__":
+                for comp in getattr(node, "comparisons", []):
+                    comparator = getattr(comp, "comparator", None)
+                    if isinstance(comparator, cst.SimpleString):
+                        sval = comparator.value.strip("\"'")
+                        if sval == "__main__":
+                            return True
+                    # Some AST shapes may yield a Name node (rare); accept name '__main__'
+                    if isinstance(comparator, cst.Name) and comparator.value == "__main__":
+                        return True
+            return False
+
+        def _body_calls_main(stmt_block: cst.BaseSuite) -> bool:
+            # Inspect statements in the block for calls to functions named 'main'
+            stmts = getattr(stmt_block, "body", [])
+            for s in stmts:
+                # unwrap simple statement lines
+                if isinstance(s, cst.SimpleStatementLine) and s.body:
+                    first = s.body[0]
+                    # Expr(Call(...)) or Assign where value is a Call
+                    call_node = None
+                    if isinstance(first, cst.Expr) and isinstance(first.value, cst.Call):
+                        call_node = first.value
+                    elif isinstance(first, cst.Assign) and isinstance(first.value, cst.Call):
+                        call_node = first.value
+                    if call_node is not None:
+                        func = call_node.func
+                        # Patterns: unittest.main(...), main(...), sys.exit(unittest.main())
+                        # Direct main call
+                        if isinstance(func, cst.Name) and func.value == "main":
+                            return True
+                        if isinstance(func, cst.Attribute):
+                            # attr like unittest.main or sys.exit
+                            if (
+                                getattr(func, "attr", None)
+                                and isinstance(func.attr, cst.Name)
+                                and func.attr.value == "main"
+                            ):
+                                return True
+                # If statement nested inside the block, also inspect recursively
+                if isinstance(s, cst.If):
+                    if _body_calls_main(s.body):
+                        return True
+            return False
+
+        new_body: list[cst.BaseStatement] = []
+        changed = False
+        for stmt in module_node.body:
+            try:
+                if isinstance(stmt, cst.If):
+                    if _is_main_test(stmt.test) and _body_calls_main(stmt.body):
+                        # drop this If entirely
+                        changed = True
+                        continue
+                new_body.append(stmt)
+            except Exception:
+                # on unexpected shapes, preserve statement
+                new_body.append(stmt)
+
+        if not changed:
+            return module_node
+        return module_node.with_changes(body=new_body)
 
     def _is_unittest_testcase(self, base: cst.Arg) -> bool:
         """Delegate to class_checks helper to detect unittest TestCase bases."""
@@ -305,9 +422,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Delegate to helper that encapsulates matching rules."""
         return _is_test_method_helper(method_name, self._test_patterns)
 
-    def _convert_assertion(
-        self, method_name: str, args: Sequence[cst.Arg]
-    ) -> cst.BaseSmallStatement | None:
+    def _convert_assertion(self, method_name: str, args: Sequence[cst.Arg]) -> cst.BaseSmallStatement | None:
         """Delegate assertion conversion to a pure helper."""
         return convert_assertion(method_name, args)
 
@@ -366,7 +481,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         for attr_name, value_expr in self.setup_assignments.items():
             fixture_node = self._create_fixture_for_attribute(attr_name, value_expr)
             self.setup_fixtures[attr_name] = fixture_node
-        
+
         self.needs_pytest_import = True
 
     def _add_fixtures_to_module(self, module_node: cst.Module) -> cst.Module:
@@ -384,9 +499,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """Check if assertion method should be skipped (handled elsewhere)."""
         return method_name in ("assertRaises", "assertRaisesRegex")
 
-    def _convert_self_assertion_to_pytest(
-        self, call_node: cst.Call
-    ) -> cst.BaseSmallStatement | None:
+    def _convert_self_assertion_to_pytest(self, call_node: cst.Call) -> cst.BaseSmallStatement | None:
         """Convert self.assertion() calls to pytest assertions."""
         try:
             # First try to detect self.method(...) calls
@@ -415,22 +528,22 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _convert_setup_to_fixture(self, node: cst.FunctionDef) -> cst.RemovalSentinel:
         """Convert setUp method by storing assignments and creating fixtures immediately.
-        
+
         Create fixtures immediately after parsing setUp assignments so they're available
         when processing test methods.
         """
         assignments = self._parse_setup_assignments(node)
-        
+
         if not assignments:
             # No assignments found, remove the setUp method
             return cst.RemovalSentinel.REMOVE
-        
+
         # Store assignments for fixture creation
         self.setup_assignments = assignments
-        
+
         # Create fixtures immediately so they're available for test methods
         self._create_fixtures_from_setup_assignments()
-        
+
         # Remove the original setUp method
         return cst.RemovalSentinel.REMOVE
 
@@ -452,7 +565,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
     def _convert_teardown_to_fixture(self, node: cst.FunctionDef) -> cst.RemovalSentinel:
         """Convert tearDown method by integrating cleanup with setup fixtures.
-        
+
         This method processes tearDown and creates/updates fixtures with cleanup.
         """
         # Store the teardown body statements with self references removed
@@ -460,7 +573,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         cleanup_statements = []
         for stmt in node.body.body:
             cleanup_statements.append(stmt.visit(remover))
-        
+
         # If we have setup assignments, create fixtures with cleanup
         if self.setup_assignments:
             self._create_fixtures_with_cleanup(cleanup_statements)
@@ -470,10 +583,10 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             from .converter.teardown_helpers import associate_cleanup_with_fixtures
 
             associate_cleanup_with_fixtures(self.teardown_cleanup, self.setup_fixtures.keys(), cleanup_statements)
-        
+
         # Remove the original tearDown method
         return cst.RemovalSentinel.REMOVE
-    
+
     def _create_fixtures_with_cleanup(self, cleanup_statements: list[Any]) -> None:
         """Create fixtures from setup assignments with tearDown cleanup integration."""
         fixtures, needs = build_fixtures_from_setup_assignments(self.setup_assignments, self.teardown_cleanup)
@@ -481,16 +594,18 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.setup_fixtures.update(fixtures)
         if needs:
             self.needs_pytest_import = True
-    
+
     def _extract_relevant_cleanup(self, cleanup_statements: list[Any], attr_name: str) -> list[Any]:
         """Delegate to pure helper that extracts cleanup statements referencing attr_name."""
         return extract_relevant_cleanup(cleanup_statements, attr_name)
-    
+
     def _references_attribute(self, expr: Any, attr_name: str) -> bool:
         """Delegate to pure helper that checks for attribute references."""
         return references_attribute(expr, attr_name)
-    
-    def _create_fixture_with_cleanup(self, attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]) -> cst.FunctionDef:
+
+    def _create_fixture_with_cleanup(
+        self, attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]
+    ) -> cst.FunctionDef:
         """Create a fixture with yield pattern and cleanup."""
         # Create the @pytest.fixture decorator
         fixture_decorator = build_pytest_fixture_decorator()
@@ -499,7 +614,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         # Create the fixture function using extracted helper
         return create_fixture_function(attr_name, body, fixture_decorator)
-    
+
     def _create_simple_fixture(self, attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
         """Create a simple fixture with return (no cleanup needed)."""
         # Delegate to extracted helper to keep method thin for easier testing

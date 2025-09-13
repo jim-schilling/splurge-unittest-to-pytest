@@ -34,4 +34,4 @@ def test_stage_manager_runs_collector() -> None:
     ctx: dict = mgr.run(module)
     assert "collector_output" in ctx
     co = ctx["collector_output"]
-    assert 'MyTests' in co.classes
+    assert "MyTests" in co.classes

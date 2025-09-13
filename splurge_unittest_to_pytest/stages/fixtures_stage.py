@@ -5,6 +5,7 @@ by the `generator_stage`. It removes the class-level setup/teardown methods and
 updates test method signatures to remove instance/class first params and add
 fixture parameters (one per setup attribute) so tests receive the generated fixtures.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
@@ -84,6 +85,14 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
+    # Determine strict mode from context. When compat is explicitly False,
+    # convert to pure pytest-style by removing setUp/tearDown and dropping
+    # the original unittest classes in favor of generated top-level test
+    # functions. When compat is True (default historical behavior), keep
+    # classes and emit autouse attach fixture to maintain runnable modules.
+    compat_val = context.get("compat", None)
+    strict_pytest_mode = False if (compat_val is None or bool(compat_val)) else True
+
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
             cls_info = classes[stmt.name.value]
@@ -100,15 +109,13 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 mname = member.name.value
                 # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
-                    # Preserve setup/teardown methods on the class so the
-                    # converted module remains runnable by directly instantiating
-                    # the TestCase and calling its lifecycle methods. The
-                    # pipeline also generates fixtures/autouse attach helpers
-                    # to make pytest runs work; keeping the original methods
-                    # avoids surprising AttributeError when test code invokes
-                    # setUp/tearDown manually (integration tests rely on this).
-                    new_class_body.append(member)
-                    continue
+                    # In strict mode, drop setUp/tearDown entirely
+                    if strict_pytest_mode:
+                        continue
+                    else:
+                        # Preserve in compat mode for back-compat runnability
+                        new_class_body.append(member)
+                        continue
 
                 # update test functions discovered by collector or named with test* prefix
                 if mname.startswith("test") or member in cls_info.test_methods:
@@ -124,15 +131,19 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
                         # Use the original node saved in the collector to detect
                         # unittest.TestCase inheritance.
-                        node = getattr(class_info, 'node', None)
+                        node = getattr(class_info, "node", None)
                         if node is None:
                             return False
-                        for base in getattr(node, 'bases', []) or []:
-                            bval = getattr(base, 'value', base)
+                        for base in getattr(node, "bases", []) or []:
+                            bval = getattr(base, "value", base)
                             if isinstance(bval, cst.Attribute):
-                                if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                                if (
+                                    isinstance(bval.value, cst.Name)
+                                    and bval.value.value == "unittest"
+                                    and getattr(bval.attr, "value", "") == "TestCase"
+                                ):
                                     return True
-                            if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                            if isinstance(bval, cst.Name) and bval.value == "TestCase":
                                 return True
                         return False
 
@@ -140,14 +151,18 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # converted module remains runnable by default. The
                     # autouse attach fixture will ensure pytest runs still
                     # receive fixture values via request.getfixturevalue.
-                    updated_fn = _update_test_function(member, fixture_names, remove_first=False)
+                    # In strict mode, convert to plain functions (remove first param and add fixtures)
+                    updated_fn = _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
                     # Ensure one blank line between methods inside the class
                     if new_class_body:
                         last = new_class_body[-1]
                         # If the last appended element is not an EmptyLine, insert one
                         if not isinstance(last, cst.EmptyLine):
                             new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                    new_class_body.append(updated_fn)
+                    # Retain updated method only in compat mode; in strict mode we will
+                    # drop the class and rely on top-level functions.
+                    if not strict_pytest_mode:
+                        new_class_body.append(updated_fn)
                     continue
 
                 # otherwise retain the member unchanged
@@ -158,8 +173,10 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                         new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                 new_class_body.append(member)
 
-            new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
-            new_body.append(new_class)
+            # Emit class only in compat mode; strict mode drops the class entirely
+            if not strict_pytest_mode:
+                new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
+                new_body.append(new_class)
             # Create top-level pytest functions for each test method when the
             # class originally inherited from unittest.TestCase. These functions
             # accept fixture parameters and contain a rewritten body where
@@ -169,15 +186,19 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
             cls_original = cls_info
 
             def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
-                node = getattr(class_info, 'node', None)
+                node = getattr(class_info, "node", None)
                 if node is None:
                     return False
-                for base in getattr(node, 'bases', []) or []:
-                    bval = getattr(base, 'value', base)
+                for base in getattr(node, "bases", []) or []:
+                    bval = getattr(base, "value", base)
                     if isinstance(bval, cst.Attribute):
-                        if isinstance(bval.value, cst.Name) and bval.value.value == 'unittest' and getattr(bval.attr, 'value', '') == 'TestCase':
+                        if (
+                            isinstance(bval.value, cst.Name)
+                            and bval.value.value == "unittest"
+                            and getattr(bval.attr, "value", "") == "TestCase"
+                        ):
                             return True
-                    if isinstance(bval, cst.Name) and bval.value == 'TestCase':
+                    if isinstance(bval, cst.Name) and bval.value == "TestCase":
                         return True
                 return False
 
@@ -186,14 +207,20 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     if not isinstance(member, cst.FunctionDef):
                         continue
                     mname = member.name.value
-                    if not (mname.startswith('test') or member in cls_info.test_methods):
+                    if not (mname.startswith("test") or member in cls_info.test_methods):
                         continue
 
                     # rewrite `self.attr` -> `attr` in the member body for the
                     # top-level function variant
                     class _SelfAttrRewriter(cst.CSTTransformer):
-                        def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
-                            if isinstance(original.value, cst.Name) and original.value.value == 'self' and isinstance(original.attr, cst.Name):
+                        def leave_Attribute(
+                            self, original: cst.Attribute, updated: cst.Attribute
+                        ) -> cst.BaseExpression:
+                            if (
+                                isinstance(original.value, cst.Name)
+                                and original.value.value == "self"
+                                and isinstance(original.attr, cst.Name)
+                            ):
                                 return cst.Name(original.attr.value)
                             return updated
 
@@ -204,7 +231,9 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     params = cst.Parameters(params=params_list)
 
                     # create top-level test function using the rewritten body
-                    top_fn = cst.FunctionDef(name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[])
+                    top_fn = cst.FunctionDef(
+                        name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[]
+                    )
                     new_body.append(top_fn)
         else:
             new_body.append(stmt)

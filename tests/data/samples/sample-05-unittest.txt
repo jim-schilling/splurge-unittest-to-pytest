@@ -1,0 +1,37 @@
+import unittest
+from parameterized import parameterized
+
+class TestMathOperations(unittest.TestCase):
+    
+    @parameterized.expand([
+        (2, 3, 5),
+        (10, 5, 15),
+        (-1, 1, 0),
+        (0, 0, 0),
+        (100, 200, 300)
+    ])
+    def test_addition(self, a, b, expected):
+        result = a + b
+        self.assertEqual(result, expected)
+        
+    @parameterized.expand([
+        ("hello", "hello", True),
+        ("Hello", "hello", False),
+        ("", "", True),
+        ("test", "TEST", False),
+        ("abc", "abc", True)
+    ])
+    def test_string_equality(self, str1, str2, expected):
+        result = str1 == str2
+        self.assertEqual(result, expected)
+        
+    @parameterized.expand([
+        ([1, 2, 3], 3, 6),
+        ([10], 1, 10),
+        ([], 0, 0),
+        ([5, 5, 5], 3, 15),
+        ([-1, -2, -3], 3, -6)
+    ])
+    def test_list_operations(self, input_list, expected_len, expected_sum):
+        self.assertEqual(len(input_list), expected_len)
+        self.assertEqual(sum(input_list), expected_sum)

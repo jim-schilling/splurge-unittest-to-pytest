@@ -4,6 +4,7 @@ These helpers are pure functions (avoid touching transformer instance state)
 so they can be moved and tested independently. Instance methods in the
 transformer will delegate to these functions.
 """
+
 from __future__ import annotations
 
 from typing import Sequence, List, Callable
@@ -18,9 +19,7 @@ def _assert_equal(args: Sequence[cst.Arg]) -> cst.Assert:
             return cst.Assert(
                 test=cst.Comparison(
                     left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)
-                    ],
+                    comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=args[1].value)],
                 )
             )
     except (AttributeError, TypeError, ValueError):
@@ -35,9 +34,7 @@ def _assert_not_equal(args: Sequence[cst.Arg]) -> cst.Assert:
             return cst.Assert(
                 test=cst.Comparison(
                     left=args[0].value,
-                    comparisons=[
-                        cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)
-                    ],
+                    comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=args[1].value)],
                 )
             )
     except (AttributeError, TypeError, ValueError):
@@ -79,9 +76,7 @@ def _assert_is_none(args: Sequence[cst.Arg]) -> cst.Assert | None:
         return cst.Assert(
             test=cst.Comparison(
                 left=left_expr,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name("None"))],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -94,9 +89,7 @@ def _assert_is_not_none(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=left_expr,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -108,9 +101,7 @@ def _assert_in(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -122,9 +113,7 @@ def _assert_not_in(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.NotIn(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -151,9 +140,7 @@ def _assert_greater(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -164,9 +151,7 @@ def _assert_greater_equal(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -177,9 +162,7 @@ def _assert_less(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))
@@ -190,9 +173,7 @@ def _assert_less_equal(args: Sequence[cst.Arg]) -> cst.Assert:
         return cst.Assert(
             test=cst.Comparison(
                 left=args[0].value,
-                comparisons=[
-                    cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)
-                ],
+                comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=args[1].value)],
             )
         )
     return cst.Assert(test=cst.Name("False"))

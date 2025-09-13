@@ -19,7 +19,7 @@ def test_import_injector_inserts_pytest_after_docstring() -> None:
             expr = s.body[0]
             if isinstance(expr, cst.Import):
                 for n in expr.names:
-                    if getattr(n.name, 'value', None) == "pytest":
+                    if getattr(n.name, "value", None) == "pytest":
                         found = True
                         break
         if found:
@@ -39,7 +39,7 @@ def test_import_injector_respects_needs_flags() -> None:
             expr = s.body[0]
             if isinstance(expr, cst.Import):
                 for n in expr.names:
-                    if getattr(n.name, 'value', None) == "re":
+                    if getattr(n.name, "value", None) == "re":
                         found_re = True
                         break
         if found_re:

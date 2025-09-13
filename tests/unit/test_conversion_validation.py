@@ -16,16 +16,16 @@ def _is_fixture_node(node: ast.AST) -> bool:
     for dec in node.decorator_list:
         # decorator can be ast.Attribute (pytest.fixture) or ast.Name (fixture)
         # Support both @pytest.fixture and @pytest.fixture(autouse=True) forms
-        if isinstance(dec, ast.Attribute) and getattr(dec, 'attr', '') == 'fixture':
+        if isinstance(dec, ast.Attribute) and getattr(dec, "attr", "") == "fixture":
             return True
-        if isinstance(dec, ast.Name) and getattr(dec, 'id', '') == 'fixture':
+        if isinstance(dec, ast.Name) and getattr(dec, "id", "") == "fixture":
             return True
         # decorator can also be an ast.Call where the func is an Attribute or Name
         if isinstance(dec, ast.Call):
             fn = dec.func
-            if isinstance(fn, ast.Attribute) and getattr(fn, 'attr', '') == 'fixture':
+            if isinstance(fn, ast.Attribute) and getattr(fn, "attr", "") == "fixture":
                 return True
-            if isinstance(fn, ast.Name) and getattr(fn, 'id', '') == 'fixture':
+            if isinstance(fn, ast.Name) and getattr(fn, "id", "") == "fixture":
                 return True
     return False
 
@@ -68,9 +68,7 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
 
     if first_fixture_idx is not None:
         # All imports must come before fixtures
-        assert last_import_idx < first_fixture_idx, (
-            "Found pytest fixtures before import statements in converted code."
-        )
+        assert last_import_idx < first_fixture_idx, "Found pytest fixtures before import statements in converted code."
 
     # Ensure no class contains leftover unittest methods unless a compatibility
     # autouse attach fixture or pytest fixtures are present. When the
@@ -79,7 +77,7 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
     # a module-level autouse fixture named _attach_to_instance) or regular
     # pytest fixtures. We'll accept preserved lifecycle methods only when
     # such compatibility is present.
-    top_level_names = {getattr(n, 'name', None) for n in body if isinstance(n, ast.FunctionDef)}
+    top_level_names = {getattr(n, "name", None) for n in body if isinstance(n, ast.FunctionDef)}
     has_attach_fixture = "_attach_to_instance" in top_level_names
 
     for node in ast.walk(mod):
@@ -87,4 +85,6 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
             for member in node.body:
                 if isinstance(member, ast.FunctionDef) and member.name in ("setUp", "tearDown"):
                     if not has_attach_fixture:
-                        pytest.fail(f"Found leftover unittest method '{member.name}' in class '{node.name}' without compatibility fixtures present")
+                        pytest.fail(
+                            f"Found leftover unittest method '{member.name}' in class '{node.name}' without compatibility fixtures present"
+                        )

@@ -30,7 +30,6 @@ def test_replace_self_attribute_in_assign():
     assert "foo =" in code
 
 
-
 def test_replace_attr_references_replaces_name_and_attribute():
     src = """foo = bar\ninst = self.baz\n"""
     module = cst.parse_module(src)
@@ -40,7 +39,6 @@ def test_replace_attr_references_replaces_name_and_attribute():
     code = mod.code
     assert "_baz_value" in code
     assert "self.baz" not in code
-
 
 
 def _parse_stmt(src: str) -> cst.BaseStatement:

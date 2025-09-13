@@ -23,11 +23,24 @@ def test_generator_stage_minimal_integration():
     # Build a fake CollectorOutput with one class and a simple setup/teardown
     module = cst.parse_module("x = 0\n")
     cls_info = ClassInfo(node=cst.ClassDef(name=cst.Name("C"), body=cst.IndentedBlock(body=[])))
-        # simulate setup assignment self.a = 1 (we set setup_assignments directly)
+    # simulate setup assignment self.a = 1 (we set setup_assignments directly)
     cls_info.setup_assignments = {"a": [cst.Integer("1")]}
-    cls_info.teardown_statements = [cst.SimpleStatementLine(body=[cst.Expr(cst.Call(func=cst.Name("del"), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("a")))]))])]
+    cls_info.teardown_statements = [
+        cst.SimpleStatementLine(
+            body=[
+                cst.Expr(
+                    cst.Call(
+                        func=cst.Name("del"),
+                        args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("a")))],
+                    )
+                )
+            ]
+        )
+    ]
 
-    out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True)
+    out = CollectorOutput(
+        module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
+    )
     ctx = {"collector_output": out, "module": module}
     res = generator.generator_stage(ctx)
     assert "fixture_specs" in res

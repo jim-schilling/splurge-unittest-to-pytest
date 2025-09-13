@@ -17,7 +17,7 @@ def _cleanup_mgr_dir(mgr: StageManager) -> None:
 
 
 def test_leave_ClassDef_removes_unittest_base_and_preserves_non_unittest():
-    src = '''
+    src = """
 import unittest
 
 class MyTest(unittest.TestCase):
@@ -26,7 +26,7 @@ class MyTest(unittest.TestCase):
 
 class Other:
     pass
-'''
+"""
     module = cst.parse_module(src)
     transformer = UnittestToPytestTransformer(compat=False)
     # Run transformer leaves for ClassDef on the parsed tree
@@ -40,14 +40,14 @@ class Other:
 
 
 def test_leave_FunctionDef_converts_setup_to_fixture_and_removes_self_from_tests():
-    src = '''
+    src = """
 class X(unittest.TestCase):
     def setUp(self):
         self.x = 5
 
     def test_something(self):
         assert self.x == 5
-'''
+"""
     module = cst.parse_module(src)
     transformer = UnittestToPytestTransformer(compat=True)
     new_module = module.visit(transformer)
@@ -57,12 +57,12 @@ class X(unittest.TestCase):
 
 
 def test_leave_Module_adds_pytest_import_when_needed():
-    src = '''
+    src = """
 class A(unittest.TestCase):
     def test_one(self):
         with self.assertRaises(ValueError):
             raise ValueError()
-'''
+"""
     module = cst.parse_module(src)
     transformer = UnittestToPytestTransformer(compat=False)
     new_module = module.visit(transformer)
@@ -75,6 +75,7 @@ def test_stage_manager_register_does_not_create_files_when_disabled(monkeypatch)
     monkeypatch.delenv("SPLURGE_ENABLE_DIAGNOSTICS", raising=False)
     mgr = StageManager()
     try:
+
         def stage(ctx: dict):
             return {"ok": True}
 

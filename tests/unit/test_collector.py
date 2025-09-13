@@ -25,10 +25,10 @@ def test_collector_captures_setup_and_teardown() -> None:
     module.visit(visitor)
     out = visitor.as_output()
 
-    assert 'MyTests' in out.classes
-    cls = out.classes['MyTests']
-    assert 'resource' in cls.setup_assignments
-    assert 'count' in cls.setup_assignments
+    assert "MyTests" in out.classes
+    cls = out.classes["MyTests"]
+    assert "resource" in cls.setup_assignments
+    assert "count" in cls.setup_assignments
     # teardown statements captured
     assert len(cls.teardown_statements) == 1
     stmt = cls.teardown_statements[0]

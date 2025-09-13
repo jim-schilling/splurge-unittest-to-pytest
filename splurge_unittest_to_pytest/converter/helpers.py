@@ -7,6 +7,7 @@ simplification refactor. Note: `converter.core` (a prior thin shim) was
 removed to reduce indirection; consumers should import from this module if
 they must access internal helpers.
 """
+
 from __future__ import annotations
 
 import ast
@@ -30,8 +31,8 @@ class SelfReferenceRemover(cst.CSTTransformer):
 
 def normalize_method_name(name: str) -> str:
     """Normalize method name for pattern matching (convert camelCase to snake_case)."""
-    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> List[str]:

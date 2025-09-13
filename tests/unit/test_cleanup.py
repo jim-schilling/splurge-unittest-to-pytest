@@ -19,19 +19,16 @@ def test_extract_relevant_cleanup_call_and_assign():
 
 
 def test_extract_relevant_cleanup_if_block():
-    stmt = cst.parse_statement(
-        "if self.ready:\n    self.conn.close()\nelse:\n    pass"
-    )
+    stmt = cst.parse_statement("if self.ready:\n    self.conn.close()\nelse:\n    pass")
     res = extract_relevant_cleanup([stmt], "conn")
     # Should return the enclosing If node when inner matched
     assert len(res) == 1
     assert isinstance(res[0], cst.If)
 
+
 def test_references_attribute_name_and_attr():
     assert cleanup.references_attribute(cst.Name("foo"), "foo")
-    assert cleanup.references_attribute(
-        cst.Attribute(value=cst.Name("self"), attr=cst.Name("foo")), "foo"
-    )
+    assert cleanup.references_attribute(cst.Attribute(value=cst.Name("self"), attr=cst.Name("foo")), "foo")
 
 
 def test_references_attribute_in_call_args():

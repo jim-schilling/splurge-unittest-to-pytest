@@ -1,0 +1,108 @@
+import pytest
+from typing import List, Dict, Any
+import json
+import re
+
+@pytest.fixture
+def valid_email_pattern() -> re.Pattern[str]:
+    """Regular expression pattern for email validation."""
+    return re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+@pytest.fixture
+def test_users() -> List[Dict[str, Any]]:
+    """Test user data."""
+    return [
+        {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john@example.com",
+            "age": 30,
+            "roles": ["user", "admin"]
+        },
+        {
+            "id": 2,
+            "name": "Jane Smith",
+            "email": "jane@test.org",
+            "age": 25,
+            "roles": ["user"]
+        }
+    ]
+
+def assert_valid_email(email: str, pattern: re.Pattern[str]) -> None:
+    """Custom assertion for email validation."""
+    assert isinstance(email, str)
+    assert pattern.match(email), f"'{email}' is not a valid email address"
+
+def assert_valid_user(user: Dict[str, Any], email_pattern: re.Pattern[str]) -> None:
+    """Custom assertion for user object validation."""
+    required_fields = ['id', 'name', 'email', 'age', 'roles']
+    
+    assert isinstance(user, dict)
+    for field in required_fields:
+        assert field in user, f"User missing required field: {field}"
+        
+    assert isinstance(user['id'], int)
+    assert user['id'] > 0
+    
+    assert isinstance(user['name'], str)
+    assert len(user['name']) > 0
+    
+    assert_valid_email(user['email'], email_pattern)
+    
+    assert isinstance(user['age'], int)
+    assert 0 <= user['age'] <= 150
+    
+    assert isinstance(user['roles'], list)
+    assert len(user['roles']) > 0
+    for role in user['roles']:
+        assert isinstance(role, str)
+
+def assert_users_equal(users1: List[Dict[str, Any]], users2: List[Dict[str, Any]]) -> None:
+    """Custom assertion for comparing user lists."""
+    assert len(users1) == len(users2)
+    
+    # Sort by ID for comparison
+    sorted_users1 = sorted(users1, key=lambda x: x['id'])
+    sorted_users2 = sorted(users2, key=lambda x: x['id'])
+    
+    for user1, user2 in zip(sorted_users1, sorted_users2):
+        assert user1['id'] == user2['id']
+        assert user1['name'] == user2['name']
+        assert user1['email'] == user2['email']
+
+def test_individual_user_validation(
+    test_users: List[Dict[str, Any]], 
+    valid_email_pattern: re.Pattern[str]
+) -> None:
+    """Test individual user validation."""
+    for user in test_users:
+        assert_valid_user(user, valid_email_pattern)
+
+@pytest.mark.parametrize("email", [
+    "test@example.com",
+    "user.name@domain.org",
+    "user+tag@example.co.uk"
+])
+def test_valid_email_validation(email: str, valid_email_pattern: re.Pattern[str]) -> None:
+    """Test valid email validation."""
+    assert_valid_email(email, valid_email_pattern)
+
+@pytest.mark.parametrize("email", [
+    "invalid-email",
+    "@example.com", 
+    "test@",
+    "test..test@example.com"
+])
+def test_invalid_email_validation(email: str, valid_email_pattern: re.Pattern[str]) -> None:
+    """Test invalid email validation."""
+    with pytest.raises(AssertionError):
+        assert_valid_email(email, valid_email_pattern)
+
+def test_user_list_comparison(test_users: List[Dict[str, Any]]) -> None:
+    """Test user list comparison functionality."""
+    users_copy = json.loads(json.dumps(test_users))  # Deep copy
+    assert_users_equal(test_users, users_copy)
+    
+    # Test with different order
+    reversed_users = list(reversed(users_copy))
+    assert_users_equal(test_users, reversed_users)

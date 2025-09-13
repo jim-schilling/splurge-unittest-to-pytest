@@ -9,7 +9,7 @@ def _apply_transformer(src: str) -> str:
 
 
 def test_mock_star_and_aliases_remain_valid():
-    src = '''
+    src = """
 import unittest
 from unittest.mock import *
 import unittest.mock as m
@@ -19,9 +19,13 @@ class X(unittest.TestCase):
     def test(self):
         m = M()
         self.assertIsNotNone(m)
-'''
+"""
     out = _apply_transformer(src)
     # output must be syntactically valid Python
     cst.parse_module(out)
     # ensure we either preserved star import or have module import
-    assert ('from unittest.mock import *' in out) or ('import unittest.mock as mock' in out) or ('import unittest.mock as m' in out)
+    assert (
+        ("from unittest.mock import *" in out)
+        or ("import unittest.mock as mock" in out)
+        or ("import unittest.mock as m" in out)
+    )

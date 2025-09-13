@@ -1,4 +1,5 @@
 """Utilities for analyzing Call nodes."""
+
 from typing import Sequence, Tuple
 
 import libcst as cst

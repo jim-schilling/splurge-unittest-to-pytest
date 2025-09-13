@@ -34,7 +34,10 @@ def test_register_writes_stage_snapshot(monkeypatch, tmp_path):
 
     files = list(mgr._diagnostics_dir.iterdir())
     # Expect multiple files (marker + snapshots)
-    assert any(p.name.endswith("00_initial_input.py") or p.name.endswith("99_final_output.py") or p.suffix == ".py" for p in files)
+    assert any(
+        p.name.endswith("00_initial_input.py") or p.name.endswith("99_final_output.py") or p.suffix == ".py"
+        for p in files
+    )
 
 
 def test_no_diagnostics_when_disabled(monkeypatch):

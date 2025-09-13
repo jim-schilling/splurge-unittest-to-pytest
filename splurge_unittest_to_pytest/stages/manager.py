@@ -4,6 +4,7 @@ This minimal manager supports registering callables that accept and return a
 `context` mapping. The context starts with the `module` (cst.Module) and may be
 extended with stage outputs (e.g., collector_output).
 """
+
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -76,8 +77,19 @@ class StageManager:
 
         self.stages.append(wrapped_stage)
 
-    def run(self, module: cst.Module) -> dict[str, Any]:
+    def run(self, module: cst.Module, initial_context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Run registered stages over `module`.
+
+        An optional `initial_context` dict can be provided to seed the pipeline
+        context (for example configuration flags like 'autocreate'). This is
+        used by the pipeline runner to pass CLI/runtime options into stages.
+        """
         context: dict[str, Any] = {"module": module}
+        if initial_context and isinstance(initial_context, dict):
+            # Merge initial context values (do not override module)
+            for k, v in initial_context.items():
+                if k != "module":
+                    context[k] = v
         for stage in self.stages:
             result = stage(context)
             # allow stages to either mutate context in-place or return a new

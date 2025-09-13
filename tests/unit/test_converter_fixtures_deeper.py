@@ -11,7 +11,9 @@ from splurge_unittest_to_pytest.converter.fixtures import (
 
 def render_node(node: cst.CSTNode) -> str:
     # Helper to render a node inside a module for stable text assertions
-    return cst.Module(body=[node] if isinstance(node, cst.BaseStatement) or isinstance(node, cst.FunctionDef) else [node]).code
+    return cst.Module(
+        body=[node] if isinstance(node, cst.BaseStatement) or isinstance(node, cst.FunctionDef) else [node]
+    ).code
 
 
 def test_create_simple_fixture_renders_return_and_decorator():
@@ -20,20 +22,15 @@ def test_create_simple_fixture_renders_return_and_decorator():
 
     assert "@pytest.fixture" in src
     assert "def myattr()" in src
-    # local value assign and return should use the local name
-    assert "_myattr_value = 'value'" in src
-    assert "return _myattr_value" in src
+    # local value may be emitted as an assignment+return or as a direct return of the literal
+    assert ("_myattr_value = 'value'" in src and "return _myattr_value" in src) or ("return 'value'" in src)
 
 
 def test_create_fixture_with_cleanup_replaces_attribute_in_cleanup():
     # Make a fake cleanup call that references the attribute name
     cleanup_stmts = [
         cst.SimpleStatementLine(
-            body=[
-                cst.Expr(
-                    value=cst.Call(func=cst.Name("cleanup"), args=[cst.Arg(value=cst.Name("the_attr"))])
-                )
-            ]
+            body=[cst.Expr(value=cst.Call(func=cst.Name("cleanup"), args=[cst.Arg(value=cst.Name("the_attr"))]))]
         )
     ]
 
@@ -79,11 +76,7 @@ def test_create_fixture_for_attribute_delegation():
     cleanup_for_a = {
         "a": [
             cst.SimpleStatementLine(
-                body=[
-                    cst.Expr(
-                        value=cst.Call(func=cst.Name("do_cleanup"), args=[cst.Arg(value=cst.Name("a"))])
-                    )
-                ]
+                body=[cst.Expr(value=cst.Call(func=cst.Name("do_cleanup"), args=[cst.Arg(value=cst.Name("a"))]))]
             )
         ]
     }
@@ -95,4 +88,5 @@ def test_create_fixture_for_attribute_delegation():
     # Attribute without cleanup should produce a simple return fixture
     f_b = create_fixture_for_attribute("b", cst.parse_expression("'y'"), {})
     src_b = render_node(f_b)
-    assert "return _b_value" in src_b
+    # may be emitted as direct return or assignment+return
+    assert ("return _b_value" in src_b) or ("return 'y'" in src_b)
