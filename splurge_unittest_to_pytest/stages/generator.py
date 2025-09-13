@@ -13,6 +13,7 @@ from splurge_unittest_to_pytest.converter.fixtures import (
     create_autocreated_file_fixture,
     create_simple_fixture_with_guard,
 )
+from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
 
 
 @dataclass
@@ -384,6 +385,31 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     # read autocreate flag from pipeline context; default to True
     autocreate_flag = bool(context.get("autocreate", True)) if isinstance(context, dict) else True
+
+    # If caller sets 'use_generator_core' in the context we will run a
+    # simplified delegation path that uses the new GeneratorCore. This
+    # enables incremental migration and isolated unit testing without
+    # modifying the legacy complex implementation below.
+    use_core = bool(context.get("use_generator_core", False))
+
+    if use_core:
+        try:
+            core = GeneratorCore()
+        except Exception:
+            core = None
+        if core is not None:
+            # produce a single fixture per recorded setup attribute for
+            # each class in collector output. This simplified behavior is
+            # sufficient for Stage 2 unit tests and maintains a record in
+            # context for downstream stages.
+            for cls_name, cls in out.classes.items():
+                for attr_name, setup_val in getattr(cls, "setup_assignments", {}).items():
+                    local_name = attr_name
+                    fixture_body_src = "    return None" if setup_val is None else f"    return {repr(str(setup_val))}"
+                    emitted = core.make_fixture(local_name, fixture_body_src)
+                    specs[local_name] = FixtureSpec(name=local_name, value_expr=None, cleanup_statements=[], yield_style=False)
+                    fixture_nodes.append(emitted)
+            return {"fixture_specs": specs, "fixture_nodes": fixture_nodes, "typing_needed": all_typing_needed}
 
     for cls_name, cls in out.classes.items():
         # attributes that have been handled by composite fixtures (to skip

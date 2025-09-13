@@ -1,0 +1,2 @@
+def temp_dir():
+    return '"/tmp/foo"'
