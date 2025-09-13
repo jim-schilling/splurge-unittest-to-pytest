@@ -54,7 +54,7 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         """
         # Deprecation: prefer staged pipeline
         warnings.warn(
-            "UnittestToPytestTransformer is deprecated; prefer the staged pipeline (engine='pipeline').",
+            "UnittestToPytestTransformer is deprecated; prefer the staged pipeline implementation.",
             DeprecationWarning,
             stacklevel=2,
         )

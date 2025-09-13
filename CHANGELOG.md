@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New unit test `tests/unit/test_cli_strict_mode.py` to lock strict mode behavior
 
 ### Changed
-- CLI default and help: CLI now advertises strict/no-compat as the default output (use `--compat` to preserve legacy compatibility behavior).
+-- CLI default and help: CLI now advertises strict/no-compat as the default output.
 - Fixture injection: no-compat (strict) output now inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Compat behavior preserves the previous single-empty-line spacing.
 
 ### Fixed

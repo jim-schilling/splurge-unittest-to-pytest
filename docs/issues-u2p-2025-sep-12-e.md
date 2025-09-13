@@ -9,10 +9,14 @@ Summary
 
 This document records a clean-run (run E) where I restored the test tree to `HEAD`, ran the newest `splurge-unittest-to-pytest` with `--no-compat`, executed the converted tests with `pytest`, and captured concrete evidence of any issues.
 
-Commands executed
------------------
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
 
-- Restore tests to HEAD (worktree + index):
+Summary
+
+
+This document records a clean-run (run E) where I restored the test tree to `HEAD`, ran the newest `splurge-unittest-to-pytest` with `--no-compat`, executed the converted tests with `pytest`, and captured concrete evidence of any issues.
 
   git restore --source=HEAD --staged --worktree -- tests/
 

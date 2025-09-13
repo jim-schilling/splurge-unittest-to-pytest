@@ -9,10 +9,14 @@ Summary
 
 This document captures the remediation steps for the latest conversion run (run C). The converter successfully translated the majority of tests, but two converted tests are failing with semantic issues:
 
-- Attribute access to a caught exception uses `cm.exception` (unittest) but should use `cm.value` (pytest ExceptionInfo.value).
-- Converter-produced fixtures for file-like artifacts (`sql_file`, `schema_file`) are self-referential placeholders and must be implemented to create and return actual file paths.
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes remediation work performed prior to that change.
 
-Goals
+Summary
+
+
+This document captures the remediation steps for the latest conversion run (run C). The converter successfully translated the majority of tests, but two converted tests are failing with semantic issues:
 -----
 
 1. Fix the converter so future conversions do not require manual edits for these patterns.

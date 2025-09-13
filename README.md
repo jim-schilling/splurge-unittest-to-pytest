@@ -56,7 +56,8 @@ CLI usage:
 splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 ```
 
-See `--help` for all CLI options.
+The CLI no longer accepts compatibility toggles; it emits strict pytest-style
+output by default. See `--help` for remaining options.
 
 ## Supported conversions (high level)
 

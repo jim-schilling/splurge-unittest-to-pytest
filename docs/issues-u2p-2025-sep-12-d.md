@@ -4,6 +4,10 @@ date: 2025-09-12
 tags: [u2p, unittest-to-pytest, evidence, migration]
 ---
 
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
+
 This file collects concrete evidence from a fresh conversion run (run D) of `splurge-unittest-to-pytest` executed on 2025-09-12. The goal was to revert tests, run the converter (with `--no-compat`), run pytest, and capture failures with exact diffs and snippets.
 
 Commands executed

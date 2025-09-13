@@ -9,10 +9,14 @@ Summary
 
 This document records a second conversion attempt where the `splurge-unittest-to-pytest` converter was run with the `--no-compat` flag (disables the compatibility autouse fixture). The goal was to avoid the converter attaching fixtures to unittest-style instances, and to see whether that resolves earlier issues.
 
-Commands executed
------------------
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
 
-- Revert any previously converted tests to HEAD (left backups in the previous `backups/` location untouched).
+Summary
+
+
+This document records a second conversion attempt where the `splurge-unittest-to-pytest` converter was run with the `--no-compat` flag (disables the compatibility autouse fixture). The goal was to avoid the converter attaching fixtures to unittest-style instances, and to see whether that resolves earlier issues.
 - Run converter (from project root):
 
   source .venv/Scripts/activate && splurge-unittest-to-pytest -r --no-compat -b backups/u2p-2025-09-12-b tests/
