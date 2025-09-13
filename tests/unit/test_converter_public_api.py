@@ -1,5 +1,3 @@
-
-
 from splurge_unittest_to_pytest.main import PatternConfigurator, convert_string
 
 

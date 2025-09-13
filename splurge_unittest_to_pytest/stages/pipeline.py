@@ -6,6 +6,7 @@ from typing import Any
 
 import libcst as cst
 from .collector import Collector
+
 try:
     from .generator_v2 import generator_v2 as generator_stage
 except Exception:

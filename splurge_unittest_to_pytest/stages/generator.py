@@ -412,6 +412,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             # (e.g., config_dir = Path(self.temp_dir) implies temp_dir should be a Path)
             path_wrapper_targets: set[str] = set()
             try:
+
                 def _collect_path_wrapped_attrs(node: Any) -> set[str]:
                     found: set[str] = set()
                     if node is None:
@@ -521,7 +522,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         def __init__(self, mapping: dict[str, str]) -> None:
                             self.mapping = mapping
 
-                        def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+                        def leave_Attribute(
+                            self, original: cst.Attribute, updated: cst.Attribute
+                        ) -> cst.BaseExpression:
                             if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
                                 if isinstance(original.attr, cst.Name):
                                     attrn = original.attr.value
@@ -543,7 +546,10 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                             if isinstance(rewritten_value, cst.Call):
                                 fname = _get_callable_name(rewritten_value.func)
                             if not (isinstance(rewritten_value, cst.Call) and fname and fname.endswith("Path")):
-                                rewritten_value = cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cast(cst.BaseExpression, rewritten_value))])
+                                rewritten_value = cst.Call(
+                                    func=cst.Name("Path"),
+                                    args=[cst.Arg(value=cast(cst.BaseExpression, rewritten_value))],
+                                )
                     except Exception:
                         pass
 
@@ -551,7 +557,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # temp_dir / "config" when we've wrapped temp_dir as
                     # a Path already to avoid double-wrapping.
                     class _CollapsePathCall(cst.CSTTransformer):
-                        def leave_BinaryOperation(self, original: cst.BinaryOperation, updated: cst.BinaryOperation) -> cst.BaseExpression:
+                        def leave_BinaryOperation(
+                            self, original: cst.BinaryOperation, updated: cst.BinaryOperation
+                        ) -> cst.BaseExpression:
                             left = updated.left
                             # check left is Call(Path(...,)) and inner arg is Name
                             if isinstance(left, cst.Call):
@@ -586,9 +594,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             # create yield dict literal mapping string keys to local names
             dict_elements: list[cst.DictElement] = []
             for key, lname in used_names_for_yield:
-                dict_elements.append(
-                    cst.DictElement(key=cst.SimpleString(repr(key)), value=cst.Name(lname))
-                )
+                dict_elements.append(cst.DictElement(key=cst.SimpleString(repr(key)), value=cst.Name(lname)))
             yield_expr = cst.Dict(elements=dict_elements)
 
             # rewrite cleanup statements to refer to local names instead of self.attr
@@ -642,13 +648,17 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             try_yield_block = cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(yield_expr))])])
             finalblock_cst = cst.IndentedBlock(body=safe_cleanup or [])
             # Wrap the finally block in a cst.Finally node (libcst expects a Finally)
-            try_finally = cst.Try(body=try_yield_block, handlers=[], orelse=None, finalbody=cst.Finally(body=finalblock_cst))
+            try_finally = cst.Try(
+                body=try_yield_block, handlers=[], orelse=None, finalbody=cst.Finally(body=finalblock_cst)
+            )
 
             # assemble function body: locals -> optional mkdirs -> try/finally
             body_stmts: list[cst.BaseStatement] = []
             if fixture_name == "temp_dirs":
                 # docstring describing the fixture
-                doc_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.SimpleString('"""Create temporary directory structure."""'))])
+                doc_stmt = cst.SimpleStatementLine(
+                    body=[cst.Expr(cst.SimpleString('"""Create temporary directory structure."""'))]
+                )
                 # include local assignments followed by mkdir calls for dir entries
                 body_stmts.append(doc_stmt)
                 body_stmts.extend(local_assignments)
@@ -698,19 +708,27 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
             # create decorator and function def with precise return annotation
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
-            func = cst.FunctionDef(name=cst.Name(fixture_name), params=cst.Parameters(), body=body, decorators=[decorator], returns=return_ann)
+            func = cst.FunctionDef(
+                name=cst.Name(fixture_name),
+                params=cst.Parameters(),
+                body=body,
+                decorators=[decorator],
+                returns=return_ann,
+            )
             fixture_nodes.append(func)
             # record a simple spec entry for completeness
-            specs[fixture_name] = FixtureSpec(name=fixture_name, value_expr=None, cleanup_statements=safe_cleanup, yield_style=True)
+            specs[fixture_name] = FixtureSpec(
+                name=fixture_name, value_expr=None, cleanup_statements=safe_cleanup, yield_style=True
+            )
             # mark attributes included in this composite fixture as handled
             for a, _ in used_names_for_yield:
                 handled_attrs.add(a)
-    # Detect composite helper-call patterns recorded in collector.local_assignments.
+        # Detect composite helper-call patterns recorded in collector.local_assignments.
         # If multiple local names map to the same Call (tuple-unpack), and
         # corresponding attributes are assigned from those locals, synthesize
         # a single composite fixture that calls the helper and returns the
         # tuple, wiring upstream fixtures for any self.<attr> arguments.
-    # reuse the handled_attrs from above (do not reinitialize)
+        # reuse the handled_attrs from above (do not reinitialize)
         try:
             # Build mapping from call source code -> list[(local_name, index, call_node)]
             call_groups: dict[str, list[tuple[str, Optional[int], Any]]] = {}
@@ -755,11 +773,11 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                             local_to_attr[local_name] = attr_name
                         # Call wrappers: self.attr = wrapper(local_name)
                         elif isinstance(v, cst.Call) and v.args:
-                                for arg_item in v.args:
-                                            a_val = getattr(arg_item, "value", None)
-                                            if isinstance(a_val, cst.Name) and a_val.value == local_name:
-                                                local_to_attr[local_name] = attr_name
-                                                break
+                            for arg_item in v.args:
+                                a_val = getattr(arg_item, "value", None)
+                                if isinstance(a_val, cst.Name) and a_val.value == local_name:
+                                    local_to_attr[local_name] = attr_name
+                                    break
                 if not local_to_attr:
                     continue
 
@@ -1391,7 +1409,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # attributes embedded in complex literals (e.g., dicts). Fall
                 # back to structural _references_attribute when rendering fails.
                 try:
-                    rendered = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(ve)])]).code if ve is not None else ""
+                    rendered = (
+                        cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(ve)])]).code if ve is not None else ""
+                    )
                 except Exception:
                     rendered = ""
                 if "self." in rendered:
@@ -1452,7 +1472,11 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     if d in specs:
                         dep_spec = specs[d]
                         try:
-                            ann_node, names_req = _infer_ann(dep_spec.value_expr) if isinstance(dep_spec.value_expr, cst.BaseExpression) else _infer_ann(None)
+                            ann_node, names_req = (
+                                _infer_ann(dep_spec.value_expr)
+                                if isinstance(dep_spec.value_expr, cst.BaseExpression)
+                                else _infer_ann(None)
+                            )
                             ann_param = ann_node
                             for n in names_req:
                                 all_typing_needed.add(n)

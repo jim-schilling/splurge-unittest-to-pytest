@@ -252,13 +252,13 @@ def main(
                             errors=[],
                         )
                     else:
-                                result = convert_string(
-                                    source_code,
-                                    setup_patterns=setup_patterns,
-                                    teardown_patterns=teardown_patterns,
-                                    test_patterns=test_patterns,
-                                    autocreate=autocreate,
-                                )
+                        result = convert_string(
+                            source_code,
+                            setup_patterns=setup_patterns,
+                            teardown_patterns=teardown_patterns,
+                            test_patterns=test_patterns,
+                            autocreate=autocreate,
+                        )
 
                     if result.has_changes:
                         click.echo(f"Would convert: {file_path}")

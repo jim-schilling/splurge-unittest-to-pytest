@@ -20,7 +20,18 @@ def test_typing_names_and_shutil_flag():
         "temp_dir": cst.Call(func=cst.Attribute(value=cst.Name("tempfile"), attr=cst.Name("mkdtemp")), args=[]),
         "main_config": cst.Dict(elements=[cst.DictElement(key=cst.SimpleString('"k"'), value=cst.SimpleString('"v"'))]),
     }
-    teardown = [cst.SimpleStatementLine(body=[cst.Expr(cst.Call(func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))]))])]
+    teardown = [
+        cst.SimpleStatementLine(
+            body=[
+                cst.Expr(
+                    cst.Call(
+                        func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")),
+                        args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))],
+                    )
+                )
+            ]
+        )
+    ]
     out = _make_collector_output(attrs, teardown)
     res = generator_v2({"collector_output": out})
     names = res.get("needs_typing_names", [])

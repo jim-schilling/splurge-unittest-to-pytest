@@ -18,11 +18,28 @@ def test_temp_dirs_composite_generated():
     # Two dir-like attributes with teardown referencing them -> should synthesize temp_dirs
     attrs = {
         "temp_dir": cst.Call(func=cst.Attribute(value=cst.Name("tempfile"), attr=cst.Name("mkdtemp")), args=[]),
-        "config_dir": cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))]),
-        "data_dir": cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))]),
+        "config_dir": cst.Call(
+            func=cst.Name("Path"),
+            args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))],
+        ),
+        "data_dir": cst.Call(
+            func=cst.Name("Path"),
+            args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))],
+        ),
     }
     # teardown references temp_dir via shutil.rmtree(self.temp_dir)
-    teardown = [cst.SimpleStatementLine(body=[cst.Expr(cst.Call(func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))]))])]
+    teardown = [
+        cst.SimpleStatementLine(
+            body=[
+                cst.Expr(
+                    cst.Call(
+                        func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")),
+                        args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("temp_dir")))],
+                    )
+                )
+            ]
+        )
+    ]
     out = _make_collector_output(attrs, teardown)
     res = generator_stage({"collector_output": out})
     fixture_nodes = res.get("fixture_nodes", [])

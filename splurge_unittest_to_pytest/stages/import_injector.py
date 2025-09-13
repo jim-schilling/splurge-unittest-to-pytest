@@ -108,7 +108,10 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
         ("sys", sys_import_node),
         ("tempfile", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("tempfile"))])])),
         ("shutil", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("shutil"))])])),
-        ("subprocess", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("subprocess"))])])),
+        (
+            "subprocess",
+            cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("subprocess"))])]),
+        ),
         ("json", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("json"))])])),
     ]
 
@@ -226,6 +229,7 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # names in our list should appear in that order; the rest appended
     ordered_insert: list[cst.SimpleStatementLine] = []
     preferred_keys = [k for k, _ in preferred_order]
+
     # pick from to_insert those whose module/name appears in preferred_keys
     def _key_for_node(n: cst.SimpleStatementLine) -> str | None:
         first = n.body[0]

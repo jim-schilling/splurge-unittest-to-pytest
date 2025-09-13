@@ -58,8 +58,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             DeprecationWarning,
             stacklevel=2,
         )
-    # compat parameter retained for API compatibility but ignored.
-    # Transformer always targets strict pytest output.
+        # compat parameter retained for API compatibility but ignored.
+        # Transformer always targets strict pytest output.
         self.needs_pytest_import = False
         self.has_unittest_content = False
         self.imports_to_remove: list[str] = []

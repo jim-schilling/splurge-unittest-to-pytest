@@ -69,12 +69,7 @@ def test_sample_04_matches_golden(tmp_path):
     # `temp_dirs` (legacy) or the per-attribute `temp_dir` produced by the
     # newer generator_v2.
     assert "@pytest.fixture" in out or "pytest.fixture" in out
-    assert (
-        "def temp_dirs" in out
-        or "def temp_dirs(" in out
-        or "def temp_dir" in out
-        or "def temp_dir(" in out
-    )
+    assert "def temp_dirs" in out or "def temp_dirs(" in out or "def temp_dir" in out or "def temp_dir(" in out
 
     # Also verify the strict (no-compat) conversion matches the no-compat golden
     expected_nc = _read_text("sample-04-pytest-no-compat.txt")

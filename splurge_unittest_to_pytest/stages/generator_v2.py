@@ -7,6 +7,7 @@ plan: deterministic composite selection for temp_dirs, per-attribute
 fixtures for non-dir attrs, mkdtemp preservation, and returning the same
 output shape as the original (fixture_specs and fixture_nodes).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -58,17 +59,26 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                     pass
 
             yield_style = bool(relevant_cleanup)
-            fixture_specs[attr] = SimpleFixtureSpec(name=attr, value_expr=val if isinstance(val, cst.BaseExpression) else None, cleanup_statements=relevant_cleanup, yield_style=yield_style)
+            fixture_specs[attr] = SimpleFixtureSpec(
+                name=attr,
+                value_expr=val if isinstance(val, cst.BaseExpression) else None,
+                cleanup_statements=relevant_cleanup,
+                yield_style=yield_style,
+            )
 
             # generate a trivial fixture node: either yield-style with cleanup or return-style
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
+
             # Determine other attribute dependencies referenced as self.<name>
             def _collect_self_attrs(node: Any) -> set[str]:
                 found: set[str] = set()
                 if node is None or not isinstance(node, cst.BaseExpression):
                     return found
                 if isinstance(node, cst.Attribute):
-                    if isinstance(getattr(node, "value", None), cst.Name) and getattr(node.value, "value", None) in ("self", "cls"):
+                    if isinstance(getattr(node, "value", None), cst.Name) and getattr(node.value, "value", None) in (
+                        "self",
+                        "cls",
+                    ):
                         if isinstance(node.attr, cst.Name):
                             found.add(node.attr.value)
                     # recurse into value and attr
@@ -151,7 +161,10 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                                     body=[
                                         cst.Expr(
                                             cst.Call(
-                                                func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                func=cst.Attribute(
+                                                    value=cst.Name(attr if not attr.startswith("self.") else attr),
+                                                    attr=cst.Name("mkdir"),
+                                                ),
                                                 args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
                                             )
                                         )
@@ -190,13 +203,18 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                                         body=[
                                             cst.Expr(
                                                 cst.Call(
-                                                    func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                    func=cst.Attribute(
+                                                        value=cst.Name(attr if not attr.startswith("self.") else attr),
+                                                        attr=cst.Name("mkdir"),
+                                                    ),
                                                     args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
                                                 )
                                             )
                                         ]
                                     )
-                                    setup_stmts.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
+                                    setup_stmts.append(
+                                        cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName()))
+                                    )
 
                     # cleanup: only replace self.X -> X, keep bare name so it reads
                     # 'value = None' rather than binding to a generated local.
@@ -209,8 +227,12 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                     # class setUp remains, duplicating mkdir calls into
                     # fixtures causes duplicated behavior (see sample-04).
                     include_setup = not bool(getattr(cls, "setup_methods", []))
-                    body = cst.IndentedBlock(body=(setup_stmts if include_setup else []) + [yield_stmt] + rewritten_cleanup)
-                    func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
+                    body = cst.IndentedBlock(
+                        body=(setup_stmts if include_setup else []) + [yield_stmt] + rewritten_cleanup
+                    )
+                    func = cst.FunctionDef(
+                        name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator]
+                    )
                 else:
                     # non-literal: bind to a local variable and rewrite cleanup to
                     # refer to that local name so teardown runs against the
@@ -241,19 +263,25 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                                         body=[
                                             cst.Expr(
                                                 cst.Call(
-                                                    func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                    func=cst.Attribute(
+                                                        value=cst.Name(attr if not attr.startswith("self.") else attr),
+                                                        attr=cst.Name("mkdir"),
+                                                    ),
                                                     args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
                                                 )
                                             )
                                         ]
                                     )
                                     # replace self.X occurrences using transformer
-                                    setup_stmts.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
+                                    setup_stmts.append(
+                                        cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName()))
+                                    )
 
                     # rewrite cleanup statements to refer to local_var or deps
                     # (rewritten_cleanup already declared above)
                     for s in relevant_cleanup:
                         new_s = cast(cst.BaseStatement, s.visit(_ReplaceSelfWithName()))
+
                         # additionally replace references to the attribute itself with the local_var
                         class _ReplaceAttrWithLocal(cst.CSTTransformer):
                             def leave_Name(self, original: cst.Name, updated: cst.Name) -> cst.BaseExpression:
@@ -265,8 +293,12 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                         rewritten_cleanup.append(new_s)
 
                     include_setup = not bool(getattr(cls, "setup_methods", []))
-                    body = cst.IndentedBlock(body=(setup_stmts if include_setup else []) + [assign, yield_stmt] + rewritten_cleanup)
-                    func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
+                    body = cst.IndentedBlock(
+                        body=(setup_stmts if include_setup else []) + [assign, yield_stmt] + rewritten_cleanup
+                    )
+                    func = cst.FunctionDef(
+                        name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator]
+                    )
             elif not yield_style and isinstance(val, cst.BaseExpression):
                 # rewrite self.* references in the return expression to params
                 val_simple = cast(cst.BaseExpression, val.visit(_ReplaceSelfWithName()))
@@ -292,17 +324,24 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                                         body=[
                                             cst.Expr(
                                                 cst.Call(
-                                                    func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                    func=cst.Attribute(
+                                                        value=cst.Name(attr if not attr.startswith("self.") else attr),
+                                                        attr=cst.Name("mkdir"),
+                                                    ),
                                                     args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
                                                 )
                                             )
                                         ]
                                     )
-                                    preserved_setup.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
+                                    preserved_setup.append(
+                                        cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName()))
+                                    )
 
                 include_setup = not bool(getattr(cls, "setup_methods", []))
                 body = cst.IndentedBlock(body=(preserved_setup if include_setup else []) + [return_stmt])
-                func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
+                func = cst.FunctionDef(
+                    name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator]
+                )
             else:
                 # fallback: return None
                 return_stmt = cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))])
