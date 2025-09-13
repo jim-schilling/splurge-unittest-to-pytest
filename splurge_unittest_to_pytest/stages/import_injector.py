@@ -124,36 +124,65 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
         if isinstance(n, str) and n:
             typing_needed.add(n)
     if typing_needed:
-        # check existing typing imports to avoid duplicates
+        # check existing typing imports to avoid duplicates and locate the existing ImportFrom
         existing_typing: set[str] = set()
-        for stmt in module.body:
+        existing_typing_idx: int | None = None
+        for idx, stmt in enumerate(module.body):
             if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
                 first = stmt.body[0]
                 if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
+                    existing_typing_idx = idx
                     for alias in getattr(first, "names") or []:
                         an = getattr(alias, "name", None)
                         if isinstance(an, cst.Name):
                             existing_typing.add(an.value)
-        missing = sorted(typing_needed - existing_typing)
-        if missing:
-            # Special-case types that belong to other stdlib modules
-            if "Path" in missing:
-                # Remove Path from typing import list and add pathlib import
-                missing.remove("Path")
-                pathlib_import_node = cst.SimpleStatementLine(
-                    body=[cst.ImportFrom(module=cst.Name("pathlib"), names=[cst.ImportAlias(name=cst.Name("Path"))])]
-                )
-                to_insert.append(pathlib_import_node)
 
-            if missing:
+        # Determine missing typing names (excluding any Path which is special-cased)
+        missing = set(typing_needed) - existing_typing
+        if "Path" in missing:
+            missing.remove("Path")
+            # insert pathlib import independently
+            pathlib_import_node = cst.SimpleStatementLine(
+                body=[cst.ImportFrom(module=cst.Name("pathlib"), names=[cst.ImportAlias(name=cst.Name("Path"))])]
+            )
+            to_insert.append(pathlib_import_node)
+
+        if missing:
+            missing_list = sorted(missing)
+            if existing_typing_idx is not None:
+                # Merge missing names into the existing ImportFrom statement in place
+                # Build the combined set of names
+                combined = sorted(existing_typing.union(missing))
                 typing_import_node = cst.SimpleStatementLine(
                     body=[
                         cst.ImportFrom(
-                            module=cst.Name("typing"), names=[cst.ImportAlias(name=cst.Name(n)) for n in missing]
+                            module=cst.Name("typing"), names=[cst.ImportAlias(name=cst.Name(n)) for n in combined]
                         )
                     ]
                 )
-                # Place typing import near other inserted imports (after docstring/other imports)
+                # Replace the existing statement in the new_body (we'll construct new_module later)
+                new_body = list(module.body)
+                new_body[existing_typing_idx] = typing_import_node
+                # Keep any previously accumulated to_insert nodes appended after the insertion index
+                # and then finalize
+                # We'll construct new_module and return early to avoid double-inserting later
+                # Insert any other pending nodes at insert_idx
+                insert_offset = 0
+                for node in to_insert:
+                    new_body.insert(insert_idx + insert_offset, node)
+                    insert_offset += 1
+
+                new_module = module.with_changes(body=new_body)
+                return {"module": new_module}
+            else:
+                # No existing typing import; create a new one and append to to_insert
+                typing_import_node = cst.SimpleStatementLine(
+                    body=[
+                        cst.ImportFrom(
+                            module=cst.Name("typing"), names=[cst.ImportAlias(name=cst.Name(n)) for n in missing_list]
+                        )
+                    ]
+                )
                 to_insert.append(typing_import_node)
 
     # Deduplicate by import name to avoid duplicate imports. We'll collect
