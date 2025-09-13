@@ -258,6 +258,15 @@ def convert_file(
     except UnicodeDecodeError as e:
         raise EncodingError(f"Failed to decode file with encoding '{encoding}': {input_path}") from e
 
+    # If the file already imports pytest, skip conversion and report no changes.
+    if "import pytest" in source_code or "from pytest" in source_code:
+        return ConversionResult(
+            original_code=source_code,
+            converted_code=source_code,
+            has_changes=False,
+            errors=[],
+        )
+
     # Convert the code
     result = convert_string(
         source_code,

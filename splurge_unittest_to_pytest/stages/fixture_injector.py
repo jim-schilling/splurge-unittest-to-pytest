@@ -147,11 +147,30 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # allow a mix of statement and small-statement/EmptyLine nodes in the new body
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
     # Insert fixture FunctionDef nodes at the calculated insertion index.
-    # Do not add EmptyLine sentinels here; spacing is normalized by the tidy
-    # stage which runs later. This prevents multiple stages from
-    # creating cumulative blank lines.
-    for i, fn in enumerate(nodes):
-        new_body.insert(insert_idx + i, fn)
+    # For no-compat (strict pytest) output insert two blank lines before
+    # each top-level def to match style expectations. For compat output
+    # (where fixtures may be attached to instances) preserve the more
+    # conservative single-EmptyLine separation used historically.
+    for offset, fn in enumerate(nodes):
+        if compat:
+            # preserve older behavior: one EmptyLine after each fixture
+            insert_pos = insert_idx + offset * 2
+            new_body.insert(insert_pos, fn)
+            if offset != len(nodes) - 1:
+                new_body.insert(insert_pos + 1, cast(cst.BaseSmallStatement, cst.EmptyLine()))
+        else:
+            # strict/no-compat: ensure two leading EmptyLine nodes before
+            # each top-level FunctionDef (this results in two blank lines
+            # separating defs at module level after normalization).
+            # We insert the FunctionDef followed by two EmptyLine sentinels
+            # so that later formatting normalization can collapse/ensure
+            # the proper counts around top-level defs.
+            insert_pos = insert_idx + offset * 3
+            # Insert two EmptyLine nodes before the function to yield
+            # the expected two-blank-line separation at module level.
+            new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            new_body.insert(insert_pos + 2, fn)
     # Insert fixtures into module body. We do not add an autouse attach
     # fixture here; instead the fixtures are intended to be used as normal
     # pytest fixtures by generated top-level test wrappers (created in the
@@ -174,9 +193,18 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if has_unittest_usage and compat:
         fixture_names = [n.name.value for n in nodes]
         attach_fn = _make_autouse_attach(fixture_names)
-        # insert an EmptyLine sentinel (a BaseSmallStatement) followed by the attach function
-        new_body.insert(insert_idx + len(nodes), cast(cst.BaseSmallStatement, cst.EmptyLine()))
-        new_body.insert(insert_idx + len(nodes) + 1, attach_fn)
+        # Calculate where the fixtures ended. In compat mode we inserted each
+        # fixture followed by an EmptyLine (except the last), so the last
+        # fixture sits at insert_idx + (len(nodes)-1)*2. Insert the attach
+        # sentinel after that spot. If there are no nodes, insert at
+        # insert_idx.
+        if nodes:
+            attach_pos = insert_idx + (len(nodes) - 1) * 2 + 1
+        else:
+            attach_pos = insert_idx
+        # insert an EmptyLine sentinel followed by the attach function
+        new_body.insert(attach_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
+        new_body.insert(attach_pos + 1, attach_fn)
 
     new_module = module.with_changes(body=new_body)
     return {"module": new_module, "needs_pytest_import": True}

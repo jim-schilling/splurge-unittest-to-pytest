@@ -15,7 +15,7 @@ from .exceptions import (
     PermissionDeniedError,
     SplurgeError,
 )
-from .main import convert_file, find_unittest_files
+from .main import convert_file, find_unittest_files, ConversionResult
 from .converter.helpers import parse_method_patterns
 
 # If diagnostics are enabled, wire up a minimal console logger so messages are visible
@@ -112,13 +112,14 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
 )
 @click.option(
     "--compat/--no-compat",
-    default=True,
+    default=False,
     help=(
-        "Compatibility mode. With --compat (default), keep unittest classes and"
-        " lifecycle methods and inject an autouse fixture to attach generated"
-        " fixtures to test instances during pytest runs. With --no-compat, emit"
-        " strict pytest output: drop unittest classes and setUp/tearDown and"
-        " generate only top-level pytest tests and fixtures (no autouse glue)."
+        "Compatibility mode. By default the CLI emits strict pytest output"
+        " (--no-compat): drop unittest classes and setUp/tearDown and generate"
+        " top-level pytest tests and fixtures (no autouse glue). Use --compat"
+        " to preserve unittest classes and inject an autouse fixture that"
+        " attaches generated fixtures to test instances for backward"
+        " compatibility."
     ),
 )
 @click.option(
@@ -252,14 +253,25 @@ def main(
                     from .main import convert_string
 
                     source_code = file_path.read_text(encoding=encoding)
-                    result = convert_string(
-                        source_code,
-                        setup_patterns=setup_patterns,
-                        teardown_patterns=teardown_patterns,
-                        test_patterns=test_patterns,
-                        compat=compat,
-                        autocreate=autocreate,
-                    )
+
+                    # If the file already imports pytest, treat it as unchanged
+                    # for dry-run reporting purposes to avoid noisy diffs.
+                    if "import pytest" in source_code or "from pytest" in source_code:
+                        result = ConversionResult(
+                            original_code=source_code,
+                            converted_code=source_code,
+                            has_changes=False,
+                            errors=[],
+                        )
+                    else:
+                        result = convert_string(
+                            source_code,
+                            setup_patterns=setup_patterns,
+                            teardown_patterns=teardown_patterns,
+                            test_patterns=test_patterns,
+                            compat=compat,
+                            autocreate=autocreate,
+                        )
 
                     if result.has_changes:
                         click.echo(f"Would convert: {file_path}")

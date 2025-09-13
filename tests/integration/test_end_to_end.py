@@ -17,7 +17,7 @@ def test_converted_module_executes_and_autouse_attaches(tmp_path: Path) -> None:
             def test_using_tmp(self) -> None:
                 assert self.tmp == 123
     """)
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src, engine="pipeline", compat=True)
     assert res.has_changes
     code = res.converted_code
     # write to temporary file and attempt to compile/exec it

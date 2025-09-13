@@ -15,7 +15,7 @@ def test_autouse_fixture_accepts_fixture_params_and_attaches() -> None:
     """)
 
     # run pipeline conversion
-    res = main.convert_string(src, engine="pipeline")
+    res = main.convert_string(src, engine="pipeline", compat=True)
     out = res.converted_code
     # the autouse fixture should accept 'x' as a parameter (in its signature)
     # the autouse fixture should use request.getfixturevalue('x') to retrieve

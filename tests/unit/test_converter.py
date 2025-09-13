@@ -126,7 +126,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotEqual(1, 2)
 """
-        result = convert_string(unittest_code)
+        result = convert_string(unittest_code, compat=True)
 
         assert result.has_changes
         assert "assert 1 != 2" in result.converted_code
@@ -141,7 +141,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsNotNone(42)
 """
-        result = convert_string(unittest_code)
+        result = convert_string(unittest_code, compat=True)
 
         assert result.has_changes
         assert "assert 42 is not None" in result.converted_code
@@ -156,7 +156,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIn(4, [1, 2, 3])
 """
-        result = convert_string(unittest_code)
+        result = convert_string(unittest_code, compat=True)
 
         assert result.has_changes
         assert "assert 4 not in [1, 2, 3]" in result.converted_code
@@ -171,7 +171,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIsInstance("hello", int)
 """
-        result = convert_string(unittest_code)
+        result = convert_string(unittest_code, compat=True)
 
         assert result.has_changes
         assert 'assert not isinstance("hello", int)' in result.converted_code

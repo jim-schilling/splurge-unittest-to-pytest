@@ -75,3 +75,16 @@ def test_sample_04_matches_golden(tmp_path):
         or "def temp_dir" in out
         or "def temp_dir(" in out
     )
+
+    # Also verify the strict (no-compat) conversion matches the no-compat golden
+    expected_nc = _read_text("sample-04-pytest-no-compat.txt")
+    result_nc = main.convert_string(src, compat=False)
+    if isinstance(result_nc, ConversionResult):
+        out_nc = result_nc.converted_code
+    else:
+        out_nc = str(result_nc)
+
+    # Normalize line endings and trivial trailing whitespace for deterministic compare
+    out_nc = out_nc.replace("\r\n", "\n").strip()
+    expected_nc = expected_nc.replace("\r\n", "\n").strip()
+    assert out_nc == expected_nc
