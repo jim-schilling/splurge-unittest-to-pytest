@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import Collector
-from splurge_unittest_to_pytest.stages.generator_v2 import generator_v2 as generator_stage
+from splurge_unittest_to_pytest.stages.generator import generator as generator_stage
 
 SAMPLE = """
 class MyTests(unittest.TestCase):

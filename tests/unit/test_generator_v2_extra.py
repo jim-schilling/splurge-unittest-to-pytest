@@ -1,6 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
-from splurge_unittest_to_pytest.stages.generator_v2 import generator_v2
+from splurge_unittest_to_pytest.stages.generator import generator
 
 
 def _make_collector_output(attrs: dict, teardown: list):
@@ -33,7 +33,7 @@ def test_typing_names_and_shutil_flag():
         )
     ]
     out = _make_collector_output(attrs, teardown)
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     names = res.get("needs_typing_names", [])
     assert "Dict" in names or "Any" in names
     # shutil usage should be detected

@@ -1,6 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
-from splurge_unittest_to_pytest.stages.generator_v2 import generator_v2
+from splurge_unittest_to_pytest.stages.generator import generator
 
 
 def _make_collector_output_for_sample(attrs, teardown_stmts):
@@ -40,7 +40,7 @@ def test_per_attribute_and_mkdtemp_preserved():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     # Expect per-attribute fixtures for temp_dir and config_dir and main_config
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "temp_dir" in names
@@ -57,7 +57,7 @@ def test_per_attribute_fixture_when_not_dir_like():
         "main_config": cst.Dict(elements=[cst.DictElement(key=cst.SimpleString('"k"'), value=cst.SimpleString('"v"'))]),
     }
     out = _make_collector_output_for_sample(attrs, [])
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "main_config" in names
     # returned fixture for main_config should contain the literal dict
@@ -73,7 +73,7 @@ def test_literal_yield_and_teardown():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     found = False
     for n in nodes:
@@ -101,7 +101,7 @@ def test_non_literal_binds_local_and_cleanup_refs_local():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     for n in nodes:
         if n.name.value == "path":
@@ -128,12 +128,12 @@ def test_mkdir_preserved_in_fixture():
     ci.teardown_statements = []
     out = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     out.classes["TestMk"] = ci
-    res = generator_v2({"collector_output": out})
+    res = generator({"collector_output": out})
     for n in res["fixture_nodes"]:
         if isinstance(n, cst.FunctionDef) and n.name.value == "d":
             module = cst.Module(body=[n])
             code = module.code
-            # When the original class has a setUp method, the generator_v2
+            # When the original class has a setUp method, the generator
             # should not duplicate mkdir calls into per-attribute fixtures
             # (the setUp remains on the class). Ensure we do not duplicate.
             assert "mkdir" not in code

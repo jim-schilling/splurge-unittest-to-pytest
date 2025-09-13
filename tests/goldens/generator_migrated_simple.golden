@@ -1,2 +1,10 @@
+import tempfile
+import shutil
+import pytest
+
+
+@pytest.fixture
 def temp_dir():
-    return '"/tmp/foo"'
+    _temp_dir_value = tempfile.mkdtemp()
+    yield _temp_dir_value
+    shutil.rmtree(_temp_dir_value, ignore_errors=True)

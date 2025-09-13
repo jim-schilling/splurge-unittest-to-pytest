@@ -35,9 +35,9 @@ Test/golden list
 - Golden/expected: `tests/data/samples/sample-04-pytest.txt`
 - Unit test: `tests/unit/test_sample_04_conversion.py`
 - Assertion: strict equality; explicit assertions for:
-  - single `temp_dirs` generator fixture that yields a Dict with keys `temp_dir`, `config_dir`, `data_dir`, `log_dir` and has a `finally` that calls `shutil.rmtree` on the temp dir
+  - per-attribute fixtures for temporary directories (for example `temp_dir`, `config_dir`, `data_dir`, `log_dir`) where each fixture performs its own setup and cleanup (yield + finally or return as appropriate). The generator intentionally avoids producing a single composite `temp_dirs` fixture.
   - `mock_env` fixture uses yield and restores environment in finally
-  - `main_config` fixture returns a dict and uses `temp_dirs` in its body
+  - `main_config` fixture returns a dict and uses the appropriate per-attribute fixtures (e.g., `temp_dir`) in its body rather than a composite `temp_dirs` mapping
 - Priority: High
 
 5) Other samples (05–09) if present

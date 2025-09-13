@@ -11,12 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Compatibility mode (`compat` / `--no-compat` / `--compat`) and engine selection have been removed. The converter now only supports the staged pipeline and emits strict pytest-native code.
 
+- Removed legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` — callers must use `stages.generator` directly.
+
 ### Changed
 - Public API: `convert_string` and `convert_file` no longer accept `compat` or `engine` parameters. Use the staged pipeline via the public API instead.
 - Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
 
 ### Notes
-- The legacy `UnittestToPytestTransformer` implementation remains in the codebase for compatibility with third-party integrations but is no longer referenced by tests; it is considered deprecated and may be removed in a future release.
+- The legacy `UnittestToPytestTransformer` implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` implementation. The converter now emits canonical per-attribute pytest fixtures by default.
 
 
 ## [2025.0.5] - 2025-09-13
