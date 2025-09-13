@@ -414,13 +414,19 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         mapping[a] = "None" if val is None else repr(str(val))
                     emitted = core.make_composite_dirs_fixture("temp_dirs", mapping)
                     fixture_nodes.append(emitted)
-                    specs["temp_dirs"] = FixtureSpec(name="temp_dirs", value_expr=None, cleanup_statements=[], yield_style=True)
+                    specs["temp_dirs"] = FixtureSpec(
+                        name="temp_dirs", value_expr=None, cleanup_statements=[], yield_style=True
+                    )
                 else:
                     for attr_name, setup_val in getattr(cls, "setup_assignments", {}).items():
                         local_name = attr_name
-                        fixture_body_src = "    return None" if setup_val is None else f"    return {repr(str(setup_val))}"
+                        fixture_body_src = (
+                            "    return None" if setup_val is None else f"    return {repr(str(setup_val))}"
+                        )
                         emitted = core.make_fixture(local_name, fixture_body_src)
-                        specs[local_name] = FixtureSpec(name=local_name, value_expr=None, cleanup_statements=[], yield_style=False)
+                        specs[local_name] = FixtureSpec(
+                            name=local_name, value_expr=None, cleanup_statements=[], yield_style=False
+                        )
                         fixture_nodes.append(emitted)
             return {"fixture_specs": specs, "fixture_nodes": fixture_nodes, "typing_needed": all_typing_needed}
 

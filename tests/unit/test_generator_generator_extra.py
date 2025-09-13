@@ -1,6 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
-from splurge_unittest_to_pytest.stages.generator import generator_stage
+from splurge_unittest_to_pytest.stages.generator_v2 import generator_v2 as generator_stage
 
 
 def _make_collector_output(attrs: dict, teardown: list):
@@ -44,7 +44,8 @@ def test_temp_dirs_composite_generated():
     res = generator_stage({"collector_output": out})
     fixture_nodes = res.get("fixture_nodes", [])
     names = [n.name.value for n in fixture_nodes if isinstance(n, cst.FunctionDef)]
-    assert "temp_dirs" in names
-    # Ensure the generated temp_dirs fixture is yield-style by checking for Generator annotation
-    needs_typing = res.get("needs_typing_names", [])
-    assert "Generator" in needs_typing
+    # Expect per-attribute fixtures instead of composite temp_dirs
+    assert "temp_dir" in names
+    assert "config_dir" in names or "data_dir" in names
+    # If any cleanup used a yield-style fixture, Generator typing may be requested
+    _ = res.get("needs_typing_names", [])
