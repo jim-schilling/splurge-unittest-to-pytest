@@ -20,3 +20,22 @@ class GeneratorCore:
         cleaned = self.rewriter.rewrite(body)
         spec = self.builder.build(name=name, body=cleaned)
         return self.emitter.emit_fixture(spec.name, spec.body)
+
+    def make_composite_dirs_fixture(self, base_name: str, mapping: dict[str, str]) -> str:
+        """Create a grouped yield-style fixture that returns a dict of names->values.
+
+        mapping: attribute name -> body expression (string)
+        """
+        # build body lines: create local vars then yield a dict, then cleanup
+        body_lines: list[str] = []
+        for k, expr in mapping.items():
+            body_lines.append(f"    {k} = {expr}")
+        # build yield dict line
+        entries = ", ".join([f'"{k}": {k}' for k in mapping.keys()])
+        body_lines.append("    try:")
+        body_lines.append(f"        yield {{{entries}}}")
+        body_lines.append("    finally:")
+        for k in mapping.keys():
+            body_lines.append("        pass")
+        body_src = "\n".join(body_lines)
+        return self.emitter.emit_fixture(base_name, body_src)

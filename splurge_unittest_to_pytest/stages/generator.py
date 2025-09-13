@@ -403,12 +403,25 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             # sufficient for Stage 2 unit tests and maintains a record in
             # context for downstream stages.
             for cls_name, cls in out.classes.items():
-                for attr_name, setup_val in getattr(cls, "setup_assignments", {}).items():
-                    local_name = attr_name
-                    fixture_body_src = "    return None" if setup_val is None else f"    return {repr(str(setup_val))}"
-                    emitted = core.make_fixture(local_name, fixture_body_src)
-                    specs[local_name] = FixtureSpec(name=local_name, value_expr=None, cleanup_statements=[], yield_style=False)
+                attrs = list(getattr(cls, "setup_assignments", {}).keys())
+                dir_like_attrs = [a for a in attrs if "dir" in a or "path" in a or "temp" in a]
+                if len(dir_like_attrs) > 1 and getattr(cls, "teardown_statements", None):
+                    # build mapping of attr -> simple expression using last recorded value
+                    mapping: dict[str, str] = {}
+                    for a in dir_like_attrs:
+                        exprs = cls.setup_assignments.get(a) or []
+                        val = exprs[-1] if exprs else None
+                        mapping[a] = "None" if val is None else repr(str(val))
+                    emitted = core.make_composite_dirs_fixture("temp_dirs", mapping)
                     fixture_nodes.append(emitted)
+                    specs["temp_dirs"] = FixtureSpec(name="temp_dirs", value_expr=None, cleanup_statements=[], yield_style=True)
+                else:
+                    for attr_name, setup_val in getattr(cls, "setup_assignments", {}).items():
+                        local_name = attr_name
+                        fixture_body_src = "    return None" if setup_val is None else f"    return {repr(str(setup_val))}"
+                        emitted = core.make_fixture(local_name, fixture_body_src)
+                        specs[local_name] = FixtureSpec(name=local_name, value_expr=None, cleanup_statements=[], yield_style=False)
+                        fixture_nodes.append(emitted)
             return {"fixture_specs": specs, "fixture_nodes": fixture_nodes, "typing_needed": all_typing_needed}
 
     for cls_name, cls in out.classes.items():

@@ -1,0 +1,8 @@
+@pytest.fixture
+def temp_dirs():
+    temp_dir = '/tmp/foo'
+    config_dir = '/tmp/conf'
+    try:
+        yield {"temp_dir": temp_dir, "config_dir": config_dir}
+    finally:
+        pass
