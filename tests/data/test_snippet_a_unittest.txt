@@ -1,0 +1,18 @@
+class TestInitAPI(unittest.TestCase):
+    def setUp(self):
+        # Create temporary directory for this test
+        self.temp_dir = tempfile.mkdtemp()
+        self.sql_content = """# TestClass\n# test_method\nSELECT 1;"""
+        
+        # Use the shared helper function
+        sql_file, schema_file = create_sql_with_schema(
+            Path(self.temp_dir), 
+            "test.sql", 
+            self.sql_content
+        )
+        self.sql_file = str(sql_file)
+        self.schema_file = str(schema_file)
+
+    def tearDown(self):
+        # Clean up the entire temp directory
+        shutil.rmtree(self.temp_dir, ignore_errors=True)

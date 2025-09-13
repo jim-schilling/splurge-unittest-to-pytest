@@ -1,0 +1,30 @@
+@pytest.fixture
+def temp_dir() -> str:
+    """Create and cleanup temporary directory."""
+    temp_dir = tempfile.mkdtemp()
+    try:
+        yield temp_dir
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def sql_content() -> str:
+    """SQL content for testing."""
+    return """# TestClass\n# test_method\nSELECT 1;"""
+
+
+@pytest.fixture
+def fixture_create_sql_with_schema(temp_dir: str, sql_content: str) -> tuple[str, str]:
+    """Create SQL and schema files.
+    
+    Returns:
+        Tuple of (sql_file_path, schema_file_path).
+    """
+    sql_file, schema_file = create_sql_with_schema(
+        Path(temp_dir), 
+        "test.sql", 
+        sql_content
+    )
+    return str(sql_file), str(schema_file)
+

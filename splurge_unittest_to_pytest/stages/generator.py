@@ -33,7 +33,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     if out is None:
         return {}
     specs: dict[str, FixtureSpec] = {}
-    fixture_nodes: list[cst.FunctionDef] = []
+    # fixtures and helper AST nodes we emit; widen to BaseStatement to allow
+    # imports, class defs, and function defs to be appended.
+    fixture_nodes: list[cst.BaseStatement] = []
     used_local_names: Set[str] = set()
     # populate used_local_names from module-level identifiers to avoid collisions
     maybe_module: Any = context.get("module")
@@ -158,11 +160,220 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # binding to a local name even when the value is a literal.
     module_level_names = set(used_local_names)
 
+    def _get_callable_name(node: Any) -> Optional[str]:
+        """Return a dotted name for simple Name/Attribute callables, or None.
+
+        Examples: Name('Path') -> 'Path', Attribute(Name('pathlib'), Name('Path')) -> 'pathlib.Path'
+        """
+        if node is None:
+            return None
+        if isinstance(node, cst.Name):
+            return node.value
+        if isinstance(node, cst.Attribute):
+            parts: list[str] = []
+            cur: Any = node
+            # unwind attributes defensively
+            while isinstance(cur, cst.Attribute):
+                if isinstance(getattr(cur, 'attr', None), cst.Name):
+                    parts.append(cur.attr.value)
+                val = getattr(cur, 'value', None)
+                if isinstance(val, cst.Name):
+                    parts.append(val.value)
+                    break
+                # prepare to unwrap further or bail
+                cur = val
+            return '.'.join(reversed(parts)) if parts else None
+        return None
+
     # read autocreate flag from pipeline context; default to True
     autocreate_flag = bool(context.get("autocreate", True)) if isinstance(context, dict) else True
 
     for cls_name, cls in out.classes.items():
+        # Detect composite helper-call patterns recorded in collector.local_assignments.
+        # If multiple local names map to the same Call (tuple-unpack), and
+        # corresponding attributes are assigned from those locals, synthesize
+        # a single composite fixture that calls the helper and returns the
+        # tuple, wiring upstream fixtures for any self.<attr> arguments.
+        handled_attrs: Set[str] = set()
+        try:
+            # Build mapping from call source code -> list[(local_name, index, call_node)]
+            call_groups: dict[str, list[tuple[str, Optional[int], Any]]] = {}
+            for local_name, val in getattr(cls, 'local_assignments', {}).items():
+                # val is (assigned_value, maybe_index)
+                assigned_call = None
+                idx = None
+                try:
+                    assigned_call, idx = val
+                except Exception:
+                    assigned_call = val
+                    idx = None
+                if isinstance(assigned_call, cst.Call):
+                    try:
+                        # rendering a Call requires wrapping it into an Expr
+                        key = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(assigned_call)])]).code
+                    except Exception:
+                        # fallback to repr-based key if rendering fails
+                        key = repr(assigned_call)
+                    call_groups.setdefault(key, []).append((local_name, idx, assigned_call))
+
+            # For each group with multiple locals, check whether those locals
+            # are later mapped into class attributes via setup_assignments
+            for group in call_groups.values():
+                if len(group) < 2:
+                    continue
+                # find which locals correspond to attributes
+                local_to_attr: dict[str, str] = {}
+                for local_name, idx, assigned_call in group:
+                    # search for attributes whose value_expr references this local
+                    for attr_name, assigns in cls.setup_assignments.items():
+                        # take the last assignment as effective
+                        v = assigns[-1] if isinstance(assigns, list) and assigns else assigns
+                        # common pattern: self.attr = Name(local_name) or Call(Name(local_name))
+                        if isinstance(v, cst.Call) and v.args:
+                            for a in v.args:
+                                a_val = getattr(a, 'value', None)
+                                if isinstance(a_val, cst.Name) and a_val.value == local_name:
+                                    local_to_attr[local_name] = attr_name
+                                    break
+                        elif isinstance(v, cst.Name) and v.value == local_name:
+                            local_to_attr[local_name] = attr_name
+                        # also handle wrapper like str(local_name)
+                        elif isinstance(v, cst.Call) and v.args:
+                            for a in v.args:
+                                a_val = getattr(a, 'value', None)
+                                if isinstance(a_val, cst.Name) and a_val.value == local_name:
+                                    local_to_attr[local_name] = attr_name
+                                    break
+                if not local_to_attr:
+                    continue
+
+                # All right: synthesize composite fixture; prefer bundling into
+                # a NamedTuple-based container and a single yield-style fixture
+                # derived from the TestCase class name.
+                assigned_call = group[0][2]
+                # derive a container and fixture name from the TestCase class
+                def _derive_names(class_name: str) -> tuple[str, str]:
+                    base = class_name
+                    if base.startswith('Test') and len(base) > 4:
+                        base = base[4:]
+                    if not base:
+                        base = class_name
+                    # NamedTuple name (private)
+                    named = f"_{base}Data"
+                    # fixture name: snake_case + _data
+                    # simple snake conversion: insert underscore before capital letters and lower
+                    import re
+                    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", base).lower()
+                    fixture_nm = f"{snake}_data"
+                    return named, fixture_nm
+
+                namedtuple_name, fixture_name = _derive_names(cls_name)
+
+                # prepare to emit NamedTuple definition and fixture
+                # ensure typing import for NamedTuple is present in fixture nodes
+                import_node = cst.SimpleStatementLine(body=[cst.ImportFrom(module=cst.Name('typing'), names=[cst.ImportAlias(name=cst.Name('NamedTuple'))])])
+
+                # determine upstream fixture parameters: collect referenced self.<name> attrs
+                params: list[cst.Param] = []
+                upstream_names: list[str] = []
+                for arg in getattr(assigned_call, 'args', []) or []:
+                    a_val = getattr(arg, 'value', None)
+                    if isinstance(a_val, cst.Attribute) and isinstance(getattr(a_val, 'value', None), cst.Name) and getattr(getattr(a_val, 'value', None), 'value', None) in ("self", "cls"):
+                        aname = getattr(a_val.attr, 'value', None)
+                        if aname and aname not in upstream_names:
+                            upstream_names.append(aname)
+                            params.append(cst.Param(name=cst.Name(aname)))
+
+                # prepare call expression with self.X replaced by bare names
+                class _ReplaceSelf(cst.CSTTransformer):
+                    def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+                        if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
+                            if isinstance(original.attr, cst.Name):
+                                return cst.Name(original.attr.value)
+                        return updated
+
+                call_in_fixture = assigned_call.visit(_ReplaceSelf())
+
+                # build tuple assignment target list in order of indices
+                # sort group entries by index when present
+                sorted_group = sorted(group, key=lambda x: (x[1] if x[1] is not None else 0))
+                targets = [cst.Name(local) for local, _, _ in sorted_group]
+                assign_target = cst.Assign(targets=[cst.AssignTarget(target=cst.Tuple(elements=[cst.Element(value=t) for t in targets]))], value=call_in_fixture)
+
+                # Build NamedTuple fields and fixture body that constructs and yields it
+                # Create class body: docstring + annotated assignments
+                class_body: list[cst.BaseStatement] = []
+                # docstring
+                class_body.append(cst.SimpleStatementLine(body=[cst.Expr(cst.SimpleString('"""Container for test data and resources."""'))]))
+                # fields: derive from local_to_attr mapping order
+                for local, _, _ in sorted_group:
+                    attr = local_to_attr.get(local)
+                    # best-effort type: str for now
+                    ann = cst.Annotation(annotation=cst.Name('str'))
+                    ann_assign = cst.AnnAssign(target=cst.Name(attr if attr else local), annotation=ann, value=None)
+                    class_body.append(cst.SimpleStatementLine(body=[ann_assign]))
+
+                class_def = cst.ClassDef(name=cst.Name(namedtuple_name), bases=[cst.Arg(value=cst.Name('NamedTuple'))], body=cst.IndentedBlock(body=class_body))
+
+                # fixture body: assign call result to locals, then yield container and finally cleanup
+                assign_stmt = cst.SimpleStatementLine(body=[assign_target])
+                # build TestData constructor call args
+                ctor_args = []
+                for local, _, _ in sorted_group:
+                    attr = local_to_attr.get(local)
+                    # preserve wrappers when present
+                    orig_v: Optional[Any] = None
+                    if attr:
+                        setup_assigns: Optional[list[Any]] = cls.setup_assignments.get(attr)
+                        if setup_assigns:
+                            orig_v = setup_assigns[-1]
+                    if isinstance(orig_v, cst.Call) and orig_v.args:
+                        new_call = orig_v.with_changes(args=[cst.Arg(value=cst.Name(local))])
+                        ctor_args.append(cst.Arg(value=new_call))
+                    else:
+                        ctor_args.append(cst.Arg(value=cst.Name(local)))
+
+                # build yield expression: yield NamedTupleName(field=...)
+                ctor = cst.Call(func=cst.Name(namedtuple_name), args=ctor_args)
+                yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(ctor))])
+
+                # map teardown statements: rewrite self.attr -> local name
+                rewritten_cleanup: list[cst.BaseStatement] = []
+                for stmt in cls.teardown_statements:
+                    new_stmt = cast(Any, stmt).visit(_ReplaceSelf())
+                    rewritten_cleanup.append(new_stmt)
+
+                # finally block: put cleanup statements
+                finally_block = []
+                for s in rewritten_cleanup:
+                    finally_block.append(s)
+
+                # construct try/finally as code: try: <assign>; yield; finally: <cleanup>
+                try_block = cst.Try(
+                    body=cst.IndentedBlock(body=[assign_stmt, yield_stmt]),
+                    handlers=[],
+                    orelse=None,
+                    finalbody=cst.Finally(body=cst.IndentedBlock(body=list(finally_block))),
+                )
+
+                body = cst.IndentedBlock(body=[try_block])
+                func = cst.FunctionDef(name=cst.Name(fixture_name), params=cst.Parameters(params=params), body=body, decorators=[cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))])
+
+                # add import, class_def, fixture
+                fixture_nodes.append(import_node)
+                fixture_nodes.append(class_def)
+                fixture_nodes.append(func)
+
+                # mark attributes as handled so we skip generating per-attr fixtures
+                for local_name in local_to_attr:
+                    handled_attrs.add(local_to_attr[local_name])
+        except Exception:
+            # be conservative: on any unexpected shape, ignore and fall back
+            handled_attrs = set()
         for attr, value in cls.setup_assignments.items():
+            if attr in handled_attrs:
+                # skip attributes already satisfied by a composite fixture
+                continue
             # collector may record multiple assignments per attribute as a list
             multi_assigned = False
             if isinstance(value, list):
