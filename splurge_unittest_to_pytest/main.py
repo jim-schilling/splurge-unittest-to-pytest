@@ -27,6 +27,7 @@ def convert_string(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
+    autocreate: bool = True,
     engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
@@ -48,8 +49,10 @@ def convert_string(
 
         # Apply the chosen conversion engine
         if engine == "pipeline":
-            # run staged pipeline (returns a Module)
-            converted_module = run_pipeline(tree, compat=compat)
+            # run staged pipeline (returns a Module). Pass autocreate flag so
+            # stages may opt-out of auto-generating file fixtures when the
+            # caller requested conservative behavior.
+            converted_module = run_pipeline(tree, compat=compat, autocreate=autocreate)
             converted_code = converted_module.code
         else:
             # The legacy transformer implementation was removed from the
@@ -221,6 +224,7 @@ def convert_file(
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
     compat: bool = True,
+    autocreate: bool = True,
     engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
@@ -258,6 +262,7 @@ def convert_file(
         teardown_patterns=teardown_patterns,
     test_patterns=test_patterns,
     compat=compat,
+    autocreate=autocreate,
     engine=engine,
     )
     

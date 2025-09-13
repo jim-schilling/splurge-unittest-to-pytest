@@ -113,7 +113,18 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
 @click.option(
     "--compat/--no-compat",
     default=True,
-    help="Emit compatibility autouse fixture to attach fixtures to unittest-style test instances (default: --compat)",
+    help=(
+        "Compatibility mode. With --compat (default), keep unittest classes and"
+        " lifecycle methods and inject an autouse fixture to attach generated"
+        " fixtures to test instances during pytest runs. With --no-compat, emit"
+        " strict pytest output: drop unittest classes and setUp/tearDown and"
+        " generate only top-level pytest tests and fixtures (no autouse glue)."
+    ),
+)
+@click.option(
+    "--autocreate/--no-autocreate",
+    default=True,
+    help="Enable or disable autocreation of tmp_path-backed file fixtures when a sibling '<prefix>_content' is present (default: --autocreate)",
 )
 def main(
     paths: tuple[Path, ...],
@@ -127,6 +138,7 @@ def main(
     teardown_methods: tuple[str, ...],
     test_methods: tuple[str, ...],
     compat: bool,
+    autocreate: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
     
@@ -244,8 +256,9 @@ def main(
                         source_code,
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
-                        test_patterns=test_patterns,
-                        compat=compat,
+                                test_patterns=test_patterns,
+                                compat=compat,
+                                autocreate=autocreate,
                     )
 
                     if result.has_changes:
@@ -279,6 +292,7 @@ def main(
                         teardown_patterns=teardown_patterns,
                         test_patterns=test_patterns,
                         compat=compat,
+                        autocreate=autocreate,
                     )
 
                     if result.has_changes:

@@ -8,6 +8,7 @@ from typing import Any, List, Optional, Set, cast, Sequence
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+from splurge_unittest_to_pytest.converter.fixtures import create_autocreated_file_fixture, create_simple_fixture_with_guard
 
 
 @dataclass
@@ -157,6 +158,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # binding to a local name even when the value is a literal.
     module_level_names = set(used_local_names)
 
+    # read autocreate flag from pipeline context; default to True
+    autocreate_flag = bool(context.get("autocreate", True)) if isinstance(context, dict) else True
+
     for cls_name, cls in out.classes.items():
         for attr, value in cls.setup_assignments.items():
             # collector may record multiple assignments per attribute as a list
@@ -168,6 +172,108 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             else:
                 value_expr = value
             fname = f"{attr}"
+            # If the recorded value is a self-referential placeholder (or a
+            # simple wrapper like str(sql_file)) and the test author also
+            # provided a sibling '<prefix>_content' assignment, auto-generate
+            # a tmp_path-based fixture that writes that content to a file and
+            # returns its string path. This avoids emitting broken
+            # self-referential placeholders like `str(sql_file)` in fixtures.
+            try:
+                # conservative check: only for attrs that look like file names
+                # and only if autocreate is enabled via CLI or API.
+                if autocreate_flag and isinstance(attr, str) and attr.endswith('_file'):
+                    prefix = attr[: -len('_file')]
+                    candidate = f"{prefix}_content"
+                    if candidate in cls.setup_assignments:
+                        # attempt to infer filename from local assignments recorded
+                        inferred_filename = None
+                        # Collector may have recorded local assignments mapping names to (expr, index)
+                        local_map = getattr(cls, 'local_assignments', {}) or {}
+
+                        def _get_callable_name(node: Any) -> Optional[str]:
+                            """Return a dotted name for simple Name/Attribute callables, or None.
+
+                            Examples: Name('Path') -> 'Path', Attribute(Name('pathlib'), Name('Path')) -> 'pathlib.Path'
+                            """
+                            if node is None:
+                                return None
+                            if isinstance(node, cst.Name):
+                                return node.value
+                            if isinstance(node, cst.Attribute):
+                                parts: list[str] = []
+                                cur: Any = node
+                                # unwind attributes defensively
+                                while isinstance(cur, cst.Attribute):
+                                    if isinstance(getattr(cur, 'attr', None), cst.Name):
+                                        parts.append(cur.attr.value)
+                                    val = getattr(cur, 'value', None)
+                                    if isinstance(val, cst.Name):
+                                        parts.append(val.value)
+                                        break
+                                    # prepare to unwrap further or bail
+                                    cur = val
+                                return '.'.join(reversed(parts)) if parts else None
+                            return None
+
+                        def _string_from_simple(aval: Any) -> Optional[str]:
+                            if isinstance(aval, cst.SimpleString):
+                                return aval.value.strip('"\'')
+                            return None
+
+                        def _find_filename_from_call(call: cst.Call) -> Optional[str]:
+                            # 1) check keyword args commonly used for filenames
+                            for arg in getattr(call, 'args', []) or []:
+                                # keyword may be Name (keyword arg) or None (positional)
+                                kw = getattr(arg, 'keyword', None)
+                                if kw and isinstance(kw, cst.Name) and kw.value.lower() in ("filename", "name", "path", "file"):
+                                    sval = _string_from_simple(getattr(arg, 'value', None))
+                                    if sval:
+                                        return sval
+                            # 2) check positional args for a string literal-like filename
+                            for arg in getattr(call, 'args', []) or []:
+                                sval = _string_from_simple(getattr(arg, 'value', None))
+                                if sval:
+                                    return sval
+                            # 3) check for Path(...) constructions: if the callee looks like Path
+                            func_name = _get_callable_name(call.func)
+                            if func_name and func_name.endswith('Path'):
+                                for arg in getattr(call, 'args', []) or []:
+                                    sval = _string_from_simple(getattr(arg, 'value', None))
+                                    if sval:
+                                        return sval
+                            return None
+
+                        # value_expr may be a Call wrapping a Name referencing a local var (e.g., str(sql_file))
+                        target_name = None
+                        if isinstance(value, list):
+                            ve = value[-1] if value else None
+                        else:
+                            ve = value
+                        if isinstance(ve, cst.Call) and ve.args:
+                            for a in ve.args:
+                                a_val = getattr(a, 'value', None)
+                                if isinstance(a_val, cst.Name):
+                                    target_name = a_val.value
+                                    break
+
+                        # if we found a local assignment for that name, inspect its call args
+                        if target_name and target_name in local_map:
+                            assigned_call, index = local_map[target_name]
+                            if isinstance(assigned_call, cst.Call):
+                                inferred_filename = _find_filename_from_call(assigned_call)
+
+                        # fallback filename if none inferred
+                        if not inferred_filename:
+                            inferred_filename = f"{attr}.sql"
+
+                        # create autocreated fixture and skip normal fixture generation
+                        fixture_node = create_autocreated_file_fixture(attr, candidate, filename=inferred_filename)
+                        specs[fname] = FixtureSpec(name=fname, value_expr=value if not isinstance(value, list) else (value[-1] if value else None), cleanup_statements=[], yield_style=False)
+                        fixture_nodes.append(fixture_node)
+                        continue
+            except Exception:
+                # be conservative: fall back to normal behavior on unexpected shapes
+                pass
             # find teardown statements that reference this attr
             # We accept a mix of libcst statement flavors here; widen to Any to
             # avoid variance and typeshed mismatches while preserving runtime
@@ -369,16 +475,16 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             else:
                 # For simple literal values, return the literal directly instead
                 # of binding to a local name, preserving the original intent
-                # (e.g., return 42). For non-literals we still bind to a local
-                # name and return it to keep cleanup rewriting consistent.
+                # (e.g., return 42). For ambiguous self-referential expressions,
+                # delegate to guarded simple fixture creation to avoid broken
+                # placeholders like `str(schema_file)`.
                 if _is_literal(value_expr):
                     return_stmt = cst.SimpleStatementLine(body=[cst.Return(cast(cst.BaseExpression, value_expr))])
                     body = cst.IndentedBlock(body=[return_stmt])
                     func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
                     fixture_nodes.append(func)
                 else:
-                    return_stmt = cst.SimpleStatementLine(body=[cst.Return(cst.Name(local_name))])
-                    body = cst.IndentedBlock(body=[assign, return_stmt])
-                    func = cst.FunctionDef(name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator])
-                    fixture_nodes.append(func)
+                    # Use guarded simple fixture creator which detects self-referential placeholders
+                    guarded = create_simple_fixture_with_guard(fname, cast(cst.BaseExpression, value_expr))
+                    fixture_nodes.append(guarded)
     return {"fixture_specs": specs, "fixture_nodes": fixture_nodes}

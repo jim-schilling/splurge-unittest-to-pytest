@@ -365,3 +365,36 @@ Files:
 
 This output prints the most recent diagnostics run directory, the marker file
 path, and a short file listing to help you locate snapshots quickly.
+
+## Strict mode (compat disabled)
+
+When you pass `--no-compat` (or compat=False via API), the converter emits strict pytest output:
+
+- Unittest classes and lifecycle methods (`setUp`/`tearDown`) are dropped
+- No autouse `_attach_to_instance` fixture is injected
+- Top-level pytest tests are generated that accept fixtures directly
+- Self-referential placeholders in fixtures (e.g., `str(schema_file)`) are guarded with a clear runtime error to avoid silently broken tests
+
+### CLI examples
+
+```bash
+# Convert a directory strictly to pytest style
+splurge-unittest-to-pytest --no-compat --recursive tests/
+
+# Convert files to an output directory in strict mode
+splurge-unittest-to-pytest --no-compat -o converted/ tests/data/*.bak.txt
+```
+
+### Python API
+
+```python
+from splurge_unittest_to_pytest.main import convert_string
+
+res = convert_string(src_code, compat=False)
+print(res.converted_code)
+```
+
+### When to use
+
+- Use default `--compat` to preserve runnability for mixed unittest/pytest suites
+- Use `--no-compat` when you want fully pytest-native code with no class scaffolding

@@ -114,7 +114,11 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     nodes: list[cst.FunctionDef] = context.get("fixture_nodes") or []
     collector: CollectorOutput | None = context.get("collector_output")
-    compat: bool = context.get("compat", False)
+    # Determine compat behavior. When compat is explicitly provided as False,
+    # disable autouse attachment. If not provided, default to True to preserve
+    # historical behavior in unit tests that call this stage directly.
+    compat_val = context.get("compat", None)
+    compat: bool = True if compat_val is None else bool(compat_val)
     if module is None or not nodes:
         return {"module": module}
     insert_idx = _find_insertion_index(module)
@@ -139,7 +143,13 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     if collector is not None:
         has_unittest_usage = getattr(collector, 'has_unittest_usage', False)
 
-    if has_unittest_usage or compat:
+    # Only inject autouse when either:
+    #  - collector detected unittest usage, OR
+    #  - compat flag was explicitly enabled (True). If compat was explicitly
+    #    disabled (False), do not inject the autouse fixture even if unittest
+    #    usage was detected. This allows strict pytest-style output when
+    #    requested by callers.
+    if has_unittest_usage and compat:
         fixture_names = [n.name.value for n in nodes]
         attach_fn = _make_autouse_attach(fixture_names)
         # insert an EmptyLine sentinel (a BaseSmallStatement) followed by the attach function

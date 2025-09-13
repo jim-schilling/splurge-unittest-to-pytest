@@ -1,0 +1,46 @@
+import os
+import shutil
+import tempfile
+from pathlib import Path
+from tests.unit.test_utils import create_sql_with_schema
+
+import pytest
+
+from splurge_sql_generator import generate_class, generate_multiple_classes
+
+
+@pytest.fixture
+def temp_dir():
+    _temp_dir_value = tempfile.mkdtemp()
+    yield _temp_dir_value
+    # Clean up the entire temp directory
+    shutil.rmtree(_temp_dir_value, ignore_errors=True)
+@pytest.fixture
+def sql_content():
+    return """# TestClass\n# test_method\nSELECT 1;"""
+@pytest.fixture()
+def sql_file(tmp_path, sql_content):
+    p = tmp_path.joinpath('test.sql')
+    p.write_text(sql_content)
+    return str(p)
+@pytest.fixture()
+def schema_file():
+    raise RuntimeError("Converted fixture 'schema_file' is ambiguous: converter produced a self-referential placeholder. Please implement this fixture to create the required artifact (e.g., using tmp_path and helper factories).")
+def test_generate_class(temp_dir, sql_content, sql_file, schema_file):
+    code = generate_class(sql_file, schema_file_path=schema_file)
+    assert 'class TestClass' in code
+    # Test output file
+    output_file = sql_file + '.py'
+    generate_class(sql_file, output_file_path=output_file, schema_file_path=schema_file)
+    assert os.path.exists(output_file)
+    with open(output_file) as f:
+        assert 'class TestClass' in f.read()
+def test_generate_multiple_classes(temp_dir, sql_content, sql_file, schema_file):
+    output_dir = sql_file + '_outdir'
+    os.mkdir(output_dir)
+    result = generate_multiple_classes([sql_file], output_dir=output_dir, schema_file_path=schema_file)
+    assert 'TestClass' in result
+    out_file = os.path.join(output_dir, 'test_class.py')
+    assert os.path.exists(out_file)
+    with open(out_file) as f:
+        assert 'class TestClass' in f.read()

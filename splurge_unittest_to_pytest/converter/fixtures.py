@@ -83,6 +83,150 @@ def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst
     return fixture_func
 
 
+def _is_self_referential(expr: cst.BaseExpression, attr_name: str) -> bool:
+    """Return True if the expression is a trivial self-referential placeholder
+    like `sql_file` or `self.sql_file` which indicates the converter couldn't
+    infer how to build the artifact.
+    """
+    # Recursively inspect common expression shapes for a trivial reference to
+    # the attribute. We treat Name(attr) and Attribute(self, attr) as
+    # self-referential. Additionally, accept simple wrappers like
+    # `str(attr)` or other Call forms whose arguments contain such a name.
+    def _inner(e: cst.BaseExpression | None) -> bool:
+        try:
+            if e is None:
+                return False
+            # direct name like `sql_file`
+            if isinstance(e, cst.Name):
+                return e.value == attr_name
+            # attribute like self.sql_file or cls.sql_file
+            if isinstance(e, cst.Attribute) and isinstance(e.value, cst.Name) and e.value.value in ("self", "cls"):
+                if isinstance(e.attr, cst.Name) and e.attr.value == attr_name:
+                    return True
+                # if attribute chains like self.x.y, still not our target
+                return False
+            # Call: inspect func and args for inner reference
+            if isinstance(e, cst.Call):
+                # check args
+                for a in e.args:
+                    if _inner(getattr(a, 'value', None)):
+                        return True
+                # also check the callable itself in case of partials/aliases
+                return _inner(getattr(e, 'func', None))
+            # Subscript: inspect value and slices
+            if isinstance(e, cst.Subscript):
+                if _inner(getattr(e, 'value', None)):
+                    return True
+                for s in getattr(e, 'slice', []) or []:
+                    inner = getattr(s, 'slice', None) or getattr(s, 'value', None) or s
+                    if isinstance(inner, cst.BaseExpression) and _inner(inner):
+                        return True
+                return False
+            # Tuples/Lists/Sets: inspect elements
+            if isinstance(e, (cst.Tuple, cst.List, cst.Set)):
+                for el in getattr(e, 'elements', []) or []:
+                    val = getattr(el, 'value', el)
+                    if isinstance(val, cst.BaseExpression) and _inner(val):
+                        return True
+                return False
+        except Exception:
+            # be conservative on unexpected shapes
+            return False
+        return False
+
+    return _inner(expr)
+
+
+def create_simple_fixture_with_guard(attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
+    """Create a simple fixture but detect self-referential placeholder expressions.
+
+    If a placeholder is detected, emit a fixture that raises a clear runtime
+    error telling the maintainer to implement the fixture manually or provide
+    a helper that the converter can call (safer than emitting a broken placeholder).
+    """
+    # If the value expression is trivial and self-referential, emit a guard that
+    # raises an informative error at runtime. The staged pipeline's generator
+    # will attempt autocreation of tmp_path-backed fixtures when a sibling
+    # '<prefix>_content' fixture is present; this helper remains conservative
+    # and emits a guard to avoid producing silently-broken placeholders.
+    if _is_self_referential(value_expr, attr_name):
+        from .decorators import build_pytest_fixture_decorator
+
+        fixture_decorator = build_pytest_fixture_decorator()
+        err_msg = (
+            f"Converted fixture '{attr_name}' is ambiguous: converter produced a "
+            "self-referential placeholder. Please implement this fixture to create "
+            "the required artifact (e.g., using tmp_path and helper factories)."
+        )
+        body = cst.IndentedBlock(body=[
+            cst.SimpleStatementLine(body=[cst.Raise(exc=cst.Call(func=cst.Name('RuntimeError'), args=[cst.Arg(value=cst.SimpleString(repr(err_msg)))]))])
+        ])
+
+        fixture_func = cst.FunctionDef(
+            name=cst.Name(attr_name),
+            params=cst.Parameters(),
+            body=body,
+            decorators=[fixture_decorator],
+        )
+        return fixture_func
+
+    # fallback to normal behavior when not self-referential
+    return create_simple_fixture(attr_name, value_expr)
+
+
+def create_autocreated_file_fixture(attr_name: str, content_fixture_name: str | None = None, filename: str | None = None) -> cst.FunctionDef:
+    """Create a fixture that generates a file under pytest's tmp_path using
+    content from a sibling fixture (e.g., `sql_content`) when available.
+
+    This is conservative but useful for common patterns where setUp created a
+    temporary file from in-memory content and then assigned `self.sql_file = str(sql_file)`.
+    The generated fixture will accept `tmp_path` and optionally the content
+    fixture, write the content to a created file, and return the string path.
+    """
+    from .decorators import build_pytest_fixture_decorator
+
+    fixture_decorator = build_pytest_fixture_decorator()
+
+    # Determine filename: prefer provided filename, otherwise fallback to '<attr_name>.sql'
+    if filename:
+        filename_val = filename
+    else:
+        filename_val = f"{attr_name}.sql"
+    p_assign = cst.SimpleStatementLine(
+        body=[
+            cst.Assign(
+                targets=[cst.AssignTarget(target=cst.Name('p'))],
+                value=cst.Call(
+                    func=cst.Attribute(value=cst.Name('tmp_path'), attr=cst.Name('joinpath')),
+                    args=[cst.Arg(value=cst.SimpleString(repr(filename_val)))]
+                ),
+            )
+        ]
+    )
+
+    # p.write_text(content_fixture_name or '')
+    write_args = [cst.Arg(value=cst.Name(content_fixture_name))] if content_fixture_name else [cst.Arg(value=cst.SimpleString("''"))]
+    write_call = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Call(func=cst.Attribute(value=cst.Name('p'), attr=cst.Name('write_text')), args=write_args))])
+
+    # return str(p)
+    return_stmt = cst.SimpleStatementLine(body=[cst.Return(value=cst.Call(func=cst.Name('str'), args=[cst.Arg(value=cst.Name('p'))]))])
+
+    params = [cst.Param(name=cst.Name('tmp_path'))]
+    if content_fixture_name:
+        params.append(cst.Param(name=cst.Name(content_fixture_name)))
+
+    body = cst.IndentedBlock(body=[p_assign, write_call, return_stmt])
+
+    fixture_func = cst.FunctionDef(
+        name=cst.Name(attr_name),
+        params=cst.Parameters(params=params),
+        body=body,
+        decorators=[fixture_decorator],
+    )
+
+    return fixture_func
+
+
 def make_autouse_attach_to_instance_fixture(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
     """Create an autouse fixture function that attaches named fixtures to unittest-style test instances.
 
@@ -176,4 +320,11 @@ def create_fixture_for_attribute(attr_name: str, value_expr: cst.BaseExpression,
     cleanup_statements = teardown_cleanup.get(attr_name, [])
     if cleanup_statements:
         return create_fixture_with_cleanup(attr_name, value_expr, cleanup_statements)
-    return create_simple_fixture(attr_name, value_expr)
+    # Use guarded simple fixture creator which handles ambiguous self-referential
+    # placeholders conservatively (emit a runtime guard) or creates a safe
+    # tmp_path-based fixture when appropriate.
+    try:
+        return create_simple_fixture_with_guard(attr_name, value_expr)
+    except NameError:
+        # Fallback in case the guarded creator isn't available in this import
+        return create_simple_fixture(attr_name, value_expr)

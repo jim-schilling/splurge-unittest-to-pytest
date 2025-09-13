@@ -84,6 +84,12 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
+    # Determine strict mode: when compat is explicitly False, convert to
+    # pure pytest-style by removing setUp/tearDown and dropping the original
+    # unittest classes in favor of generated top-level test functions.
+    compat_val = context.get("compat", None)
+    strict_pytest_mode = (compat_val is False)
+
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
             cls_info = classes[stmt.name.value]
@@ -100,15 +106,13 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 mname = member.name.value
                 # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
-                    # Preserve setup/teardown methods on the class so the
-                    # converted module remains runnable by directly instantiating
-                    # the TestCase and calling its lifecycle methods. The
-                    # pipeline also generates fixtures/autouse attach helpers
-                    # to make pytest runs work; keeping the original methods
-                    # avoids surprising AttributeError when test code invokes
-                    # setUp/tearDown manually (integration tests rely on this).
-                    new_class_body.append(member)
-                    continue
+                    # In strict mode, drop setUp/tearDown entirely
+                    if strict_pytest_mode:
+                        continue
+                    else:
+                        # Preserve in compat mode for back-compat runnability
+                        new_class_body.append(member)
+                        continue
 
                 # update test functions discovered by collector or named with test* prefix
                 if mname.startswith("test") or member in cls_info.test_methods:
@@ -140,14 +144,18 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # converted module remains runnable by default. The
                     # autouse attach fixture will ensure pytest runs still
                     # receive fixture values via request.getfixturevalue.
-                    updated_fn = _update_test_function(member, fixture_names, remove_first=False)
+                    # In strict mode, convert to plain functions (remove first param and add fixtures)
+                    updated_fn = _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
                     # Ensure one blank line between methods inside the class
                     if new_class_body:
                         last = new_class_body[-1]
                         # If the last appended element is not an EmptyLine, insert one
                         if not isinstance(last, cst.EmptyLine):
                             new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                    new_class_body.append(updated_fn)
+                    # Retain updated method only in compat mode; in strict mode we will
+                    # drop the class and rely on top-level functions.
+                    if not strict_pytest_mode:
+                        new_class_body.append(updated_fn)
                     continue
 
                 # otherwise retain the member unchanged
@@ -158,8 +166,10 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                         new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                 new_class_body.append(member)
 
-            new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
-            new_body.append(new_class)
+            # Emit class only in compat mode; strict mode drops the class entirely
+            if not strict_pytest_mode:
+                new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
+                new_body.append(new_class)
             # Create top-level pytest functions for each test method when the
             # class originally inherited from unittest.TestCase. These functions
             # accept fixture parameters and contain a rewritten body where

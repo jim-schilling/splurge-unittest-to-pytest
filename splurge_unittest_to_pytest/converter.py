@@ -65,6 +65,9 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.has_unittest_content = False
         self.imports_to_remove: list[str] = []
         self.imports_to_add: list[str] = []
+        # names bound by `with ... as NAME` for assertRaises conversions
+        # (used to rewrite NAME.exception -> NAME.value after module transforms)
+        self._exception_var_names: set[str] = set()
         
         # Track fixtures created from setUp methods
         self.setup_fixtures: dict[str, cst.FunctionDef] = {}
@@ -254,6 +257,17 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 # propagate import requirement to transformer state
                 if needs:
                     self.needs_pytest_import = True
+                # if original had an `as NAME` binding, record the name so
+                # we can perform a scope-aware rewrite of NAME.exception -> NAME.value
+                try:
+                    # look at the original_node first (pre-conversion) for asname
+                    first = original_node.items[0]
+                    asname = getattr(first, 'asname', None)
+                    if asname and isinstance(asname.name, cst.Name):
+                        self._exception_var_names.add(asname.name.value)
+                except Exception:
+                    pass
+
                 return new_with
         except (AttributeError, TypeError, ValueError):
             return original_node
@@ -278,12 +292,106 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
             # Add autouse fixture to attach fixture values to unittest-style test instances
             updated_node = self._add_autouse_instance_attachment_fixture(updated_node)
+
+            # Remove common unittest main guards to avoid executing tests when
+            # the converted module is imported by pytest (e.g., if __name__ == '__main__')
+            updated_node = self._remove_unittest_main_guard(updated_node)
+            # If we recorded any exception variable names from assertRaises
+            # context-manager conversions, run a scope-aware attribute rewrite
+            # pass to update NAME.exception -> NAME.value while respecting
+            # lexical shadowing. Use the existing RaisesRewriter stage logic
+            # for correct scoping behavior.
+            if self._exception_var_names:
+                try:
+                    # import here to avoid circular imports at module import time
+                    from .stages.raises_stage import RaisesRewriter
+
+                    rewriter = RaisesRewriter()
+                    # pre-seed the rewriter with the recorded names so it will
+                    # perform attribute rewrites while still performing proper
+                    # scope tracking for shadowed names.
+                    rewriter._exception_var_names = set(self._exception_var_names)
+                    updated_node = updated_node.visit(rewriter)
+                except Exception:
+                    # be conservative: if the rewriter fails for any reason,
+                    # don't break conversion; keep original updated_node
+                    pass
                 
         except (AttributeError, TypeError, ValueError, cst.ParserSyntaxError):
             # If processing fails due to node shape or parse issues, return original node unchanged
             return original_node
         
         return updated_node
+
+    def _remove_unittest_main_guard(self, module_node: cst.Module) -> cst.Module:
+        """Remove top-level `if __name__ == '__main__': unittest.main()` guards.
+
+        This is a conservative pass that strips If statements at module level
+        whose test is a comparison of __name__ == '__main__' and whose body
+        calls unittest.main(). Removing these prevents accidental test runs
+        when pytest imports converted modules.
+        """
+        def _is_main_test(node: cst.BaseExpression) -> bool:
+            # Accept Comparison nodes where left is __name__ and any comparator
+            # equals the literal '__main__' (allow single/double quotes)
+            if isinstance(node, cst.Comparison) and isinstance(node.left, cst.Name) and node.left.value == '__name__':
+                for comp in getattr(node, 'comparisons', []):
+                    comparator = getattr(comp, 'comparator', None)
+                    if isinstance(comparator, cst.SimpleString):
+                        sval = comparator.value.strip('"\'')
+                        if sval == '__main__':
+                            return True
+                    # Some AST shapes may yield a Name node (rare); accept name '__main__'
+                    if isinstance(comparator, cst.Name) and comparator.value == '__main__':
+                        return True
+            return False
+
+        def _body_calls_main(stmt_block: cst.BaseSuite) -> bool:
+            # Inspect statements in the block for calls to functions named 'main'
+            stmts = getattr(stmt_block, 'body', [])
+            for s in stmts:
+                # unwrap simple statement lines
+                if isinstance(s, cst.SimpleStatementLine) and s.body:
+                    first = s.body[0]
+                    # Expr(Call(...)) or Assign where value is a Call
+                    call_node = None
+                    if isinstance(first, cst.Expr) and isinstance(first.value, cst.Call):
+                        call_node = first.value
+                    elif isinstance(first, cst.Assign) and isinstance(first.value, cst.Call):
+                        call_node = first.value
+                    if call_node is not None:
+                        func = call_node.func
+                        # Patterns: unittest.main(...), main(...), sys.exit(unittest.main())
+                        # Direct main call
+                        if isinstance(func, cst.Name) and func.value == 'main':
+                            return True
+                        if isinstance(func, cst.Attribute):
+                            # attr like unittest.main or sys.exit
+                            if getattr(func, 'attr', None) and isinstance(func.attr, cst.Name) and func.attr.value == 'main':
+                                return True
+                # If statement nested inside the block, also inspect recursively
+                if isinstance(s, cst.If):
+                    if _body_calls_main(s.body):
+                        return True
+            return False
+
+        new_body: list[cst.BaseStatement] = []
+        changed = False
+        for stmt in module_node.body:
+            try:
+                if isinstance(stmt, cst.If):
+                    if _is_main_test(stmt.test) and _body_calls_main(stmt.body):
+                        # drop this If entirely
+                        changed = True
+                        continue
+                new_body.append(stmt)
+            except Exception:
+                # on unexpected shapes, preserve statement
+                new_body.append(stmt)
+
+        if not changed:
+            return module_node
+        return module_node.with_changes(body=new_body)
 
     def _is_unittest_testcase(self, base: cst.Arg) -> bool:
         """Delegate to class_checks helper to detect unittest TestCase bases."""
