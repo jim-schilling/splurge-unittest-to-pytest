@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [2025.1.0] - 2025-09-13
+
 ## [2025.0.5] - 2025-09-13
 
 ### Added
@@ -59,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CI workflow `.github/workflows/upload-diagnostics.yml` now sets a workspace-local
     diagnostics root and uploads the diagnostics directory as an artifact. A debug
     step was added to print the diagnostics root path in job logs for easier troubleshooting.
+
+
+
+## [2025.0.4] - 2025-09-12
 
 - Internal: consolidate small helpers into `converter/helpers`
   - Moved small helper implementations (normalization, parsing, change-detection,

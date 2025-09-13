@@ -59,12 +59,12 @@ class TestExample(unittest.TestCase):
         self.assertTrue(True)
 """
 
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src)
     assert res.has_changes
     out = res.converted_code
     # pytest import should be present
     assert "import pytest" in out
-    # autouse fixture attaching to instance should be present
-    assert "_attach_to_instance" in out
+    # compatibility/autouse fixture removed; expect strict pytest fixtures
+    assert "_attach_to_instance" not in out
     # fixture name temp_dir should be referenced as a function/param
     assert "def temp_dir(" in out or "def temp_dir" in out

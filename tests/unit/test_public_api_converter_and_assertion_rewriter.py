@@ -5,7 +5,7 @@ from splurge_unittest_to_pytest.stages.assertion_rewriter import assertion_rewri
 
 
 def test_transformer_pattern_adders_and_checks():
-    t = UnittestToPytestTransformer(compat=False)
+    t = UnittestToPytestTransformer()
 
     # add setup/teardown/test patterns and verify they're present
     t.add_setup_pattern("before_all")
@@ -24,7 +24,7 @@ def test_transformer_pattern_adders_and_checks():
 
 
 def test_is_self_call_and_pytest_import_add_and_add_pytest_import():
-    t = UnittestToPytestTransformer(compat=False)
+    t = UnittestToPytestTransformer()
 
     # craft a self.assertRaises(...) call
     call_node = cst.parse_expression("self.assertRaises(ValueError, func, arg)")

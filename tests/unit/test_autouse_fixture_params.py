@@ -15,13 +15,10 @@ def test_autouse_fixture_accepts_fixture_params_and_attaches() -> None:
     """)
 
     # run pipeline conversion
-    res = main.convert_string(src, engine="pipeline", compat=True)
+    res = main.convert_string(src)
     out = res.converted_code
-    # the autouse fixture should accept 'x' as a parameter (in its signature)
-    # the autouse fixture should use request.getfixturevalue('x') to retrieve
-    # the fixture deterministically and attach it onto the instance
-    assert "getfixturevalue('x')" in out or 'getfixturevalue("x")' in out
-    assert (
-        "setattr(inst, 'x', request.getfixturevalue('x')" in out
-        or "setattr(inst, 'x', request.getfixturevalue('x'))" in out
-    )
+    # Compatibility/autouse mode was removed. Expect strict pytest-style
+    # conversion: a top-level fixture 'x' should be created and the
+    # top-level test function should accept it as a parameter.
+    assert "def x" in out or "def x(" in out
+    assert "def test_use(x)" in out or "def test_use(x):" in out

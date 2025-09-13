@@ -12,7 +12,7 @@ class T(unittest.TestCase):
         assert True
 """
     mod = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer(compat=False)
+    transformer = UnittestToPytestTransformer()
     new = mod.visit(transformer)
     code = new.code
     # Check that a fixture named sql_file exists and contains a RuntimeError or 'ambiguous'

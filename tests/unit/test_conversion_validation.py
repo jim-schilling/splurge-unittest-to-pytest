@@ -39,7 +39,7 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
       - Converted code is syntactically valid Python.
     """
     src = SAMPLE.read_text(encoding="utf-8")
-    result = convert_string(src, compat=True)
+    result = convert_string(src)
 
     # Ensure conversion produced code
     assert isinstance(result.converted_code, str)

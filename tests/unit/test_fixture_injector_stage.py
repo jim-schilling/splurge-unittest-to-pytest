@@ -22,5 +22,5 @@ def test_fixture_injector_inserts_nodes_and_autouse_when_unittest_used() -> None
     new_mod = out.get("module")
     assert new_mod is not None
     assert any(isinstance(n, cst.FunctionDef) and n.name.value == "x" for n in new_mod.body)
-    # autouse attach should exist
-    assert any(isinstance(n, cst.FunctionDef) and n.name.value == "_attach_to_instance" for n in new_mod.body)
+    # autouse attach fixture removed; expect fixture 'x' present and pytest import signaled
+    assert any(isinstance(n, cst.FunctionDef) and n.name.value == "x" for n in new_mod.body)

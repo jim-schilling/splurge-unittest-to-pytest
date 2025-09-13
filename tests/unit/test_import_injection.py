@@ -12,7 +12,7 @@ def test_import_pytest_added_for_raises() -> None:
                 with self.assertRaises(ValueError):
                     int('x')
     """)
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     assert "import pytest" in out
 
 
@@ -25,5 +25,5 @@ def test_import_pytest_not_added_when_unused() -> None:
                 x = 1 + 1
                 assert x == 2
     """)
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     assert "import pytest" not in out

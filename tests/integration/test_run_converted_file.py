@@ -6,7 +6,7 @@ from splurge_unittest_to_pytest.main import convert_string
 def test_convert_and_run_single_file(tmp_path: Path) -> None:
     src_path = Path(__file__).parents[1] / "data" / "unittest_01.txt"
     src = src_path.read_text()
-    res = convert_string(src, compat=True, engine="pipeline")
+    res = convert_string(src)
     assert res.converted_code
     out_file = tmp_path / "converted.py"
     out_file.write_text(res.converted_code)

@@ -6,7 +6,7 @@ from splurge_unittest_to_pytest.main import is_unittest_file, find_unittest_file
 def test_convert_string_no_changes(tmp_path) -> None:
     src = """import pytest\n\ndef test_ok():\n    assert True\n"""
     # convert_string should detect no changes for pytest files
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src)
     assert not res.has_changes
 
 

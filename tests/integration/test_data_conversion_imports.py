@@ -30,7 +30,7 @@ def test_convert_and_import_all_data_files(tmp_path: Path) -> None:
 
     for p in sorted(data_dir.glob("unittest_*.txt")):
         src = p.read_text(encoding="utf8")
-        res = convert_string(src, engine="pipeline", compat=True)
+        res = convert_string(src)
         code = getattr(res, "converted_code", None)
         assert code is not None, f"Conversion failed for {p}"
 

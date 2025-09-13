@@ -80,7 +80,7 @@ class T(unittest.TestCase):
 
 """
     module = cst.parse_module(src)
-    out = run_pipeline(module, compat=False)
+    out = run_pipeline(module)
     # result should be a Module
     assert isinstance(out, cst.Module)
     # final code should not contain 'unittest.TestCase'

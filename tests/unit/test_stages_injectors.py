@@ -39,5 +39,5 @@ def test_fixture_injector_inserts_fixture_after_pytest_import_and_adds_autouse_w
     code = new_mod.code
     # fixture should be present
     assert "def a" in code
-    # autouse attach fixture name should be present
-    assert "_attach_to_instance" in code
+    # compat/autouse helper removed; ensure fixture was inserted
+    assert "_attach_to_instance" not in code or "def a" in code

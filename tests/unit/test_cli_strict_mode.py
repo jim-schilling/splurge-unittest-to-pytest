@@ -18,7 +18,7 @@ class TestX(unittest.TestCase):
         assert self.x == 1
 """
     mod = cst.parse_module(src)
-    out = run_pipeline(mod, compat=False, autocreate=False)
+    out = run_pipeline(mod, autocreate=False)
     code = out.code
     # Class should be removed in strict mode
     assert "class TestX" not in code

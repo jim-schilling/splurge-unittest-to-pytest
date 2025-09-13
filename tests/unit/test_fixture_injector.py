@@ -34,5 +34,6 @@ def test_fixture_injector_adds_compat_attacher() -> None:
     ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": Co(), "compat": True}
     res = fixture_injector_stage(ctx)
     new_module = cast(cst.Module, res.get("module"))
-    attach = [n for n in new_module.body if isinstance(n, cst.FunctionDef) and n.name.value == "_attach_to_instance"]
-    assert len(attach) == 1
+    # compatibility autouse attach removed; ensure fixture 'res' was inserted
+    fixtures = [n for n in new_module.body if isinstance(n, cst.FunctionDef) and n.name.value == "res"]
+    assert len(fixtures) == 1

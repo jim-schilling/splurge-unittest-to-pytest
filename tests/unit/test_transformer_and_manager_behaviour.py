@@ -28,7 +28,7 @@ class Other:
     pass
 """
     module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer(compat=False)
+    transformer = UnittestToPytestTransformer()
     # Run transformer leaves for ClassDef on the parsed tree
     # Use visit to ensure leave_* hooks are called
     new_module = module.visit(transformer)
@@ -49,7 +49,7 @@ class X(unittest.TestCase):
         assert self.x == 5
 """
     module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer(compat=True)
+    transformer = UnittestToPytestTransformer()
     new_module = module.visit(transformer)
 
     # setUp should be transformed into fixtures (fixture name or def present)
@@ -64,7 +64,7 @@ class A(unittest.TestCase):
             raise ValueError()
 """
     module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer(compat=False)
+    transformer = UnittestToPytestTransformer()
     new_module = module.visit(transformer)
     # since assertRaises is converted, pytest import should be added if needed
     assert "import pytest" in new_module.code or "pytest" in new_module.code

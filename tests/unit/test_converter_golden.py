@@ -78,7 +78,7 @@ def test_sample_04_matches_golden(tmp_path):
 
     # Also verify the strict (no-compat) conversion matches the no-compat golden
     expected_nc = _read_text("sample-04-pytest-no-compat.txt")
-    result_nc = main.convert_string(src, compat=False)
+    result_nc = main.convert_string(src)
     if isinstance(result_nc, ConversionResult):
         out_nc = result_nc.converted_code
     else:

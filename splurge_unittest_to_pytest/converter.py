@@ -24,7 +24,6 @@ from .converter.with_helpers import convert_assert_raises_with
 from .converter.fixture_builders import build_fixtures_from_setup_assignments
 from .converter.params import get_fixture_param_names, make_fixture_params
 from .converter.params import append_fixture_params
-from .converter.autouse import build_attach_to_instance_fixture, insert_attach_fixture_into_module
 from .converter.placement import insert_fixtures_into_module
 from .converter.call_utils import is_self_call
 from .converter.method_patterns import (
@@ -47,12 +46,11 @@ from .converter.decorators import build_pytest_fixture_decorator
 class UnittestToPytestTransformer(cst.CSTTransformer):
     """Transform unittest-style tests to pytest-style tests."""
 
-    def __init__(self, compat: bool = True) -> None:
+    def __init__(self, compat: bool = False) -> None:
         """Initialize the transformer.
 
-        Args:
-            compat: If True, emit autouse compatibility fixture to attach fixtures
-                to unittest-style test instances (default: True).
+        Compatibility mode has been removed; the transformer emits strict
+        pytest-style output without autouse attachment shims.
         """
         # Deprecation: prefer staged pipeline
         warnings.warn(
@@ -60,7 +58,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             DeprecationWarning,
             stacklevel=2,
         )
-        self.compat = bool(compat)
+    # compat parameter retained for API compatibility but ignored.
+    # Transformer always targets strict pytest output.
         self.needs_pytest_import = False
         self.has_unittest_content = False
         self.imports_to_remove: list[str] = []
@@ -470,11 +469,10 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         This fixture is only added when the transformer detected unittest.TestCase usage
         and when fixtures were created from setUp assignments.
         """
-        if not self.has_unittest_content or not self.setup_fixtures or not self.compat:
-            return module_node
-
-        fixture_func = build_attach_to_instance_fixture(self.setup_fixtures)
-        return insert_attach_fixture_into_module(module_node, fixture_func)
+        # Autouse attachment fixture behavior has been removed along with
+        # compatibility mode. The staged pipeline no longer injects this
+        # fixture; callers should use strict pytest fixtures instead.
+        return module_node
 
     def _create_fixtures_from_setup_assignments(self) -> None:
         """Create fixtures from stored setUp assignments and tearDown cleanup."""

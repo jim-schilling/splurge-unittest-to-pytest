@@ -9,7 +9,7 @@ def test_transformer_pattern_properties_and_adders():
     # Creating the transformer should emit a DeprecationWarning
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        transformer = UnittestToPytestTransformer(compat=False)
+        transformer = UnittestToPytestTransformer()
         # one DeprecationWarning expected
         assert any(isinstance(x.message, DeprecationWarning) for x in w)
 
@@ -30,7 +30,7 @@ def test_transformer_pattern_properties_and_adders():
 
 
 def test_remove_self_references_delegation():
-    transformer = UnittestToPytestTransformer(compat=True)
+    transformer = UnittestToPytestTransformer()
     # Create a small module containing a self attribute access in a function body
     src = "class A:\n    def test_one(self):\n        self.x = 1\n"
     module = cst.parse_module(src)

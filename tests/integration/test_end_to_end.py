@@ -17,7 +17,7 @@ def test_converted_module_executes_and_autouse_attaches(tmp_path: Path) -> None:
             def test_using_tmp(self) -> None:
                 assert self.tmp == 123
     """)
-    res = convert_string(src, engine="pipeline", compat=True)
+    res = convert_string(src)
     assert res.has_changes
     code = res.converted_code
     # write to temporary file and attempt to compile/exec it
@@ -27,21 +27,20 @@ def test_converted_module_executes_and_autouse_attaches(tmp_path: Path) -> None:
     compiled = compile(code, str(p), "exec")
     globals_dict: dict[str, object] = {}
     exec(compiled, globals_dict)
-    # Ensure the converted module defines TestFoo
-    assert "TestFoo" in globals_dict
-    # instantiate and inspect the test method signature to ensure the
-    # converted test expects a 'tmp' fixture parameter (or that setUp was
-    # preserved). We avoid calling the test method because pytest handles
-    # fixture attachment at runtime.
-    T = cast(type, globals_dict["TestFoo"])
-    func = getattr(T, "test_using_tmp")
-    # ensure function has at least one parameter when converted to pytest
-    # style (accepting 'tmp') or that the class still defines setUp.
-    params = getattr(func, "__code__", None)
-    if params is not None:
-        argcount = getattr(params, "co_argcount", 0)
-        # when converted to a pytest function, it will accept one arg
-        assert argcount >= 1
+    # The converter now emits strict pytest-style code: classes are dropped
+    # and top-level test functions and fixtures are emitted. Accept either
+    # a preserved class or a top-level test function.
+    if "TestFoo" in globals_dict:
+        T = cast(type, globals_dict["TestFoo"])
+        func = getattr(T, "test_using_tmp")
+        params = getattr(func, "__code__", None)
+        if params is not None:
+            assert getattr(params, "co_argcount", 0) >= 1
+        else:
+            assert hasattr(T, "setUp")
     else:
-        # fallback: ensure setUp exists on the class
-        assert hasattr(T, "setUp")
+        # Expect top-level test function named 'test_using_tmp'
+        assert "test_using_tmp" in globals_dict
+        func = globals_dict["test_using_tmp"]
+        params = getattr(func, "__code__", None)
+        assert params is not None and getattr(params, "co_argcount", 0) >= 1
