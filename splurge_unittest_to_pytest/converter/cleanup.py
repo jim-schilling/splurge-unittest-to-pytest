@@ -4,7 +4,7 @@ These are pure functions that inspect libcst statement/expression nodes to
 determine whether cleanup statements reference a given attribute name.
 """
 
-from typing import Any, List
+from typing import Any
 
 import libcst as cst
 
@@ -12,13 +12,13 @@ from .cleanup_checks import references_attribute
 from .cleanup_inspect import simple_stmt_references_attribute
 
 
-def extract_relevant_cleanup(cleanup_statements: List[Any], attr_name: str) -> List[Any]:
+def extract_relevant_cleanup(cleanup_statements: list[Any], attr_name: str) -> list[Any]:
     """Return a list of cleanup statements that reference the given attribute.
 
     The implementation scans common statement shapes (Expr with Call, Assign,
     If blocks, IndentedBlock) and returns statements that reference attr_name.
     """
-    relevant_statements: List[Any] = []
+    relevant_statements: list[Any] = []
 
     def inspect_stmt(s: cst.BaseStatement) -> None:
         # Simple statement lines are delegated to a focused helper for clarity / testability

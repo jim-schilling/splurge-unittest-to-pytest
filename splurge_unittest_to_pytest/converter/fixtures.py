@@ -5,11 +5,11 @@ nodes. The class in `converter.py` keeps thin wrappers that manage transformer
 state (e.g., setting self.needs_pytest_import) and call these helpers.
 """
 
-from typing import Any, List
+from typing import Any
 
 import libcst as cst
 
-__all__: List[str] = [
+__all__: list[str] = [
     "create_fixture_with_cleanup",
     "create_simple_fixture",
     "parse_setup_assignments",
@@ -18,7 +18,7 @@ __all__: List[str] = [
 from .setup_parser import parse_setup_assignments
 
 
-def _collect_identifiers_from_statements(stmts: List[cst.BaseStatement]) -> set[str]:
+def _collect_identifiers_from_statements(stmts: list[cst.BaseStatement]) -> set[str]:
     ids: set[str] = set()
 
     class _NameCollector(cst.CSTVisitor):
@@ -75,7 +75,7 @@ def _infer_simple_return_annotation(expr: cst.BaseExpression | None) -> cst.Anno
 
 
 def create_fixture_with_cleanup(
-    attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: List[cst.BaseStatement]
+    attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]
 ) -> cst.FunctionDef:
     """Create a fixture with yield pattern and cleanup.
 

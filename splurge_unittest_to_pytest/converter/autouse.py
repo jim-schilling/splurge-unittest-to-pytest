@@ -1,11 +1,11 @@
 """Helpers to build and insert the autouse attachment fixture for unittest compatibility."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 import libcst as cst
 
 
-def build_attach_to_instance_fixture(setup_fixtures: Dict[str, cst.FunctionDef]) -> cst.FunctionDef:
+def build_attach_to_instance_fixture(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
     """Construct the `_attach_to_instance` fixture function node.
 
     Args:
@@ -32,7 +32,7 @@ def build_attach_to_instance_fixture(setup_fixtures: Dict[str, cst.FunctionDef])
     )
 
     # Build setattr calls under if inst is truthy.
-    set_calls: List[cst.BaseStatement] = []
+    set_calls: list[cst.BaseStatement] = []
     for name in setup_fixtures.keys():
         set_calls.append(
             cst.SimpleStatementLine(
@@ -81,7 +81,7 @@ def insert_attach_fixture_into_module(module_node: cst.Module, fixture_func: cst
 
     Returns a new Module node with the fixture inserted.
     """
-    new_body: List[Any] = list(module_node.body)
+    new_body: list[Any] = list(module_node.body)
     insert_pos = 0
     for i, stmt in enumerate(new_body):
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:

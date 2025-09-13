@@ -1,11 +1,11 @@
 """Utilities for analyzing Call nodes."""
 
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import libcst as cst
 
 
-def is_self_call(call_node: cst.Call) -> Tuple[str, Sequence[cst.Arg]] | None:
+def is_self_call(call_node: cst.Call) -> tuple[str, Sequence[cst.Arg]] | None:
     """Return (method_name, args) if call_node is self.method(...), else None."""
     try:
         if isinstance(call_node.func, cst.Attribute):

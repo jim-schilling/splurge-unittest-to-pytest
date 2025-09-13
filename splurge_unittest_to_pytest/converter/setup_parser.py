@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import libcst as cst
-from typing import Dict
 
 
-def parse_setup_assignments(node: cst.FunctionDef) -> Dict[str, cst.BaseExpression]:
+def parse_setup_assignments(node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
     """Parse a setUp function to extract assignments to self.<attr>.
 
     Returns a dict mapping attribute name -> assigned expression.

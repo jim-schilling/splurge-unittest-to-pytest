@@ -1,11 +1,11 @@
 """Helpers for placing fixtures and nodes into module bodies."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 import libcst as cst
 
 
-def insert_fixtures_into_module(module_node: cst.Module, fixtures: Dict[str, cst.FunctionDef]) -> cst.Module:
+def insert_fixtures_into_module(module_node: cst.Module, fixtures: dict[str, cst.FunctionDef]) -> cst.Module:
     """Insert fixture FunctionDef nodes into the module body after imports.
 
     Fixtures are inserted after the last import statement (Import or ImportFrom).
@@ -13,7 +13,7 @@ def insert_fixtures_into_module(module_node: cst.Module, fixtures: Dict[str, cst
     if not fixtures:
         return module_node
 
-    new_body: List[Any] = list(module_node.body)
+    new_body: list[Any] = list(module_node.body)
 
     insert_pos = 0
     for i, stmt in enumerate(new_body):

@@ -11,7 +11,7 @@ output shape as the original (fixture_specs and fixture_nodes).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, Optional, Set, cast
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -226,7 +226,7 @@ def _infer_ann(node: Any) -> tuple[cst.Annotation, set[str]]:
 class SimpleFixtureSpec:
     name: str
     value_expr: Optional[cst.BaseExpression]
-    cleanup_statements: List[Any]
+    cleanup_statements: list[Any]
     yield_style: bool
 
 
@@ -240,8 +240,8 @@ def generator(context: dict[str, Any]) -> dict[str, Any]:
     if out is None:
         return {}
 
-    fixture_specs: Dict[str, SimpleFixtureSpec] = {}
-    fixture_nodes: List[cst.BaseStatement] = []
+    fixture_specs: dict[str, SimpleFixtureSpec] = {}
+    fixture_nodes: list[cst.BaseStatement] = []
     needs_typing: Set[str] = set()
     needs_shutil = False
     module_node = context.get("module")
@@ -694,7 +694,7 @@ def generator(context: dict[str, Any]) -> dict[str, Any]:
                     ann_node = getattr(ann_res, "annotation", None)
                     # Emit return annotations when they are useful and stable.
                     # Allow simple Name annotations (e.g., "int", "Path") and
-                    # Tuple[...] subscript annotations (commonly inferred for
+                    # tuple[...] subscript annotations (commonly inferred for
                     # tuple literals). Skip other complex/subscript annotations
                     # to avoid noisy goldens.
                     if isinstance(ann_node, cst.Name):
@@ -718,7 +718,7 @@ def generator(context: dict[str, Any]) -> dict[str, Any]:
                         and isinstance(getattr(ann_node, "value", None), cst.Name)
                         and getattr(ann_node.value, "value", None) in ("Tuple", "List")
                     ):
-                        # allow Tuple[...] annotations for tuple literals
+                        # allow tuple[...] annotations for tuple literals
                         func = cst.FunctionDef(
                             name=cst.Name(attr),
                             params=cst.Parameters(params=params),
@@ -754,7 +754,7 @@ def generator(context: dict[str, Any]) -> dict[str, Any]:
                 # For sequence/tuple/set literals we rely on _infer_ann above to
                 # provide precise typing requirements. Avoid unconditionally
                 # adding 'Any' here because it pollutes generated imports and
-                # golden outputs when a precise annotation (e.g., Tuple[str,int])
+                # golden outputs when a precise annotation (e.g., tuple[str,int])
                 # was inferred.
             try:
                 if isinstance(val, (cst.Dict,)):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple, List
 
 import libcst as cst
 
@@ -77,7 +76,7 @@ def first_param_name(node: cst.FunctionDef) -> str | None:
     return first_param.name.value if hasattr(first_param, "name") else None
 
 
-def remove_method_self_references(node: cst.FunctionDef) -> Tuple[List[cst.Param], cst.BaseSuite]:
+def remove_method_self_references(node: cst.FunctionDef) -> tuple[list[cst.Param], cst.BaseSuite]:
     """Remove the first parameter (if applicable) and self/cls references from the body.
 
     Returns the new parameter list and transformed body.
