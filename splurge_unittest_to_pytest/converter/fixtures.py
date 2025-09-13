@@ -18,6 +18,62 @@ __all__: List[str] = [
 from .setup_parser import parse_setup_assignments
 
 
+def _collect_identifiers_from_statements(stmts: List[cst.BaseStatement]) -> set[str]:
+    ids: set[str] = set()
+
+    class _NameCollector(cst.CSTVisitor):
+        def visit_Name(self, node: cst.Name) -> None:
+            ids.add(node.value)
+
+    for s in stmts:
+        try:
+            s.visit(_NameCollector())
+        except Exception:
+            continue
+    return ids
+
+
+def _choose_unique_name(base: str, existing: set[str]) -> str:
+    if base not in existing:
+        return base
+    i = 1
+    while True:
+        cand = f"{base}_{i}"
+        if cand not in existing:
+            return cand
+        i += 1
+
+
+def _infer_simple_return_annotation(expr: cst.BaseExpression | None) -> cst.Annotation | None:
+    """Infer a lightweight return annotation for very simple expressions.
+
+    This is intentionally conservative: it only handles plain literals and
+    container literals and returns a simple `cst.Annotation` referencing a
+    builtin or typing name (e.g., `int`, `str`, `List`). More complex
+    inference is left to the generator stage which has broader context.
+    """
+    if expr is None:
+        return None
+    # primitives
+    if isinstance(expr, cst.Integer):
+        return cst.Annotation(annotation=cst.Name("int"))
+    if isinstance(expr, cst.Float):
+        return cst.Annotation(annotation=cst.Name("float"))
+    if isinstance(expr, cst.SimpleString):
+        return cst.Annotation(annotation=cst.Name("str"))
+    # container literals -> use typing names (List/Dict/Set/Tuple)
+    if isinstance(expr, cst.List):
+        return cst.Annotation(annotation=cst.Name("List"))
+    if isinstance(expr, cst.Tuple):
+        return cst.Annotation(annotation=cst.Name("Tuple"))
+    if isinstance(expr, cst.Set):
+        return cst.Annotation(annotation=cst.Name("Set"))
+    if isinstance(expr, cst.Dict):
+        return cst.Annotation(annotation=cst.Name("Dict"))
+    # comprehensions and simple names are not annotated here
+    return None
+
+
 def create_fixture_with_cleanup(
     attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: List[cst.BaseStatement]
 ) -> cst.FunctionDef:
@@ -32,7 +88,10 @@ def create_fixture_with_cleanup(
     # Always create a local value name and assign the value_expr to it. This
     # ensures cleanup statements can reliably reference the local variable
     # rather than the original attribute name.
-    value_name = f"_{attr_name}_value"
+    # pick a deterministic base and ensure it doesn't collide with names used
+    base_name = f"_{attr_name}_value"
+    existing_names = _collect_identifiers_from_statements(cleanup_statements)
+    value_name = _choose_unique_name(base_name, existing_names)
     value_assign = cst.SimpleStatementLine(
         body=[
             cst.Assign(
@@ -56,7 +115,7 @@ def create_fixture_with_cleanup(
         params=cst.Parameters(),
         body=body,
         decorators=[fixture_decorator],
-        returns=None,
+        returns=_infer_simple_return_annotation(value_expr),
         asynchronous=None,
     )
 
@@ -92,13 +151,16 @@ def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst
             params=cst.Parameters(),
             body=body,
             decorators=[fixture_decorator],
-            returns=None,
+            returns=_infer_simple_return_annotation(value_expr),
             asynchronous=None,
         )
         return fixture_func
 
     # fallback: bind to a local name and return it
-    value_name = f"_{attr_name}_value"
+    base_name = f"_{attr_name}_value"
+    # avoid colliding with common reserved names
+    reserved = {"request", "tmp_path", attr_name}
+    value_name = _choose_unique_name(base_name, reserved)
     value_assign = cst.SimpleStatementLine(
         body=[cst.Assign(targets=[cst.AssignTarget(target=cst.Name(value_name))], value=value_expr)]
     )
@@ -281,6 +343,7 @@ def create_autocreated_file_fixture(
         params=cst.Parameters(params=params),
         body=body,
         decorators=[fixture_decorator],
+        returns=cst.Annotation(annotation=cst.Name("str")),
     )
 
     return fixture_func
