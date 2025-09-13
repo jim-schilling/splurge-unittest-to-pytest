@@ -15,7 +15,7 @@ def _make_fn(name: str) -> cst.FunctionDef:
 def test_no_compat_inserts_two_blank_lines_before_defs() -> None:
     mod = _make_module_with_placeholders()
     nodes = [_make_fn("fix1"), _make_fn("fix2")]
-    ctx = {"module": mod, "fixture_nodes": nodes, "compat": False}
+    ctx = {"module": mod, "fixture_nodes": nodes}
     out = fixture_injector_stage(ctx)
     new_mod = out.get("module")
     assert isinstance(new_mod, cst.Module)
@@ -37,7 +37,7 @@ def test_no_compat_inserts_two_blank_lines_before_defs() -> None:
 def test_compat_preserves_single_empty_between_fixtures() -> None:
     mod = _make_module_with_placeholders()
     nodes = [_make_fn("a"), _make_fn("b")]
-    ctx = {"module": mod, "fixture_nodes": nodes, "compat": True}
+    ctx = {"module": mod, "fixture_nodes": nodes}
     out = fixture_injector_stage(ctx)
     new_mod = out.get("module")
     assert isinstance(new_mod, cst.Module)

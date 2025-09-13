@@ -1,19 +1,19 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import PatternConfigurator, convert_string
 
 
 def test_pattern_adders_and_properties():
-    t = UnittestToPytestTransformer()
+    pc = PatternConfigurator()
     # default patterns exist
-    assert "setUp" in t.setup_patterns or "setup" in t.setup_patterns
+    assert "setUp" in pc.setup_patterns or "setup" in pc.setup_patterns
     # add custom patterns
-    t.add_setup_pattern("mySetup")
-    t.add_teardown_pattern("myTeardown")
-    t.add_test_pattern("my_test_")
-    assert any(p.lower() == "mysetup" for p in t.setup_patterns)
-    assert any(p.lower() == "myteardown" for p in t.teardown_patterns)
-    assert any(p == "my_test_" for p in t.test_patterns)
+    pc.add_setup_pattern("mySetup")
+    pc.add_teardown_pattern("myTeardown")
+    pc.add_test_pattern("my_test_")
+    assert any(p.lower() == "mysetup" for p in pc.setup_patterns)
+    assert any(p.lower() == "myteardown" for p in pc.teardown_patterns)
+    assert any(p == "my_test_" for p in pc.test_patterns)
 
 
 def test_remove_self_references_delegation():
@@ -25,14 +25,14 @@ def test_fn(self):
     node = cst.parse_module(src).body[0]
     assert isinstance(node, cst.FunctionDef)
 
-    t = UnittestToPytestTransformer()
-    new_params, new_body = t._remove_method_self_references(node)
-    # new_params should be a list (self removed)
-    assert isinstance(new_params, list)
-    assert isinstance(new_body, cst.BaseSuite)
+    # Perform a conversion on a class-based test and confirm 'self' references are removed
+    src = "class T(unittest.TestCase):\n    def test_fn(self):\n        print(self.x)\n"
+    res = convert_string(src)
+    # The converted code should not contain 'self.' attribute accesses
+    assert "self.x" not in res.converted_code
 
 
 def test_normalize_method_name_delegation():
-    t = UnittestToPytestTransformer()
+    pc = PatternConfigurator()
     # current normalization converts camelCase to snake with underscore
-    assert t._normalize_method_name("setUp") == "set_up"
+    assert pc._is_setup_method("setUp") is True

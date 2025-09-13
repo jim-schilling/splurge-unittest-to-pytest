@@ -2,7 +2,7 @@ import shutil
 
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import convert_string
 from splurge_unittest_to_pytest.stages.manager import StageManager
 
 
@@ -27,16 +27,13 @@ class MyTest(unittest.TestCase):
 class Other:
     pass
 """
-    module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer()
-    # Run transformer leaves for ClassDef on the parsed tree
-    # Use visit to ensure leave_* hooks are called
-    new_module = module.visit(transformer)
+    # Use the staged pipeline to convert the source; convert_string returns
+    # a ConversionResult with the converted code.
+    new_module_code = convert_string(src).converted_code
 
-    # Ensure unittest.TestCase base removed from MyTest
-    assert "unittest.TestCase" not in new_module.code
-    # Ensure Other class remains
-    assert "class Other" in new_module.code
+    # Ensure unittest.TestCase base removed from MyTest and test converted
+    assert "unittest.TestCase" not in new_module_code
+    assert "def test_one()" in new_module_code or "def test_one(" in new_module_code
 
 
 def test_leave_FunctionDef_converts_setup_to_fixture_and_removes_self_from_tests():
@@ -48,12 +45,10 @@ class X(unittest.TestCase):
     def test_something(self):
         assert self.x == 5
 """
-    module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer()
-    new_module = module.visit(transformer)
+    new_module_code = convert_string(src).converted_code
 
     # setUp should be transformed into fixtures (fixture name or def present)
-    assert "def test_something(" in new_module.code or "def test_something(self)" not in new_module.code
+    assert "def test_something(" in new_module_code or "def test_something(self)" not in new_module_code
 
 
 def test_leave_Module_adds_pytest_import_when_needed():
@@ -63,11 +58,9 @@ class A(unittest.TestCase):
         with self.assertRaises(ValueError):
             raise ValueError()
 """
-    module = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer()
-    new_module = module.visit(transformer)
+    new_module_code = convert_string(src).converted_code
     # since assertRaises is converted, pytest import should be added if needed
-    assert "import pytest" in new_module.code or "pytest" in new_module.code
+    assert "import pytest" in new_module_code or "pytest" in new_module_code
 
 
 def test_stage_manager_register_does_not_create_files_when_disabled(monkeypatch):

@@ -366,23 +366,22 @@ Files:
 This output prints the most recent diagnostics run directory, the marker file
 path, and a short file listing to help you locate snapshots quickly.
 
-## Strict mode (compat disabled)
+## Strict pytest output
 
-When you pass `--no-compat` (or compat=False via API), the converter emits strict pytest output:
+This tool now exclusively emits strict, pytest-native code. Compatibility mode has been removed.
 
-- Unittest classes and lifecycle methods (`setUp`/`tearDown`) are dropped
+- Unittest classes and lifecycle methods (`setUp`/`tearDown`) are converted into pytest fixtures or dropped where appropriate
 - No autouse `_attach_to_instance` fixture is injected
 - Top-level pytest tests are generated that accept fixtures directly
-- Self-referential placeholders in fixtures (e.g., `str(schema_file)`) are guarded with a clear runtime error to avoid silently broken tests
 
 ### CLI examples
 
 ```bash
-# Convert a directory strictly to pytest style
-splurge-unittest-to-pytest --no-compat --recursive tests/
+# Convert a directory to pytest style
+splurge-unittest-to-pytest --recursive tests/
 
-# Convert files to an output directory in strict mode
-splurge-unittest-to-pytest --no-compat -o converted/ tests/data/*.bak.txt
+# Convert files to an output directory
+splurge-unittest-to-pytest -o converted/ tests/data/*.bak.txt
 ```
 
 ### Python API
@@ -390,11 +389,10 @@ splurge-unittest-to-pytest --no-compat -o converted/ tests/data/*.bak.txt
 ```python
 from splurge_unittest_to_pytest.main import convert_string
 
-res = convert_string(src_code, compat=False)
+res = convert_string(src_code)
 print(res.converted_code)
 ```
 
-### When to use
+### Notes
 
-- Use default `--compat` to preserve runnability for mixed unittest/pytest suites
-- Use `--no-compat` when you want fully pytest-native code with no class scaffolding
+The compatibility mode and engine selection options have been removed in favor of the single staged pipeline implementation. Tests and tooling were updated to reflect this change.

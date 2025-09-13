@@ -14,7 +14,7 @@ def test_fixture_injector_inserts_fixtures_after_import() -> None:
     src = "import pytest\n\nclass A:\n    pass\n"
     module = parse_module(src)
     fixtures = [make_dummy_fixture("a"), make_dummy_fixture("b")]
-    ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": None, "compat": False}
+    ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": None}
     res = fixture_injector_stage(ctx)
     new_module = cast(cst.Module, res.get("module"))
     # find fixtures present after import
@@ -31,7 +31,7 @@ def test_fixture_injector_adds_compat_attacher() -> None:
     class Co:
         has_unittest_usage = True
 
-    ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": Co(), "compat": True}
+    ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": Co()}
     res = fixture_injector_stage(ctx)
     new_module = cast(cst.Module, res.get("module"))
     # compatibility autouse attach removed; ensure fixture 'res' was inserted
