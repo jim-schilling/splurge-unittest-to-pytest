@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New unit test `tests/unit/test_cli_strict_mode.py` to lock strict mode behavior
 
 ### Changed
+- CLI default and help: CLI now advertises strict/no-compat as the default output (use `--compat` to preserve legacy compatibility behavior).
+- Fixture injection: no-compat (strict) output now inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Compat behavior preserves the previous single-empty-line spacing.
+
+### Fixed
+- CLI dry-run verbose reporting: when a file already imports `pytest`, dry-run verbose now reports "No changes needed" (avoids noisy diffs for already-converted files).
+- Fixture autouse placement: ensure the autouse `_attach_to_instance` fixture (compat mode) is inserted after injected fixtures so golden comparisons and emitted code are stable.
+- Added unit test `tests/unit/test_fixture_spacing.py` to assert compat vs no-compat spacing behavior.
+
+### Changed
 - Compat flag now propagates through the staged pipeline so all stages can make
   decisions deterministically
 - Autouse attachment fixture is injected only when `compat=True`; no longer
