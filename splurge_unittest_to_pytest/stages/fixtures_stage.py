@@ -85,11 +85,13 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
-    # Determine strict mode: when compat is explicitly False, convert to
-    # pure pytest-style by removing setUp/tearDown and dropping the original
-    # unittest classes in favor of generated top-level test functions.
+    # Determine strict mode from context. When compat is explicitly False,
+    # convert to pure pytest-style by removing setUp/tearDown and dropping
+    # the original unittest classes in favor of generated top-level test
+    # functions. When compat is True (default historical behavior), keep
+    # classes and emit autouse attach fixture to maintain runnable modules.
     compat_val = context.get("compat", None)
-    strict_pytest_mode = compat_val is False
+    strict_pytest_mode = False if (compat_val is None or bool(compat_val)) else True
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:

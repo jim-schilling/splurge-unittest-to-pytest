@@ -6,7 +6,10 @@ from typing import Any
 
 import libcst as cst
 from .collector import Collector
-from .generator import generator_stage
+try:
+    from .generator_v2 import generator_v2 as generator_stage
+except Exception:
+    from .generator import generator_stage
 from .fixture_injector import fixture_injector_stage
 from .rewriter import rewriter_stage
 from .import_injector import import_injector_stage

@@ -10,6 +10,28 @@ def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst
 
     Adds no decorators; caller should add @pytest.fixture as needed.
     """
+    # Conservative local inference for simple literals/containers to avoid
+    # adding a dependency on other converter modules and to keep this helper
+    # self-contained.
+    def _infer_simple_return_annotation(expr: cst.BaseExpression | None) -> cst.Annotation | None:
+        if expr is None:
+            return None
+        if isinstance(expr, cst.Integer):
+            return cst.Annotation(annotation=cst.Name("int"))
+        if isinstance(expr, cst.Float):
+            return cst.Annotation(annotation=cst.Name("float"))
+        if isinstance(expr, cst.SimpleString):
+            return cst.Annotation(annotation=cst.Name("str"))
+        if isinstance(expr, cst.List):
+            return cst.Annotation(annotation=cst.Name("List"))
+        if isinstance(expr, cst.Tuple):
+            return cst.Annotation(annotation=cst.Name("Tuple"))
+        if isinstance(expr, cst.Set):
+            return cst.Annotation(annotation=cst.Name("Set"))
+        if isinstance(expr, cst.Dict):
+            return cst.Annotation(annotation=cst.Name("Dict"))
+        return None
+
     # Create a simple return statement
     ret = cst.SimpleStatementLine(body=[cst.Return(value=value_expr)])
     body = cst.IndentedBlock(body=[ret])
@@ -19,7 +41,7 @@ def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst
         params=cst.Parameters(),
         body=body,
         decorators=[],
-        returns=None,
+        returns=_infer_simple_return_annotation(value_expr),
         asynchronous=None,
     )
     return func
