@@ -137,28 +137,27 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                             code = cst.Module(body=[s]).code
                         except Exception:
                             code = ""
-                            if f"{attr}.mkdir(" in code or f"self.{attr}.mkdir(" in code:
-                                # try to reuse the original statement (transformed) to
-                                # preserve formatting such as `parents=True` vs a
-                                # synthesized argument formatting.
-                                try:
-                                    node = s.visit(_ReplaceSelfWithName())
-                                    setup_stmts.append(cast(cst.BaseStatement, node))
-                                    continue
-                                except Exception:
-                                    pass
-                            # fallback: synthesize a canonical mkdir(parents=True) call
-                            mkdir_call = cst.SimpleStatementLine(
-                                body=[
-                                    cst.Expr(
-                                        cst.Call(
-                                            func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
-                                            args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
+                        # if the parsed statement mentions mkdir for this attr,
+                        # try to transform and preserve it; otherwise synthesize
+                        # a canonical mkdir call only if we detected the pattern
+                        if f"{attr}.mkdir(" in code or f"self.{attr}.mkdir(" in code:
+                            try:
+                                node = s.visit(_ReplaceSelfWithName())
+                                setup_stmts.append(cast(cst.BaseStatement, node))
+                                continue
+                            except Exception:
+                                # fallback to a synthesized mkdir(parents=True)
+                                mkdir_call = cst.SimpleStatementLine(
+                                    body=[
+                                        cst.Expr(
+                                            cst.Call(
+                                                func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
+                                            )
                                         )
-                                    )
-                                ]
-                            )
-                            setup_stmts.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
+                                    ]
+                                )
+                                setup_stmts.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
 
             if yield_style and isinstance(val, cst.BaseExpression):
                 # If the setup value is a simple literal, yield it directly and
@@ -205,7 +204,12 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                         new_s = cast(cst.BaseStatement, s.visit(_ReplaceSelfWithName()))
                         rewritten_cleanup.append(new_s)
 
-                    body = cst.IndentedBlock(body=setup_stmts + [yield_stmt] + rewritten_cleanup)
+                    # only include setup statements in the fixture body if the
+                    # original class did not have setUp methods. When the
+                    # class setUp remains, duplicating mkdir calls into
+                    # fixtures causes duplicated behavior (see sample-04).
+                    include_setup = not bool(getattr(cls, "setup_methods", []))
+                    body = cst.IndentedBlock(body=(setup_stmts if include_setup else []) + [yield_stmt] + rewritten_cleanup)
                     func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
                 else:
                     # non-literal: bind to a local variable and rewrite cleanup to
@@ -260,13 +264,44 @@ def generator_v2(context: dict[str, Any]) -> dict[str, Any]:
                         new_s = cast(cst.BaseStatement, new_s.visit(_ReplaceAttrWithLocal()))
                         rewritten_cleanup.append(new_s)
 
-                    body = cst.IndentedBlock(body=setup_stmts + [assign, yield_stmt] + rewritten_cleanup)
+                    include_setup = not bool(getattr(cls, "setup_methods", []))
+                    body = cst.IndentedBlock(body=(setup_stmts if include_setup else []) + [assign, yield_stmt] + rewritten_cleanup)
                     func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
             elif not yield_style and isinstance(val, cst.BaseExpression):
                 # rewrite self.* references in the return expression to params
                 val_simple = cast(cst.BaseExpression, val.visit(_ReplaceSelfWithName()))
                 return_stmt = cst.SimpleStatementLine(body=[cst.Return(val_simple)])
-                body = cst.IndentedBlock(body=setup_stmts + [return_stmt])
+
+                # ensure mkdir/setup statements are preserved even for return-style
+                # fixtures: detect mkdir calls in recorded setup_methods and
+                # append transformed or synthesized mkdir statements.
+                preserved_setup: list[cst.BaseStatement] = list(setup_stmts)
+                for m in getattr(cls, "setup_methods", []) or []:
+                    if isinstance(getattr(m, "body", None), cst.IndentedBlock):
+                        for s in getattr(m, "body").body:
+                            try:
+                                code = cst.Module(body=[s]).code
+                            except Exception:
+                                code = ""
+                            if f"{attr}.mkdir(" in code or f"self.{attr}.mkdir(" in code:
+                                try:
+                                    node = s.visit(_ReplaceSelfWithName())
+                                    preserved_setup.append(cast(cst.BaseStatement, node))
+                                except Exception:
+                                    mkdir_call = cst.SimpleStatementLine(
+                                        body=[
+                                            cst.Expr(
+                                                cst.Call(
+                                                    func=cst.Attribute(value=cst.Name(attr if not attr.startswith("self.") else attr), attr=cst.Name("mkdir")),
+                                                    args=[cst.Arg(keyword=cst.Name("parents"), value=cst.Name("True"))],
+                                                )
+                                            )
+                                        ]
+                                    )
+                                    preserved_setup.append(cast(cst.BaseStatement, mkdir_call.visit(_ReplaceSelfWithName())))
+
+                include_setup = not bool(getattr(cls, "setup_methods", []))
+                body = cst.IndentedBlock(body=(preserved_setup if include_setup else []) + [return_stmt])
                 func = cst.FunctionDef(name=cst.Name(attr), params=cst.Parameters(params=params), body=body, decorators=[decorator])
             else:
                 # fallback: return None

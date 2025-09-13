@@ -158,7 +158,16 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
                 body=[cst.ImportFrom(module=cst.Name("pathlib"), names=[cst.ImportAlias(name=cst.Name("Path"))])]
             )
             # ensure pathlib import is inserted early (we'll place at insert_idx)
-            to_insert.append(pathlib_import_node)
+            # avoid duplicating pathlib import if it already exists
+            have_pathlib = False
+            for stmt in module.body:
+                if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+                    first = stmt.body[0]
+                    if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "pathlib":
+                        have_pathlib = True
+                        break
+            if not have_pathlib:
+                to_insert.append(pathlib_import_node)
 
         if missing:
             missing_list = sorted(missing)

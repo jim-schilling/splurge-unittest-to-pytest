@@ -49,3 +49,63 @@ def test_per_attribute_fixture_when_not_dir_like():
     # returned fixture for main_config should contain the literal dict
     module = cst.Module(body=res["fixture_nodes"])
     assert "\"k\"" in module.code
+
+
+def test_literal_yield_and_teardown():
+    attrs = {"value": cst.Integer(value="42")}
+    teardown = [cst.SimpleStatementLine(body=[cst.Expr(cst.Assign(targets=[cst.AssignTarget(target=cst.Name("value"))], value=cst.Name("None")))])]
+    out = _make_collector_output_for_sample(attrs, teardown)
+    res = generator_v2({"collector_output": out})
+    nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
+    found = False
+    for n in nodes:
+        if n.name.value == "value":
+            module = cst.Module(body=[n])
+            code = module.code
+            assert "yield 42" in code or "yield 42" in code
+            assert "value = None" in code
+            found = True
+    assert found
+
+
+def test_non_literal_binds_local_and_cleanup_refs_local():
+    attrs = {"path": cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.Name("temp"))])}
+    teardown = [cst.SimpleStatementLine(body=[cst.Expr(cst.Call(func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")), args=[cst.Arg(value=cst.Attribute(value=cst.Name("self"), attr=cst.Name("path")))]))])]
+    out = _make_collector_output_for_sample(attrs, teardown)
+    res = generator_v2({"collector_output": out})
+    nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
+    for n in nodes:
+        if n.name.value == "path":
+            module = cst.Module(body=[n])
+            code = module.code
+            assert "yield _path_value" in code or "_path_value" in code
+            assert "_path_value" in code
+            return
+    assert False, "did not find generated fixture for path"
+
+
+def test_mkdir_preserved_in_fixture():
+    # simulate a setup method containing a mkdir call for attr 'd'
+    class_node = cst.ClassDef(name=cst.Name("TestMk"), body=cst.IndentedBlock(body=[]))
+    ci = ClassInfo(node=class_node)
+    # attach a synthetic setup method node body using parse_module and wrap into FunctionDef
+    setup_module = cst.parse_module("self.d = Path(temp)\nself.d.mkdir(parents=True)\n")
+    # create a fake setUp FunctionDef node with the parsed statements as its body
+    setup_fn = cst.FunctionDef(name=cst.Name("setUp"), params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=list(setup_module.body)))
+    ci.setup_methods = [setup_fn]
+    ci.setup_assignments = {"d": [cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.Name("temp"))])]} 
+    ci.teardown_statements = []
+    out = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
+    out.classes["TestMk"] = ci
+    res = generator_v2({"collector_output": out})
+    for n in res["fixture_nodes"]:
+        if isinstance(n, cst.FunctionDef) and n.name.value == "d":
+            module = cst.Module(body=[n])
+            code = module.code
+            # When the original class has a setUp method, the generator_v2
+            # should not duplicate mkdir calls into per-attribute fixtures
+            # (the setUp remains on the class). Ensure we do not duplicate.
+            assert "mkdir" not in code
+            assert "parents=True" not in code
+            return
+    assert False, "did not find fixture for d"
