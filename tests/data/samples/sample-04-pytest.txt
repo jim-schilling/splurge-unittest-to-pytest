@@ -1,0 +1,129 @@
+import pytest
+import os
+import tempfile
+import json
+from pathlib import Path
+from unittest.mock import patch, Mock
+import subprocess
+import shutil
+from typing import Dict, Any, Generator
+
+@pytest.fixture
+def temp_dirs() -> Generator[Dict[str, Path], None, None]:
+    """Create temporary directory structure."""
+    temp_dir = Path(tempfile.mkdtemp())
+    config_dir = temp_dir / "config"
+    data_dir = temp_dir / "data"
+    log_dir = temp_dir / "logs"
+    
+    # Create directory structure
+    config_dir.mkdir(parents=True)
+    data_dir.mkdir(parents=True)
+    log_dir.mkdir(parents=True)
+    
+    try:
+        yield {
+            "temp_dir": temp_dir,
+            "config_dir": config_dir,
+            "data_dir": data_dir,
+            "log_dir": log_dir
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+@pytest.fixture
+def main_config(temp_dirs: Dict[str, Path]) -> Dict[str, Any]:
+    """Main configuration dictionary."""
+    return {
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+            "name": "testdb"
+        },
+        "logging": {
+            "level": "DEBUG",
+            "file": str(temp_dirs["log_dir"] / "app.log")
+        },
+        "features": {
+            "feature_a": True,
+            "feature_b": False
+        }
+    }
+
+@pytest.fixture
+def config_file(temp_dirs: Dict[str, Path], main_config: Dict[str, Any]) -> Path:
+    """Create configuration file."""
+    config_file = temp_dirs["config_dir"] / "config.json"
+    config_file.write_text(json.dumps(main_config, indent=2))
+    return config_file
+
+@pytest.fixture
+def mock_env(temp_dirs: Dict[str, Path]) -> Generator[Dict[str, str], None, None]:
+    """Set up environment variables with cleanup."""
+    original_env = os.environ.copy()
+    
+    os.environ["CONFIG_PATH"] = str(temp_dirs["config_dir"])
+    os.environ["DATA_PATH"] = str(temp_dirs["data_dir"])
+    os.environ["LOG_LEVEL"] = "DEBUG"
+    
+    try:
+        yield {
+            "CONFIG_PATH": str(temp_dirs["config_dir"]),
+            "DATA_PATH": str(temp_dirs["data_dir"]),
+            "LOG_LEVEL": "DEBUG"
+        }
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
+
+@pytest.fixture
+def mock_database() -> Mock:
+    """Mock database connection."""
+    return Mock()
+
+@pytest.fixture
+def mock_logger() -> Mock:
+    """Mock logger instance."""
+    return Mock()
+
+@patch('subprocess.run')
+@patch('logging.getLogger')
+def test_configuration_loading(
+    mock_get_logger,
+    mock_subprocess,
+    mock_env: Dict[str, str],
+    config_file: Path,
+    temp_dirs: Dict[str, Path],
+    mock_logger: Mock
+) -> None:
+    """Test configuration loading functionality."""
+    mock_get_logger.return_value = mock_logger
+    mock_subprocess.return_value = Mock(returncode=0, stdout="Success")
+    
+    # Test configuration loading logic would go here
+    config_path = os.environ.get("CONFIG_PATH")
+    assert config_path == str(temp_dirs["config_dir"])
+    
+    # Simulate loading config
+    with open(config_file) as f:
+        loaded_config = json.load(f)
+        
+    assert loaded_config["database"]["host"] == "localhost"
+    assert loaded_config["database"]["port"] == 5432
+    assert loaded_config["features"]["feature_a"] is True
+
+def test_directory_structure(temp_dirs: Dict[str, Path], config_file: Path) -> None:
+    """Test that directory structure is created correctly."""
+    assert temp_dirs["config_dir"].exists()
+    assert temp_dirs["data_dir"].exists()
+    assert temp_dirs["log_dir"].exists()
+    assert config_file.exists()
+
+@patch('os.makedirs')
+def test_directory_creation_error_handling(mock_makedirs) -> None:
+    """Test error handling for directory creation."""
+    mock_makedirs.side_effect = OSError("Permission denied")
+    
+    # Test error handling logic
+    with pytest.raises(OSError):
+        os.makedirs("/invalid/path", exist_ok=True)

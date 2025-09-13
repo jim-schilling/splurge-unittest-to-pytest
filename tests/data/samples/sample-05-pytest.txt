@@ -1,0 +1,42 @@
+import pytest
+from typing import List, Union
+
+@pytest.mark.parametrize("a,b,expected", [
+    (2, 3, 5),
+    (10, 5, 15),
+    (-1, 1, 0),
+    (0, 0, 0),
+    (100, 200, 300)
+])
+def test_addition(a: int, b: int, expected: int) -> None:
+    """Test addition operation with multiple inputs."""
+    result = a + b
+    assert result == expected
+
+@pytest.mark.parametrize("str1,str2,expected", [
+    ("hello", "hello", True),
+    ("Hello", "hello", False),
+    ("", "", True),
+    ("test", "TEST", False),
+    ("abc", "abc", True)
+])
+def test_string_equality(str1: str, str2: str, expected: bool) -> None:
+    """Test string equality with multiple inputs."""
+    result = str1 == str2
+    assert result == expected
+
+@pytest.mark.parametrize("input_list,expected_len,expected_sum", [
+    ([1, 2, 3], 3, 6),
+    ([10], 1, 10),
+    ([], 0, 0),
+    ([5, 5, 5], 3, 15),
+    ([-1, -2, -3], 3, -6)
+])
+def test_list_operations(
+    input_list: List[int], 
+    expected_len: int, 
+    expected_sum: int
+) -> None:
+    """Test list operations with multiple inputs."""
+    assert len(input_list) == expected_len
+    assert sum(input_list) == expected_sum

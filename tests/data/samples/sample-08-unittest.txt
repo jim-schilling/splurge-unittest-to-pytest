@@ -1,0 +1,106 @@
+import unittest
+from typing import List, Dict, Any
+import json
+import re
+
+class TestDataValidation(unittest.TestCase):
+    
+    def setUp(self):
+        self.valid_email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+        self.test_users = [
+            {
+                "id": 1,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "age": 30,
+                "roles": ["user", "admin"]
+            },
+            {
+                "id": 2,
+                "name": "Jane Smith",
+                "email": "jane@test.org",
+                "age": 25,
+                "roles": ["user"]
+            }
+        ]
+        
+    def assertValidEmail(self, email):
+        """Custom assertion for email validation."""
+        self.assertIsInstance(email, str)
+        self.assertTrue(
+            self.valid_email_pattern.match(email),
+            f"'{email}' is not a valid email address"
+        )
+        
+    def assertValidUser(self, user):
+        """Custom assertion for user object validation."""
+        required_fields = ['id', 'name', 'email', 'age', 'roles']
+        
+        self.assertIsInstance(user, dict)
+        for field in required_fields:
+            self.assertIn(field, user, f"User missing required field: {field}")
+            
+        self.assertIsInstance(user['id'], int)
+        self.assertGreater(user['id'], 0)
+        
+        self.assertIsInstance(user['name'], str)
+        self.assertGreater(len(user['name']), 0)
+        
+        self.assertValidEmail(user['email'])
+        
+        self.assertIsInstance(user['age'], int)
+        self.assertGreaterEqual(user['age'], 0)
+        self.assertLessEqual(user['age'], 150)
+        
+        self.assertIsInstance(user['roles'], list)
+        self.assertGreater(len(user['roles']), 0)
+        for role in user['roles']:
+            self.assertIsInstance(role, str)
+            
+    def assertUsersEqual(self, users1, users2):
+        """Custom assertion for comparing user lists."""
+        self.assertEqual(len(users1), len(users2))
+        
+        # Sort by ID for comparison
+        sorted_users1 = sorted(users1, key=lambda x: x['id'])
+        sorted_users2 = sorted(users2, key=lambda x: x['id'])
+        
+        for user1, user2 in zip(sorted_users1, sorted_users2):
+            self.assertEqual(user1['id'], user2['id'])
+            self.assertEqual(user1['name'], user2['name'])
+            self.assertEqual(user1['email'], user2['email'])
+            
+    def test_individual_user_validation(self):
+        for user in self.test_users:
+            with self.subTest(user=user):
+                self.assertValidUser(user)
+                
+    def test_email_validation(self):
+        valid_emails = [
+            "test@example.com",
+            "user.name@domain.org",
+            "user+tag@example.co.uk"
+        ]
+        invalid_emails = [
+            "invalid-email",
+            "@example.com",
+            "test@",
+            "test..test@example.com"
+        ]
+        
+        for email in valid_emails:
+            with self.subTest(email=email):
+                self.assertValidEmail(email)
+                
+        for email in invalid_emails:
+            with self.subTest(email=email):
+                with self.assertRaises(AssertionError):
+                    self.assertValidEmail(email)
+                    
+    def test_user_list_comparison(self):
+        users_copy = json.loads(json.dumps(self.test_users))  # Deep copy
+        self.assertUsersEqual(self.test_users, users_copy)
+        
+        # Test with different order
+        reversed_users = list(reversed(users_copy))
+        self.assertUsersEqual(self.test_users, reversed_users)

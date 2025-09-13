@@ -1,0 +1,91 @@
+import unittest
+import os
+import tempfile
+import json
+from pathlib import Path
+from unittest.mock import patch, Mock
+import subprocess
+
+class TestConfigurationManager(unittest.TestCase):
+    def setUp(self):
+        # Create temporary directories
+        self.temp_dir = tempfile.mkdtemp()
+        self.config_dir = Path(self.temp_dir) / "config"
+        self.data_dir = Path(self.temp_dir) / "data"
+        self.log_dir = Path(self.temp_dir) / "logs"
+        
+        # Create directory structure
+        self.config_dir.mkdir(parents=True)
+        self.data_dir.mkdir(parents=True)
+        self.log_dir.mkdir(parents=True)
+        
+        # Create configuration files
+        self.main_config = {
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+                "name": "testdb"
+            },
+            "logging": {
+                "level": "DEBUG",
+                "file": str(self.log_dir / "app.log")
+            },
+            "features": {
+                "feature_a": True,
+                "feature_b": False
+            }
+        }
+        
+        self.config_file = self.config_dir / "config.json"
+        self.config_file.write_text(json.dumps(self.main_config, indent=2))
+        
+        # Set environment variables
+        self.original_env = os.environ.copy()
+        os.environ["CONFIG_PATH"] = str(self.config_dir)
+        os.environ["DATA_PATH"] = str(self.data_dir)
+        os.environ["LOG_LEVEL"] = "DEBUG"
+        
+        # Mock external services
+        self.mock_database = Mock()
+        self.mock_logger = Mock()
+        
+    def tearDown(self):
+        # Restore environment
+        os.environ.clear()
+        os.environ.update(self.original_env)
+        
+        # Clean up temp directory
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        
+    @patch('subprocess.run')
+    @patch('logging.getLogger')
+    def test_configuration_loading(self, mock_get_logger, mock_subprocess):
+        mock_get_logger.return_value = self.mock_logger
+        mock_subprocess.return_value = Mock(returncode=0, stdout="Success")
+        
+        # Test configuration loading logic would go here
+        config_path = os.environ.get("CONFIG_PATH")
+        self.assertEqual(config_path, str(self.config_dir))
+        
+        # Simulate loading config
+        with open(self.config_file) as f:
+            loaded_config = json.load(f)
+            
+        self.assertEqual(loaded_config["database"]["host"], "localhost")
+        self.assertEqual(loaded_config["database"]["port"], 5432)
+        self.assertTrue(loaded_config["features"]["feature_a"])
+        
+    def test_directory_structure(self):
+        self.assertTrue(self.config_dir.exists())
+        self.assertTrue(self.data_dir.exists())
+        self.assertTrue(self.log_dir.exists())
+        self.assertTrue(self.config_file.exists())
+        
+    @patch('os.makedirs')
+    def test_directory_creation_error_handling(self, mock_makedirs):
+        mock_makedirs.side_effect = OSError("Permission denied")
+        
+        # Test error handling logic
+        with self.assertRaises(OSError):
+            os.makedirs("/invalid/path", exist_ok=True)

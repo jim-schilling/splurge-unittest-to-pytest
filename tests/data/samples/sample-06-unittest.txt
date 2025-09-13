@@ -1,0 +1,30 @@
+import unittest
+import sys
+import os
+
+class TestPlatformSpecific(unittest.TestCase):
+    
+    @unittest.skip("Feature not yet implemented")
+    def test_future_feature(self):
+        self.fail("This should not run")
+        
+    @unittest.skipIf(sys.platform.startswith("win"), "Not supported on Windows")
+    def test_unix_feature(self):
+        # Unix-specific test
+        result = os.getuid()
+        self.assertIsInstance(result, int)
+        
+    @unittest.skipUnless(os.path.exists("/usr/bin"), "Requires /usr/bin directory")
+    def test_usr_bin_exists(self):
+        self.assertTrue(os.path.isdir("/usr/bin"))
+        
+    @unittest.expectedFailure
+    def test_known_bug(self):
+        # This test documents a known bug
+        self.assertEqual(1, 2, "Known issue with calculation")
+        
+    def test_conditional_skip(self):
+        if not hasattr(os, 'fork'):
+            self.skipTest("os.fork not available")
+        # Test that requires fork would go here
+        self.assertTrue(hasattr(os, 'fork'))

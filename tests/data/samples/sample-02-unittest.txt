@@ -1,0 +1,50 @@
+import unittest
+from unittest.mock import Mock, patch
+import sqlite3
+
+class TestDatabaseOperations(unittest.TestCase):
+    def setUp(self):
+        self.db_connection = sqlite3.connect(":memory:")
+        self.cursor = self.db_connection.cursor()
+        self.cursor.execute("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE
+            )
+        """)
+        self.db_connection.commit()
+        
+        self.mock_logger = Mock()
+        self.test_data = [
+            {"name": "John Doe", "email": "john@example.com"},
+            {"name": "Jane Smith", "email": "jane@example.com"}
+        ]
+        
+    def tearDown(self):
+        self.db_connection.close()
+        
+    def test_user_insertion(self):
+        user = self.test_data[0]
+        self.cursor.execute(
+            "INSERT INTO users (name, email) VALUES (?, ?)",
+            (user["name"], user["email"])
+        )
+        self.db_connection.commit()
+        
+        self.cursor.execute("SELECT name, email FROM users WHERE name = ?", (user["name"],))
+        result = self.cursor.fetchone()
+        
+        self.assertEqual(result[0], user["name"])
+        self.assertEqual(result[1], user["email"])
+        
+    @patch('logging.getLogger')
+    def test_user_logging(self, mock_get_logger):
+        mock_get_logger.return_value = self.mock_logger
+        
+        # Simulate some operation that logs
+        import logging
+        logger = logging.getLogger("test")
+        logger.info("User operation completed")
+        
+        self.mock_logger.info.assert_called_once_with("User operation completed")

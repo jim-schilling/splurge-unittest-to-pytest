@@ -340,12 +340,9 @@ def make_autouse_attach_to_instance_fixture(setup_fixtures: dict[str, cst.Functi
         body=if_block,
     )
 
-    decorator = cst.Decorator(
-        decorator=cst.Call(
-            func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")),
-            args=[cst.Arg(keyword=cst.Name("autouse"), value=cst.Name("True"))],
-        )
-    )
+    from .decorators import build_pytest_fixture_decorator
+
+    decorator = build_pytest_fixture_decorator({"autouse": True})
 
     func = cst.FunctionDef(
         name=cst.Name("_attach_to_instance"),

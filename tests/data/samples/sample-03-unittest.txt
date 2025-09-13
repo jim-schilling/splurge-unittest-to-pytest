@@ -1,0 +1,57 @@
+import unittest
+import requests
+from unittest.mock import patch, Mock
+
+class TestAPIClient(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.base_url = "https://api.example.com"
+        cls.api_key = "test_api_key"
+        cls.headers = {
+            "Authorization": f"Bearer {cls.api_key}",
+            "Content-Type": "application/json"
+        }
+        cls.session = requests.Session()
+        cls.session.headers.update(cls.headers)
+        
+    @classmethod
+    def tearDownClass(cls):
+        cls.session.close()
+        
+    def setUp(self):
+        self.endpoint = "/users"
+        self.test_user_id = 123
+        self.expected_response = {
+            "id": self.test_user_id,
+            "name": "Test User",
+            "email": "test@example.com"
+        }
+        
+    @patch('requests.Session.get')
+    def test_get_user(self, mock_get):
+        mock_response = Mock()
+        mock_response.json.return_value = self.expected_response
+        mock_response.status_code = 200
+        mock_get.return_value = mock_response
+        
+        url = f"{self.base_url}{self.endpoint}/{self.test_user_id}"
+        response = self.session.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), self.expected_response)
+        mock_get.assert_called_once_with(url)
+        
+    @patch('requests.Session.post')
+    def test_create_user(self, mock_post):
+        user_data = {"name": "New User", "email": "new@example.com"}
+        mock_response = Mock()
+        mock_response.json.return_value = {**user_data, "id": 456}
+        mock_response.status_code = 201
+        mock_post.return_value = mock_response
+        
+        url = f"{self.base_url}{self.endpoint}"
+        response = self.session.post(url, json=user_data)
+        
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("id", response.json())
+        mock_post.assert_called_once_with(url, json=user_data)

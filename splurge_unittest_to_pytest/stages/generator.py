@@ -384,6 +384,129 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     autocreate_flag = bool(context.get("autocreate", True)) if isinstance(context, dict) else True
 
     for cls_name, cls in out.classes.items():
+        # Only synthesize a composite fixture in the specific case where
+        # multiple attributes appear to be directory/path-like (e.g. temp
+        # dirs) — otherwise prefer per-attribute fixtures which tests
+        # expect. This avoids surprising bundling for simple attributes.
+        attrs = list(getattr(cls, "setup_assignments", {}).keys())
+        dir_like = sum(1 for a in attrs if "dir" in a or "path" in a)
+        if len(attrs) > 1 and getattr(cls, "teardown_statements", None) and dir_like >= 2:
+            # Heuristic name selection: prefer a pluralized 'dirs' fixture when
+            # many attrs contain 'dir' or 'path', otherwise fallback to
+            # `setup_<classname>`.
+            attrs = list(cls.setup_assignments.keys())
+            dir_like = sum(1 for a in attrs if "dir" in a or "path" in a)
+            if dir_like >= 2:
+                fixture_name = "temp_dirs"
+            else:
+                fixture_name = f"setup_{cls_name.lower()}"
+
+            # Build local assignments for each attr using the last recorded
+            # setup expression for that attribute.
+            local_assignments: list[cst.BaseStatement] = []
+            used_names_for_yield: list[tuple[str, str]] = []  # (key, localname)
+            for attr in attrs:
+                exprs = cls.setup_assignments.get(attr) or []
+                # pick the last assignment expression if multiple
+                value_expr = exprs[-1] if exprs else None
+                # choose a safe local name (avoid collisions)
+                base_local = attr
+                local_name = base_local
+                if local_name in used_local_names:
+                    suffix = 1
+                    while f"{local_name}_{suffix}" in used_local_names:
+                        suffix += 1
+                    local_name = f"{local_name}_{suffix}"
+                used_local_names.add(local_name)
+
+                if isinstance(value_expr, cst.BaseExpression):
+                    assign_stmt = cst.SimpleStatementLine(
+                        body=[
+                            cst.Assign(
+                                targets=[cst.AssignTarget(target=cst.Name(local_name))],
+                                value=value_expr,
+                            )
+                        ]
+                    )
+                    local_assignments.append(assign_stmt)
+                # remember mapping for dict yield
+                used_names_for_yield.append((attr, local_name))
+
+            # create yield dict literal mapping string keys to local names
+            dict_elements: list[cst.DictElement] = []
+            for key, lname in used_names_for_yield:
+                dict_elements.append(
+                    cst.DictElement(key=cst.SimpleString(repr(key)), value=cst.Name(lname))
+                )
+            yield_expr = cst.Dict(elements=dict_elements)
+
+            # rewrite cleanup statements to refer to local names instead of self.attr
+            class _AttrRewriterMapping(cst.CSTTransformer):
+                def __init__(self, mapping: dict[str, str]) -> None:
+                    self.mapping = mapping
+
+                def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+                    if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
+                        if isinstance(original.attr, cst.Name):
+                            attrn = original.attr.value
+                            if attrn in self.mapping:
+                                return cst.Name(self.mapping[attrn])
+                    return updated
+
+            mapping = {a: local for a, local in used_names_for_yield}
+            safe_cleanup: list[cst.BaseStatement] = []
+            for stmt in cls.teardown_statements:
+                try:
+                    new_stmt = cast(Any, stmt).visit(_AttrRewriterMapping(mapping))
+                    safe_cleanup.append(new_stmt)
+                except Exception:
+                    # conservative: include original if rewrite fails
+                    safe_cleanup.append(stmt)
+
+            # build try/yield/finally block
+            try_yield_block = cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(yield_expr))])])
+            finalblock_cst = cst.IndentedBlock(body=safe_cleanup or [])
+            # Wrap the finally block in a cst.Finally node (libcst expects a Finally)
+            try_finally = cst.Try(body=try_yield_block, handlers=[], orelse=None, finalbody=cst.Finally(body=finalblock_cst))
+
+            # assemble function body: locals -> try/finally (append Try directly)
+            body_stmts: list[cst.BaseStatement] = []
+            body_stmts.extend(local_assignments)
+            body_stmts.append(try_finally)
+            body = cst.IndentedBlock(body=body_stmts)
+
+            # ensure typing imports for Generator, Dict and Path
+            all_typing_needed.update({"Generator", "Dict", "Path", "Any"})
+
+            # Build a precise return annotation: Generator[Dict[str, Path], None, None]
+            # Annotation AST: Generator[Dict[str, Path], None, None]
+            # libcst representation: Subscript(Name('Generator'), [SubscriptElement(Index(Subscript(Name('Dict'), [SubscriptElement(Index(Name('str'))), SubscriptElement(Index(Name('Path')))]))), SubscriptElement(Index(Name('None'))), SubscriptElement(Index(Name('None')))])
+            dict_inner = cst.Subscript(
+                value=cst.Name("Dict"),
+                slice=[
+                    cst.SubscriptElement(slice=cst.Index(value=cst.Name("str"))),
+                    cst.SubscriptElement(slice=cst.Index(value=cst.Name("Path"))),
+                ],
+            )
+            gen_sub = cst.Subscript(
+                value=cst.Name("Generator"),
+                slice=[
+                    cst.SubscriptElement(slice=cst.Index(value=dict_inner)),
+                    cst.SubscriptElement(slice=cst.Index(value=cst.Name("None"))),
+                    cst.SubscriptElement(slice=cst.Index(value=cst.Name("None"))),
+                ],
+            )
+
+            return_ann = cst.Annotation(annotation=gen_sub)
+
+            # create decorator and function def with precise return annotation
+            decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
+            func = cst.FunctionDef(name=cst.Name(fixture_name), params=cst.Parameters(), body=body, decorators=[decorator], returns=return_ann)
+            fixture_nodes.append(func)
+            # record a simple spec entry for completeness
+            specs[fixture_name] = FixtureSpec(name=fixture_name, value_expr=None, cleanup_statements=safe_cleanup, yield_style=True)
+            # skip per-attribute emission for this class
+            continue
         # Detect composite helper-call patterns recorded in collector.local_assignments.
         # If multiple local names map to the same Call (tuple-unpack), and
         # corresponding attributes are assigned from those locals, synthesize
@@ -903,7 +1026,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             # performed in-place where needed.
 
             # helper rewriter to replace self.attr or cls.attr with local_name
-            class _AttrRewriter(cst.CSTTransformer):
+            class _AttrRewriterTarget(cst.CSTTransformer):
                 def __init__(self, target_attr: str, local: str) -> None:
                     self.target_attr = target_attr
                     self.local = local
@@ -982,7 +1105,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # accumulate as Any to accept mixed libcst statement flavors
                     body_stmts_small_small: List[Any] = [yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, fname))
+                        new_stmt = cast(Any, stmt).visit(_AttrRewriterTarget(attr, fname))
                         body_stmts_small_small.append(new_stmt)
                     # IndentedBlock expects Sequence[BaseStatement]; widen types here
                     body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small_small)))
@@ -1006,7 +1129,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     # SimpleStatementLine/other small-statement flavors
                     body_stmts_small_small = [assign_stmt, yield_stmt]
                     for stmt in spec.cleanup_statements:
-                        new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, local_name))
+                        new_stmt = cast(Any, stmt).visit(_AttrRewriterTarget(attr, local_name))
                         body_stmts_small_small.append(new_stmt)
                     body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts_small_small)))
                     func = cst.FunctionDef(

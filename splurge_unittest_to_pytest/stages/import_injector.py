@@ -136,15 +136,25 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
                             existing_typing.add(an.value)
         missing = sorted(typing_needed - existing_typing)
         if missing:
-            typing_import_node = cst.SimpleStatementLine(
-                body=[
-                    cst.ImportFrom(
-                        module=cst.Name("typing"), names=[cst.ImportAlias(name=cst.Name(n)) for n in missing]
-                    )
-                ]
-            )
-            # Place typing import near other inserted imports (after docstring/other imports)
-            to_insert.append(typing_import_node)
+            # Special-case types that belong to other stdlib modules
+            if "Path" in missing:
+                # Remove Path from typing import list and add pathlib import
+                missing.remove("Path")
+                pathlib_import_node = cst.SimpleStatementLine(
+                    body=[cst.ImportFrom(module=cst.Name("pathlib"), names=[cst.ImportAlias(name=cst.Name("Path"))])]
+                )
+                to_insert.append(pathlib_import_node)
+
+            if missing:
+                typing_import_node = cst.SimpleStatementLine(
+                    body=[
+                        cst.ImportFrom(
+                            module=cst.Name("typing"), names=[cst.ImportAlias(name=cst.Name(n)) for n in missing]
+                        )
+                    ]
+                )
+                # Place typing import near other inserted imports (after docstring/other imports)
+                to_insert.append(typing_import_node)
 
     # Deduplicate by import name to avoid duplicate imports. We'll collect
     # existing import names and skip inserting names already present.
