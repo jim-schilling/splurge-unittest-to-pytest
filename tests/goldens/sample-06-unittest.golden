@@ -1,0 +1,24 @@
+import sys
+import os
+
+
+def test_future_feature():
+    fail("This should not run")
+    
+def test_unix_feature():
+    # Unix-specific test
+    result = os.getuid()
+    assert isinstance(result, int)
+    
+def test_usr_bin_exists():
+    assert os.path.isdir("/usr/bin")
+    
+def test_known_bug():
+    # This test documents a known bug
+    assert 1 == 2
+    
+def test_conditional_skip():
+    if not hasattr(os, 'fork'):
+        skipTest("os.fork not available")
+    # Test that requires fork would go here
+    assert hasattr(os, 'fork')

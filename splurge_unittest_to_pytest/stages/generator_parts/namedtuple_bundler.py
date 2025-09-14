@@ -18,7 +18,7 @@ import libcst as cst
 
 def bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str]
-) -> Tuple[List[cst.BaseStatement], Set[str]]:
+) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
     """Collect groups of local_assignments that should be bundled into a
     NamedTuple and a single bundled fixture. Returns a list of nodes (class
     def + fixture def) to prepend and a set of typing names required.
@@ -29,13 +29,23 @@ def bundle_named_locals(
     fixture_nodes: List[cst.BaseStatement] = []
     needs_typing: Set[str] = set()
     used_names: Set[str] = set()
+    # Map attribute name -> bundled fixture name (e.g., sql_file -> init_api_data)
+    attr_to_fixture: Dict[str, str] = {}
 
     for cls_name, cls in out_classes.items():
         local_map = getattr(cls, "local_assignments", {}) or {}
         # group by textual representation of the assigned call
-        call_groups: dict[str, list[tuple[str, int, Any]]] = {}
+        # Use flexible Any tuple element types to avoid tight mypy tuple shape
+        # assumptions - values may include optional index and Call nodes.
+        call_groups: dict[str, list[tuple[str, Any, Any]]] = {}
         for local_name, val in local_map.items():
-            assigned_call, idx = val if isinstance(val, tuple) else (val, None)
+            # support stored tuples of shape (call, idx) or (call, idx, refs)
+            if isinstance(val, tuple) or isinstance(val, list):
+                assigned_call = val[0]
+                idx = val[1] if len(val) > 1 else None
+            else:
+                assigned_call = val
+                idx = None
             if not isinstance(assigned_call, cst.Call):
                 continue
             try:
@@ -143,9 +153,13 @@ def bundle_named_locals(
             # append in discovered order to preserve stable emission order
             fixture_nodes.append(class_def)
             fixture_nodes.append(fixture_func)
+            # record which attributes were bundled into this composite fixture
+            for local, _, _ in sorted_group:
+                attr_name = local_to_attr.get(local, local)
+                attr_to_fixture[attr_name] = fixture_name
             try:
                 needs_typing.update({"NamedTuple", "Any"})
             except Exception:
                 pass
 
-    return fixture_nodes, needs_typing
+    return fixture_nodes, needs_typing, attr_to_fixture

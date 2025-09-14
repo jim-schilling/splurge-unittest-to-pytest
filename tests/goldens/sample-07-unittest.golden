@@ -1,0 +1,107 @@
+from unittest.mock import Mock, patch, MagicMock
+import threading
+import time
+import queue
+from typing import Any, Generator, List
+
+import pytest
+
+
+@pytest.fixture
+def input_queue():
+    _input_queue_value = queue.Queue()
+    yield _input_queue_value
+    # Clear all queues
+    self._clear_queue(_input_queue_value)
+
+
+@pytest.fixture
+def output_queue():
+    _output_queue_value = queue.Queue()
+    yield _output_queue_value
+    self._clear_queue(_output_queue_value)
+
+
+@pytest.fixture
+def error_queue():
+    _error_queue_value = queue.Queue()
+    yield _error_queue_value
+    self._clear_queue(_error_queue_value)
+
+
+@pytest.fixture
+def test_items() -> List[Any]:
+    return [
+        {"id": 1, "data": "item1"},
+        {"id": 2, "data": "item2"},
+        {"id": 3, "data": "item3"}
+    ]
+
+
+@pytest.fixture
+def mock_processor():
+    return Mock()
+
+
+@pytest.fixture
+def mock_validator():
+    return Mock()
+
+
+@pytest.fixture
+def mock_database():
+    return Mock()
+
+
+@pytest.fixture
+def worker_threads() -> List[Any]:
+    return []
+
+
+@pytest.fixture
+def stop_event():
+    _stop_event_value = threading.Event()
+    yield _stop_event_value
+    # Signal all threads to stop
+    _stop_event_value.set()
+def test_single_item_processing(input_queue, output_queue, error_queue, test_items, mock_processor, mock_validator, mock_database, worker_threads, stop_event):
+    mock_sleep.return_value = None  # Speed up test
+    mock_processor.process.return_value = {"processed": True}
+    mock_validator.validate.return_value = True
+    
+    # Test single item processing
+    item = test_items[0]
+    
+    # Simulate processing
+    validated = mock_validator.validate(item)
+    assert validated
+    
+    result = mock_processor.process(item)
+    assert "processed" in result
+    assert result["processed"]
+    
+def test_queue_operations(input_queue, output_queue, error_queue, test_items, mock_processor, mock_validator, mock_database, worker_threads, stop_event):
+    # Test queue has items
+    assert not input_queue.empty()
+    assert input_queue.qsize() == 3
+    
+    # Test getting items
+    item = input_queue.get()
+    assert item["id"] == 1
+    assert input_queue.qsize() == 2
+    
+    # Test putting items in output queue
+    processed_item = {"id": item["id"], "status": "completed"}
+    output_queue.put(processed_item)
+    assert output_queue.qsize() == 1
+    
+def test_worker_thread_creation(input_queue, output_queue, error_queue, test_items, mock_processor, mock_validator, mock_database, worker_threads, stop_event):
+    mock_thread = Mock()
+    mock_thread_class.return_value = mock_thread
+    
+    # Simulate thread creation
+    thread = mock_thread_class(target=lambda: None, daemon=True)
+    worker_threads.append(thread)
+    
+    assert len(worker_threads) == 1
+    mock_thread_class.assert_called_once()

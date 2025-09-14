@@ -22,7 +22,12 @@ def infer_filename_for_local(local_name: str, cls_obj: Any) -> Optional[str]:
         local_map = getattr(cls_obj, "local_assignments", {}) or {}
         if local_name not in local_map:
             return None
-        assigned_call, _ = local_map[local_name]
+        val = local_map[local_name]
+        # local_map entries may be (call, idx) or (call, idx, refs)
+        if isinstance(val, tuple) or isinstance(val, list):
+            assigned_call = val[0]
+        else:
+            assigned_call = val
         if not isinstance(assigned_call, cst.Call):
             return None
         if assigned_call.args:

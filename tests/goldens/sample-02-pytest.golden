@@ -1,0 +1,75 @@
+from unittest.mock import Mock, patch
+import sqlite3
+from typing import Generator, List, Dict, Any
+
+import pytest
+
+
+
+@pytest.fixture
+def db_connection() -> Generator[sqlite3.Connection, None, None]:
+    """Create in-memory SQLite database connection."""
+    connection = sqlite3.connect(":memory:")
+    cursor = connection.cursor()
+    cursor.execute("""
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE
+        )
+    """)
+    connection.commit()
+    
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+@pytest.fixture
+def cursor(db_connection: sqlite3.Connection) -> sqlite3.Cursor:
+    """Get database cursor."""
+    return db_connection.cursor()
+
+@pytest.fixture
+def mock_logger() -> Mock:
+    """Create mock logger for testing."""
+    return Mock()
+
+@pytest.fixture
+def test_data() -> List[Dict[str, str]]:
+    """Test user data."""
+    return [
+        {"name": "John Doe", "email": "john@example.com"},
+        {"name": "Jane Smith", "email": "jane@example.com"}
+    ]
+
+def test_user_insertion(
+    db_connection: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+    test_data: List[Dict[str, str]]
+) -> None:
+    """Test user insertion into database."""
+    user = test_data[0]
+    cursor.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)",
+        (user["name"], user["email"])
+    )
+    db_connection.commit()
+    
+    cursor.execute("SELECT name, email FROM users WHERE name = ?", (user["name"],))
+    result = cursor.fetchone()
+    
+    assert result[0] == user["name"]
+    assert result[1] == user["email"]
+
+@patch('logging.getLogger')
+def test_user_logging(mock_get_logger, mock_logger: Mock) -> None:
+    """Test logging functionality."""
+    mock_get_logger.return_value = mock_logger
+    
+    # Simulate some operation that logs
+    import logging
+    logger = logging.getLogger("test")
+    logger.info("User operation completed")
+    
+    mock_logger.info.assert_called_once_with("User operation completed")

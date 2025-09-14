@@ -1,0 +1,50 @@
+import requests
+from unittest.mock import patch, Mock
+from typing import Dict
+
+import pytest
+
+
+@pytest.fixture
+def endpoint():
+    return "/users"
+
+
+@pytest.fixture
+def test_user_id():
+    return 123
+
+
+@pytest.fixture
+def expected_response(test_user_id):
+    return {
+        "id": test_user_id,
+        "name": "Test User",
+        "email": "test@example.com"
+    }
+def test_get_user(endpoint, test_user_id, expected_response):
+    mock_response = Mock()
+    mock_response.json.return_value = expected_response
+    mock_response.status_code = 200
+    mock_get.return_value = mock_response
+    
+    url = f"{base_url}{endpoint}/{test_user_id}"
+    response = session.get(url)
+    
+    assert response.status_code == 200
+    assert response.json() == expected_response
+    mock_get.assert_called_once_with(url)
+    
+def test_create_user(endpoint, test_user_id, expected_response):
+    user_data = {"name": "New User", "email": "new@example.com"}
+    mock_response = Mock()
+    mock_response.json.return_value = {**user_data, "id": 456}
+    mock_response.status_code = 201
+    mock_post.return_value = mock_response
+    
+    url = f"{base_url}{endpoint}"
+    response = session.post(url, json=user_data)
+    
+    assert response.status_code == 201
+    assert "id" in response.json()
+    mock_post.assert_called_once_with(url, json=user_data)

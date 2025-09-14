@@ -1,0 +1,53 @@
+from unittest.mock import Mock, patch
+import sqlite3
+from typing import Any, Generator, List
+
+import pytest
+
+
+@pytest.fixture
+def db_connection():
+    _db_connection_value = sqlite3.connect(":memory:")
+    yield _db_connection_value
+    _db_connection_value.close()
+
+
+@pytest.fixture
+def cursor(db_connection):
+    return db_connection.cursor()
+
+
+@pytest.fixture
+def mock_logger():
+    return Mock()
+
+
+@pytest.fixture
+def test_data() -> List[Any]:
+    return [
+        {"name": "John Doe", "email": "john@example.com"},
+        {"name": "Jane Smith", "email": "jane@example.com"}
+    ]
+def test_user_insertion(db_connection, cursor, mock_logger, test_data):
+    user = test_data[0]
+    cursor.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)",
+        (user["name"], user["email"])
+    )
+    db_connection.commit()
+    
+    cursor.execute("SELECT name, email FROM users WHERE name = ?", (user["name"],))
+    result = cursor.fetchone()
+    
+    assert result[0] == user["name"]
+    assert result[1] == user["email"]
+    
+def test_user_logging(db_connection, cursor, mock_logger, test_data):
+    mock_get_logger.return_value = mock_logger
+    
+    # Simulate some operation that logs
+    import logging
+    logger = logging.getLogger("test")
+    logger.info("User operation completed")
+    
+    mock_logger.info.assert_called_once_with("User operation completed")

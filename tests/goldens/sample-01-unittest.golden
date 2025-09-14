@@ -1,0 +1,26 @@
+import tempfile
+import shutil
+from pathlib import Path
+from typing import Any, Generator
+
+import pytest
+
+
+@pytest.fixture
+def temp_dir():
+    _temp_dir_value = tempfile.mkdtemp()
+    yield _temp_dir_value
+    shutil.rmtree(_temp_dir_value, ignore_errors=True)
+
+
+@pytest.fixture
+def test_file(temp_dir):
+    return Path(temp_dir) / "test.txt"
+def test_file_creation(temp_dir, test_file):
+    test_file.write_text("Hello World")
+    assert test_file.exists()
+    
+def test_file_content(temp_dir, test_file):
+    content = "Test content"
+    test_file.write_text(content)
+    assert test_file.read_text() == content

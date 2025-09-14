@@ -1,0 +1,35 @@
+import sys
+import os
+
+import pytest
+
+
+
+@pytest.mark.skip(reason="Feature not yet implemented")
+def test_future_feature() -> None:
+    """Test for future feature (currently skipped)."""
+    assert False, "This should not run"
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Not supported on Windows")
+def test_unix_feature() -> None:
+    """Test Unix-specific functionality."""
+    # Unix-specific test
+    result = os.getuid()
+    assert isinstance(result, int)
+
+@pytest.mark.skipif(not os.path.exists("/usr/bin"), reason="Requires /usr/bin directory")
+def test_usr_bin_exists() -> None:
+    """Test that /usr/bin directory exists."""
+    assert os.path.isdir("/usr/bin")
+
+@pytest.mark.xfail(reason="Known issue with calculation")
+def test_known_bug() -> None:
+    """Test that documents a known bug (expected to fail)."""
+    assert 1 == 2, "Known issue with calculation"
+
+def test_conditional_skip() -> None:
+    """Test with conditional skip based on platform capabilities."""
+    if not hasattr(os, 'fork'):
+        pytest.skip("os.fork not available")
+    # Test that requires fork would go here
+    assert hasattr(os, 'fork')

@@ -1,0 +1,14 @@
+from parameterized import parameterized
+
+
+def test_addition():
+    result = a + b
+    assert result == expected
+    
+def test_string_equality():
+    result = str1 == str2
+    assert result == expected
+    
+def test_list_operations():
+    assert len(input_list) == expected_len
+    assert sum(input_list) == expected_sum

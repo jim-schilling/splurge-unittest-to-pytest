@@ -14,6 +14,22 @@ import libcst as cst
 from libcst import matchers as m
 
 
+def _collect_names_from_expr(expr: Any) -> set[str]:
+    refs: set[str] = set()
+
+    class _RefCollector(cst.CSTVisitor):
+        def visit_Name(self, node: cst.Name) -> None:
+            refs.add(node.value)
+
+    try:
+        if expr is not None:
+            expr.visit(_RefCollector())
+    except Exception:
+        # be conservative on unexpected shapes
+        pass
+    return refs
+
+
 @dataclass
 class ClassInfo:
     node: cst.ClassDef
@@ -114,14 +130,21 @@ class Collector(cst.CSTVisitor):
                         # target can be Name or Tuple
                         if isinstance(target, cst.Name):
                             lname = target.value
-                            self._current_class.local_assignments[lname] = (assign.value, None)
+                            # record the assigned expression and a placeholder
+                            # index for simple names. Also collect referenced
+                            # names inside the RHS so later stages can detect
+                            # fixture dependencies (e.g., Path(temp_dir)).
+                            refs = _collect_names_from_expr(assign.value)
+                            self._current_class.local_assignments[lname] = (assign.value, None, refs)
                         elif isinstance(target, cst.Tuple):
                             # tuple of names -> map each name to (value, index)
                             elements = getattr(target, "elements", []) or []
                             for idx, el in enumerate(elements):
                                 inner = getattr(el, "value", None)
                                 if isinstance(inner, cst.Name):
-                                    self._current_class.local_assignments[inner.value] = (assign.value, idx)
+                                    refs = _collect_names_from_expr(assign.value)
+                                    # tuple element: store index and refs
+                                    self._current_class.local_assignments[inner.value] = (assign.value, idx, refs)
         elif name in ("tearDown", "tearDownClass"):
             self._current_class.teardown_methods.append(node)
             # collect teardown statements as-is

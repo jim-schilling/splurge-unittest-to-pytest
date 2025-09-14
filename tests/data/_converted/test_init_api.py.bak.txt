@@ -29,6 +29,14 @@ def schema_file():
     return _schema_file_value
 
 
+@pytest.fixture
+def init_api_data(temp_dir, sql_content):
+    # Provide a helper fixture that mirrors the original unittest setup
+    # by creating sql and schema files in the temp_dir and returning paths.
+    sql_file, schema_file = create_sql_with_schema(Path(temp_dir), "test.sql", sql_content)
+    return (str(sql_file), str(schema_file))
+
+
 @pytest.fixture(autouse = True)
 def _attach_to_instance(request):
     inst = getattr(request, 'instance', None)
