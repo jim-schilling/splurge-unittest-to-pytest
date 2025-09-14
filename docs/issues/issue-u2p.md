@@ -1,3 +1,4 @@
+````markdown
 # Issue: splurge-unittest-to-pytest conversion problems (u2p)
 
 Summary
@@ -188,3 +189,4 @@ Status summary
 - Repo-level test file `tests/unit/test_schema_parser.py.bak.1757364222` used as canonical input. Converted output written to `tmp/` and backed up.
 - Short-term fix: local edits to `tmp/` file make the converted file runnable. Long-term fix: update the converter to emit imports at top, produce correct fixtures, and ensure compat glue references real fixture values.
 
+```
