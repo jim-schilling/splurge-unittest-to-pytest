@@ -138,6 +138,22 @@ pytest tests/unit/test_main.py::TestFileOperations::test_convert_file_in_place
 pytest -k "test_convert"
 ```
 
+## Recent migration notes (2025-09-13 → 2025-09-14)
+
+This repository recently completed a migration to remove legacy compatibility shims and to modernize the test surface. The following summarizes what changed and why:
+
+- Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native output by default.
+- Duplicate test-local autouse helpers were consolidated into a single test-only helper module: `tests/unit/helpers/autouse_helpers.py`. Tests import this module to avoid duplicating implementation details while keeping test-only utilities out of the package API.
+- The local `build/` directory (generated artifacts) was removed from the working tree and `build/` is ignored via `.gitignore` to prevent accidental commits of generated files.
+
+Verification performed locally during the migration:
+
+- ruff format/check: passed (a few files were reformatted during the change)
+- mypy: no type errors reported for the package
+- pytest (unit tests): local unit test run passed (859 passed, 1 skipped) and full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage summary printed (~86% project coverage during the run).
+
+If you maintain tooling or CI that relied on older compat flags, update your workflows to use the staged pipeline and the modernized CLI semantics.
+
 ## Code Conversion Process
 
 ### Supported Transformations

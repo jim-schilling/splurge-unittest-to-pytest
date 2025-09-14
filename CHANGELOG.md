@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public API: `convert_string` and `convert_file` no longer accept `compat` or `engine` parameters. Use the staged pipeline via the public API instead.
 - Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
 
+### Removed
+- Test helpers: duplicate test-local autouse helper implementations were consolidated into a single test-only module (`tests/unit/helpers/autouse_helpers.py`) and removed from production code. This keeps test utilities out of the package public API.
+
+### Repository cleanup
+- Removed local generated `build/` artifacts from the working tree and ensured `build/` is ignored in `.gitignore` to avoid committing generated files.
+
+### Verification (local)
+- ruff format/check: passed (minor formatting changes)
+- mypy: no type errors reported for the package
+- pytest: unit tests passed locally (unit run: 859 passed, 1 skipped). Full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage recorded during the run (~86% project coverage).
+
 ### Notes
 - The legacy transformer implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` and the staged pipeline. The converter now emits canonical per-attribute pytest fixtures by default.
 
