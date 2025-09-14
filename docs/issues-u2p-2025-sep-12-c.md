@@ -4,6 +4,10 @@ date: 2025-09-12
 tags: [u2p, unittest-to-pytest, migration, analysis]
 ---
 
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
+
 Overview
 --------
 

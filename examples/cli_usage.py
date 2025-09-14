@@ -30,6 +30,9 @@ class TestMath(unittest.TestCase):
     print(unittest_content)
 
     try:
+        # Run the CLI tool (dry-run shows what would change). Note:
+        # The CLI no longer accepts compatibility toggles; it emits strict
+        # pytest-style output by default.
         # Run the CLI tool
         print("\nRunning: splurge-unittest-to-pytest --dry-run", temp_file)
         result = subprocess.run(

@@ -44,17 +44,12 @@ from splurge_sql_generator.schema_parser import SchemaParser
 
 2) Fix `temp_dir` fixture pattern
 
-Replace broken fixture bodies with a clear yield/cleanup pattern:
-
-```python
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This issue writeup is retained for historical context and documents behaviors observed prior to that change.
 @pytest.fixture()
 def temp_dir():
     tmpdir = tempfile.mkdtemp()
-    try:
-        yield tmpdir
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-```
 
 3) Ensure `parser` fixture returns instance
 

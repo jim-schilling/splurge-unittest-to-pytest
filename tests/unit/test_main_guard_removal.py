@@ -2,7 +2,7 @@ from splurge_unittest_to_pytest.main import convert_string
 
 
 def _convert_and_code(src: str) -> str:
-    res = convert_string(src, compat=True)
+    res = convert_string(src)
     return res.converted_code
 
 

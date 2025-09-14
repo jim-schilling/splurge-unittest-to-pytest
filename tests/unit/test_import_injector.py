@@ -111,7 +111,14 @@ def test_no_duplicate_pathlib_import_when_present() -> None:
     res = import_injector_stage(ctx)
     new_module = res.get("module")
     # count pathlib imports
-    pathlib_imports = [s for s in new_module.body if isinstance(s, cst.SimpleStatementLine) and s.body and isinstance(s.body[0], cst.ImportFrom) and getattr(s.body[0].module, "value", None) == "pathlib"]
+    pathlib_imports = [
+        s
+        for s in new_module.body
+        if isinstance(s, cst.SimpleStatementLine)
+        and s.body
+        and isinstance(s.body[0], cst.ImportFrom)
+        and getattr(s.body[0].module, "value", None) == "pathlib"
+    ]
     assert len(pathlib_imports) == 1
 
 
@@ -140,5 +147,12 @@ def test_tidy_stage_preserves_and_dedupes_imports() -> None:
     tidy_out = tidy_stage({"module": new_module})
     final_module = tidy_out.get("module")
     # ensure only one pathlib import remains
-    pathlib_imports = [s for s in final_module.body if isinstance(s, cst.SimpleStatementLine) and s.body and isinstance(s.body[0], cst.ImportFrom) and getattr(s.body[0].module, "value", None) == "pathlib"]
+    pathlib_imports = [
+        s
+        for s in final_module.body
+        if isinstance(s, cst.SimpleStatementLine)
+        and s.body
+        and isinstance(s.body[0], cst.ImportFrom)
+        and getattr(s.body[0].module, "value", None) == "pathlib"
+    ]
     assert len(pathlib_imports) == 1

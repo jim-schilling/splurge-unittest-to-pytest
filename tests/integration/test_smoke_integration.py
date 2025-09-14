@@ -18,7 +18,7 @@ def test_smoke_convert_all_sample_unittest_files(tmp_path: Path) -> None:
     assert files, "No sample unittest files found in tests/data"
     for f in files:
         src = f.read_text(encoding="utf-8")
-        res = convert_string(src, engine="pipeline")
+        res = convert_string(src)
         assert res.has_changes
         code = res.converted_code
         # run in a temp subdir to avoid import issues

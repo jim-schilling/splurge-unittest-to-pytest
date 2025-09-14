@@ -10,7 +10,7 @@ class T(unittest.TestCase):
         with self.assertRaises(ValueError):
             int('x')
 """
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     assert "with pytest.raises(ValueError):" in out
 
 
@@ -23,7 +23,7 @@ class T(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid'):
             int('x')
 """
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     # Accept minor formatting differences (e.g., spacing around '='). Ensure
     # pytest.raises with ValueError and match pattern appears.
     assert "with pytest.raises(ValueError" in out and "match" in out and "invalid" in out
@@ -37,6 +37,6 @@ class T(unittest.TestCase):
     def test_baz(self) -> None:
         self.assertIsNone(1)
 """
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     # For a literal int, the rewriter should skip conversion (leave as-is or not produce "is None")
     assert "is None" not in out

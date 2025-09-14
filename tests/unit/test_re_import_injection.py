@@ -11,7 +11,7 @@ def test_import_re_added_for_assert_regex() -> None:
             def test_foo(self) -> None:
                 self.assertRegex('abc', r'b.c')
     """)
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     assert "import re" in out
 
 
@@ -23,5 +23,5 @@ def test_import_re_not_added_when_unused() -> None:
             def test_bar(self) -> None:
                 assert 1 == 1
     """)
-    out = convert_string(src, engine="pipeline").converted_code
+    out = convert_string(src).converted_code
     assert "import re" not in out

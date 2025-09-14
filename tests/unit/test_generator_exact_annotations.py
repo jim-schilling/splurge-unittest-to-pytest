@@ -1,6 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
-from splurge_unittest_to_pytest.stages.generator import generator_stage
+from splurge_unittest_to_pytest.stages.generator import generator as generator_stage
 
 
 def make_co(setup):
@@ -29,8 +29,8 @@ def test_tuple_literal_emits_tuple_annotation():
     co = make_co(setup)
     res = generator_stage({"collector_output": co, "module": cst.Module([])})
     code = render(res.get("fixture_nodes", []))
-    # Expect return annotation Tuple[str, int]
-    assert "-> Tuple[" in code or "-> tuple[" in code or "Tuple[" in code
+    # Expect return annotation tuple[str, int]
+    assert "-> Tuple[" in code or "-> Tuple[" in code or "Tuple[" in code
 
 
 def test_list_of_str_emits_list_annotation():

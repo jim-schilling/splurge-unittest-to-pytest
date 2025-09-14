@@ -7,23 +7,20 @@ tags: [u2p, unittest-to-pytest, evidence, migration]
 Summary
 -------
 
+This document records a clean-run (run E) where I restored the test tree to `HEAD`, ran an earlier converter variant with `--no-compat` (historical), executed the converted tests with `pytest`, and captured evidence of issues observed at that time.
+
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
+
+Summary
+
+
 This document records a clean-run (run E) where I restored the test tree to `HEAD`, ran the newest `splurge-unittest-to-pytest` with `--no-compat`, executed the converted tests with `pytest`, and captured concrete evidence of any issues.
-
-Commands executed
------------------
-
-- Restore tests to HEAD (worktree + index):
 
   git restore --source=HEAD --staged --worktree -- tests/
 
-- Run converter with `--no-compat` and backups for run E:
-
-  source .venv/Scripts/activate && \
-  splurge-unittest-to-pytest -r --no-compat -b backups/u2p-2025-09-12-e tests/
-
-- Run pytest:
-
-  source .venv/Scripts/activate && pytest -q
+Note: The concrete run commands shown here reference the removed `--no-compat` flag and are retained for historical context only. The staged pipeline in release 2025.1.0 no longer supports `--no-compat`.
 
 
 Converter output (summary)
@@ -147,6 +144,7 @@ Files changed (summary)
 ----------------------
 
 - `splurge_unittest_to_pytest/converter.py`
+
   - Record exception `as` names during `with` conversion and invoke the stage `RaisesRewriter` at module finalization to rewrite `.exception` -> `.value` in a scope-aware way.
 
 - `splurge_unittest_to_pytest/converter/fixtures.py`

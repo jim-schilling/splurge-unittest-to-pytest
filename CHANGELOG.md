@@ -5,18 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [2025.1.0] - 2025-09-13
+
+### Removed
+- Historical: compatibility mode (`compat` / `--no-compat` / `--compat`) and engine selection were removed in release 2025.1.0. The converter now supports the staged pipeline and emits strict pytest-native code.
+
+- Historical: legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` removed in 2025.1.0 — callers should use `stages.generator` or the staged pipeline directly.
+
+### Changed
+- Public API: `convert_string` and `convert_file` no longer accept `compat` or `engine` parameters. Use the staged pipeline via the public API instead.
+- Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
+
+### Removed
+- Test helpers: duplicate test-local autouse helper implementations were consolidated into a single test-only module (`tests/unit/helpers/autouse_helpers.py`) and removed from production code. This keeps test utilities out of the package public API.
+
+### Repository cleanup
+- Removed local generated `build/` artifacts from the working tree and ensured `build/` is ignored in `.gitignore` to avoid committing generated files.
+
+### Verification (local)
+- ruff format/check: passed (minor formatting changes)
+- mypy: no type errors reported for the package
+- pytest: unit tests passed locally (unit run: 859 passed, 1 skipped). Full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage recorded during the run (~86% project coverage).
+
+### Notes
+- The legacy transformer implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` and the staged pipeline. The converter now emits canonical per-attribute pytest fixtures by default.
+
+
 ## [2025.0.5] - 2025-09-13
 
 ### Added
-- Strict mode (compat disabled) for pure pytest output
-  - `--no-compat` drops unittest classes and lifecycle methods and emits only
-    top-level pytest tests and fixtures
-  - No autouse `_attach_to_instance` fixture in strict mode
-  - Documented in `docs/README-DETAILS.md` with CLI and API examples
-- New unit test `tests/unit/test_cli_strict_mode.py` to lock strict mode behavior
+- Historical: Strict/no-compat behavior was introduced before 2025.1.0. See the migration notes for how the staged pipeline now emits strict pytest-native code by default.
 
 ### Changed
-- CLI default and help: CLI now advertises strict/no-compat as the default output (use `--compat` to preserve legacy compatibility behavior).
+-- CLI default and help: CLI now advertises strict/no-compat as the default output.
 - Fixture injection: no-compat (strict) output now inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Compat behavior preserves the previous single-empty-line spacing.
 
 ### Fixed
@@ -59,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CI workflow `.github/workflows/upload-diagnostics.yml` now sets a workspace-local
     diagnostics root and uploads the diagnostics directory as an artifact. A debug
     step was added to print the diagnostics root path in job logs for easier troubleshooting.
+
+
+
+## [2025.0.4] - 2025-09-12
 
 - Internal: consolidate small helpers into `converter/helpers`
   - Moved small helper implementations (normalization, parsing, change-detection,
@@ -157,7 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `--compat` flag to control emission of autouse compatibility fixture
 - Skip `__pycache__` and unreadable files during discovery to avoid Unicode/IO errors
 - Ensure `import pytest` inserted before generated fixtures and respect module docstrings
- - Archive legacy `UnittestToPytestTransformer` implementation under `contrib/legacy_converter.py`;
+ - Archive legacy transformer implementation under `contrib/legacy_converter.py`;
    the staged pipeline is now the authoritative conversion engine.
  - Add an end-to-end integration test verifying converted modules are executable and
    autouse fixtures attach correctly.

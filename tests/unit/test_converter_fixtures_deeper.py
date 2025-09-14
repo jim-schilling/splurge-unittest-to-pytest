@@ -3,10 +3,12 @@ import libcst as cst
 from splurge_unittest_to_pytest.converter.fixtures import (
     create_simple_fixture,
     create_fixture_with_cleanup,
-    make_autouse_attach_to_instance_fixture,
-    add_autouse_attach_fixture_to_module,
     create_fixture_for_attribute,
 )
+from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
+
+
+# Use shared test helpers imported from tests.unit.helpers.autouse_helpers
 
 
 def render_node(node: cst.CSTNode) -> str:
@@ -51,7 +53,7 @@ def test_make_autouse_attach_to_instance_fixture_and_module_insertion():
     f2 = create_simple_fixture("b", cst.parse_expression("2"))
     fixtures = {"a": f1, "b": f2}
 
-    func = make_autouse_attach_to_instance_fixture(fixtures)
+    func = make_autouse_attach(fixtures)
     src = render_node(func)
 
     # autouse decorator should be present (allow spacing variations) and function name as expected
@@ -64,7 +66,8 @@ def test_make_autouse_attach_to_instance_fixture_and_module_insertion():
 
     # Now test insertion into a module that already imports pytest
     module = cst.parse_module("import pytest\n\n# existing\n")
-    new_module = add_autouse_attach_fixture_to_module(module, fixtures)
+
+    new_module = insert_attach_fixture_into_module(module, make_autouse_attach(fixtures))
     code = new_module.code
 
     # The inserted autouse fixture should be present in the module

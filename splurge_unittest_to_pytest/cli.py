@@ -110,18 +110,7 @@ def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
     multiple=True,
     help="Test method patterns (comma-separated or multiple flags)",
 )
-@click.option(
-    "--compat/--no-compat",
-    default=False,
-    help=(
-        "Compatibility mode. By default the CLI emits strict pytest output"
-        " (--no-compat): drop unittest classes and setUp/tearDown and generate"
-        " top-level pytest tests and fixtures (no autouse glue). Use --compat"
-        " to preserve unittest classes and inject an autouse fixture that"
-        " attaches generated fixtures to test instances for backward"
-        " compatibility."
-    ),
-)
+# Compatibility mode removed: CLI always emits strict pytest-style output.
 @click.option(
     "--autocreate/--no-autocreate",
     default=True,
@@ -138,7 +127,6 @@ def main(
     setup_methods: tuple[str, ...],
     teardown_methods: tuple[str, ...],
     test_methods: tuple[str, ...],
-    compat: bool,
     autocreate: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
@@ -269,7 +257,6 @@ def main(
                             setup_patterns=setup_patterns,
                             teardown_patterns=teardown_patterns,
                             test_patterns=test_patterns,
-                            compat=compat,
                             autocreate=autocreate,
                         )
 
@@ -303,7 +290,6 @@ def main(
                         setup_patterns=setup_patterns,
                         teardown_patterns=teardown_patterns,
                         test_patterns=test_patterns,
-                        compat=compat,
                         autocreate=autocreate,
                     )
 

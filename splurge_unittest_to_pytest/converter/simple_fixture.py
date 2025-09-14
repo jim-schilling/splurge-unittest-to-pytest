@@ -10,6 +10,7 @@ def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst
 
     Adds no decorators; caller should add @pytest.fixture as needed.
     """
+
     # Conservative local inference for simple literals/containers to avoid
     # adding a dependency on other converter modules and to keep this helper
     # self-contained.

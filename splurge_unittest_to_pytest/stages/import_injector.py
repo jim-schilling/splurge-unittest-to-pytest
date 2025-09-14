@@ -45,26 +45,30 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # However, when flags are absent (caller didn't set them), we default
     # to inserting pytest to preserve previous behavior and tests.
     if ("needs_pytest_import" in context or "needs_re_import" in context) and not (needs_pytest or needs_re):
+        # Caller explicitly provided flags but none are needed; return
+        # module unchanged to avoid inserting imports the caller didn't ask for.
         return {"module": module}
-    # quick check: if module already contains pytest import, do nothing
+    # quick check: detect whether pytest or unittest are already imported.
+    # We must not return early here because callers may request typing
+    # imports; instead remember which imports exist so we avoid inserting
+    # duplicates while still allowing insertion of typing/pathlib imports.
+    have_pytest = False
     for stmt in module.body:
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
             expr = stmt.body[0]
-            if isinstance(expr, cst.ImportFrom):
-                if getattr(expr.module, "value", None) == "pytest":
-                    return {"module": module}
+            if isinstance(expr, cst.ImportFrom) and getattr(expr.module, "value", None) == "pytest":
+                have_pytest = True
             if isinstance(expr, cst.Import):
                 # check alias names
                 for name in expr.names:
-                    if name.name.value == "pytest":
-                        return {"module": module}
+                    if getattr(name.name, "value", None) == "pytest":
+                        have_pytest = True
             # also detect if unittest is already imported
-            if isinstance(expr, cst.ImportFrom):
-                if getattr(expr.module, "value", None) == "unittest":
-                    needs_unittest = False
+            if isinstance(expr, cst.ImportFrom) and getattr(expr.module, "value", None) == "unittest":
+                needs_unittest = False
             if isinstance(expr, cst.Import):
                 for name in expr.names:
-                    if name.name.value == "unittest":
+                    if getattr(name.name, "value", None) == "unittest":
                         needs_unittest = False
     # build import node
     import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])])
@@ -108,12 +112,15 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
         ("sys", sys_import_node),
         ("tempfile", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("tempfile"))])])),
         ("shutil", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("shutil"))])])),
-        ("subprocess", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("subprocess"))])])),
+        (
+            "subprocess",
+            cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("subprocess"))])]),
+        ),
         ("json", cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("json"))])])),
     ]
 
     to_insert: list[cst.SimpleStatementLine] = []
-    if needs_pytest:
+    if needs_pytest and not have_pytest:
         to_insert.append(import_node)
     if needs_re:
         to_insert.append(re_import_node)
@@ -226,6 +233,7 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # names in our list should appear in that order; the rest appended
     ordered_insert: list[cst.SimpleStatementLine] = []
     preferred_keys = [k for k, _ in preferred_order]
+
     # pick from to_insert those whose module/name appears in preferred_keys
     def _key_for_node(n: cst.SimpleStatementLine) -> str | None:
         first = n.body[0]

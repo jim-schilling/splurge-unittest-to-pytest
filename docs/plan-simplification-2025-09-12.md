@@ -5,6 +5,10 @@ This document captures a small, safe, prioritized plan to simplify the
 plan focuses on small, testable, and reversible changes to reduce duplication
 and cognitive overhead without changing behavior.
 
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This plan is retained for historical context.
+
 Owners: Jim Schilling (maintainer)
 Status: Draft
 

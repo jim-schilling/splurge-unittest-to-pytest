@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-# type: ignore
-"""Demo script showing flexible parameter handling for different method types."""
+"""Demo script showing flexible parameter handling for different method types.
+
+Note: this example demonstrates internal helper behavior on PatternConfigurator
+for illustrative purposes; these helpers are implementation details and may
+change between releases. Prefer the public `convert_string` API for conversions.
+"""
 
 import libcst as cst
 from splurge_unittest_to_pytest.main import PatternConfigurator
+from typing import Any, cast
 
 
 def main() -> None:
     """Demonstrate flexible parameter handling."""
     print("=== Flexible Parameter Handling Demo ===\n")
 
-    transformer = PatternConfigurator()
+    # PatternConfigurator exposes some implementation helpers used in this demo
+    # (these are internal and not part of the public API). For the purposes
+    # of the example we cast it to Any so mypy does not enforce the presence
+    # of private helper attributes.
+    transformer = cast(Any, PatternConfigurator())
 
     # Test cases for different method types
     test_cases = [
@@ -61,8 +70,10 @@ def test_custom_example(obj, arg1):
 
         # Parse the code
         try:
-            module = cst.parse_module(test_case["code"])
-            func_def = module.body[0]  # Get the function definition
+            # parse_module expects a str/bytes; cast to str to satisfy mypy
+            module = cst.parse_module(str(test_case["code"]))
+            # module.body elements have a union type; cast to FunctionDef for clarity
+            func_def = cast(cst.FunctionDef, module.body[0])  # Get the function definition
 
             # Add decorators if specified
             if test_case["decorators"]:

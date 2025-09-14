@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import List
 
 import libcst as cst
 
@@ -35,7 +34,7 @@ def normalize_method_name(name: str) -> str:
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
-def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> List[str]:
+def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> list[str]:
     """Parse method patterns supporting comma-separated values and multiple flags.
 
     Returns a list of unique patterns preserving order.

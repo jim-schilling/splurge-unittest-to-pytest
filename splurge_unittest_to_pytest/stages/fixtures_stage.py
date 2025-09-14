@@ -85,13 +85,12 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
-    # Determine strict mode from context. When compat is explicitly False,
-    # convert to pure pytest-style by removing setUp/tearDown and dropping
-    # the original unittest classes in favor of generated top-level test
-    # functions. When compat is True (default historical behavior), keep
-    # classes and emit autouse attach fixture to maintain runnable modules.
-    compat_val = context.get("compat", None)
-    strict_pytest_mode = False if (compat_val is None or bool(compat_val)) else True
+    # The project has removed compatibility mode. This stage now always
+    # operates in strict pytest mode: drop unittest.TestCase classes, remove
+    # setUp/tearDown methods, and emit top-level pytest functions that
+    # accept fixture parameters. Autouse attach fixtures are no longer
+    # produced.
+    strict_pytest_mode = True
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
@@ -202,6 +201,8 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                         return True
                 return False
 
+            # In strict mode we always emit top-level pytest functions for
+            # each test method and do not retain the original unittest class.
             if _class_inherits_unittest_testcase_from_original(cls_original):
                 for member in stmt.body.body:
                     if not isinstance(member, cst.FunctionDef):
@@ -226,7 +227,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
 
                     new_body_block = member.body.visit(_SelfAttrRewriter())
 
-                    # build function params from fixture_names
+                    # build function params from fixture_names (strict mode)
                     params_list = [cst.Param(name=cst.Name(fname)) for fname in fixture_names]
                     params = cst.Parameters(params=params_list)
 

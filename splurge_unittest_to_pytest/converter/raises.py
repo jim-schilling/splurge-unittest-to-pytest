@@ -7,7 +7,7 @@ tested independently; the transformer will set flags and delegate to them.
 
 from __future__ import annotations
 
-from typing import Sequence, List
+from typing import Sequence
 
 import libcst as cst
 
@@ -59,7 +59,7 @@ def create_pytest_raises_withitem(method_name: str, args: Sequence[cst.Arg]) -> 
     )
 
 
-__all__: List[str] = [
+__all__: list[str] = [
     "make_pytest_raises_call",
     "make_pytest_raises_regex_call",
     "create_pytest_raises_withitem",

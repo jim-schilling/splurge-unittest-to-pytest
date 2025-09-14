@@ -1,7 +1,31 @@
 import libcst as cst
-import libcst.matchers as m
+from libcst import matchers as m
 
-from splurge_unittest_to_pytest.stages.assertion_rewriter import assertion_rewriter_stage
+from splurge_unittest_to_pytest.stages.assertion_rewriter import AssertionRewriter, assertion_rewriter_stage
+
+
+def _apply(expr_src: str) -> str:
+    mod = cst.parse_module(expr_src)
+    new = mod.visit(AssertionRewriter())
+    return new.code
+
+
+def test_assert_equal_conversion():
+    src = "x = 1\nself.assertEqual(x, 1)\n"
+    out = _apply(src)
+    assert "assert x == 1" in out
+
+
+def test_assert_true_conversion():
+    src = "self.assertTrue(flag)\n"
+    out = _apply(src)
+    assert "assert flag" in out
+
+
+def test_with_assert_raises_converted_to_pytest():
+    src = "with self.assertRaises(ValueError):\n    do_thing()\n"
+    out = _apply(src)
+    assert "pytest.raises" in out
 
 
 def _run(src: str):

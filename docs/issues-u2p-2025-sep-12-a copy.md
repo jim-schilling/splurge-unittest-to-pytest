@@ -9,10 +9,14 @@ Summary
 
 I ran the `splurge-unittest-to-pytest` converter (from the project's `.venv`) against the repository `tests/` directory on 2025-09-12. Conversion was executed with backups enabled; the converter created `.bak` backups in `backups/`.
 
-Key outcomes
-------------
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This document is retained for historical context and describes a conversion run performed prior to that change.
 
-- Conversion command used (from project root):
+Summary
+
+
+I ran the `splurge-unittest-to-pytest` converter (from the project's `.venv`) against the repository `tests/` directory on 2025-09-12. Conversion was executed with backups enabled; the converter created `.bak` backups in `backups/`.
 
   source .venv/Scripts/activate && splurge-unittest-to-pytest -r -b backups/ tests/
 

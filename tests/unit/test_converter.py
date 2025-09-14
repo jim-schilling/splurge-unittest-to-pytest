@@ -17,7 +17,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertEqual(1 + 1, 2)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert 1 + 1 == 2" in result.converted_code
         assert "assertEqual" not in result.converted_code
@@ -30,7 +30,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert True" in result.converted_code
         assert "assertTrue" not in result.converted_code
@@ -43,7 +43,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertFalse(False)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert not False" in result.converted_code
         assert "assertFalse" not in result.converted_code
@@ -56,7 +56,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsNone(None)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert None is None" in result.converted_code
         assert "assertIsNone" not in result.converted_code
@@ -69,7 +69,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIn(1, [1, 2, 3])
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert 1 in [1, 2, 3]" in result.converted_code
         assert "assertIn" not in result.converted_code
@@ -82,7 +82,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsInstance(1, int)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
         assert result.has_changes
         assert "assert isinstance(1, int)" in result.converted_code
         assert "assertIsInstance" not in result.converted_code
@@ -96,7 +96,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertGreater(2, 1)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert "assert 2 > 1" in result.converted_code
@@ -111,7 +111,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertLessEqual(2, 2)
 """
-        result = convert_string(unittest_code, engine="pipeline")
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert "assert 2 <= 2" in result.converted_code
@@ -126,7 +126,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotEqual(1, 2)
 """
-        result = convert_string(unittest_code, compat=True)
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert "assert 1 != 2" in result.converted_code
@@ -141,7 +141,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertIsNotNone(42)
 """
-        result = convert_string(unittest_code, compat=True)
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert "assert 42 is not None" in result.converted_code
@@ -156,7 +156,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIn(4, [1, 2, 3])
 """
-        result = convert_string(unittest_code, compat=True)
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert "assert 4 not in [1, 2, 3]" in result.converted_code
@@ -171,7 +171,7 @@ class TestExample(unittest.TestCase):
     def test_something(self) -> None:
         self.assertNotIsInstance("hello", int)
 """
-        result = convert_string(unittest_code, compat=True)
+        result = convert_string(unittest_code)
 
         assert result.has_changes
         assert 'assert not isinstance("hello", int)' in result.converted_code
@@ -259,8 +259,11 @@ class TestExample(unittest.TestCase):
         result = convert_string(unittest_code)
 
         assert result.has_changes
-        assert "class TestExample():" in result.converted_code
+        # In strict/no-compat mode we drop unittest.TestCase classes
+        assert "class TestExample():" not in result.converted_code
         assert "unittest.TestCase" not in result.converted_code
+        # A top-level pytest test function should be present
+        assert "def test_something(" in result.converted_code
 
     def test_setup_method_conversion(self) -> None:
         """Test setUp method conversion to pytest fixture."""
@@ -448,9 +451,10 @@ class TestExample(unittest.TestCase):
 
         assert result.has_changes
         assert "import pytest" in result.converted_code
-        assert "class TestExample():" in result.converted_code
+        # strict mode: classes removed in favor of top-level tests
+        assert "class TestExample():" not in result.converted_code
         assert "@pytest.fixture" in result.converted_code
-        assert "def value():" in result.converted_code
+        assert "def value(" in result.converted_code
         assert "yield 42" in result.converted_code
         assert "value = None" in result.converted_code
         assert "def test_addition(value):" in result.converted_code

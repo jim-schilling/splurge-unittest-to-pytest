@@ -15,7 +15,7 @@ def _make_fn(name: str) -> cst.FunctionDef:
 def test_no_compat_inserts_two_blank_lines_before_defs() -> None:
     mod = _make_module_with_placeholders()
     nodes = [_make_fn("fix1"), _make_fn("fix2")]
-    ctx = {"module": mod, "fixture_nodes": nodes, "compat": False}
+    ctx = {"module": mod, "fixture_nodes": nodes}
     out = fixture_injector_stage(ctx)
     new_mod = out.get("module")
     assert isinstance(new_mod, cst.Module)
@@ -37,17 +37,18 @@ def test_no_compat_inserts_two_blank_lines_before_defs() -> None:
 def test_compat_preserves_single_empty_between_fixtures() -> None:
     mod = _make_module_with_placeholders()
     nodes = [_make_fn("a"), _make_fn("b")]
-    ctx = {"module": mod, "fixture_nodes": nodes, "compat": True}
+    ctx = {"module": mod, "fixture_nodes": nodes}
     out = fixture_injector_stage(ctx)
     new_mod = out.get("module")
     assert isinstance(new_mod, cst.Module)
     body = list(new_mod.body)
-    # Expect fixture then an EmptyLine then fixture
-    codes = [type(n).__name__ for n in body]
-    # find sequence 'FunctionDef', 'EmptyLine', 'FunctionDef'
-    found = False
-    for i in range(len(codes) - 2):
-        if codes[i] == "FunctionDef" and codes[i + 1] == "EmptyLine" and codes[i + 2] == "FunctionDef":
-            found = True
-            break
-    assert found, f"Expected FunctionDef, EmptyLine, FunctionDef sequence in compat mode; got {codes}"
+    # Compat mode removed; injector emits two EmptyLine before each top-level def.
+    positions = [i for i, n in enumerate(body) if isinstance(n, cst.FunctionDef)]
+    assert positions, "No FunctionDef found"
+    for pos in positions:
+        cnt = 0
+        j = pos - 1
+        while j >= 0 and isinstance(body[j], cst.EmptyLine):
+            cnt += 1
+            j -= 1
+        assert cnt >= 2, f"Expected >=2 EmptyLine before def at pos {pos}, found {cnt}"

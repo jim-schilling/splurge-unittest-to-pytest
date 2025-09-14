@@ -16,7 +16,6 @@ try:
 except Exception:  # pragma: no cover - fallback helper for isolated runs
     from pathlib import Path
 
-
     def create_sql_with_schema(tmp_path: Path, filename: str, content: str):
         """Create a SQL file and a dummy schema file next to it.
 

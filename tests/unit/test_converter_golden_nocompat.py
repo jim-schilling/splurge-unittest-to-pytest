@@ -12,7 +12,7 @@ def test_sample_04_matches_no_compat_golden():
     src = _read_text("sample-04-unittest.txt")
     expected = _read_text("sample-04-pytest-no-compat.txt")
 
-    result = main.convert_string(src, compat=False)
+    result = main.convert_string(src)
     if isinstance(result, ConversionResult):
         out = result.converted_code
     else:

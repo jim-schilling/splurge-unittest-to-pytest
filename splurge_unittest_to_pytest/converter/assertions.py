@@ -7,7 +7,7 @@ transformer will delegate to these functions.
 
 from __future__ import annotations
 
-from typing import Sequence, List, Callable
+from typing import Sequence, Callable
 
 import libcst as cst
 
@@ -179,7 +179,7 @@ def _assert_less_equal(args: Sequence[cst.Arg]) -> cst.Assert:
     return cst.Assert(test=cst.Name("False"))
 
 
-__all__: List[str] = [
+__all__: list[str] = [
     "_assert_equal",
     "_assert_not_equal",
     "_assert_true",

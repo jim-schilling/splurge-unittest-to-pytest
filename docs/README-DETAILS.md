@@ -21,8 +21,8 @@ Splurge unittest-to-pytest is a comprehensive Python library and CLI tool for co
     - AST-based code transformation using libcst
     - Assertion conversion, import management, class structure changes
     - Preserves code formatting, comments, and whitespace
-    - Legacy transformer implementation has been archived to `contrib/legacy_converter.py` for
-       reference; prefer the staged pipeline for conversions.
+      - The staged pipeline is the canonical conversion implementation; prefer the
+         public API (`convert_string`, `convert_file`) which invokes the pipeline.
 
 4. **Exception Handling** (`splurge_unittest_to_pytest/exceptions.py`)
    - Custom exception classes for different error scenarios
@@ -137,6 +137,22 @@ pytest tests/unit/test_main.py::TestFileOperations::test_convert_file_in_place
 # Run tests matching pattern
 pytest -k "test_convert"
 ```
+
+## Recent migration notes (2025-09-13 → 2025-09-14)
+
+This repository recently completed a migration to remove legacy compatibility shims and to modernize the test surface. The following summarizes what changed and why:
+
+- Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native output by default.
+- Duplicate test-local autouse helpers were consolidated into a single test-only helper module: `tests/unit/helpers/autouse_helpers.py`. Tests import this module to avoid duplicating implementation details while keeping test-only utilities out of the package API.
+- The local `build/` directory (generated artifacts) was removed from the working tree and `build/` is ignored via `.gitignore` to prevent accidental commits of generated files.
+
+Verification performed locally during the migration:
+
+- ruff format/check: passed (a few files were reformatted during the change)
+- mypy: no type errors reported for the package
+- pytest (unit tests): local unit test run passed (859 passed, 1 skipped) and full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage summary printed (~86% project coverage during the run).
+
+If you maintain tooling or CI that relied on older compat flags, update your workflows to use the staged pipeline and the modernized CLI semantics.
 
 ## Code Conversion Process
 
@@ -366,23 +382,23 @@ Files:
 This output prints the most recent diagnostics run directory, the marker file
 path, and a short file listing to help you locate snapshots quickly.
 
-## Strict mode (compat disabled)
+## Strict pytest output
 
-When you pass `--no-compat` (or compat=False via API), the converter emits strict pytest output:
+This tool emits strict, pytest-native code. Compatibility mode has been removed
+and the converter uses a single staged-pipeline implementation.
 
-- Unittest classes and lifecycle methods (`setUp`/`tearDown`) are dropped
+- Unittest classes and lifecycle methods (`setUp`/`tearDown`) are converted into pytest fixtures or dropped where appropriate
 - No autouse `_attach_to_instance` fixture is injected
 - Top-level pytest tests are generated that accept fixtures directly
-- Self-referential placeholders in fixtures (e.g., `str(schema_file)`) are guarded with a clear runtime error to avoid silently broken tests
 
 ### CLI examples
 
 ```bash
-# Convert a directory strictly to pytest style
-splurge-unittest-to-pytest --no-compat --recursive tests/
+# Convert a directory to pytest style
+splurge-unittest-to-pytest --recursive tests/
 
-# Convert files to an output directory in strict mode
-splurge-unittest-to-pytest --no-compat -o converted/ tests/data/*.bak.txt
+# Convert files to an output directory
+splurge-unittest-to-pytest -o converted/ tests/data/*.bak.txt
 ```
 
 ### Python API
@@ -390,11 +406,10 @@ splurge-unittest-to-pytest --no-compat -o converted/ tests/data/*.bak.txt
 ```python
 from splurge_unittest_to_pytest.main import convert_string
 
-res = convert_string(src_code, compat=False)
+res = convert_string(src_code)
 print(res.converted_code)
 ```
 
-### When to use
+### Notes
 
-- Use default `--compat` to preserve runnability for mixed unittest/pytest suites
-- Use `--no-compat` when you want fully pytest-native code with no class scaffolding
+Compatibility mode has been removed and documentation/tests were updated to reflect the simplified public API and CLI behavior.

@@ -65,20 +65,13 @@ def test_sample_04_matches_golden(tmp_path):
     assert "from typing import" in out
     assert "Generator" in out
     assert "Dict" in out
-    # fixture decorator should appear; accept either a composite fixture
-    # `temp_dirs` (legacy) or the per-attribute `temp_dir` produced by the
-    # newer generator_v2.
+    # fixture decorator should appear and we validate against the strict
+    # no-compat golden below, so ensure basic fixture presence here.
     assert "@pytest.fixture" in out or "pytest.fixture" in out
-    assert (
-        "def temp_dirs" in out
-        or "def temp_dirs(" in out
-        or "def temp_dir" in out
-        or "def temp_dir(" in out
-    )
 
     # Also verify the strict (no-compat) conversion matches the no-compat golden
     expected_nc = _read_text("sample-04-pytest-no-compat.txt")
-    result_nc = main.convert_string(src, compat=False)
+    result_nc = main.convert_string(src)
     if isinstance(result_nc, ConversionResult):
         out_nc = result_nc.converted_code
     else:

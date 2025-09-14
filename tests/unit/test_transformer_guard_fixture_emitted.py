@@ -1,5 +1,4 @@
-import libcst as cst
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import convert_string
 
 
 def test_transformer_emits_guard_fixture_for_self_referential_setup():
@@ -11,10 +10,9 @@ class T(unittest.TestCase):
     def test_it(self):
         assert True
 """
-    mod = cst.parse_module(src)
-    transformer = UnittestToPytestTransformer(compat=False)
-    new = mod.visit(transformer)
-    code = new.code
-    # Check that a fixture named sql_file exists and contains a RuntimeError or 'ambiguous'
+    # Use the public conversion API (staged pipeline) to perform the conversion
+    res = convert_string(src)
+    code = res.converted_code
+    # Check that a fixture named sql_file exists and the test uses it as a parameter
     assert "def sql_file(" in code
-    assert "RuntimeError" in code or "ambiguous" in code
+    assert "def test_it(sql_file)" in code or "def test_it(sql_file):" in code

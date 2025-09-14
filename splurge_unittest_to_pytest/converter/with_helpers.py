@@ -1,14 +1,12 @@
 """Helpers for converting unittest assertRaises context managers to pytest.raises."""
 
-from typing import Tuple
-
 import libcst as cst
 
 from .call_utils import is_self_call
 from .raises import create_pytest_raises_withitem
 
 
-def convert_assert_raises_with(node: cst.With) -> Tuple[cst.With | None, bool]:
+def convert_assert_raises_with(node: cst.With) -> tuple[cst.With | None, bool]:
     """Convert a `with` node using unittest assertRaises/assertRaisesRegex to a
     `with pytest.raises(...)` node.
 

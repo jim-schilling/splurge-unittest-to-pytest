@@ -1,15 +1,14 @@
 """Fixture helper creators extracted from the monolithic converter.
 
 These functions are pure-ish: they accept the needed inputs and return libcst
-nodes. The class in `converter.py` keeps thin wrappers that manage transformer
+nodes. These helpers were previously part of the legacy transformer implementation
+and were split into small modules for easier testing and maintenance.
 state (e.g., setting self.needs_pytest_import) and call these helpers.
 """
 
-from typing import Any, List
-
 import libcst as cst
 
-__all__: List[str] = [
+__all__: list[str] = [
     "create_fixture_with_cleanup",
     "create_simple_fixture",
     "parse_setup_assignments",
@@ -18,7 +17,7 @@ __all__: List[str] = [
 from .setup_parser import parse_setup_assignments
 
 
-def _collect_identifiers_from_statements(stmts: List[cst.BaseStatement]) -> set[str]:
+def _collect_identifiers_from_statements(stmts: list[cst.BaseStatement]) -> set[str]:
     ids: set[str] = set()
 
     class _NameCollector(cst.CSTVisitor):
@@ -75,7 +74,7 @@ def _infer_simple_return_annotation(expr: cst.BaseExpression | None) -> cst.Anno
 
 
 def create_fixture_with_cleanup(
-    attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: List[cst.BaseStatement]
+    attr_name: str, value_expr: cst.BaseExpression, cleanup_statements: list[cst.BaseStatement]
 ) -> cst.FunctionDef:
     """Create a fixture with yield pattern and cleanup.
 
@@ -347,102 +346,6 @@ def create_autocreated_file_fixture(
     )
 
     return fixture_func
-
-
-def make_autouse_attach_to_instance_fixture(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
-    """Create an autouse fixture function that attaches named fixtures to unittest-style test instances.
-
-    Returns a libcst.FunctionDef for:
-        @pytest.fixture(autouse=True)
-        def _attach_to_instance(request):
-            inst = getattr(request, 'instance', None)
-            if inst is not None:
-                setattr(inst, 'name', name)  # for each fixture name
-    """
-    # Build inst = getattr(request, 'instance', None)
-    inst_assign = cst.SimpleStatementLine(
-        body=[
-            cst.Assign(
-                targets=[cst.AssignTarget(target=cst.Name("inst"))],
-                value=cst.Call(
-                    func=cst.Name("getattr"),
-                    args=[
-                        cst.Arg(value=cst.Name("request")),
-                        cst.Arg(value=cst.SimpleString("'instance'")),
-                        cst.Arg(value=cst.Name("None")),
-                    ],
-                ),
-            )
-        ]
-    )
-
-    set_calls: list[cst.BaseStatement] = []
-    for name in setup_fixtures.keys():
-        set_calls.append(
-            cst.SimpleStatementLine(
-                body=[
-                    cst.Expr(
-                        value=cst.Call(
-                            func=cst.Name("setattr"),
-                            args=[
-                                cst.Arg(value=cst.Name("inst")),
-                                cst.Arg(value=cst.SimpleString(f"'{name}'")),
-                                cst.Arg(value=cst.Name(name)),
-                            ],
-                        )
-                    )
-                ]
-            )
-        )
-
-    if_block = cst.IndentedBlock(body=set_calls)
-    if_stmt = cst.If(
-        test=cst.Comparison(
-            left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]
-        ),
-        body=if_block,
-    )
-
-    from .decorators import build_pytest_fixture_decorator
-
-    decorator = build_pytest_fixture_decorator({"autouse": True})
-
-    func = cst.FunctionDef(
-        name=cst.Name("_attach_to_instance"),
-        params=cst.Parameters(params=[cst.Param(name=cst.Name("request"))]),
-        body=cst.IndentedBlock(body=[inst_assign, if_stmt]),
-        decorators=[decorator],
-    )
-
-    return func
-
-
-def add_autouse_attach_fixture_to_module(
-    module_node: cst.Module, setup_fixtures: dict[str, cst.FunctionDef]
-) -> cst.Module:
-    """Insert the autouse attachment fixture into the module (after pytest import if present)."""
-    if not setup_fixtures:
-        return module_node
-
-    func = make_autouse_attach_to_instance_fixture(setup_fixtures)
-
-    new_body: list[Any] = list(module_node.body)
-    insert_pos = 0
-    for i, stmt in enumerate(new_body):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-            first = stmt.body[0]
-            if isinstance(first, cst.Import):
-                for alias in first.names:
-                    if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
-                        insert_pos = i + 1
-                        break
-            if insert_pos:
-                break
-
-    new_body.insert(insert_pos, cst.EmptyLine())
-    new_body.insert(insert_pos + 1, func)
-
-    return module_node.with_changes(body=new_body)
 
 
 def create_fixture_for_attribute(

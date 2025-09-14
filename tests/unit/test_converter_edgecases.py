@@ -18,7 +18,7 @@ class TestFoo(unittest.TestCase):
         self.assertTrue(True)
 """
 
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src)
     out = res.converted_code
     # should create a fixture named temp_dir using yield pattern and include cleanup call
     assert "def temp_dir" in out
@@ -40,14 +40,14 @@ class TestMany(unittest.TestCase):
         self.assertEqual(self.a + self.b, 3)
 """
 
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src)
     out = res.converted_code
     # fixtures 'a' and 'b' should exist
     assert "def a" in out
     assert "def b" in out
-    # autouse compat fixture should attach both names
-    assert "'_attach_to_instance'" not in out or "_attach_to_instance" in out
-    assert "'a'" in out and "'b'" in out
+    # compatibility/autouse removed: expect per-attribute fixtures 'a' and 'b'
+    assert "def a" in out or "def a(" in out
+    assert "def b" in out or "def b(" in out
 
 
 def test_variable_name_consistency() -> None:
@@ -63,7 +63,7 @@ class TestNames(unittest.TestCase):
         self.assertEqual(self.tables['x'], 1)
 """
 
-    res = convert_string(src, engine="pipeline")
+    res = convert_string(src)
     out = res.converted_code
     # fixture 'tables' should be created and used (no accidental rename)
     assert "def tables" in out

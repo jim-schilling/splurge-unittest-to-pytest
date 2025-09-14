@@ -56,7 +56,8 @@ CLI usage:
 splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 ```
 
-See `--help` for all CLI options.
+The CLI no longer accepts compatibility toggles; it emits strict pytest-style
+output by default. See `--help` for remaining options.
 
 ## Supported conversions (high level)
 
@@ -95,6 +96,20 @@ mypy splurge_unittest_to_pytest/
 Key developer notes:
 - Internal helper utilities live in `splurge_unittest_to_pytest.converter.helpers`.
 - The converter uses libcst to perform safe, formatting-preserving transformations.
+
+## Recent updates (2025-09-13 → 2025-09-14)
+
+- Removed legacy compatibility/autouse helpers from the public runtime API. The converter now uses the staged pipeline as the canonical engine and emits strict pytest-native code by default. See the changelog for details.
+- Tests: duplicated, test-local autouse helpers were consolidated into a single test-only helper module at `tests/unit/helpers/autouse_helpers.py`. This keeps tests DRY while avoiding exposing test utilities in production code.
+- Repository cleanup: local `build/` artifacts were removed from the working tree and `build/` is ignored via `.gitignore` to avoid committing generated files.
+
+Verification (local run):
+
+- ruff: format + check passed (few files reformatted during the change)
+- mypy: no type errors across the package
+- pytest (unit suite): all unit tests passed locally (unit run: 859 passed, 1 skipped; full suite runs earlier reported 874 passed, 4 skipped). Coverage summary printed during the run (project coverage ~86%).
+
+If you depend on older compat flags or behavior, update your workflow to use the staged pipeline and strict/no-compat semantics — the converter intentionally emits modern pytest patterns.
 
 ## Contributing
 

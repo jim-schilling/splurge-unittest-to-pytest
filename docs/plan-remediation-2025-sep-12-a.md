@@ -9,10 +9,14 @@ Summary
 
 This document lists actionable remediation steps for the two failing tests observed after converting the test suite on 2025-09-12 (runs A and B). The failures are localized and caused by semantic mismatches between unittest idioms and pytest idioms introduced by the converter.
 
-Scope and constraints
----------------------
+Historical note
+---------------
+The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This plan documents remediation work performed before that change and is retained for historical context.
 
-- The converter processed 14 files and converted 9; 147 tests passed and 2 failed in both the `compat` (run A) and `--no-compat` (run B) modes. The failures are identical across both runs.
+Summary
+
+
+This document lists actionable remediation steps for the two failing tests observed after converting the test suite on 2025-09-12 (runs A and B). The failures are localized and caused by semantic mismatches between unittest idioms and pytest idioms introduced by the converter.
 - Changes here are intentionally minimal and low-risk: fix the translated pytest usage and repair broken fixtures produced by the converter.
 
 Root causes (short)

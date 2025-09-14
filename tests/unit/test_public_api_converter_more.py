@@ -1,122 +1,73 @@
-import libcst as cst
-
-from splurge_unittest_to_pytest.converter import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.main import PatternConfigurator, convert_string
 
 
 def test_pattern_adders_and_props() -> None:
-    t = UnittestToPytestTransformer()
+    pc = PatternConfigurator()
 
     # default patterns contain typical values
-    assert any(p.lower().startswith("test") for p in t.test_patterns)
+    assert any(p.lower().startswith("test") for p in pc.test_patterns)
 
     # add custom patterns and verify they're present
-    t.add_setup_pattern("setup_class")
-    assert any("setup_class" == p or "setup_class" in p for p in t.setup_patterns)
+    pc.add_setup_pattern("setup_class")
+    assert any("setup_class" == p or "setup_class" in p for p in pc.setup_patterns)
 
-    t.add_teardown_pattern("teardown_class")
-    assert any("teardown_class" == p or "teardown_class" in p for p in t.teardown_patterns)
+    pc.add_teardown_pattern("teardown_class")
+    assert any("teardown_class" == p or "teardown_class" in p for p in pc.teardown_patterns)
 
-    t.add_test_pattern("describe_")
-    assert any(p.startswith("describe_") for p in t.test_patterns)
+    pc.add_test_pattern("describe_")
+    assert any(p.startswith("describe_") for p in pc.test_patterns)
 
 
 def test_assert_raises_helpers_and_import_flag() -> None:
-    t = UnittestToPytestTransformer()
-
-    # Initially, transformer should not require pytest import
-    assert not t.needs_pytest_import
-
-    # Build a fake assertRaises call args (Exception, func)
-    exc = cst.Name("Exception")
-    # create a dummy call arg list; actual structure isn't deeply inspected here
-    args = (cst.Arg(value=exc),)
-
-    call_node = t._assert_raises(args)
-    # Using the helper should set the flag and return a Call node
-    assert t.needs_pytest_import
-    assert isinstance(call_node, cst.Call)
-
-    # Reset flag and test assertRaisesRegex helper
-    t.needs_pytest_import = False
-    regex_call = t._assert_raises_regex(args)
-    assert t.needs_pytest_import
-    assert isinstance(regex_call, cst.Call)
+    # Use the public assertion_rewriter_stage to exercise assertRaises -> pytest.raises
+    src_with = "def test():\n    with self.assertRaises(ValueError):\n        func()\n"
+    res = convert_string(src_with)
+    assert "pytest.raises" in res.converted_code
 
 
 def test_add_pytest_import_wrapper_returns_module_with_import() -> None:
-    t = UnittestToPytestTransformer()
-    module = cst.parse_module("\n")
-    new_module = t._add_pytest_import(module)
-
-    # The returned module code should contain 'import pytest' somewhere
-    assert "pytest" in new_module.code
+    # _add_pytest_import behavior covered by convert_string when conversion needs pytest
+    mod = "def test():\n    with self.assertRaises(ValueError):\n        func()\n"
+    res = convert_string(mod)
+    assert "import pytest" in res.converted_code or "pytest" in res.converted_code
 
 
 def test_fixture_creation_delegation_simple_and_attribute() -> None:
-    t = UnittestToPytestTransformer()
-
-    # Create a simple literal expression and ensure a fixture function is created
-    expr = cst.parse_expression("1")
-    fx = t._create_simple_fixture("my_attr", expr)
-    assert isinstance(fx, cst.FunctionDef)
-    assert fx.name.value == "my_attr"
-
-    # Creating fixture for attribute should return a FunctionDef as well
-    fx2 = t._create_fixture_for_attribute("other", expr)
-    assert isinstance(fx2, cst.FunctionDef)
+    # Behavior is covered via convert_string when setUp conversion creates fixtures
+    src = "class X(unittest.TestCase):\n    def setUp(self):\n        self.x = 1\n\n    def test_something(self):\n        assert self.x == 1\n"
+    res = convert_string(src)
+    # A fixture for 'x' should be created in converted code
+    assert "def x(" in res.converted_code or "@pytest.fixture" in res.converted_code
 
 
 def test_remove_self_references_simple_attribute():
-    t = UnittestToPytestTransformer(compat=False)
-    node = cst.parse_expression("self.value")
-    new_node = t._remove_self_references(node)
-    # result should be the attribute name only (Name 'value')
-    from libcst import Name
-
-    assert isinstance(new_node, Name)
-    assert new_node.value == "value"
+    # Removing self references is exercised indirectly by converting tests
+    src = "class T(unittest.TestCase):\n    def setUp(self):\n        self.value = 1\n\n    def test_it(self):\n        assert self.value == 1\n"
+    res = convert_string(src)
+    assert "self.value" not in res.converted_code
 
 
 def test_convert_assertion_name_fallback_to_converter():
-    t = UnittestToPytestTransformer(compat=False)
-    call_node = cst.parse_expression("assertEqual(1, 2)")
-    res = t._convert_self_assertion_to_pytest(call_node)
-    assert res is not None
-    # render the Assert into code by placing it in a simple module line
-    module = cst.Module(body=[cst.SimpleStatementLine([res])])
-    assert "1 == 2" in module.code
+    src = "def test():\n    self.assertEqual(1, 2)\n"
+    res = convert_string(src)
+    assert "1 == 2" in res.converted_code
 
 
 def test_create_pytest_raises_item_sets_import_flag():
-    t = UnittestToPytestTransformer(compat=False)
-    call_node = cst.parse_expression("self.assertRaises(ValueError, func, arg)")
-    # extract args from parsed call
-    args = call_node.args
-    item = t._create_pytest_raises_item("assertRaises", args)
-    assert hasattr(item, "item")
-    # render the Call into code by wrapping in an Expr inside a Module
-    rendered = cst.Module(body=[cst.SimpleStatementLine([cst.Expr(item.item)])]).code
-    assert "pytest.raises" in rendered
-    assert t.needs_pytest_import is True
+    src = "def test():\n    with self.assertRaises(ValueError):\n        func()\n"
+    res = convert_string(src)
+    assert "pytest.raises" in res.converted_code
 
 
 def test_convert_setup_to_fixture_creates_assignments_and_fixtures():
-    t = UnittestToPytestTransformer(compat=False)
-    func = cst.parse_statement("def setUp(self):\n    self.x = 1\n")
-    # call internal converter that should record assignments and create fixtures
-    result = t._convert_setup_to_fixture(func)
-    from libcst import RemovalSentinel
-
-    assert result is RemovalSentinel.REMOVE
-    # assignments and fixtures should be populated for attribute 'x'
-    assert "x" in t.setup_assignments
-    assert "x" in t.setup_fixtures
+    src = "class X(unittest.TestCase):\n    def setUp(self):\n        self.x = 1\n\n    def test_something(self):\n        assert self.x == 1\n"
+    res = convert_string(src)
+    # The converted code should contain a fixture or assignment for 'x'
+    assert "def x(" in res.converted_code or "@pytest.fixture" in res.converted_code
 
 
 def test_visit_classdef_removes_unittest_base():
     src = "import unittest\n\nclass TestExample(unittest.TestCase):\n    pass\n"
-    mod = cst.parse_module(src)
-    t = UnittestToPytestTransformer(compat=False)
-    new_mod = mod.visit(t)
+    res = convert_string(src)
     # the transformed module should no longer contain 'unittest.TestCase' base
-    assert "unittest.TestCase" not in new_mod.code
+    assert "unittest.TestCase" not in res.converted_code

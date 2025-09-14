@@ -26,9 +26,7 @@ def convert_string(
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
-    compat: bool = True,
     autocreate: bool = True,
-    engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
@@ -47,23 +45,10 @@ def convert_string(
         # Parse the source code into a CST
         tree = cst.parse_module(source_code)
 
-        # Apply the chosen conversion engine
-        if engine == "pipeline":
-            # run staged pipeline (returns a Module). Pass autocreate flag so
-            # stages may opt-out of auto-generating file fixtures when the
-            # caller requested conservative behavior.
-            converted_module = run_pipeline(tree, compat=compat, autocreate=autocreate)
-            converted_code = converted_module.code
-        else:
-            # The legacy transformer implementation was removed from the
-            # package proper and archived under contrib/legacy_converter.py.
-            # The staged pipeline is the supported conversion engine.
-            raise NotImplementedError(
-                "engine='transformer' is no longer supported by default."
-                " If you need the legacy transformer, import it from"
-                " 'contrib.legacy_converter' or pass engine='pipeline' to use"
-                " the staged pipeline."
-            )
+        # Use the staged pipeline implementation. The pipeline returns a
+        # libcst.Module representing strict pytest-style output.
+        converted_module = run_pipeline(tree, autocreate=autocreate)
+        converted_code = converted_module.code
 
         # Determine whether any meaningful conversion changes were made.
         try:
@@ -226,9 +211,7 @@ def convert_file(
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
-    compat: bool = True,
     autocreate: bool = True,
-    engine: str = "pipeline",
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -273,9 +256,7 @@ def convert_file(
         setup_patterns=setup_patterns,
         teardown_patterns=teardown_patterns,
         test_patterns=test_patterns,
-        compat=compat,
         autocreate=autocreate,
-        engine=engine,
     )
 
     # Write the converted code if there were changes and no errors

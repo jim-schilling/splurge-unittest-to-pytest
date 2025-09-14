@@ -6,10 +6,8 @@ from typing import Any
 
 import libcst as cst
 from .collector import Collector
-try:
-    from .generator_v2 import generator_v2 as generator_stage
-except Exception:
-    from .generator import generator_stage
+
+from .generator import generator as generator_stage
 from .fixture_injector import fixture_injector_stage
 from .rewriter import rewriter_stage
 from .import_injector import import_injector_stage
@@ -18,7 +16,7 @@ from .postvalidator import postvalidator_stage
 from .tidy import tidy_stage
 
 
-def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = True) -> cst.Module:
+def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
     mgr = StageManager()
 
     def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -76,7 +74,7 @@ def run_pipeline(module: cst.Module, compat: bool = True, autocreate: bool = Tru
 
     # execute the pipeline and return the final module
     # Provide flags via initial context so stages can opt-in/out deterministically
-    context = mgr.run(module, initial_context={"autocreate": autocreate, "compat": compat})
+    context = mgr.run(module, initial_context={"autocreate": autocreate})
     result = context.get("module")
     try:
         # Only call dump_final when we actually have a Module instance.

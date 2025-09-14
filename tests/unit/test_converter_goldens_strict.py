@@ -97,7 +97,9 @@ def test_samples_match_goldens_strict():
     exp_imports, exp_rest, exp_typing = _extract_and_normalize_imports(norm_expected)
 
     # imports block should be the same modulo ordering; compare as sets
-    assert set(out_imports.splitlines()) == set(exp_imports.splitlines()), f"Import block mismatch for {base}\nOUT:\n{out_imports}\nEXP:\n{exp_imports}"
+    assert set(out_imports.splitlines()) == set(exp_imports.splitlines()), (
+        f"Import block mismatch for {base}\nOUT:\n{out_imports}\nEXP:\n{exp_imports}"
+    )
 
     # typing imports names should match as sets
     assert out_typing == exp_typing, f"Typing import names mismatch for {base}: {out_typing} != {exp_typing}"
@@ -107,4 +109,4 @@ def test_samples_match_goldens_strict():
     def collapse_whitespace(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip()
 
-    assert collapse_whitespace(out_rest) == collapse_whitespace(exp_rest), f"Body mismatch for {base}" 
+    assert collapse_whitespace(out_rest) == collapse_whitespace(exp_rest), f"Body mismatch for {base}"

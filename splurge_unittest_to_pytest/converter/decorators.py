@@ -42,4 +42,6 @@ def build_pytest_fixture_decorator(kwargs: Mapping[str, Any] | None = None) -> c
 
         args.append(cst.Arg(keyword=cst.Name(key), value=value_node))
 
-    return cst.Decorator(decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=args))
+    return cst.Decorator(
+        decorator=cst.Call(func=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")), args=args)
+    )
