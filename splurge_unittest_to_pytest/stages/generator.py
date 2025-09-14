@@ -8,9 +8,10 @@ from dataclasses import dataclass
 from typing import Any, List, Optional, Set, cast, Sequence
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator_parts.namedtuple_bundler import bundle_named_locals
+from splurge_unittest_to_pytest.stages.generator_parts.bundler_invoker import safe_bundle_named_locals
 from splurge_unittest_to_pytest.stages.generator_parts.self_attr_finder import collect_self_attrs
 from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
+from splurge_unittest_to_pytest.stages.generator_parts.module_level_names import collect_module_level_names
 from splurge_unittest_to_pytest.stages.generator_parts.filename_inferer import infer_filename_for_local
 from splurge_unittest_to_pytest.stages.generator_parts.references_attr import references_attribute
 from splurge_unittest_to_pytest.stages.generator_parts.cleanup_checks import is_simple_cleanup_statement
@@ -44,63 +45,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
         return {}
     specs: dict[str, FixtureSpec] = {}
     fixture_nodes: list[cst.FunctionDef] = []
-    used_local_names: Set[str] = set()
-    # populate used_local_names from module-level identifiers to avoid collisions
     maybe_module: Any = context.get("module")
+    used_local_names: Set[str] = collect_module_level_names(maybe_module)
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
-    if module is not None:
-        for node in module.body:
-            # assignments
-            if isinstance(node, cst.SimpleStatementLine):
-                for stmt in node.body:
-                    if isinstance(stmt, cst.Assign):
-                        for t in stmt.targets:
-                            target = t.target
-                            if isinstance(target, cst.Name):
-                                used_local_names.add(target.value)
-            # def/class names
-            if isinstance(node, cst.FunctionDef):
-                used_local_names.add(node.name.value)
-            if isinstance(node, cst.ClassDef):
-                used_local_names.add(node.name.value)
-            # imports - be defensive about ImportStar and name kinds
-            if isinstance(node, cst.SimpleStatementLine):
-                for stmt in node.body:
-                    if isinstance(stmt, cst.Import):
-                        for alias in getattr(stmt, "names") or []:
-                            asname = getattr(alias, "asname", None)
-                            if asname and isinstance(asname.name, cst.Name):
-                                used_local_names.add(asname.name.value)
-                            else:
-                                base = None
-                                nname = getattr(alias, "name", None)
-                                if isinstance(nname, str):
-                                    base = nname.split(".")[0]
-                                else:
-                                    val = getattr(nname, "value", None)
-                                    if isinstance(val, str):
-                                        base = val.split(".")[0]
-                                if base:
-                                    used_local_names.add(base)
-                    if isinstance(stmt, cst.ImportFrom):
-                        names = getattr(stmt, "names", None)
-                        # names may be an ImportStar (not iterable) or a sequence
-                        if names and isinstance(names, (list, tuple)):
-                            for alias in names:
-                                asname = getattr(alias, "asname", None)
-                                if asname and isinstance(asname.name, cst.Name):
-                                    used_local_names.add(asname.name.value)
-                                else:
-                                    nname = getattr(alias, "name", None)
-                                    base = None
-                                    if isinstance(nname, str):
-                                        base = nname
-                                    else:
-                                        val = getattr(nname, "value", None)
-                                        if isinstance(val, str):
-                                            base = val
-                                    if base:
-                                        used_local_names.add(base)
 
     def _references_attribute(expr: Any, attr_name: str) -> bool:
         # thin wrapper delegating to extracted helper
@@ -411,10 +358,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # logic is extracted into generator_parts.namedtuple_bundler so we
     # can unit-test it independently and avoid moving code that relies
     # on lexical locals into a new module.
-    try:
-        prepend_nodes, bundler_typing = bundle_named_locals(out.classes, module_level_names)
-    except Exception:
-        prepend_nodes, bundler_typing = [], set()
+    prepend_nodes, bundler_typing = safe_bundle_named_locals(out.classes, module_level_names)
 
     # Delegate final annotation/typing and result assembly to GeneratorCore
     core = GeneratorCore()
