@@ -1,5 +1,31 @@
 import libcst as cst
+
 from splurge_unittest_to_pytest.converter import fixtures
+
+
+def test_create_simple_fixture_literal():
+    fn = fixtures.create_simple_fixture("x", cst.Integer("1"))
+    # Should return a FunctionDef with Return containing the literal
+    assert isinstance(fn, cst.FunctionDef)
+    code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(fn)])]).code
+    assert "return 1" in code or "return (1)" in code
+
+
+def test_create_simple_fixture_with_guard_emits_runtime_error():
+    # self-referential placeholder should emit a fixture that raises at runtime
+    # Use simple Name expression referencing the attr
+    fn = fixtures.create_simple_fixture_with_guard("x", cst.Name("x"))
+    code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(fn)])]).code
+    assert "RuntimeError" in code
+
+
+def test_create_autocreated_file_fixture_defaults_and_params():
+    fn = fixtures.create_autocreated_file_fixture("sql_file", content_fixture_name=None, filename=None)
+    code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(fn)])]).code
+    # should contain tmp_path and write_text and return str(p)
+    assert "tmp_path" in code
+    assert "write_text" in code
+    assert "return str(p)" in code or "return(str(p))" in code
 
 
 def make_setup_func_source():

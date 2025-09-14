@@ -1,5 +1,22 @@
+import libcst as cst
 from libcst import parse_expression
+from splurge_unittest_to_pytest.stages.generator_parts import literals
 from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
+
+
+def test_is_literal_none_and_name():
+    assert literals.is_literal(None) is False
+    assert literals.is_literal(cst.Name("x")) is False
+
+
+def test_is_literal_numbers_and_strings_and_containers():
+    assert literals.is_literal(cst.Integer("123")) is True
+    assert literals.is_literal(cst.Float("1.2")) is True
+    assert literals.is_literal(cst.SimpleString('"ok"')) is True
+    assert literals.is_literal(cst.Tuple(elements=[cst.Element(cst.Integer("1"))])) is True
+    assert literals.is_literal(cst.List(elements=[cst.Element(cst.SimpleString('"a"'))])) is True
+    assert literals.is_literal(cst.Set(elements=[cst.Element(cst.Integer("2"))])) is True
+    assert literals.is_literal(cst.Dict(elements=[cst.DictElement(cst.SimpleString('"k"'), cst.Integer("1"))])) is True
 
 
 def test_literals_simple():

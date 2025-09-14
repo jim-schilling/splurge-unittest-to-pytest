@@ -1,6 +1,6 @@
 """Helper utilities for method name normalization and pattern matching.
 
-These are extracted from `converter.py` to make them easier to test.
+These helpers were extracted from the legacy transformer implementation to make them easier to test.
 """
 
 from __future__ import annotations

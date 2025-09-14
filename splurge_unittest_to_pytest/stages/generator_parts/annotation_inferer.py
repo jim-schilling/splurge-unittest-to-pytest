@@ -81,6 +81,8 @@ def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression 
         sub = cst.Subscript(value=cst.Name("Dict"), slice=subslices)
         return sub, names
     return None, set()
+
+
 class AnnotationInferer:
     """Simple annotation inferer used during scaffolding.
 

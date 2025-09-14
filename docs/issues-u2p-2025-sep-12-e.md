@@ -151,6 +151,7 @@ Files changed (summary)
 ----------------------
 
 - `splurge_unittest_to_pytest/converter.py`
+
   - Record exception `as` names during `with` conversion and invoke the stage `RaisesRewriter` at module finalization to rewrite `.exception` -> `.value` in a scope-aware way.
 
 - `splurge_unittest_to_pytest/converter/fixtures.py`

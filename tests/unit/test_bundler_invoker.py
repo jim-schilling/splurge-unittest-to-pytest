@@ -1,5 +1,22 @@
-
+from splurge_unittest_to_pytest.stages.generator_parts import bundler_invoker
 from splurge_unittest_to_pytest.stages.generator_parts.bundler_invoker import safe_bundle_named_locals
+
+
+def test_safe_bundle_named_locals_no_classes():
+    nodes, needs = bundler_invoker.safe_bundle_named_locals({}, set())
+    assert nodes == []
+    assert needs == set()
+
+
+def test_safe_bundle_named_locals_exception(monkeypatch):
+    # force the underlying bundler to raise, safe wrapper should return empty outputs
+    def fake_bundle(_out, _names):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(bundler_invoker, "bundle_named_locals", fake_bundle)
+    nodes, needs = bundler_invoker.safe_bundle_named_locals({"C": {}}, {"X"})
+    assert nodes == []
+    assert needs == set()
 
 
 def test_safe_bundle_named_locals_happy_path_empty():

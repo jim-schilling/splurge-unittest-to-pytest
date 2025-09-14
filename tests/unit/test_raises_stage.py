@@ -1,7 +1,42 @@
 import libcst as cst
 from typing import cast
 
-from splurge_unittest_to_pytest.stages.raises_stage import RaisesRewriter, raises_stage
+from splurge_unittest_to_pytest.stages.raises_stage import (
+    RaisesRewriter,
+    ExceptionAttrRewriter,
+    raises_stage,
+)
+
+
+def test_exception_attr_rewriter_rewrites_exception_to_value():
+    expr = cst.parse_expression("cm.exception")
+    new = expr.visit(ExceptionAttrRewriter("cm"))
+    code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(new)])]).code
+    assert "cm.value" in code
+
+
+def test_raises_rewriter_functional_form():
+    src = "self.assertRaises(ValueError, func, 1)\n"
+    mod = cst.parse_module(src)
+    new = mod.visit(RaisesRewriter())
+    # Avoid calling .code() which can trigger codegen incompatibilities
+    # instead assert on the AST structure: look for a With node using pytest.raises
+    found = False
+    for node in new.body:
+        if isinstance(node, cst.SimpleStatementLine) and node.body:
+            stmt = node.body[0]
+            if isinstance(stmt, cst.With):
+                first = stmt.items[0]
+                if isinstance(first.item, cst.Call) and isinstance(first.item.func, cst.Attribute):
+                    val = first.item.func
+                    if (
+                        isinstance(val.value, cst.Name)
+                        and val.value.value == "pytest"
+                        and getattr(val.attr, "value", None) == "raises"
+                    ):
+                        found = True
+                        break
+    assert found, "expected a With node using pytest.raises"
 
 
 def test_with_assert_raises_converted_to_pytest_raises() -> None:

@@ -1,7 +1,8 @@
 """Fixture helper creators extracted from the monolithic converter.
 
 These functions are pure-ish: they accept the needed inputs and return libcst
-nodes. The class in `converter.py` keeps thin wrappers that manage transformer
+nodes. These helpers were previously part of the legacy transformer implementation
+and were split into small modules for easier testing and maintenance.
 state (e.g., setting self.needs_pytest_import) and call these helpers.
 """
 
@@ -441,6 +442,32 @@ def add_autouse_attach_fixture_to_module(
 
     new_body.insert(insert_pos, cst.EmptyLine())
     new_body.insert(insert_pos + 1, func)
+
+    return module_node.with_changes(body=new_body)
+
+
+def insert_attach_fixture_into_module(module_node: cst.Module, fixture_func: cst.FunctionDef) -> cst.Module:
+    """Insert an already-constructed fixture function into the module body.
+
+    This keeps compatibility with older helper semantics where the fixture was
+    constructed separately and then inserted. It searches for a pytest import
+    line and inserts the fixture directly after it (or at the top if not found).
+    """
+    new_body: list[Any] = list(module_node.body)
+    insert_pos = 0
+    for i, stmt in enumerate(new_body):
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.Import):
+                for alias in first.names:
+                    if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
+                        insert_pos = i + 1
+                        break
+            if insert_pos:
+                break
+
+    new_body.insert(insert_pos, cst.EmptyLine())
+    new_body.insert(insert_pos + 1, fixture_func)
 
     return module_node.with_changes(body=new_body)
 

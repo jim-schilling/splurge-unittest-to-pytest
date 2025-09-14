@@ -3,6 +3,7 @@
 
 Extracted from stages/generator.py to make the logic unit-testable.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -48,11 +49,19 @@ def references_attribute(expr: Any, attr_name: str) -> bool:
             # the underlying expression(s) to inspect.
             inner = getattr(s, "slice", None) or getattr(s, "value", None) or s
             # Unwrap Index -> value
-            if getattr(inner, "__class__", None) is not None and getattr(inner, "value", None) is not None and not isinstance(inner, cst.BaseExpression):
+            if (
+                getattr(inner, "__class__", None) is not None
+                and getattr(inner, "value", None) is not None
+                and not isinstance(inner, cst.BaseExpression)
+            ):
                 inner = getattr(inner, "value", inner)
             # If it's a Slice, inspect lower/upper/step
             if isinstance(inner, cst.Slice):
-                for part in (getattr(inner, "lower", None), getattr(inner, "upper", None), getattr(inner, "step", None)):
+                for part in (
+                    getattr(inner, "lower", None),
+                    getattr(inner, "upper", None),
+                    getattr(inner, "step", None),
+                ):
                     if isinstance(part, cst.BaseExpression) and references_attribute(part, attr_name):
                         return True
                 continue

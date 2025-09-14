@@ -3,6 +3,7 @@
 This logic was extracted from stages/generator.py to simplify testing and
 separate concerns.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional

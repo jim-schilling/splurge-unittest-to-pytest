@@ -80,7 +80,7 @@ class GeneratorCore:
         self,
         prepend_nodes: list[cst.BaseStatement],
         fixture_nodes: list[cst.FunctionDef],
-    specs: Mapping[str, Any],
+        specs: Mapping[str, Any],
         bundler_typing: set[str] | None = None,
     ) -> dict[str, object]:
         """Annotate fixture nodes where possible, collect typing needs, and

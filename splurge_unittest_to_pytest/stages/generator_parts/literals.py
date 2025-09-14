@@ -3,6 +3,7 @@
 Extracted from stages/generator.py so it can be unit-tested independently
 and reused by other generator helpers.
 """
+
 from __future__ import annotations
 
 from typing import Optional

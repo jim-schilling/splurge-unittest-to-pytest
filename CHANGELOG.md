@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
 
 ### Notes
-- The legacy `UnittestToPytestTransformer` implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` implementation. The converter now emits canonical per-attribute pytest fixtures by default.
+- The legacy transformer implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` and the staged pipeline. The converter now emits canonical per-attribute pytest fixtures by default.
 
 
 ## [2025.0.5] - 2025-09-13
@@ -177,7 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `--compat` flag to control emission of autouse compatibility fixture
 - Skip `__pycache__` and unreadable files during discovery to avoid Unicode/IO errors
 - Ensure `import pytest` inserted before generated fixtures and respect module docstrings
- - Archive legacy `UnittestToPytestTransformer` implementation under `contrib/legacy_converter.py`;
+ - Archive legacy transformer implementation under `contrib/legacy_converter.py`;
    the staged pipeline is now the authoritative conversion engine.
  - Add an end-to-end integration test verifying converted modules are executable and
    autouse fixtures attach correctly.

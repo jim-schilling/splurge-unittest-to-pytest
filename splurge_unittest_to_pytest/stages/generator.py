@@ -317,7 +317,6 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
                     # Replace occurrences of self.attr with bare param Name
 
-
                     # value_expr may be None according to CollectorOutput
                     # typing; defensively handle that case by returning a
                     # literal None expression so mypy and runtime are safe.

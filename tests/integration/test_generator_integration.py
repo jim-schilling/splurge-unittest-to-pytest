@@ -14,7 +14,9 @@ def test_generator_stage_basic_fixture_and_shutil_detection():
     ci.setup_assignments["config_dir"] = [cst.SimpleString('"/tmp/config"')]
 
     # teardown_statements referencing shutil (should trigger needs_shutil)
-    call = cst.Call(func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")), args=[cst.Arg(cst.Name("config_dir"))])
+    call = cst.Call(
+        func=cst.Attribute(value=cst.Name("shutil"), attr=cst.Name("rmtree")), args=[cst.Arg(cst.Name("config_dir"))]
+    )
     td_stmt = cst.SimpleStatementLine(body=[cst.Expr(call)])
     ci.teardown_statements.append(td_stmt)
 
@@ -35,7 +37,6 @@ def test_generator_stage_basic_fixture_and_shutil_detection():
     # fixture_nodes should include a FunctionDef for the fixture
     nodes = result["fixture_nodes"]
     assert any(isinstance(n, cst.FunctionDef) and n.name.value == "config_dir" for n in nodes)
-
 
 
 def test_generator_creates_fixture_from_collector_and_handles_collision():

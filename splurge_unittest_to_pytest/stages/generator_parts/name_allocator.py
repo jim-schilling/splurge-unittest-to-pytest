@@ -20,6 +20,8 @@ def choose_local_name(base: str, taken: Set[str]) -> str:
             taken.add(candidate)
             return candidate
         suffix += 1
+
+
 class NameAllocator:
     """Trivial name allocator for generated fixtures.
 

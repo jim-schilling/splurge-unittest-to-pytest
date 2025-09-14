@@ -14,22 +14,22 @@ def ann_names(node):
 def test_list_infer():
     ann, names = ann_names(parse('["a", "b"]'))
     assert ann is not None
-    assert 'List' in names
+    assert "List" in names
 
 
 def test_tuple_infer():
-    ann, names = ann_names(parse('(1, "a")') )
+    ann, names = ann_names(parse('(1, "a")'))
     assert ann is not None
-    assert 'Tuple' in names
+    assert "Tuple" in names
 
 
 def test_dict_infer():
     ann, names = ann_names(parse('{"k": 1}'))
     assert ann is not None
-    assert 'Dict' in names
+    assert "Dict" in names
 
 
 def test_non_literal_returns_none():
-    ann, names = ann_names(parse('foo()'))
+    ann, names = ann_names(parse("foo()"))
     assert ann is None
     assert names == set()
