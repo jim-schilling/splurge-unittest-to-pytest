@@ -14,9 +14,12 @@ from splurge_unittest_to_pytest.stages.generator_parts.literals import is_litera
 from splurge_unittest_to_pytest.stages.generator_parts.filename_inferer import infer_filename_for_local
 from splurge_unittest_to_pytest.stages.generator_parts.references_attr import references_attribute
 from splurge_unittest_to_pytest.stages.generator_parts.cleanup_checks import is_simple_cleanup_statement
-from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import type_name_for_literal
 from splurge_unittest_to_pytest.stages.generator_parts.name_allocator import choose_local_name
+from splurge_unittest_to_pytest.stages.generator_parts.attr_rewriter import AttrRewriter
+from splurge_unittest_to_pytest.stages.generator_parts.replace_self_param import ReplaceSelfWithParam
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
+from splurge_unittest_to_pytest.stages.generator_parts.shutil_detector import cleanup_needs_shutil
 
 
 @dataclass
@@ -263,16 +266,10 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
             )
 
             # helper rewriter to replace self.attr or cls.attr with local_name
-            class _AttrRewriter(cst.CSTTransformer):
-                def __init__(self, target_attr: str, local: str) -> None:
-                    self.target_attr = target_attr
-                    self.local = local
-
-                def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
-                    if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
-                        if isinstance(original.attr, cst.Name) and original.attr.value == self.target_attr:
-                            return cst.Name(self.local)
-                    return updated
+            def _AttrRewriter(target: str, local: str) -> cst.CSTTransformer:
+                # thin wrapper returning a transformer instance for local
+                # call sites that previously constructed the inline class.
+                return AttrRewriter(target, local)
 
             # body: return or yield
             # skip creating fixture if a top-level function with same name already exists
@@ -372,17 +369,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     params = cst.Parameters(params=[cst.Param(name=cst.Name(n)) for n in param_names])
 
                     # Replace occurrences of self.attr with bare param Name
-                    class _ReplaceSelfWithParam(cst.CSTTransformer):
-                        def __init__(self, refs_set: set[str]) -> None:
-                            self.refs = refs_set
 
-                        def leave_Attribute(
-                            self, original: cst.Attribute, updated: cst.Attribute
-                        ) -> cst.BaseExpression:
-                            if isinstance(original.value, cst.Name) and original.value.value in ("self", "cls"):
-                                if isinstance(original.attr, cst.Name) and original.attr.value in self.refs:
-                                    return cst.Name(original.attr.value)
-                            return updated
 
                     # value_expr may be None according to CollectorOutput
                     # typing; defensively handle that case by returning a
@@ -390,22 +377,15 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     if value_expr is None:
                         rewritten = cst.Name("None")
                     else:
-                        rewritten = value_expr.visit(_ReplaceSelfWithParam(refs))
+                        rewritten = value_expr.visit(ReplaceSelfWithParam(refs))
                     return_stmt = cst.SimpleStatementLine(body=[cst.Return(cast(cst.BaseExpression, rewritten))])
                     body = cst.IndentedBlock(body=[return_stmt])
                     func = cst.FunctionDef(name=cst.Name(fname), params=params, body=body, decorators=[decorator])
                     fixture_nodes.append(func)
             # detect if any cleanup statements reference shutil so we can
             # request an import from the import_injector stage.
-            for stmt in spec.cleanup_statements:
-                try:
-                    rendered = cst.Module(body=[stmt]).code
-                    if "shutil." in rendered or "import shutil" in rendered:
-                        # attach a flag to the result via context-like variable
-                        # we'll include this in final result below
-                        spec._needs_shutil = True  # type: ignore[attr-defined]
-                except Exception:
-                    pass
+            if cleanup_needs_shutil(spec.cleanup_statements):
+                spec._needs_shutil = True  # type: ignore[attr-defined]
             # attempt to infer filename literals for fixtures created from
             # helper-local indirections (e.g., helper('file.sql') -> local)
             # when autocreate is enabled callers expect the literal embedded
@@ -436,72 +416,9 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         prepend_nodes, bundler_typing = [], set()
 
-    # Collect typing names required by scanned value expressions. Simple
-    # heuristics: list/tuple/dict/set -> List/Tuple/Dict/Set, and any
-    # yield-style fixture requires Generator.
-    typing_needed: set[str] = set(bundler_typing)
-    any_yield = False
-
-    def _type_name_for_literal(node: cst.BaseExpression) -> tuple[cst.BaseExpression | None, set[str]]:
-        # delegate to the extracted helper for clarity and testability
-        return type_name_for_literal(node)
-
-    for spec in specs.values():
-        v = spec.value_expr
-        if isinstance(v, cst.List):
-            typing_needed.add("List")
-        elif isinstance(v, cst.Tuple):
-            typing_needed.add("Tuple")
-        elif isinstance(v, cst.Set):
-            typing_needed.add("Set")
-        elif isinstance(v, cst.Dict):
-            typing_needed.add("Dict")
-        else:
-            # conservative fallback: if expression is a comprehension or
-            # otherwise complex, include Any so callers can fall back.
-            if v is not None and not _is_literal(v):
-                typing_needed.add("Any")
-        if spec.yield_style:
-            any_yield = True
-
-    if any_yield:
-        typing_needed.add("Generator")
-
-    # Prepend any NamedTuple/fixture nodes produced by the bundler so they
-    # appear before per-attribute fixtures in the generated module.
-    # Attach return annotations to generated fixture functions when we
-    # can infer a precise typing annotation for the fixture value.
-    # To preserve certain golden outputs that expect parameterized fixtures
-    # to remain un-annotated, only attach annotations for fixtures that
-    # accept no parameters (params list empty).
-    annotated_nodes: list[cst.BaseStatement] = []
-    for n in fixture_nodes:
-        if isinstance(n, cst.FunctionDef):
-            # find corresponding spec by name
-            nm = n.name.value
-            spec_opt: Optional[FixtureSpec] = specs.get(nm)
-            if spec_opt is not None and spec_opt.value_expr is not None:
-                # only annotate if the fixture has no parameters
-                if not n.params.params:
-                    ann_node, extra_names = _type_name_for_literal(spec_opt.value_expr)
-                    if ann_node is not None:
-                        annotated = n.with_changes(returns=cst.Annotation(annotation=ann_node))
-                        annotated_nodes.append(annotated)
-                        typing_needed.update(extra_names)
-                        continue
-        annotated_nodes.append(n)
-
-    final_nodes = list(prepend_nodes) + annotated_nodes
-
-    result: dict[str, object] = {"fixture_specs": specs, "fixture_nodes": final_nodes}
-    if typing_needed:
-        # return as a sorted list for determinism
-        result["needs_typing_names"] = sorted(typing_needed)
-    # propagate shutil import requirement if any spec flagged it
-    needs_shutil = any(getattr(s, "_needs_shutil", False) for s in specs.values())
-    if needs_shutil:
-        result["needs_shutil_import"] = True
-    return result
+    # Delegate final annotation/typing and result assembly to GeneratorCore
+    core = GeneratorCore()
+    return core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing)
 
 
 # Backwards-compatible alias used by the pipeline and older callers
