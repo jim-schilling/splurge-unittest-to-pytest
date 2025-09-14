@@ -48,7 +48,67 @@ def convert_string(
         # Use the staged pipeline implementation. The pipeline returns a
         # libcst.Module representing strict pytest-style output.
         converted_module = run_pipeline(tree, autocreate=autocreate)
+        # Final AST-based normalization: run the exceptioninfo normalizer
+        # stage over the converted module to ensure any NAME.exception ->
+        # NAME.value conversions are applied. This stage runs late in the
+        # pipeline by default, but invoke it here again to be defensive in
+        # case stage ordering differs in some contexts (harmless no-op if
+        # already applied).
+        try:
+            from splurge_unittest_to_pytest.stages.raises_stage import exceptioninfo_normalizer_stage
+
+            # norm_ctx is a mapping used by pipeline stages; type it explicitly
+            # Use a dict[str, object] to match the stage signature
+            norm_ctx: dict[str, object] = {"module": converted_module}
+            out = exceptioninfo_normalizer_stage(norm_ctx)
+            # Be defensive: ensure we only assign a Module back to converted_module
+            if isinstance(out, dict):
+                maybe_mod = out.get("module")
+                if isinstance(maybe_mod, cst.Module):
+                    converted_module = maybe_mod
+        except Exception:
+            # Defensive: do not fail conversion if normalization errors
+            # occur; rely on earlier pipeline stages.
+            pass
+
+        # Apply a direct AST pass using ExceptionAttrRewriter as a last AST-only
+        # safeguard (not textual). This is preferred over string replacement
+        # and will rewrite NAME.exception -> NAME.value for any names bound by
+        # `with pytest.raises(...) as NAME` in the emitted AST.
+        try:
+            # Collect any attribute accesses like `NAME.exception` and apply
+            # the ExceptionAttrRewriter for each NAME found. This is a
+            # conservative AST-only transformation that rewrites attribute
+            # access to `NAME.value`. It avoids brittle text replacement and
+            # ensures we catch accesses that survived earlier stages.
+            class _AttrCollector(cst.CSTVisitor):
+                def __init__(self) -> None:
+                    self.names: set[str] = set()
+
+                def visit_Attribute(self, node: cst.Attribute) -> None:
+                    try:
+                        if isinstance(node.attr, cst.Name) and node.attr.value == "exception":
+                            if isinstance(node.value, cst.Name):
+                                self.names.add(node.value.value)
+                    except Exception:
+                        pass
+
+            collector = _AttrCollector()
+            converted_module.visit(collector)
+            from splurge_unittest_to_pytest.stages.raises_stage import ExceptionAttrRewriter
+
+            for nm in sorted(collector.names):
+                if nm:
+                    converted_module = converted_module.visit(ExceptionAttrRewriter(nm))
+        except Exception:
+            pass
         converted_code = converted_module.code
+
+        # NOTE: normalization of NAME.exception -> NAME.value is performed
+        # by the pipeline's `exceptioninfo_normalizer_stage` which runs late
+        # in the pipeline. A prior implementation included a conservative
+        # textual fallback here; that has been removed in favor of the
+        # AST-based transformation to avoid fragile string replacements.
 
         # Determine whether any meaningful conversion changes were made.
         try:

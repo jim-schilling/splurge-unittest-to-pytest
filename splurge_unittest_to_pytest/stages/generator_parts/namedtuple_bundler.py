@@ -140,6 +140,7 @@ def bundle_named_locals(
             # filter out self/cls, builtins, capitalized names, and any
             # existing top-level module names to avoid collisions.
             try:
+
                 class _NameCollector(cst.CSTVisitor):
                     def __init__(self) -> None:
                         self.names: set[str] = set()
@@ -157,6 +158,7 @@ def bundle_named_locals(
             # include their RHS refs (e.g., local sql_file -> temp_dir, sql_content)
             expanded: set[str] = set()
             import builtins as _builtins
+
             for n in collected:
                 if not n or n in ("self", "cls"):
                     continue
@@ -192,7 +194,65 @@ def bundle_named_locals(
             )
             assign_stmt = cst.SimpleStatementLine(body=[assign_target])
 
-            ctor_args = [cst.Arg(value=cst.Name(local)) for local, _, _ in sorted_group]
+            # Build constructor args for the NamedTuple. If the original
+            # class setup assigned the attribute using a transformation
+            # (for example: `self.sql_file = str(sql_file)`), preserve
+            # that transformation in the emitted fixture by using the
+            # recorded setup assignment expression (with `self.`/`cls.`
+            # replaced by bare names) so the NamedTuple yields the same
+            # shaped values (e.g., strings instead of Path objects).
+            ctor_args_list: list[cst.Arg] = []
+            for local, _, _ in sorted_group:
+                # default expression is the bare local name
+                expr: cst.BaseExpression = cst.Name(local)
+                # If this local mapped to an attribute and that attribute
+                # had a recorded setup assignment (like `self.x = str(local)`),
+                # use that expression instead (after removing `self.`).
+                attr = local_to_attr.get(local, local)
+                setup_assigns = getattr(cls, "setup_assignments", {}) or {}
+                if attr in setup_assigns:
+                    v = setup_assigns[attr]
+                    # v may be a list of assignments; prefer the last one
+                    if isinstance(v, list) and v:
+                        v = v[-1]
+                    try:
+                        # If the setup assignment is a simple Name that
+                        # references a recorded local assignment, prefer
+                        # the RHS from local_map so we preserve the
+                        # original transformation (e.g., str(sql_file)).
+                        if isinstance(v, cst.Name) and getattr(v, "value", None) in local_map:
+                            entry = local_map.get(v.value)
+                            if isinstance(entry, tuple) and len(entry) >= 1:
+                                rhs = entry[0]
+                                idx_from_local = entry[1] if len(entry) > 1 else None
+                                transformed = rhs.visit(_ReplaceSelfLocal())
+                                if idx_from_local is None:
+                                    if isinstance(transformed, cst.BaseExpression):
+                                        expr = transformed
+                                else:
+                                    # tuple-unpacked local: index into the call
+                                    try:
+                                        expr = cst.Subscript(
+                                            value=transformed,
+                                            slice=[
+                                                cst.SubscriptElement(
+                                                    slice=cst.Index(value=cst.Integer(str(idx_from_local)))
+                                                )
+                                            ],
+                                        )
+                                    except Exception:
+                                        expr = cst.Name(local)
+                        else:
+                            # reuse the same ReplaceSelfLocal logic to strip
+                            # `self.`/`cls.` prefixes from attribute expressions
+                            transformed = v.visit(_ReplaceSelfLocal())
+                            if isinstance(transformed, cst.BaseExpression):
+                                expr = transformed
+                    except Exception:
+                        # fall back to bare local name on any error
+                        expr = cst.Name(local)
+                ctor_args_list.append(cst.Arg(value=expr))
+            ctor_args = ctor_args_list
             ctor = cst.Call(func=cst.Name(namedtuple_name), args=ctor_args)
             yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(ctor))])
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))

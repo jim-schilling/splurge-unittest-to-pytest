@@ -4,6 +4,7 @@ This script loads each sample unittest file under tests/data/samples/*.txt,
 converts it with the public API, and writes a golden in tests/goldens/ matching
 filename pattern. It shows diffs for review and updates the golden files.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -32,7 +33,9 @@ def run():
         if out != gold:
             print(f"Updating golden: {gold_path}")
             # show short unified diff
-            diff = difflib.unified_diff(gold.splitlines(keepends=True), out.splitlines(keepends=True), fromfile=str(gold_path), tofile=str(p))
+            diff = difflib.unified_diff(
+                gold.splitlines(keepends=True), out.splitlines(keepends=True), fromfile=str(gold_path), tofile=str(p)
+            )
             print("".join(list(diff))[:10000])
             gold_path.write_text(out)
             updated.append(gold_path)

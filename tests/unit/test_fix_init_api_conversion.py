@@ -5,6 +5,7 @@ the docs and asserts the converted pytest source contains fixtures that
 construct file paths under `temp_dir` (i.e., they don't just return bare
 filenames like 'test.sql').
 """
+
 import re
 
 from splurge_unittest_to_pytest import convert_string

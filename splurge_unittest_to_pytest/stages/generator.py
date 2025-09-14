@@ -186,7 +186,12 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 autocreate = bool(context.get("autocreate", True))
             except Exception:
                 autocreate = True
-            if autocreate and value_expr is not None and isinstance(value_expr, cst.Call) and fname not in bundled_attr_map:
+            if (
+                autocreate
+                and value_expr is not None
+                and isinstance(value_expr, cst.Call)
+                and fname not in bundled_attr_map
+            ):
                 for a in value_expr.args:
                     av = getattr(a, "value", None)
                     if isinstance(av, cst.Name):
@@ -338,6 +343,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                         extra_names: set[str] = set()
                         # value_expr may be None; defensively handle
                         if value_expr is not None:
+
                             class _NameCollector(cst.CSTVisitor):
                                 def __init__(self) -> None:
                                     self.names: set[str] = set()
@@ -347,6 +353,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
                             nc = _NameCollector()
                             value_expr.visit(nc)
+
                             # Also collect names that appear as argument values in calls
                             class _ArgNameCollector(cst.CSTVisitor):
                                 def __init__(self) -> None:
@@ -360,6 +367,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                                         return
                                     # Walk the argument value expression and collect any Name nodes
                                     try:
+
                                         class _InnerNameCollector(cst.CSTVisitor):
                                             def __init__(self) -> None:
                                                 self.names: set[str] = set()
@@ -413,6 +421,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                                 def visit_FormattedStringExpression(self, node) -> None:
                                     # collect any Name nodes inside the formatted expression
                                     try:
+
                                         class _InnerNameCollector(cst.CSTVisitor):
                                             def __init__(self) -> None:
                                                 self.names: set[str] = set()
@@ -444,7 +453,11 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
                             # consider names collected by NameCollector or by arg/attr/subscript collectors
                             name_only = set(getattr(nc, "names", set()))
-                            arg_attr_sub_names = set(getattr(anc, "arg_names", set())) | set(getattr(anc, "attr_names", set())) | set(getattr(anc, "subscript_names", set()))
+                            arg_attr_sub_names = (
+                                set(getattr(anc, "arg_names", set()))
+                                | set(getattr(anc, "attr_names", set()))
+                                | set(getattr(anc, "subscript_names", set()))
+                            )
                             # Accept names collected from args/attribute/subscript contexts
                             # unconditionally (subject to other filters). For plain Name
                             # occurrences, require the name to be present in the
@@ -481,7 +494,11 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                             # rendered-source fallback for cases like arr[temp_dir] when
                             # the Subscript visitor didn't capture the name for some reason
                             try:
-                                rendered = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value_expr)])]).code if value_expr is not None else ""
+                                rendered = (
+                                    cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value_expr)])]).code
+                                    if value_expr is not None
+                                    else ""
+                                )
                             except Exception:
                                 rendered = ""
                             if rendered:
@@ -559,9 +576,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # logic is extracted into generator_parts.namedtuple_bundler so we
     # can unit-test it independently and avoid moving code that relies
     # on lexical locals into a new module.
-    prepend_nodes, bundler_typing, bundled_attr_map = safe_bundle_named_locals(
-        out.classes, module_level_names
-    )
+    prepend_nodes, bundler_typing, bundled_attr_map = safe_bundle_named_locals(out.classes, module_level_names)
 
     # bundled_attr_map maps attribute name -> composite fixture name. For any
     # attribute that was bundled, we should avoid emitting an independent

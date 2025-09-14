@@ -179,4 +179,3 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     new_module = module.with_changes(body=normalized)
     return {"module": new_module, "needs_pytest_import": True}
-

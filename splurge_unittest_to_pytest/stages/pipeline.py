@@ -69,7 +69,16 @@ def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
     # detect the need for pytest import and place it before the @pytest.fixture
     # decorators deterministically.
     mgr.register(import_injector_stage)
+    # Run post-validation before final normalization so postvalidator can
+    # perform checks that might restructure the module. Apply the
+    # exceptioninfo normalizer immediately before the tidy stage so the
+    # AST-based ExceptionAttrRewriter runs after any stage that could
+    # re-introduce `.exception` attribute accesses tied to pytest.raises
+    # context managers.
     mgr.register(postvalidator_stage)
+    from .raises_stage import exceptioninfo_normalizer_stage
+
+    mgr.register(exceptioninfo_normalizer_stage)
     mgr.register(tidy_stage)
 
     # execute the pipeline and return the final module

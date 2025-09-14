@@ -22,20 +22,28 @@ def test_raises_rewriter_functional_form():
     # Avoid calling .code() which can trigger codegen incompatibilities
     # instead assert on the AST structure: look for a With node using pytest.raises
     found = False
+    # The transformer may produce a top-level With node directly or a
+    # SimpleStatementLine containing a With depending on flattening. Accept
+    # either form.
     for node in new.body:
+        candidate = None
         if isinstance(node, cst.SimpleStatementLine) and node.body:
-            stmt = node.body[0]
-            if isinstance(stmt, cst.With):
-                first = stmt.items[0]
-                if isinstance(first.item, cst.Call) and isinstance(first.item.func, cst.Attribute):
-                    val = first.item.func
-                    if (
-                        isinstance(val.value, cst.Name)
-                        and val.value.value == "pytest"
-                        and getattr(val.attr, "value", None) == "raises"
-                    ):
-                        found = True
-                        break
+            candidate = node.body[0]
+        elif isinstance(node, cst.With):
+            candidate = node
+
+        if isinstance(candidate, cst.With):
+            first = candidate.items[0]
+            if isinstance(first.item, cst.Call) and isinstance(first.item.func, cst.Attribute):
+                val = first.item.func
+                if (
+                    isinstance(val.value, cst.Name)
+                    and val.value.value == "pytest"
+                    and getattr(val.attr, "value", None) == "raises"
+                ):
+                    found = True
+                    break
+
     assert found, "expected a With node using pytest.raises"
 
 

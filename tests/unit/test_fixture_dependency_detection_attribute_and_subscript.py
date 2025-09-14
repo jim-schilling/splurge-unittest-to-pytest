@@ -10,7 +10,9 @@ def test_fixture_param_detects_temp_dir_attr():
     cls_node = cst.parse_module("class TestX:\n    pass\n").body[0]
     cls = ClassInfo(node=cls_node)
     # call: Path(temp_dir.attr)
-    call = cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.Attribute(value=cst.Name("temp_dir"), attr=cst.Name("attr")))])
+    call = cst.Call(
+        func=cst.Name("Path"), args=[cst.Arg(value=cst.Attribute(value=cst.Name("temp_dir"), attr=cst.Name("attr")))]
+    )
     cls.setup_assignments["init_api_data"] = call
     out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"TestX": cls})
 
@@ -24,7 +26,9 @@ def test_fixture_param_detects_temp_dir_attr():
         module_code = cst.Module(body=list(nodes))
     else:
         module_code = module_node
-    func = next((n for n in module_code.body if isinstance(n, cst.FunctionDef) and n.name.value == "init_api_data"), None)
+    func = next(
+        (n for n in module_code.body if isinstance(n, cst.FunctionDef) and n.name.value == "init_api_data"), None
+    )
     assert func is not None
     params = [p.name.value for p in func.params.params]
     assert "temp_dir" in params
@@ -51,7 +55,9 @@ def test_fixture_param_detects_temp_dir_subscript():
         module_code = cst.Module(body=list(nodes))
     else:
         module_code = module_node
-    func = next((n for n in module_code.body if isinstance(n, cst.FunctionDef) and n.name.value == "init_api_data"), None)
+    func = next(
+        (n for n in module_code.body if isinstance(n, cst.FunctionDef) and n.name.value == "init_api_data"), None
+    )
     assert func is not None
     params = [p.name.value for p in func.params.params]
     assert "temp_dir" in params
