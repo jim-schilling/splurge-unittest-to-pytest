@@ -11,6 +11,11 @@ import libcst as cst
 from splurge_unittest_to_pytest.stages.generator_parts.namedtuple_bundler import bundle_named_locals
 from splurge_unittest_to_pytest.stages.generator_parts.self_attr_finder import collect_self_attrs
 from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
+from splurge_unittest_to_pytest.stages.generator_parts.filename_inferer import infer_filename_for_local
+from splurge_unittest_to_pytest.stages.generator_parts.references_attr import references_attribute
+from splurge_unittest_to_pytest.stages.generator_parts.cleanup_checks import is_simple_cleanup_statement
+from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import type_name_for_literal
+from splurge_unittest_to_pytest.stages.generator_parts.name_allocator import choose_local_name
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 
 
@@ -95,67 +100,8 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                                         used_local_names.add(base)
 
     def _references_attribute(expr: Any, attr_name: str) -> bool:
-        """Recursively check if expression references self.<attr> or bare <attr>.
-
-        This mirrors the legacy converter's conservative search used to decide
-        whether a teardown statement references a given setup attribute.
-        """
-        # Accept AssignTarget and similar wrapper objects by unwrapping
-        expr = getattr(expr, "target", expr)
-        if expr is None or not isinstance(expr, cst.BaseExpression):
-            return False
-        # Attribute like self.attr or cls.attr
-        if isinstance(expr, cst.Attribute):
-            if isinstance(expr.attr, cst.Name) and expr.attr.value == attr_name:
-                if isinstance(expr.value, cst.Name) and expr.value.value in ("self", "cls"):
-                    return True
-            # recurse into value
-            return _references_attribute(expr.value, attr_name)
-        # Name
-        if isinstance(expr, cst.Name):
-            return expr.value == attr_name
-        # Call: check func and args
-        if isinstance(expr, cst.Call):
-            if _references_attribute(expr.func, attr_name):
-                return True
-            for a in expr.args:
-                if _references_attribute(a.value, attr_name):
-                    return True
-            return False
-        # Subscript (value and slices)
-        if isinstance(expr, cst.Subscript):
-            if _references_attribute(expr.value, attr_name):
-                return True
-            for s in expr.slice:
-                inner = getattr(s, "slice", None) or getattr(s, "value", None) or s
-                if isinstance(inner, cst.BaseExpression) and _references_attribute(inner, attr_name):
-                    return True
-            return False
-        # Binary/Comparison/Boolean ops
-        if isinstance(expr, (cst.BinaryOperation, cst.Comparison, cst.BooleanOperation)):
-            parts: list[cst.BaseExpression] = []
-            if hasattr(expr, "left"):
-                parts.append(expr.left)
-            if hasattr(expr, "right"):
-                parts.append(expr.right)
-            if hasattr(expr, "comparisons"):
-                for comp in expr.comparisons:
-                    comp_item = getattr(comp, "comparison", None) or getattr(comp, "operator", None)
-                    if comp_item is not None and isinstance(comp_item, cst.BaseExpression):
-                        parts.append(comp_item)
-            for p in parts:
-                if _references_attribute(p, attr_name):
-                    return True
-            return False
-        # Tuples/Lists/Sets
-        if isinstance(expr, (cst.Tuple, cst.List, cst.Set)):
-            for e in expr.elements:
-                val = getattr(e, "value", e)
-                if isinstance(val, cst.BaseExpression) and _references_attribute(val, attr_name):
-                    return True
-            return False
-        # default: no reference found
-        return False
+        # thin wrapper delegating to extracted helper
+        return references_attribute(expr, attr_name)
 
     # snapshot module-level names to detect collisions that should force
     # binding to a local name even when the value is a literal.
@@ -163,26 +109,8 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     # helper: infer filename literals from local_assignments recorded by collector
     def _infer_filename_for_local(local_name: str, cls_obj: Any) -> Optional[str]:
-        try:
-            local_map = getattr(cls_obj, "local_assignments", {}) or {}
-            if local_name not in local_map:
-                return None
-            # local_map is known to contain the key here; use indexing to
-            # avoid Optional return type from dict.get which confuses mypy
-            assigned_call, _ = local_map[local_name]
-            if not isinstance(assigned_call, cst.Call):
-                return None
-            # check positional first arg that is a simple string literal
-            if assigned_call.args:
-                for a in assigned_call.args:
-                    if isinstance(getattr(a, "value", None), cst.SimpleString):
-                        # strip quotes
-                        s = getattr(a.value, "value", "")
-                        if len(s) >= 2 and (s[0] == s[-1] == '"' or s[0] == s[-1] == "'"):
-                            return s[1:-1]
-            return None
-        except Exception:
-            return None
+        # thin wrapper to call the extracted helper; keeps local call sites
+        return infer_filename_for_local(local_name, cls_obj)
 
     def _collect_self_attrs(expr: Any) -> set[str]:
         return set(collect_self_attrs(expr))
@@ -314,20 +242,10 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
             # determine local name and ensure uniqueness
             def _choose_local_name(base: str, taken: set[str]) -> str:
-                """Deterministically pick a unique local name by appending
-                a numeric suffix when needed. Returns the chosen name and
-                reserves it in `taken`.
-                """
-                if base not in taken:
-                    taken.add(base)
-                    return base
-                suffix = 1
-                while True:
-                    candidate = f"{base}_{suffix}"
-                    if candidate not in taken:
-                        taken.add(candidate)
-                        return candidate
-                    suffix += 1
+                # thin wrapper to keep local call sites unchanged while
+                # delegating the deterministic naming logic to a testable
+                # helper module.
+                return choose_local_name(base, taken)
 
             base_local = f"_{attr}_value"
             local_name = _choose_local_name(base_local, used_local_names)
@@ -373,49 +291,8 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # unique local name and rewrite cleanup to reference that
                 # local name so complex control flow works safely.
                 def _is_simple_cleanup_statement(s: Any) -> bool:
-                    # Simple assignment like `self.attr = X` or `del self.attr`
-                    if isinstance(s, cst.SimpleStatementLine) and s.body:
-                        expr = s.body[0]
-                        # Accept Assign directly
-                        if isinstance(expr, cst.Assign):
-                            target = expr.targets[0].target
-                            # accept self.attr or cls.attr
-                            if (
-                                isinstance(target, cst.Attribute)
-                                and isinstance(getattr(target, "value", None), cst.Name)
-                                and getattr(getattr(target, "value", None), "value", None) in ("self", "cls")
-                            ):
-                                return True
-                            # also accept bare name assignment like `value = None`
-                            if isinstance(target, cst.Name) and target.value == attr:
-                                return True
-                        # Or Assign wrapped inside an Expr (some tests construct this shape)
-                        if isinstance(expr, cst.Expr):
-                            inner = getattr(expr, "value", None)
-                            if isinstance(inner, cst.Assign):
-                                target = inner.targets[0].target
-                                if (
-                                    isinstance(target, cst.Attribute)
-                                    and isinstance(getattr(target, "value", None), cst.Name)
-                                    and getattr(getattr(target, "value", None), "value", None) in ("self", "cls")
-                                ):
-                                    return True
-                                if isinstance(target, cst.Name) and target.value == attr:
-                                    return True
-                        # Some libcst versions/typeshed don't expose a Delete symbol
-                        # that mypy recognizes. Detect Delete by class name to avoid
-                        # mypy attr-defined errors.
-                        cls = getattr(expr, "__class__", None)
-                        if cls is not None and getattr(cls, "__name__", None) == "Delete":
-                            for t in getattr(expr, "targets", []):
-                                targ = getattr(t, "target", t)
-                                if (
-                                    isinstance(targ, cst.Attribute)
-                                    and isinstance(getattr(targ, "value", None), cst.Name)
-                                    and getattr(getattr(targ, "value", None), "value", None) in ("self", "cls")
-                                ):
-                                    return True
-                    return False
+                    # delegate to extracted helper
+                    return is_simple_cleanup_statement(s, attr)
 
                 # If multiple assignments occurred in setUp, prefer binding to a
                 # local name so cleanup rewrites are consistent and literal-only
@@ -566,83 +443,8 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     any_yield = False
 
     def _type_name_for_literal(node: cst.BaseExpression) -> tuple[cst.BaseExpression | None, set[str]]:
-        """Return a libcst node representing a typing annotation and a set of typing names.
-
-        The returned node can be used inside cst.Annotation(annotation=...).
-        """
-        names: set[str] = set()
-        if isinstance(node, cst.List):
-            names.add("List")
-            # infer simple element type when possible
-            elts = [getattr(e, "value", None) for e in node.elements]
-            if not elts:
-                inner = cst.Name("Any")
-                names.add("Any")
-            else:
-                first = elts[0]
-                if all(isinstance(e, cst.SimpleString) for e in elts if e is not None):
-                    inner = cst.Name("str")
-                elif all(isinstance(e, cst.Integer) for e in elts if e is not None):
-                    inner = cst.Name("int")
-                else:
-                    inner = cst.Name("Any")
-                    names.add("Any")
-            sub = cst.Subscript(value=cst.Name("List"), slice=[cst.SubscriptElement(slice=cst.Index(inner))])
-            return sub, names
-        if isinstance(node, cst.Tuple):
-            names.add("Tuple")
-            parts: list[cst.BaseExpression] = []
-            for el in node.elements:
-                val = getattr(el, "value", None)
-                if isinstance(val, cst.SimpleString):
-                    parts.append(cst.Name("str"))
-                elif isinstance(val, cst.Integer):
-                    parts.append(cst.Name("int"))
-                elif isinstance(val, cst.Float):
-                    parts.append(cst.Name("float"))
-                else:
-                    parts.append(cst.Name("Any"))
-                    names.add("Any")
-            subslices = [cst.SubscriptElement(slice=cst.Index(p)) for p in parts]
-            sub = cst.Subscript(value=cst.Name("Tuple"), slice=subslices)
-            return sub, names
-        if isinstance(node, cst.Set):
-            names.add("Set")
-            # try to infer element type
-            elts = [getattr(e, "value", None) for e in node.elements]
-            if elts and all(isinstance(e, cst.Integer) for e in elts if e is not None):
-                inner = cst.Name("int")
-            else:
-                inner = cst.Name("Any")
-                names.add("Any")
-            sub = cst.Subscript(value=cst.Name("Set"), slice=[cst.SubscriptElement(slice=cst.Index(inner))])
-            return sub, names
-        if isinstance(node, cst.Dict):
-            names.add("Dict")
-            # infer key/value types simply from first pair
-            if node.elements:
-                first = node.elements[0]
-                k = getattr(first, "key", None)
-                v = getattr(first, "value", None)
-                if isinstance(k, cst.SimpleString):
-                    ktype = cst.Name("str")
-                else:
-                    ktype = cst.Name("Any")
-                    names.add("Any")
-                if isinstance(v, cst.Integer):
-                    vtype = cst.Name("int")
-                else:
-                    vtype = cst.Name("Any")
-                    names.add("Any")
-            else:
-                ktype = cst.Name("Any")
-                vtype = cst.Name("Any")
-                names.add("Any")
-            subslices = [cst.SubscriptElement(slice=cst.Index(ktype)), cst.SubscriptElement(slice=cst.Index(vtype))]
-            sub = cst.Subscript(value=cst.Name("Dict"), slice=subslices)
-            return sub, names
-        # fallback: no specific typing
-        return None, set()
+        # delegate to the extracted helper for clarity and testability
+        return type_name_for_literal(node)
 
     for spec in specs.values():
         v = spec.value_expr
