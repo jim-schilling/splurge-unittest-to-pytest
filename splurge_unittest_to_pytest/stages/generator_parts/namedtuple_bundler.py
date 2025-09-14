@@ -134,6 +134,57 @@ def bundle_named_locals(
                     return updated
 
             call_in_fixture = assigned_call.visit(_ReplaceSelfLocal())
+            # Collect simple Name dependencies from the call so the emitted
+            # composite fixture can accept and receive underlying fixtures
+            # (e.g., temp_dir, sql_content) as parameters. We conservatively
+            # filter out self/cls, builtins, capitalized names, and any
+            # existing top-level module names to avoid collisions.
+            try:
+                class _NameCollector(cst.CSTVisitor):
+                    def __init__(self) -> None:
+                        self.names: set[str] = set()
+
+                    def visit_Name(self, node: cst.Name) -> None:
+                        self.names.add(node.value)
+
+                nc = _NameCollector()
+                call_in_fixture.visit(nc)
+                collected = set(getattr(nc, "names", set()))
+            except Exception:
+                collected = set()
+
+            # Expand names that correspond to recorded local assignments to
+            # include their RHS refs (e.g., local sql_file -> temp_dir, sql_content)
+            expanded: set[str] = set()
+            import builtins as _builtins
+            for n in collected:
+                if not n or n in ("self", "cls"):
+                    continue
+                if n in existing_top_names:
+                    continue
+                if n[0].isupper():
+                    continue
+                if n in getattr(_builtins, "__dict__", {}):
+                    continue
+                # If name matches a local assignment, expand to its recorded refs
+                if n in local_map:
+                    try:
+                        entry = local_map.get(n)
+                        if isinstance(entry, tuple) and len(entry) >= 3:
+                            refs_from_local = entry[2] or set()
+                            for r in refs_from_local:
+                                expanded.add(r)
+                            continue
+                    except Exception:
+                        pass
+                expanded.add(n)
+
+            # Deterministic ordering for parameters
+            param_names = [r for r in sorted(expanded)]
+            if param_names:
+                params = cst.Parameters(params=[cst.Param(name=cst.Name(n)) for n in param_names])
+            else:
+                params = cst.Parameters()
             targets = [cst.Name(local) for local, _, _ in sorted_group]
             assign_target = cst.Assign(
                 targets=[cst.AssignTarget(target=cst.Tuple(elements=[cst.Element(value=t) for t in targets]))],
@@ -147,7 +198,7 @@ def bundle_named_locals(
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
             body = cst.IndentedBlock(body=[assign_stmt, yield_stmt])
             fixture_func = cst.FunctionDef(
-                name=cst.Name(fixture_name), params=cst.Parameters(), body=body, decorators=[decorator]
+                name=cst.Name(fixture_name), params=params, body=body, decorators=[decorator]
             )
 
             # append in discovered order to preserve stable emission order

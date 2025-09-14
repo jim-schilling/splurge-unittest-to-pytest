@@ -8,7 +8,7 @@ have a `self` parameter when appropriate.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import libcst as cst
 
@@ -23,6 +23,23 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     # Centralized formatting pass
     normalized = normalize_module(module)
+
+    # Final pass: ensure exactly two EmptyLine nodes before each top-level
+    # FunctionDef or ClassDef. This enforces canonical spacing regardless of
+    # what earlier stages inserted or omitted.
+    final_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
+    for node in list(normalized.body):
+        if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
+            # remove trailing EmptyLine nodes from final_body to avoid churn
+            while final_body and isinstance(final_body[-1], cst.EmptyLine):
+                final_body.pop()
+            final_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            final_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            final_body.append(node)
+            continue
+        final_body.append(node)
+
+    normalized = normalized.with_changes(body=final_body)
 
     # Ensure class test methods have a 'self' parameter when missing
     class EnsureSelfParam(cst.CSTTransformer):

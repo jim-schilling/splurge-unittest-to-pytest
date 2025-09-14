@@ -456,7 +456,27 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                             collected_names = set(arg_attr_sub_names)
                             # names present in local_map or setup_assignments are ok
                             for n in name_only:
-                                if n in local_map or n in getattr(cls, "setup_assignments", {}):
+                                # If the name corresponds to a recorded local assignment
+                                # (e.g., tuple-unpacked local like `sql_file` from
+                                # `sql_file, schema_file = create_sql_with_schema(...)`),
+                                # prefer expanding it into the RHS references collected
+                                # by the collector. This lets us emit parameters for
+                                # the actual dependencies (e.g., `temp_dir`,
+                                # `sql_content`) instead of the transient local name.
+                                if n in local_map:
+                                    try:
+                                        entry = local_map.get(n)
+                                        # Expect stored shape (value_expr, index_or_None, refs_set)
+                                        if isinstance(entry, tuple) and len(entry) >= 3:
+                                            refs_from_local = entry[2] or set()
+                                            for r in refs_from_local:
+                                                collected_names.add(r)
+                                            # don't add the ephemeral local name itself
+                                            continue
+                                    except Exception:
+                                        # fall back to conservative behavior
+                                        pass
+                                if n in getattr(cls, "setup_assignments", {}):
                                     collected_names.add(n)
                             # rendered-source fallback for cases like arr[temp_dir] when
                             # the Subscript visitor didn't capture the name for some reason

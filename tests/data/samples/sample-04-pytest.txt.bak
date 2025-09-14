@@ -1,0 +1,105 @@
+import os
+import tempfile
+import json
+from pathlib import Path
+from unittest.mock import patch, Mock
+import subprocess
+import shutil
+from typing import Any, Dict, Generator
+
+import pytest
+
+
+@pytest.fixture
+def temp_dir():
+    _temp_dir_value = tempfile.mkdtemp()
+    yield _temp_dir_value
+    shutil.rmtree(_temp_dir_value, ignore_errors=True)
+
+
+@pytest.fixture
+def config_dir(temp_dir):
+    return Path(temp_dir) / "config"
+
+
+@pytest.fixture
+def data_dir(temp_dir):
+    return Path(temp_dir) / "data"
+
+
+@pytest.fixture
+def log_dir(temp_dir):
+    return Path(temp_dir) / "logs"
+
+
+@pytest.fixture
+def main_config(log_dir):
+    return {
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+            "name": "testdb"
+        },
+        "logging": {
+            "level": "DEBUG",
+            "file": str(log_dir / "app.log")
+        },
+        "features": {
+            "feature_a": True,
+            "feature_b": False
+        }
+    }
+
+
+@pytest.fixture
+def config_file(config_dir):
+    return config_dir / "config.json"
+
+
+@pytest.fixture
+def original_env():
+    _original_env_value = os.environ.copy()
+    yield _original_env_value
+    os.environ.update(_original_env_value)
+
+
+@pytest.fixture
+def mock_database():
+    return Mock()
+
+
+@pytest.fixture
+def mock_logger():
+    return Mock()
+
+
+def test_configuration_loading(temp_dir, config_dir, data_dir, log_dir, main_config, config_file, original_env, mock_database, mock_logger):
+    mock_get_logger.return_value = mock_logger
+    mock_subprocess.return_value = Mock(returncode=0, stdout="Success")
+
+    # Test configuration loading logic would go here
+    config_path = os.environ.get("CONFIG_PATH")
+    assert config_path == str(config_dir)
+
+    # Simulate loading config
+    with open(config_file) as f:
+        loaded_config = json.load(f)
+
+    assert loaded_config["database"]["host"] == "localhost"
+    assert loaded_config["database"]["port"] == 5432
+    assert loaded_config["features"]["feature_a"]
+
+
+def test_directory_structure(temp_dir, config_dir, data_dir, log_dir, main_config, config_file, original_env, mock_database, mock_logger):
+    assert config_dir.exists()
+    assert data_dir.exists()
+    assert log_dir.exists()
+    assert config_file.exists()
+
+
+def test_directory_creation_error_handling(temp_dir, config_dir, data_dir, log_dir, main_config, config_file, original_env, mock_database, mock_logger):
+    mock_makedirs.side_effect = OSError("Permission denied")
+
+    # Test error handling logic
+    with pytest.raises(OSError):
+        os.makedirs("/invalid/path", exist_ok=True)

@@ -156,6 +156,27 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # preserving behavior have been removed; generated fixtures are intended
     # to be used directly by top-level test wrappers. Signal that pytest
     # import is needed so ImportInjector will insert it.
+    # Normalize spacing: ensure exactly two EmptyLine nodes before each
+    # top-level FunctionDef or ClassDef. Collapse runs longer than two.
+    normalized: list[cst.BaseStatement | cst.BaseSmallStatement] = []
+    i = 0
+    while i < len(new_body):
+        node = new_body[i]
+        if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
+            # count trailing empties in normalized so far
+            # remove trailing EmptyLines to avoid accumulating more than needed
+            while normalized and isinstance(normalized[-1], cst.EmptyLine):
+                normalized.pop()
+            # append two EmptyLine sentinels before the top-level def
+            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            normalized.append(node)
+            i += 1
+            continue
+        # preserve existing empties and other nodes
+        normalized.append(node)
+        i += 1
 
-    new_module = module.with_changes(body=new_body)
+    new_module = module.with_changes(body=normalized)
     return {"module": new_module, "needs_pytest_import": True}
+
