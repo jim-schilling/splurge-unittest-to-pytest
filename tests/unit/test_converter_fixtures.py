@@ -1,6 +1,7 @@
 import libcst as cst
 
 from splurge_unittest_to_pytest.converter import fixtures
+from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
 
 
 def test_create_simple_fixture_structure_and_decorator():
@@ -32,7 +33,7 @@ def test_create_fixture_with_cleanup_replaces_names_and_yields():
 def test_make_autouse_attach_to_instance_fixture_builds_setters():
     # use create_simple_fixture to produce a FunctionDef value for the mapping
     foo_fd = fixtures.create_simple_fixture("foo", cst.parse_expression("1"))
-    module_fn = fixtures.make_autouse_attach_to_instance_fixture({"foo": foo_fd})
+    module_fn = make_autouse_attach({"foo": foo_fd})
     code = cst.Module(body=[module_fn]).code
     assert isinstance(module_fn, cst.FunctionDef)
     # function name and common helper calls
@@ -46,7 +47,9 @@ def test_make_autouse_attach_to_instance_fixture_builds_setters():
 def test_add_autouse_attach_fixture_to_module_inserts_after_pytest_import():
     mod = cst.parse_module("import pytest\n")
     foo_fd = fixtures.create_simple_fixture("bar", cst.parse_expression("2"))
-    new_mod = fixtures.add_autouse_attach_fixture_to_module(mod, {"bar": foo_fd})
+
+    # Insert the autouse fixture locally (test-only insertion helper)
+    new_mod = insert_attach_fixture_into_module(mod, make_autouse_attach({"bar": foo_fd}))
     code = new_mod.code
     # import should come before the inserted fixture
     assert "import pytest" in code

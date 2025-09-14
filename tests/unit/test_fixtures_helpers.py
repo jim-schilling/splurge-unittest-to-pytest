@@ -110,10 +110,91 @@ def test_make_autouse_attach_and_module_insertion():
     module = cst.parse_module(mod_src)
     # create a dummy setup_fixtures mapping
     dummy = {"a": fixtures.create_simple_fixture("a", cst.Integer("1"))}
-    func = fixtures.make_autouse_attach_to_instance_fixture(dummy)
+
+    # Use the current fixtures module's high-level helpers to create the autouse fixture
+    # Build a local autouse attach fixture using test-local logic (decoupled from compat helpers)
+    def _make_autouse_attach_local(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
+        from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
+
+        inst_assign = cst.SimpleStatementLine(
+            body=[
+                cst.Assign(
+                    targets=[cst.AssignTarget(target=cst.Name("inst"))],
+                    value=cst.Call(
+                        func=cst.Name("getattr"),
+                        args=[
+                            cst.Arg(value=cst.Name("request")),
+                            cst.Arg(value=cst.SimpleString("'instance'")),
+                            cst.Arg(value=cst.Name("None")),
+                        ],
+                    ),
+                )
+            ]
+        )
+
+        set_calls: list[cst.BaseStatement] = []
+        for name in setup_fixtures.keys():
+            set_calls.append(
+                cst.SimpleStatementLine(
+                    body=[
+                        cst.Expr(
+                            value=cst.Call(
+                                func=cst.Name("setattr"),
+                                args=[
+                                    cst.Arg(value=cst.Name("inst")),
+                                    cst.Arg(value=cst.SimpleString(f"'{name}'")),
+                                    cst.Arg(value=cst.Name(name)),
+                                ],
+                            )
+                        )
+                    ]
+                )
+            )
+
+        if_block = cst.IndentedBlock(body=set_calls)
+        if_stmt = cst.If(
+            test=cst.Comparison(
+                left=cst.Name("inst"),
+                comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))],
+            ),
+            body=if_block,
+        )
+
+        decorator = build_pytest_fixture_decorator({"autouse": True})
+
+        func = cst.FunctionDef(
+            name=cst.Name("_attach_to_instance"),
+            params=cst.Parameters(params=[cst.Param(name=cst.Name("request"))]),
+            body=cst.IndentedBlock(body=[inst_assign, if_stmt]),
+            decorators=[decorator],
+        )
+
+        return func
+
+    func = _make_autouse_attach_local(dummy)
     assert isinstance(func, cst.FunctionDef)
 
-    new_module = fixtures.add_autouse_attach_fixture_to_module(module, dummy)
+    # Insert the fixture locally into the module
+    def _insert_attach_fixture_local(module_node: cst.Module, fixture_func: cst.FunctionDef) -> cst.Module:
+        new_body: list = list(module_node.body)
+        insert_pos = 0
+        for i, stmt in enumerate(new_body):
+            if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+                first = stmt.body[0]
+                if isinstance(first, cst.Import):
+                    for alias in first.names:
+                        if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
+                            insert_pos = i + 1
+                            break
+                if insert_pos:
+                    break
+
+        new_body.insert(insert_pos, cst.EmptyLine())
+        new_body.insert(insert_pos + 1, fixture_func)
+
+        return module.with_changes(body=new_body)
+
+    new_module = _insert_attach_fixture_local(module, func)
     # Ensure the module now contains the fixture by checking code text includes function name
     assert "_attach_to_instance" in new_module.code
 

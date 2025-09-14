@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025.1.0] - 2025-09-13
 
 ### Removed
-- Compatibility mode (`compat` / `--no-compat` / `--compat`) and engine selection have been removed. The converter now only supports the staged pipeline and emits strict pytest-native code.
+- Historical: compatibility mode (`compat` / `--no-compat` / `--compat`) and engine selection were removed in release 2025.1.0. The converter now supports the staged pipeline and emits strict pytest-native code.
 
-- Removed legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` — callers must use `stages.generator` directly.
+- Historical: legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` removed in 2025.1.0 — callers should use `stages.generator` or the staged pipeline directly.
 
 ### Changed
 - Public API: `convert_string` and `convert_file` no longer accept `compat` or `engine` parameters. Use the staged pipeline via the public API instead.
@@ -24,12 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025.0.5] - 2025-09-13
 
 ### Added
-- Strict mode (compat disabled) for pure pytest output
-  - `--no-compat` drops unittest classes and lifecycle methods and emits only
-    top-level pytest tests and fixtures
-  - No autouse `_attach_to_instance` fixture in strict mode
-  - Documented in `docs/README-DETAILS.md` with CLI and API examples
-- New unit test `tests/unit/test_cli_strict_mode.py` to lock strict mode behavior
+- Historical: Strict/no-compat behavior was introduced before 2025.1.0. See the migration notes for how the staged pipeline now emits strict pytest-native code by default.
 
 ### Changed
 -- CLI default and help: CLI now advertises strict/no-compat as the default output.
