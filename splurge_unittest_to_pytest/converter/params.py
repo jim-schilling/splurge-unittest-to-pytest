@@ -1,6 +1,5 @@
 """Helpers to build fixture parameters for test methods."""
 
-
 import libcst as cst
 
 

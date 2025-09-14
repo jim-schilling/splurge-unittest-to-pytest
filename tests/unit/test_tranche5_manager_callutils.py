@@ -35,4 +35,4 @@ def test_stage_manager_diagnostics_snapshots(tmp_path, monkeypatch):
 
     # Ensure at least one .py file exists in diagnostics dir (snapshots/marker)
     files = list(d.iterdir())
-    assert any(p.suffix == "" or p.name.startswith("splurge-diagnostics-") or p.name.endswith('.py') for p in files)
+    assert any(p.suffix == "" or p.name.startswith("splurge-diagnostics-") or p.name.endswith(".py") for p in files)

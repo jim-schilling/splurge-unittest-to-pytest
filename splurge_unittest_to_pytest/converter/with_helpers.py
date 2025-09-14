@@ -1,6 +1,5 @@
 """Helpers for converting unittest assertRaises context managers to pytest.raises."""
 
-
 import libcst as cst
 
 from .call_utils import is_self_call

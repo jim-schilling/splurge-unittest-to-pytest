@@ -9,6 +9,7 @@ from splurge_unittest_to_pytest.stages.manager import StageManager
 
 def test_create_diagnostics_mkdtemp_raises(monkeypatch):
     monkeypatch.setenv("SPLURGE_ENABLE_DIAGNOSTICS", "1")
+
     # force tempfile.mkdtemp to raise
     def fake_mkdtemp(*a, **k):
         raise RuntimeError("mkdtemp failed")

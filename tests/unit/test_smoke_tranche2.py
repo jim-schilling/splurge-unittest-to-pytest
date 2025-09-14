@@ -6,7 +6,9 @@ from splurge_unittest_to_pytest.converter.assertion_dispatch import convert_asse
 
 def test_is_self_call_positive_and_negative():
     # build a call node: self.foo(1, 2)
-    call = cst.Call(func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("foo")), args=[cst.Arg(value=cst.Integer("1"))])
+    call = cst.Call(
+        func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("foo")), args=[cst.Arg(value=cst.Integer("1"))]
+    )
     res = is_self_call(call)
     assert res is not None
     name, args = res
