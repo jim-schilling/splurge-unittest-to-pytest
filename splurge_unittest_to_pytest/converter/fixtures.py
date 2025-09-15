@@ -14,7 +14,15 @@ __all__: list[str] = [
     "parse_setup_assignments",
 ]
 
+
 from .setup_parser import parse_setup_assignments
+
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+# Associated domains for this module
+DOMAINS = ["converter", "fixtures"]
 
 
 def _collect_identifiers_from_statements(stmts: list[cst.BaseStatement]) -> set[str]:

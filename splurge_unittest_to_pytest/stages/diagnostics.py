@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional, Any
 import logging
 
+DOMAINS = ["stages", "diagnostics"]
+
 
 def diagnostics_enabled() -> bool:
     val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")
@@ -20,6 +22,8 @@ def diagnostics_verbose() -> bool:
 
 
 _logger = logging.getLogger("splurge.diagnostics")
+
+# Associated domains for this module
 
 
 def create_diagnostics_dir() -> Optional[Path]:

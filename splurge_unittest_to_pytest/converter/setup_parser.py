@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["converter"]
+
+# Associated domains for this module
+
 
 def parse_setup_assignments(node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
     """Parse a setUp function to extract assignments to self.<attr>.

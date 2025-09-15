@@ -5,6 +5,11 @@ from typing import Any, Optional
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 @dataclass
 class SimpleFixtureSpec:

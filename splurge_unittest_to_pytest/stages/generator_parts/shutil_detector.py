@@ -4,6 +4,11 @@ from typing import Sequence, Any
 
 import libcst as cst
 
+DOMAINS = ["generator", "helpers"]
+
+
+# Associated domains for this module
+
 
 def cleanup_needs_shutil(stmts: Sequence[Any]) -> bool:
     """Return True if any statement in stmts appears to reference shutil.

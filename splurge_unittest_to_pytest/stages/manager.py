@@ -13,7 +13,11 @@ import libcst as cst
 from pathlib import Path
 from . import diagnostics
 
+DOMAINS = ["stages", "manager"]
+
 StageCallable = Callable[[dict[str, Any]], dict[str, Any]]
+
+# Associated domains for this module
 
 
 class StageManager:

@@ -3,6 +3,11 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["generator", "rewriter"]
+
+
+# Associated domains for this module
+
 
 class AttrRewriter(cst.CSTTransformer):
     """Transformer that replaces attributes of the form ``self.attr`` or

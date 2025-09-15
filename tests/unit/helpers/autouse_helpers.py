@@ -2,6 +2,8 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
 
+DOMAINS = ["converter"]
+
 
 def make_autouse_attach(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
     """Create an autouse attach fixture FunctionDef for tests to reuse.

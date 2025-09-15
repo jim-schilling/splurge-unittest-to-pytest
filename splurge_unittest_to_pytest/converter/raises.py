@@ -11,6 +11,8 @@ from typing import Sequence
 
 import libcst as cst
 
+DOMAINS = ["converter", "exceptions"]
+
 
 def make_pytest_raises_call(args: Sequence[cst.Arg]) -> cst.Call:
     """Return a pytest.raises call node for given args.
@@ -58,6 +60,8 @@ def create_pytest_raises_withitem(method_name: str, args: Sequence[cst.Arg]) -> 
         )
     )
 
+
+# Associated domains for this module
 
 __all__: list[str] = [
     "make_pytest_raises_call",

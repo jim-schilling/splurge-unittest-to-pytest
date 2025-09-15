@@ -7,6 +7,10 @@ import libcst as cst
 
 from .helpers import SelfReferenceRemover
 
+DOMAINS = ["converter", "parameters"]
+
+# Associated domains for this module
+
 
 def should_remove_first_param(node: cst.FunctionDef) -> bool:
     """Return True when the first parameter (self/cls) should be removed.

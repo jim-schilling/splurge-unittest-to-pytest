@@ -6,6 +6,11 @@ from typing import Iterable
 
 import libcst as cst
 
+DOMAINS = ["converter", "teardown"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 def associate_cleanup_with_fixtures(
     teardown_cleanup: dict[str, list[cst.BaseStatement]],

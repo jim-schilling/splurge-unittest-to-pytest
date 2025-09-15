@@ -10,6 +10,10 @@ from typing import Any, cast, Sequence
 
 import libcst as cst
 
+DOMAINS = ["stages", "helpers"]
+
+# Associated domains for this module
+
 
 def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:
     module: cst.Module | None = context.get("module")

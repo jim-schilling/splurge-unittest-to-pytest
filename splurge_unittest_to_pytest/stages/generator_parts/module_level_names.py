@@ -4,6 +4,11 @@ from typing import Any, Set
 
 import libcst as cst
 
+DOMAINS = ["generator", "naming"]
+
+
+# Associated domains for this module
+
 
 def collect_module_level_names(module_obj: Any) -> Set[str]:
     """Collect top-level names defined in a module node.

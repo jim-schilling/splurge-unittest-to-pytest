@@ -14,6 +14,10 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.stages.formatting import normalize_module
 
+DOMAINS = ["stages", "tidy"]
+
+# Associated domains for this module
+
 
 def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")

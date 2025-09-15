@@ -12,6 +12,10 @@ from typing import Any, Optional
 import libcst as cst
 from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param
 
+DOMAINS = ["stages", "rewriter"]
+
+# Associated domains for this module
+
 
 def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")

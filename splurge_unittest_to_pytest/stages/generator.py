@@ -22,6 +22,11 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
 from splurge_unittest_to_pytest.stages.generator_parts.shutil_detector import cleanup_needs_shutil
 
+DOMAINS = ["stages", "generator"]
+
+
+# Associated domains for this module
+
 
 @dataclass
 class FixtureSpec:
@@ -458,7 +463,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                                 | set(getattr(anc, "attr_names", set()))
                                 | set(getattr(anc, "subscript_names", set()))
                             )
-                            # Accept names collected from args/attribute/subscript contexts
+                            # Accept names collected from args/attribute/subscript
                             # unconditionally (subject to other filters). For plain Name
                             # occurrences, require the name to be present in the
                             # collector's local_assignments or setup_assignments to

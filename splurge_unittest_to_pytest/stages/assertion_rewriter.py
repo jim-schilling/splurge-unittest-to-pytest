@@ -11,6 +11,11 @@ from typing import Sequence, Optional, Any, cast
 
 import libcst as cst
 
+DOMAINS = ["stages", "assertions", "rewriter"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 class AssertionRewriter(cst.CSTTransformer):
     """Transformer that rewrites unittest-style assertions to pytest asserts."""

@@ -6,6 +6,11 @@ import libcst as cst
 
 from .assertions import ASSERTIONS_MAP
 
+DOMAINS = ["converter", "assertions"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 def convert_assertion(method_name: str, args: Sequence[cst.Arg]) -> cst.BaseSmallStatement | None:
     """Convert unittest assertion name+args to a pytest assertion node or None."""

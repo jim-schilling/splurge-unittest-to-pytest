@@ -3,6 +3,11 @@ from __future__ import annotations
 import libcst as cst
 from typing import Set
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 class ReplaceSelfWithParam(cst.CSTTransformer):
     """Transformer that replaces occurrences of ``self.attr`` or ``cls.attr``

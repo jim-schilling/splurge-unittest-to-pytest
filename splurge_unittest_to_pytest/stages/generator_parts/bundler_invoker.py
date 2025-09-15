@@ -6,6 +6,11 @@ import libcst as cst
 
 from .namedtuple_bundler import bundle_named_locals
 
+DOMAINS = ["generator", "bundles"]
+
+
+# Associated domains for this module
+
 
 def safe_bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str], full: bool = False

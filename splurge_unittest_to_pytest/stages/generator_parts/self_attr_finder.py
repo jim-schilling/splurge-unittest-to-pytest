@@ -2,6 +2,11 @@ from typing import Any, Set
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 def collect_self_attrs(expr: Any) -> Set[str]:
     """Collect attribute names referenced as self.xxx or cls.xxx in expr.

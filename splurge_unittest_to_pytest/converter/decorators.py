@@ -5,6 +5,10 @@ from __future__ import annotations
 import libcst as cst
 from typing import Any, Mapping
 
+DOMAINS = ["converter"]
+
+# Associated domains for this module
+
 
 def build_pytest_fixture_decorator(kwargs: Mapping[str, Any] | None = None) -> cst.Decorator:
     """Return a `@pytest.fixture` Decorator node.

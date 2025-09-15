@@ -10,6 +10,10 @@ from typing import Sequence, Optional, Any, cast
 
 import libcst as cst
 
+DOMAINS = ["stages", "exceptions"]
+
+# Associated domains for this module
+
 
 class ExceptionAttrRewriter(cst.CSTTransformer):
     """Transformer to rewrite NAME.exception -> NAME.value for a target name.

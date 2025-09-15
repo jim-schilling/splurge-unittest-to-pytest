@@ -2,6 +2,10 @@
 
 import libcst as cst
 
+DOMAINS = ["converter", "parameters"]
+
+# Associated domains for this module
+
 
 def get_fixture_param_names(setup_fixtures: dict[str, cst.FunctionDef]) -> list[str]:
     """Return fixture names from a mapping of fixtures (keys are names)."""

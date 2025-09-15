@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Set, Tuple
 
 import libcst as cst
 
+DOMAINS = ["generator", "bundles"]
+
+# Associated domains for this module
+
 
 def bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str]

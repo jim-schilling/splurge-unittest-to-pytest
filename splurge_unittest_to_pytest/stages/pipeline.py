@@ -15,6 +15,10 @@ from .manager import StageManager
 from .postvalidator import postvalidator_stage
 from .tidy import tidy_stage
 
+DOMAINS = ["stages", "pipeline"]
+
+# Associated domains for this module
+
 
 def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
     mgr = StageManager()

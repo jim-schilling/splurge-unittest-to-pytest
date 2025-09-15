@@ -10,6 +10,10 @@ from typing import Any, Optional
 
 import libcst as cst
 
+DOMAINS = ["generator", "naming"]
+
+# Associated domains for this module
+
 
 def infer_filename_for_local(local_name: str, cls_obj: Any) -> Optional[str]:
     """Return a filename string inferred from a recorded local assignment.

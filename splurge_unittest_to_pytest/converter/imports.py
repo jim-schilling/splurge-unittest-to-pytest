@@ -9,6 +9,10 @@ from libcst import matchers as m
 
 from .import_helpers import make_pytest_import_stmt
 
+DOMAINS = ["converter", "imports"]
+
+# Associated domains for this module
+
 
 def remove_unittest_importfrom(updated_node: cst.ImportFrom) -> cst.ImportFrom | cst.RemovalSentinel:
     """Remove ImportFrom nodes that import from unittest."""

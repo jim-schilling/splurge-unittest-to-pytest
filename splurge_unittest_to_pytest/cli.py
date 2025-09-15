@@ -18,12 +18,17 @@ from .exceptions import (
 from .main import convert_file, find_unittest_files, ConversionResult
 from .converter.helpers import parse_method_patterns
 
+DOMAINS = ["cli"]
+
 # If diagnostics are enabled, wire up a minimal console logger so messages are visible
 if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
     logging.basicConfig(level=logging.INFO)
     diag_logger = logging.getLogger("splurge.diagnostics")
     if os.environ.get("SPLURGE_DIAGNOSTICS_VERBOSE"):
         diag_logger.setLevel(logging.DEBUG)
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:

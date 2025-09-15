@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-
 import libcst as cst
+
+DOMAINS = ["converter"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 def is_unittest_testcase_base(base: cst.Arg) -> bool:

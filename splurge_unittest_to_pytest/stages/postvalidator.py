@@ -8,6 +8,10 @@ from typing import Any
 
 import libcst as cst
 
+DOMAINS = ["stages", "validation"]
+
+# Associated domains for this module
+
 
 def postvalidator_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module: Any = context.get("module")

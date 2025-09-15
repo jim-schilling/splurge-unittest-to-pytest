@@ -9,6 +9,10 @@ from typing import Iterable
 
 from .helpers import normalize_method_name
 
+DOMAINS = ["converter"]
+
+# Associated domains for this module
+
 
 def _pattern_in_name(method_name: str, pattern: str) -> bool:
     """Internal helper: check if a pattern matches the method name according

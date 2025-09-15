@@ -6,6 +6,10 @@ from .fixtures import (
     create_fixture_for_attribute,
 )
 
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
+
 
 def build_fixtures_from_setup_assignments(
     setup_assignments: dict[str, cst.BaseExpression],

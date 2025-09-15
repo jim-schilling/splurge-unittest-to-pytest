@@ -1,3 +1,8 @@
+DOMAINS = ["generator", "rewriter"]
+
+# Associated domains for this module
+
+
 class CleanupRewriter:
     """Scaffold cleanup rewriter that returns a normalized cleanup string."""
 

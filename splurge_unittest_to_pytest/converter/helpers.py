@@ -15,6 +15,10 @@ import re
 
 import libcst as cst
 
+DOMAINS = ["converter", "helpers"]
+
+# Associated domains for this module
+
 
 class SelfReferenceRemover(cst.CSTTransformer):
     """Remove self/cls references from attribute accesses."""

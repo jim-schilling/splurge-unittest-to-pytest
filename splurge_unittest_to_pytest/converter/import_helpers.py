@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["converter", "imports"]
+
+# Associated domains for this module
+
 
 def make_pytest_import_stmt() -> cst.SimpleStatementLine:
     """Create a SimpleStatementLine importing pytest."""

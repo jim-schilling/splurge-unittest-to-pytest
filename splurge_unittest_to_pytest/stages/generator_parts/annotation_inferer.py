@@ -4,6 +4,11 @@ from typing import Tuple, Set
 
 import libcst as cst
 
+DOMAINS = ["generator", "transform", "literals"]
+
+
+# Associated domains for this module
+
 
 def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression | None, Set[str]]:
     """Return an annotation node for a literal-ish expression and a set of typing names.

@@ -7,6 +7,10 @@ from typing import Optional
 
 import libcst as cst
 
+DOMAINS = ["stages", "imports"]
+
+# Associated domains for this module
+
 
 def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     maybe_module = context.get("module")

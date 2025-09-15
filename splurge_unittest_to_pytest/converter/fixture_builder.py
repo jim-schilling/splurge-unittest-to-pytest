@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-
 import libcst as cst
 
 from .name_replacer import replace_names_in_statements
+
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
 
 
 def replace_attr_references_in_statements(

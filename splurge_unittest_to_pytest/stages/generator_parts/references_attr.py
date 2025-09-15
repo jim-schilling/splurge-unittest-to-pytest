@@ -10,6 +10,10 @@ from typing import Any
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+# Associated domains for this module
+
 
 def references_attribute(expr: Any, attr_name: str) -> bool:
     """Recursively check if expression references self.<attr> or bare <attr>.

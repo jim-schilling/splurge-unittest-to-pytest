@@ -1,5 +1,10 @@
 from dataclasses import dataclass
 
+DOMAINS = ["generator", "fixtures"]
+
+
+# Associated domains for this module
+
 
 @dataclass
 class FixtureSpec:

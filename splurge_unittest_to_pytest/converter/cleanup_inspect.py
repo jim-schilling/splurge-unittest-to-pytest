@@ -7,6 +7,10 @@ import libcst as cst
 
 from .cleanup_checks import references_attribute
 
+DOMAINS = ["converter", "teardown"]
+
+# Associated domains for this module
+
 
 def simple_stmt_references_attribute(stmt: cst.SimpleStatementLine, attr_name: str) -> bool:
     """Return True if the given simple statement line references attr_name.

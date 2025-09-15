@@ -11,6 +11,10 @@ from typing import Any, Optional, Set
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+# Associated domains for this module
+
 
 def _get_callable_name(node: Any) -> Optional[str]:
     if node is None:

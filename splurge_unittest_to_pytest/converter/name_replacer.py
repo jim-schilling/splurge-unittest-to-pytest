@@ -10,6 +10,10 @@ from typing import Iterable, cast
 
 import libcst as cst
 
+DOMAINS = ["converter", "naming"]
+
+# Associated domains for this module
+
 
 class NameReplacer(cst.CSTTransformer):
     def __init__(self, attr_name: str, value_name: str) -> None:

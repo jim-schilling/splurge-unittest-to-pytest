@@ -10,6 +10,11 @@ from .cleanup_rewriter import CleanupRewriter
 from .node_emitter import NodeEmitter
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 class GeneratorCore:
     """Compose small components to provide a simple generator facade.

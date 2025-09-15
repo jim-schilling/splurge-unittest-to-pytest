@@ -5,6 +5,10 @@ import libcst as cst
 from .call_utils import is_self_call
 from .raises import create_pytest_raises_withitem
 
+DOMAINS = ["converter", "assertions"]
+
+# Associated domains for this module
+
 
 def convert_assert_raises_with(node: cst.With) -> tuple[cst.With | None, bool]:
     """Convert a `with` node using unittest assertRaises/assertRaisesRegex to a

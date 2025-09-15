@@ -10,6 +10,11 @@ from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 from .converter.helpers import has_meaningful_changes, normalize_method_name
 
+DOMAINS = ["main"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 @dataclass
 class ConversionResult:
@@ -325,7 +330,7 @@ def convert_file(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(result.converted_code, encoding=encoding)
         except PermissionError:
-            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionError
+            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionDeniedError
         except UnicodeEncodeError as e:
             raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
 
@@ -437,3 +442,7 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
             continue
 
     return unittest_files
+
+
+# Associated domains for this module
+DOMAINS = ["main"]

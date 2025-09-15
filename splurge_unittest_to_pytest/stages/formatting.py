@@ -10,6 +10,8 @@ from typing import Optional, cast, Any
 
 import libcst as cst
 
+DOMAINS = ["stages", "tidy"]
+
 
 def _node_to_str(node: Optional[cst.BaseExpression] | None) -> str:
     if node is None:
@@ -222,3 +224,6 @@ def normalize_module(module: cst.Module) -> cst.Module:
         i += 1
 
     return module.with_changes(body=normalized)
+
+
+# Associated domains for this module

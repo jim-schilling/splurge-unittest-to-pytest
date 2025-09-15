@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["converter", "validation"]
+
+# Associated domains for this module
+
 
 def is_simple_fixture_value(expr: cst.BaseExpression) -> bool:
     """Return True when an expression is a simple literal that can be yielded

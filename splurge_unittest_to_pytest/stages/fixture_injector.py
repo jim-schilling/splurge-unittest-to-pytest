@@ -11,6 +11,10 @@ from typing import Any, Optional, cast
 
 import libcst as cst
 
+DOMAINS = ["stages", "fixtures"]
+
+# Associated domains for this module
+
 
 def _find_insertion_index(module: cst.Module) -> int:
     # prefer after pytest import

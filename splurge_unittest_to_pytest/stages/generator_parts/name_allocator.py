@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Set
 
+DOMAINS = ["generator", "naming"]
+
+
+# Associated domains for this module
+
 
 def choose_local_name(base: str, taken: Set[str]) -> str:
     """Deterministically pick a unique local name by appending a numeric

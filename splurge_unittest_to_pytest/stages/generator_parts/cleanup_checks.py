@@ -9,6 +9,10 @@ from typing import Any
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+# Associated domains for this module
+
 
 def is_simple_cleanup_statement(s: Any, attr: str) -> bool:
     """Return True when `s` is a simple cleanup targeting `attr`.

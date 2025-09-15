@@ -10,6 +10,10 @@ from typing import Optional
 
 import libcst as cst
 
+DOMAINS = ["generator", "literals"]
+
+# Associated domains for this module
+
 
 def is_literal(expr: Optional[cst.BaseExpression]) -> bool:
     """Return True for true literals (numbers and simple strings).

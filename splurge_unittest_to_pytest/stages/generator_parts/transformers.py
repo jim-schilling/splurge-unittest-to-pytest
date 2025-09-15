@@ -11,6 +11,10 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["generator", "transform"]
+
+# Associated domains for this module
+
 
 class ReplaceSelfWithName(cst.CSTTransformer):
     """Replace occurrences of ``self.<attr>`` with the bare ``<attr>`` name.

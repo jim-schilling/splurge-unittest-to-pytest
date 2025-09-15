@@ -15,6 +15,10 @@ import importlib.resources as pkg_resources
 
 import libcst as cst
 
+DOMAINS = ["stages", "mocks"]
+
+# Associated domains for this module
+
 
 class DecoratorAndMockTransformer(cst.CSTTransformer):
     def __init__(self) -> None:

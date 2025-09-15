@@ -11,6 +11,11 @@ from typing import Sequence, Callable
 
 import libcst as cst
 
+DOMAINS = ["converter", "assertions"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 def _assert_equal(args: Sequence[cst.Arg]) -> cst.Assert:
     """Convert assertEqual to assert ==."""
@@ -217,3 +222,6 @@ ASSERTIONS_MAP: dict[str, Callable[[Sequence[cst.Arg]], cst.Assert | None]] = {
 
 # Export the map as part of the module's public API
 __all__.append("ASSERTIONS_MAP")
+
+# Associated domains for this module
+DOMAINS = ["converter", "assertions"]

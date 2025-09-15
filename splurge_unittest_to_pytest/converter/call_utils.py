@@ -4,6 +4,11 @@ from typing import Sequence
 
 import libcst as cst
 
+DOMAINS = ["converter", "helpers"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 def is_self_call(call_node: cst.Call) -> tuple[str, Sequence[cst.Arg]] | None:
     """Return (method_name, args) if call_node is self.method(...), else None."""

@@ -13,6 +13,8 @@ from typing import Optional, cast, Sequence, Any
 import libcst as cst
 from libcst import matchers as m
 
+DOMAINS = ["stages"]
+
 
 def _collect_names_from_expr(expr: Any) -> set[str]:
     refs: set[str] = set()
@@ -161,3 +163,6 @@ class Collector(cst.CSTVisitor):
                 imports=self._imports.copy(),
             )
         return self.output
+
+
+# Associated domains for this module

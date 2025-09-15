@@ -14,8 +14,13 @@ import argparse
 import os
 import sys
 import tempfile
-from pathlib import Path
 from typing import Optional
+from pathlib import Path
+
+DOMAINS = ["diagnostics"]
+
+# Associated domains for this module
+# Placed after imports for discoverability.
 
 
 def find_diagnostics_root(cli_root: Optional[str]) -> Path:

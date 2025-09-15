@@ -18,6 +18,11 @@ from splurge_unittest_to_pytest.converter.method_params import (
     first_param_name,
 )
 
+DOMAINS = ["stages", "fixtures"]
+
+
+# Associated domains for this module
+
 
 # NOTE: helper to decide removal of first param was removed; the current
 # staged pipeline keeps instance/class first params to make converted modules

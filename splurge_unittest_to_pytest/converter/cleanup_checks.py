@@ -6,6 +6,10 @@ from typing import Any
 
 import libcst as cst
 
+DOMAINS = ["converter", "teardown"]
+
+# Associated domains for this module
+
 
 def references_attribute(expr: Any, attr_name: str) -> bool:
     """Check if an expression references a specific attribute name.

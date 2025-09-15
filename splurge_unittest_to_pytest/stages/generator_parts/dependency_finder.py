@@ -12,6 +12,10 @@ from typing import Set
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+# Associated domains for this module
+
 
 def collect_self_attributes(node: cst.CSTNode) -> Set[str]:
     """Return the set of attribute names accessed via ``self`` or ``cls`` in

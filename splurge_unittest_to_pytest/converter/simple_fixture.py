@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import libcst as cst
 
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
+
 
 def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:
     """Return a fixture FunctionDef that simply returns value_expr.

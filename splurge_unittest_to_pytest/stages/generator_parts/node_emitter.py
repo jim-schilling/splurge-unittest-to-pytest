@@ -2,6 +2,11 @@ import libcst as cst
 from libcst import parse_statement
 from typing import List
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 class NodeEmitter:
     """Emit libcst AST nodes for fixtures from small body source strings.

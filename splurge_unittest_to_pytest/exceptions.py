@@ -1,5 +1,10 @@
 """Domain-specific exceptions for splurge-unittest-to-pytest."""
 
+DOMAINS = ["exceptions"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 class SplurgeError(Exception):
     """Base exception for all splurge-related errors."""
