@@ -154,6 +154,42 @@ Verification performed locally during the migration:
 
 If you maintain tooling or CI that relied on older compat flags, update your workflows to use the staged pipeline and the modernized CLI semantics.
 
+## Feature branch: update-2025.1.1 (branch: update-2025.1.1)
+
+This documentation block summarizes the purpose and scope of the feature branch
+`update-2025.1.1`. It mirrors the entry added to `CHANGELOG.md` and provides a
+few practical notes for reviewers and consumers of the branch.
+
+- Purpose: prepare the repository for the 2025.1.1 patch release by bumping
+   package metadata, regenerating generator goldens, and applying minor
+   packaging consistency fixes.
+- Key changes:
+   - Package metadata/version bumped to `2025.1.1`.
+   - Generator goldens were regenerated to reflect improved literal-preservation
+      and NamedTuple bundling behavior; sample goldens were regenerated from
+      `tests/data/samples`.
+   - Small packaging and metadata consistency fixes to improve installability and
+      CI reproducibility.
+- Verification done locally:
+   - Formatting: `ruff format`/`ruff check` applied and recorded minor reformatting.
+   - Type checks: `mypy` reported no type errors for the package.
+   - Tests: local unit test runs used during verification (representative runs):
+      - unit-only run: 859 passed, 1 skipped
+      - earlier full-suite runs reported: 874 passed, 4 skipped
+      These numbers are included for traceability; CI may report slightly
+      different counts depending on the environment and optional dependency
+      availability.
+- Merge guidance:
+   - This branch contains no public API breaking changes beyond previously
+      announced removals. Consumers using the public API (`convert_string`,
+      `convert_file`) should not need changes; if your tooling relied on the
+      removed compatibility flags, update it to use the staged pipeline.
+   - After merging, verify CI on the main branch to ensure the regenerated
+      goldens are accepted in downstream workflows that compare against them.
+
+If you have questions about the goldens or the literal-preservation changes,
+see `tools/check_generated.py` and `tests/goldens/` for sample comparisons.
+
 ## Code Conversion Process
 
 ### Supported Transformations
