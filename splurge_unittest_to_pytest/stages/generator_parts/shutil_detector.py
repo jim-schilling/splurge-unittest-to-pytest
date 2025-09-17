@@ -3,6 +3,10 @@
 The routine renders small statement nodes to source and looks for
 ``shutil`` usage. It is deliberately conservative and returns False on
 rendering errors.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

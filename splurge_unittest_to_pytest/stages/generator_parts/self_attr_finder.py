@@ -6,6 +6,10 @@ node shapes to keep generator tests stable.
 
 Publics:
     collect_self_attrs
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any, Set

@@ -4,6 +4,10 @@ Contains a small, pure helper that inspects a :class:`libcst.With` node
 and returns a transformed :class:`libcst.With` using ``pytest.raises``
 when a matching ``assertRaises`` invocation is found. The helper also
 signals whether a ``pytest`` import is required.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst

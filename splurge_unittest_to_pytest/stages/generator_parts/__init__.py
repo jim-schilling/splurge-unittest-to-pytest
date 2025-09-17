@@ -3,6 +3,10 @@
 This package exposes small, focused components used by the generator
 stage. The implementations are minimal scaffolds to support incremental
 refactoring and deterministic unit tests.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from .name_allocator import NameAllocator
