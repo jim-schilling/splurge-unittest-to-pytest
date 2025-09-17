@@ -4,6 +4,9 @@ Performs the centralized formatting pass using :func:`normalize_module`
 and enforces canonical blank-line counts and class-method parameter
 expectations. This is the last stage in the pipeline and prepares the
 module for output.
+
+Publics:
+    tidy_stage
 """
 
 from __future__ import annotations

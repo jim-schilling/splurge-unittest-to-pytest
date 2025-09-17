@@ -6,6 +6,9 @@ inserts minimal import statements at a deterministic location in the
 module (after the docstring or existing imports). The injector avoids
 duplicating existing imports and will merge or create a single
 ``from typing import ...`` statement when typing names are requested.
+
+Publics:
+    import_injector_stage
 """
 
 from __future__ import annotations

@@ -1,8 +1,12 @@
-"""Helpers to inspect class base expressions.
+"""Utilities for inspecting class base expressions.
 
-Utilities to detect whether a class inherits from ``unittest.TestCase``
-or a bare ``TestCase`` identifier. These helpers are used early in the
+Small helpers to detect whether a class inherits from ``unittest.TestCase``
+or a bare ``TestCase`` identifier. These utilities are used early in the
 pipeline to remove unittest-specific bases when converting to pytest.
+
+Publics:
+    is_unittest_testcase_base: Detect ``unittest.TestCase`` or ``TestCase`` bases.
+    remove_unittest_bases: Return bases with unittest TestCase entries removed.
 """
 
 from __future__ import annotations

@@ -1,9 +1,12 @@
 """Legacy helpers to infer typing annotations from libcst nodes.
 
-These helpers provide a lightweight heuristic for mapping literal-like
-libcst expressions to :class:`libcst.Annotation` nodes and a set of
-typing names required by the annotation. They are extracted to support
-isolated unit testing and gradual replacement by a fuller implementation.
+Lightweight heuristics for mapping literal-like libcst expressions to
+:class:`libcst.Annotation` nodes and the set of typing names required by
+the annotation. Extracted to support isolated unit testing and gradual
+replacement by a fuller implementation.
+
+Publics:
+    _infer_ann, _get_callable_name
 """
 
 from __future__ import annotations

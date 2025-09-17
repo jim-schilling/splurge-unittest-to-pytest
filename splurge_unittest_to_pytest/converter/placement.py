@@ -1,4 +1,11 @@
-"""Helpers for placing fixtures and nodes into module bodies."""
+"""Helpers for placing fixtures and nodes into module bodies.
+
+This module contains utilities to insert fixture :class:`libcst.FunctionDef`
+nodes into module bodies, typically after the last import statement.
+
+Publics:
+    insert_fixtures_into_module
+"""
 
 from typing import Any
 

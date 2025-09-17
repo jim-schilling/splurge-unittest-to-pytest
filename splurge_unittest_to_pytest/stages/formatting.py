@@ -1,9 +1,11 @@
 """Formatting utilities for deterministic module normalization.
 
-Provides helpers to normalize class and module spacing, group and
-deduplicate imports, and produce stable blank-line counts so later
-tidy formatting yields predictable output. The primary consumer is the
-``tidy`` stage which centralizes the final formatting pass.
+Helpers to normalize class and module spacing, group and deduplicate
+imports, and produce stable blank-line counts so the final tidy
+formatting pass yields predictable output.
+
+Publics:
+    normalize_class_body, normalize_module
 """
 
 from __future__ import annotations

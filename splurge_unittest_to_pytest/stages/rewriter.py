@@ -4,6 +4,9 @@ Uses collector metadata to decide whether to remove the leading
 ``self``/``cls`` parameter and append fixture parameters inferred from
 ``setUp`` assignments. Operates as a :class:`libcst.CSTTransformer` that
 visits class and function definitions and adjusts parameter lists.
+
+Publics:
+    rewriter_stage
 """
 
 from __future__ import annotations

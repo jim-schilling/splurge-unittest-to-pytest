@@ -1,13 +1,16 @@
-"""Collector visitor that extracts class-level setup/teardown metadata.
+"""Collect class-level setUp/tearDown and module metadata.
 
 This visitor inspects a parsed :class:`libcst.Module` and records
 information required by downstream stages: top-level imports, the
-module docstring index, discovered classes and their ``setUp``/
-``tearDown``/``test`` methods, and simple assignments inside ``setUp``
-methods used to infer fixture values.
+module docstring index, discovered classes and their ``setUp``,
+``tearDown``, and ``test`` methods, plus simple assignments inside
+``setUp`` methods used to infer fixture values.
 
 The collected data is exposed via :class:`CollectorOutput` for later
 stages to consume.
+
+Publics:
+    Collector, CollectorOutput, ClassInfo
 """
 
 from __future__ import annotations

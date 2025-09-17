@@ -1,9 +1,12 @@
 """Group related local assignments into a NamedTuple-like container.
 
-This module finds local assignments that originate from the same call
-site, emits a light container class (modeled after NamedTuple) and a
-paired composite fixture that constructs and yields instances of that
-container. The extraction makes bundling logic unit-testable.
+Find local assignments that originate from the same call site, emit a
+light container class (modeled after NamedTuple) and a paired composite
+fixture that constructs and yields instances of that container. The
+extraction makes bundling logic unit-testable.
+
+Publics:
+    bundle_named_locals
 """
 
 from __future__ import annotations

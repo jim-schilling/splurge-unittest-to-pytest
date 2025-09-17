@@ -2,6 +2,9 @@
 
 Strips top-level ``unittest`` imports, removes ``TestCase`` bases from
 classes, and drops common ``if __name__ == '__main__'`` test-run guards.
+
+Publics:
+    remove_unittest_artifacts_stage
 """
 
 from __future__ import annotations

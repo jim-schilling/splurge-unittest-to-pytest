@@ -4,6 +4,9 @@ Expose ``convert_assertion`` which takes a unittest-style assertion
 method name and its argument list and returns a ``libcst`` node
 representing the corresponding pytest-style assertion. The dispatcher
 delegates to the concrete converters defined in :mod:`.assertions`.
+
+Publics:
+    convert_assertion: Convert a unittest assertion method into a libcst node.
 """
 
 from typing import Sequence

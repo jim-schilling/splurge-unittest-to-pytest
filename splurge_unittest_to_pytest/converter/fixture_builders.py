@@ -5,6 +5,9 @@ to lower-level helpers (for example, :func:`create_fixture_for_attribute`)
 to build :class:`libcst.FunctionDef` nodes representing pytest fixtures.
 It returns a mapping of fixture name → function node and a boolean
 indicating whether a pytest import is required.
+
+Publics:
+    build_fixtures_from_setup_assignments: Build fixture FunctionDef nodes and indicate pytest import need.
 """
 
 import libcst as cst

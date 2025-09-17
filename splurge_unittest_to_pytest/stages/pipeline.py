@@ -4,6 +4,9 @@ Expose :func:`run_pipeline` which registers the canonical set of stages
 and executes them in order over a parsed module. The function accepts an
 optional ``pattern_config`` which is forwarded to stages that require
 method-name matching configuration.
+
+Publics:
+    run_pipeline
 """
 
 from __future__ import annotations

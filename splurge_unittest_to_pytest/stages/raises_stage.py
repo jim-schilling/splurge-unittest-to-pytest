@@ -3,6 +3,10 @@
 Converts both context-manager and callable ``assertRaises`` usages to
 ``pytest.raises`` and updates bound exception attribute access to use
 ``ExceptionInfo.value``.
+
+Publics:
+    ExceptionAttrRewriter
+    RaisesRewriter
 """
 
 from __future__ import annotations

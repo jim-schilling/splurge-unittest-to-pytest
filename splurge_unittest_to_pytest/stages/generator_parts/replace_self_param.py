@@ -3,6 +3,9 @@
 Used by the generator to convert attribute accesses like ``self.x`` into
 plain parameter names when the attribute is intended to be provided as a
 fixture parameter.
+
+Publics:
+    ReplaceSelfWithParam
 """
 
 from __future__ import annotations

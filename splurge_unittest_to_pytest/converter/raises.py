@@ -1,9 +1,12 @@
-"""Helpers to build :mod:`pytest` raises context managers.
+"""Helpers to build pytest raises context managers.
 
-The helpers in this module construct :class:`libcst.Call` and
-:class:`libcst.WithItem` nodes that represent ``pytest.raises(...)``
-context managers. They are intentionally pure functions so they can be
-tested independently from transformer state.
+Construct libcst nodes for ``pytest.raises(...)`` context managers.
+These helper functions are pure and can be unit tested independently
+from transformer state.
+
+Publics:
+    make_pytest_raises_call, make_pytest_raises_regex_call,
+    create_pytest_raises_withitem
 """
 
 from __future__ import annotations

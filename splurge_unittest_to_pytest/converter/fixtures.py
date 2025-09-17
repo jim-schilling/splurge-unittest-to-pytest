@@ -1,10 +1,13 @@
 """Fixture creator helpers used by the staged converter.
 
-This module exposes functions to build pytest fixture function nodes from
-inferred setup assignments. Helpers are intentionally small and return
-:class:`libcst.FunctionDef` nodes that can be inserted into the module
-by the fixture-injection stage. They are designed to be testable in
-isolation.
+Functions to build pytest fixture function nodes from inferred setup
+assignments. The helpers return :class:`libcst.FunctionDef` nodes that
+can be inserted into modules by the fixture-injection stage. They are
+designed to be small, testable, and side-effect free.
+
+Publics:
+    create_fixture_with_cleanup: Build a fixture function that yields with cleanup.
+    create_simple_fixture: Build a fixture that returns a simple value.
 """
 
 import libcst as cst

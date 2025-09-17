@@ -1,9 +1,12 @@
 """Generate fixture specifications and fixture function nodes.
 
-Consumes a :class:`CollectorOutput` and places ``fixture_specs`` and
-``fixture_nodes`` into the pipeline context. Detailed inference (naming,
-filename inference, bundling) is delegated to helpers under
+Consume a :class:`CollectorOutput` and place ``fixture_specs`` and
+``fixture_nodes`` into the pipeline context. Detailed inference
+(naming, filename inference, bundling) is delegated to helpers under
 ``stages/generator_parts``.
+
+Publics:
+    generator_stage, FixtureSpec
 """
 
 from __future__ import annotations

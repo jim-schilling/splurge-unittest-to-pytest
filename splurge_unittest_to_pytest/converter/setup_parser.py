@@ -1,4 +1,12 @@
-"""Helpers to parse unittest setUp assignments."""
+"""Parse assignments performed in unittest ``setUp`` methods.
+
+This module extracts assignments to ``self.<attr>`` performed inside a
+``setUp`` :class:`libcst.FunctionDef` and returns a mapping from the
+attribute name to the assigned :class:`libcst.BaseExpression`.
+
+Publics:
+    parse_setup_assignments
+"""
 
 from __future__ import annotations
 

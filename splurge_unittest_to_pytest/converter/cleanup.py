@@ -6,6 +6,9 @@ statement references a target attribute name. The primary utility is
 ``extract_relevant_cleanup`` which scans common statement shapes and
 returns the subset that reference the attribute, preserving context for
 multi-statement constructs like ``if`` blocks.
+
+Publics:
+    extract_relevant_cleanup: Return cleanup statements that reference an attribute.
 """
 
 from typing import Any

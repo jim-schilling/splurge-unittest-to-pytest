@@ -3,6 +3,9 @@
 This helper walks libcst expressions and returns attribute names that
 are accessed by ``self`` or ``cls``. It is defensive against unusual
 node shapes to keep generator tests stable.
+
+Publics:
+    collect_self_attrs
 """
 
 from typing import Any, Set

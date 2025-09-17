@@ -1,8 +1,13 @@
 """Helpers to construct common import statement nodes.
 
-Exports convenience helpers that build canonical :class:`libcst` import
-statement nodes (for example the canonical ``import pytest`` statement)
-so import construction remains consistent across the injector code.
+Convenience helpers that build canonical :class:`libcst` import
+statement nodes (for example the canonical ``import pytest`` statement).
+
+These small, focused helpers keep import construction consistent across
+the converter stages and make it easy to unit test import creation.
+
+Publics:
+    make_pytest_import_stmt: Create a canonical ``import pytest`` statement node.
 """
 
 from __future__ import annotations

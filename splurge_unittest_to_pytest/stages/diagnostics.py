@@ -1,11 +1,13 @@
-"""Helpers for optional diagnostics and run-time instrumentation.
+"""Optional diagnostics and run-time instrumentation helpers.
 
-Provide utilities used by the pipeline to create per-run diagnostics
-folders, write snapshot files, and centralize diagnostics-related checks.
+Utilities used by the pipeline to create per-run diagnostics folders,
+write snapshot files, and centralize diagnostics-related checks. These
+helpers are defensive and no-op when diagnostics are disabled so normal
+runs are unaffected.
 
-These helpers are defensive and no-op when diagnostics are disabled to
-avoid affecting normal runs.
-
+Publics:
+    diagnostics_enabled, diagnostics_verbose, create_diagnostics_dir,
+    write_snapshot
 """
 
 from __future__ import annotations

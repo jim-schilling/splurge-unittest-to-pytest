@@ -3,6 +3,9 @@
 Provides :func:`build_pytest_fixture_decorator` which builds a
 ``@pytest.fixture`` decorator node, optionally accepting keyword
 arguments (for example ``autouse=True``) in a deterministic order.
+
+Publics:
+    build_pytest_fixture_decorator: Build a canonical @pytest.fixture decorator node.
 """
 
 from __future__ import annotations

@@ -4,6 +4,9 @@ This module provides :class:`AssertionRewriter`, a :class:`libcst.CSTTransformer
 that converts common unittest assertion calls (for example
 ``self.assertEqual``) into native Python ``assert`` statements and
 rewrites ``assertRaises`` forms to use ``pytest.raises`` context managers.
+
+Publics:
+    AssertionRewriter
 """
 
 from __future__ import annotations

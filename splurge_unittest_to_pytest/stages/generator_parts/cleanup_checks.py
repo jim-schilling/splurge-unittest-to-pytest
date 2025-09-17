@@ -1,8 +1,11 @@
-"""Heuristics to detect simple cleanup statements used by the generator.
+"""Heuristics to detect simple cleanup statements for the generator.
 
-Helpers identify simple cleanup patterns (assigns or deletes targeting
-``self.<attr>``/``cls.<attr>`` or bare names) so the generator can emit
-teardown fixtures.
+Identify simple cleanup patterns (assigns or deletes targeting
+``self.<attr>``, ``cls.<attr>``, or bare names) so the generator can
+emit teardown fixtures.
+
+Publics:
+    is_simple_cleanup_statement
 """
 
 from __future__ import annotations

@@ -1,9 +1,13 @@
 """Name replacer: replace Name/Attribute occurrences in libcst nodes.
 
-Provides :class:`NameReplacer` which rewrites occurrences of a named
-attribute (including ``self.attr`` or ``cls.attr``) to a provided
-value name. The helper :func:`replace_names_in_statements` applies the
-transform to an iterable of statements and returns the rewritten list.
+Provides a :class:`NameReplacer` transformer which rewrites occurrences
+of a named attribute (including ``self.attr`` or ``cls.attr``) to a
+provided value name. The helper :func:`replace_names_in_statements` applies
+the transform to an iterable of statements and returns the rewritten list.
+
+Publics:
+    NameReplacer: A CSTTransformer to replace name/attribute occurrences.
+    replace_names_in_statements: Apply the transformer to statements.
 """
 
 from __future__ import annotations

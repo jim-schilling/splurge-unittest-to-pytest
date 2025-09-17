@@ -1,9 +1,12 @@
 """Transform TestCase setup/teardown into pytest fixtures and functions.
 
-Consumes :class:`CollectorOutput` and emits top-level pytest functions
+Consume :class:`CollectorOutput` and emit top-level pytest functions
 and/or fixtures derived from recorded setup assignments. A
 ``pattern_config`` object may be supplied in the pipeline context to
 customize method-name matching for setup/teardown detection.
+
+Publics:
+    fixtures_stage
 """
 
 from __future__ import annotations

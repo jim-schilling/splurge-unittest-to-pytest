@@ -1,8 +1,11 @@
-"""Utilities for method-name normalization and pattern matching.
+"""Helpers for method-name normalization and pattern matching.
 
-Provides helpers to test whether a given method name matches setup,
+Provides functions to check whether a method name matches setup,
 teardown, or test patterns. Matching is tolerant of different naming
 styles (snake_case, CamelCase) by normalizing names before comparisons.
+
+Publics:
+    is_setup_method, is_teardown_method, is_test_method
 """
 
 from __future__ import annotations

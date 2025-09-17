@@ -5,6 +5,9 @@ and executes them sequentially over a shared context mapping. The
 manager wraps stages to optionally write intermediate diagnostics
 snapshots when diagnostics are enabled; it also exposes helpers to dump
 initial and final module snapshots.
+
+Publics:
+    StageManager
 """
 
 from __future__ import annotations

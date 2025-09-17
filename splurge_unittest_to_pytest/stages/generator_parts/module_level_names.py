@@ -1,8 +1,11 @@
-"""Utilities to collect top-level names from a libcst module.
+"""Collect top-level names from a libcst module.
 
-These helpers are used by the generator to determine which identifiers
-are already present at module scope so generated names avoid
-collisions with existing names.
+Helpers used by the generator to determine which identifiers are
+already present at module scope so generated names avoid collisions
+with existing names.
+
+Publics:
+    collect_module_level_names
 """
 
 from __future__ import annotations

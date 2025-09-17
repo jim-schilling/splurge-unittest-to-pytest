@@ -1,7 +1,11 @@
-"""Recursive utilities to check whether an expression references
-``self.<attr>`` or a bare ``<attr>`` name.
+"""Detect references to ``self.<attr>`` or a bare attribute name.
 
-Extracted to make the logic unit-testable.
+Recursive utilities to check whether an expression references
+``self.<attr>`` or the bare attribute name. Extracted to make the
+logic unit-testable.
+
+Publics:
+    references_attribute
 """
 
 from __future__ import annotations

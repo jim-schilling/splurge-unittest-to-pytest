@@ -2,6 +2,9 @@
 
 If parsing fails, attach a ``postvalidator_error`` string into the
 pipeline context for later inspection.
+
+Publics:
+    postvalidator_stage
 """
 
 from __future__ import annotations
