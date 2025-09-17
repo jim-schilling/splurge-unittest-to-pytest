@@ -1,13 +1,32 @@
+"""Emit libcst nodes for generated fixtures.
+
+This module contains a small emitter that constructs
+:class:`libcst.FunctionDef` nodes from short source fragments. It is
+kept minimal so generator unit tests can rely on predictable node
+structures.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 import libcst as cst
 from libcst import parse_statement
 from typing import List
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 class NodeEmitter:
-    """Emit libcst AST nodes for fixtures from small body source strings.
+    """Emit libcst nodes for small fixture bodies.
 
-    The emitter creates a FunctionDef node from simple lines or builds a
-    composite dirs fixture when requested.
+    The emitter builds :class:`libcst.FunctionDef` nodes from short body
+    source strings. It also supports creating composite yield-style
+    fixtures that initialize local variables and yield a dictionary of
+    values.
     """
 
     def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:
@@ -37,14 +56,19 @@ class NodeEmitter:
         )
 
     def _normalize_body(self, body: str) -> List[str]:
-        """Return non-empty lines from the body preserving indentation."""
+        """Return non-empty lines from ``body`` preserving indentation.
+
+        Empty or whitespace-only lines are filtered out but indentation is
+        preserved for parsing.
+        """
         return [line for line in body.splitlines() if line.strip()]
 
     def _parse_statement_safe(self, line: str) -> cst.BaseStatement:
-        """Parse a single statement; on error return a Pass statement node.
+        """Parse a single statement from ``line``.
 
-        This isolates the try/except so tests can assert the fallback behavior
-        deterministically.
+        Returns a parsed statement node or a ``Pass`` node when parsing fails.
+        The try/except is isolated so tests can deterministically assert the
+        fallback behavior.
         """
         try:
             return parse_statement(line)

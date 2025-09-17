@@ -1,8 +1,16 @@
-"""TestMethodRewriter stage: rewrite test methods to accept fixtures instead of self/cls.
+"""Rewriter stage: update class test method signatures for fixtures.
 
-This stage expects `collector_output` in the context and will remove the
-first parameter from test methods if it's `self` or `cls`, then append fixture
-parameters inferred from the class's `setup_assignments` keys.
+Uses collector metadata to decide whether to remove the leading
+``self``/``cls`` parameter and append fixture parameters inferred from
+``setUp`` assignments. Operates as a :class:`libcst.CSTTransformer` that
+visits class and function definitions and adjusts parameter lists.
+
+Publics:
+    rewriter_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -11,6 +19,10 @@ from typing import Any, Optional
 
 import libcst as cst
 from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param
+
+DOMAINS = ["stages", "rewriter"]
+
+# Associated domains for this module
 
 
 def rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:

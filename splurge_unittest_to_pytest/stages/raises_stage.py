@@ -1,7 +1,16 @@
-"""Raises stage: handle various forms of assertRaises/assertRaisesRegex.
+"""Convert unittest.assertRaises forms to pytest.raises and fix attributes.
 
-This stage focuses on converting both context-manager uses and callable-form
-uses of assertRaises/assertRaisesRegex into pytest.raises equivalents.
+Converts both context-manager and callable ``assertRaises`` usages to
+``pytest.raises`` and updates bound exception attribute access to use
+``ExceptionInfo.value``.
+
+Publics:
+    ExceptionAttrRewriter
+    RaisesRewriter
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,24 +19,91 @@ from typing import Sequence, Optional, Any, cast
 
 import libcst as cst
 
+DOMAINS = ["stages", "exceptions"]
+
+# Associated domains for this module
+
 
 class ExceptionAttrRewriter(cst.CSTTransformer):
-    """Transformer to rewrite NAME.exception -> NAME.value for a target name.
+    """Rewrite ``NAME.exception`` to ``NAME.value`` for a target name.
 
-    This is used after converting a unittest assertRaises context-manager to
-    pytest.raises when the original code bound the exception to a context
-    variable (e.g., `as cm`). Pytest exposes the caught exception via
-    ExceptionInfo.value, so accesses like `cm.exception` should become
-    `cm.value`.
+    After converting ``assertRaises`` context managers to ``pytest.raises``
+    the bound exception object is an ``ExceptionInfo`` whose attribute is
+    ``value`` rather than ``exception``. This transformer updates attribute
+    accesses accordingly while respecting lexical shadowing.
     """
 
     def __init__(self, target_name: str) -> None:
         super().__init__()
         self._target = target_name
+        # lexical scope stack for shadowing checks
+        self._scope_stack: list[set[str]] = [set()]
+
+    def _add_bound_name(self, name: str) -> None:
+        try:
+            if self._scope_stack:
+                self._scope_stack[-1].add(name)
+        except Exception:
+            pass
+
+    def _is_name_bound_in_current_scope(self, name: str) -> bool:
+        try:
+            if not self._scope_stack:
+                return False
+            return name in self._scope_stack[-1]
+        except Exception:
+            return False
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> Any:
+        self._scope_stack.append(set())
+        try:
+            params = node.params
+            for p in params.params:
+                if isinstance(p.name, cst.Name):
+                    self._add_bound_name(p.name.value)
+            for p in params.posonly_params:
+                if isinstance(p.name, cst.Name):
+                    self._add_bound_name(p.name.value)
+            for p in params.kwonly_params:
+                if isinstance(p.name, cst.Name):
+                    self._add_bound_name(p.name.value)
+        except Exception:
+            pass
+        return node
+
+    def leave_FunctionDef(self, original: cst.FunctionDef, updated: cst.FunctionDef) -> cst.FunctionDef:
+        try:
+            if self._scope_stack:
+                self._scope_stack.pop()
+        except Exception:
+            pass
+        return updated
+
+    def visit_Lambda(self, node: cst.Lambda) -> Any:
+        self._scope_stack.append(set())
+        try:
+            params = node.params
+            for p in params.params:
+                if isinstance(p.name, cst.Name):
+                    self._add_bound_name(p.name.value)
+        except Exception:
+            pass
+        return node
+
+    def leave_Lambda(self, original: cst.Lambda, updated: cst.Lambda) -> cst.Lambda:
+        try:
+            if self._scope_stack:
+                self._scope_stack.pop()
+        except Exception:
+            pass
+        return updated
 
     def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.Attribute:
         try:
             if isinstance(updated.value, cst.Name) and updated.value.value == self._target:
+                # do not rewrite if the name is shadowed in the current scope
+                if self._is_name_bound_in_current_scope(self._target):
+                    return updated
                 if isinstance(updated.attr, cst.Name) and updated.attr.value == "exception":
                     return updated.with_changes(attr=cst.Name("value"))
         except Exception:
@@ -36,12 +112,14 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
 
 
 class RaisesRewriter(cst.CSTTransformer):
-    """Rewrites assertRaises forms to pytest.raises.
+    """Rewrite ``assertRaises`` usages into ``pytest.raises`` equivalents.
 
-    - with self.assertRaises(E): ...  -> with pytest.raises(E): ...
-    - with self.assertRaisesRegex(E, 'pat'): -> with pytest.raises(E, match='pat'):
-    - self.assertRaises(E, func, *args) -> with pytest.raises(E): func(*args)
-    - self.assertRaisesRegex(E, 'pat', func, *args) -> with pytest.raises(E, match='pat'): func(*args)
+    Supported rewrites include:
+
+    - ``with self.assertRaises(E): ...`` -> ``with pytest.raises(E): ...``
+    - ``with self.assertRaisesRegex(E, 'pat')`` -> ``with pytest.raises(E, match='pat')``
+    - ``self.assertRaises(E, func, *args)`` -> ``with pytest.raises(E): func(*args)``
+    - Callable forms with regex -> ``pytest.raises(..., match=...)``
     """
 
     def __init__(self) -> None:
@@ -87,7 +165,21 @@ class RaisesRewriter(cst.CSTTransformer):
         if method is None:
             return updated_node
         new_item = self._create_pytest_raises_item(method, first.item.args)
-        new_first = first.with_changes(item=new_item)
+        # _create_pytest_raises_item may return a WithItem (used when
+        # constructing new With nodes) or a bare Call. When updating the
+        # existing WithItem we must preserve the original `asname` field.
+        # Ensure we assign the Call expression to `first.item` while
+        # leaving `first.asname` intact.
+        try:
+            if isinstance(new_item, cst.WithItem):
+                call_expr: cst.BaseExpression = new_item.item
+            else:
+                # new_item should be a BaseExpression in this branch
+                call_expr = cast(cst.BaseExpression, new_item)
+        except Exception:
+            # As a last resort, fall back to the original first.item
+            call_expr = first.item
+        new_first = first.with_changes(item=call_expr)
         new_items = [new_first] + list(updated_node.items[1:])
         self.made_changes = True
 
@@ -217,33 +309,50 @@ class RaisesRewriter(cst.CSTTransformer):
     # Use Any return to accommodate libcst typed-visitor signature differences
     # across versions while keeping runtime behavior unchanged.
     def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> Any:
-        # handle functional form: self.assertRaises(E, func, *args)
-        if isinstance(updated_node.value, cst.Call):
-            call = updated_node.value
+        # non-functional expressions: nothing to do here
+        return updated_node
+
+    def leave_SimpleStatementLine(self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine) -> Any:
+        # handle functional form: self.assertRaises(E, func, *args) occurring as
+        # a bare statement line. Replace the entire SimpleStatementLine with a
+        # With compound statement via FlattenSentinel so codegen remains valid.
+        try:
+            # expect a single small-statement which is an Expr(Call(...))
+            body = updated.body or []
+            if len(body) != 1:
+                return updated
+            small = body[0]
+            if not isinstance(small, cst.Expr):
+                return updated
+            if not isinstance(small.value, cst.Call):
+                return updated
+            call = small.value
             info = self._is_assert_raises_call(call)
             if info is None:
-                return updated_node
+                return updated
             method_name = info
             args = call.args
-            # functional form requires at least 2 args: exception, callable
             if len(args) >= 2:
                 exc_arg = args[0]
                 func_call = cst.Call(func=args[1].value, args=list(args[2:]))
-                # wrap the function call in a with pytest.raises(...): block
-                # For assertRaisesRegex the pattern is the second arg, so pass exc_arg and pattern as needed
                 if method_name == "assertRaises":
-                    with_item = self._create_pytest_raises_item(method_name, [exc_arg])
+                    wi = self._create_pytest_raises_item(method_name, [exc_arg])
                 else:
-                    # assume args like (Exc, pattern, func, ...)
-                    with_item = self._create_pytest_raises_item(method_name, [exc_arg, args[1]])
-                # craft a With node
+                    wi = self._create_pytest_raises_item(method_name, [exc_arg, args[1]])
+                # Ensure we have a WithItem for the With.items list
+                if isinstance(wi, cst.WithItem):
+                    items_list: list[cst.WithItem] = [wi]
+                else:
+                    items_list = [cst.WithItem(item=cast(cst.BaseExpression, wi))]
                 new_with = cst.With(
-                    items=[with_item],
+                    items=items_list,
                     body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(func_call)])]),
                 )
                 self.made_changes = True
-                return cast(Any, new_with)
-        return updated_node
+                return cast(Any, cst.FlattenSentinel([new_with]))
+        except Exception:
+            pass
+        return updated
 
     # helpers
     def _is_assert_raises_call(self, call_node: cst.Call) -> str | None:
@@ -258,7 +367,9 @@ class RaisesRewriter(cst.CSTTransformer):
             pass
         return None
 
-    def _create_pytest_raises_item(self, method_name: str, args: Sequence[cst.Arg]) -> cst.WithItem:
+    def _create_pytest_raises_item(
+        self, method_name: str, args: Sequence[cst.Arg]
+    ) -> cst.WithItem | cst.BaseExpression:
         # Build pytest.raises(...) call; for Regex variant, bind second arg as match=
         # mark that pytest import will be needed by the pipeline
         try:
@@ -294,5 +405,96 @@ def raises_stage(context: dict[str, object]) -> dict[str, object]:
         return {}
     transformer = RaisesRewriter()
     new_mod = module.visit(transformer)
+    # After rewriting unittest assertRaises -> pytest.raises we may still have
+    # attribute accesses like `cm.exception` that need to become `cm.value`.
+    # Collect any names bound by `with pytest.raises(...) as NAME` in the
+    # transformed module (these may have been introduced by this stage or
+    # pre-existed). Then run a targeted ExceptionAttrRewriter pass for each
+    # name to ensure NAME.exception -> NAME.value is applied everywhere.
+    try:
+        pytest_asnames: set[str] = set()
+        for node in new_mod.body:
+            # look for top-level With nodes; do a defensive traversal for nested ones
+            if isinstance(node, cst.With):
+                items = node.items or []
+                if not items:
+                    continue
+                first = items[0]
+                # item must be a Call to pytest.raises
+                call = first.item
+                if isinstance(call, cst.Call) and isinstance(call.func, cst.Attribute):
+                    func = call.func
+                    if (
+                        isinstance(func.value, cst.Name)
+                        and func.value.value == "pytest"
+                        and isinstance(func.attr, cst.Name)
+                        and func.attr.value == "raises"
+                    ):
+                        asname = first.asname
+                        if asname and isinstance(asname.name, cst.Name):
+                            pytest_asnames.add(asname.name.value)
+        # also include any names collected during the rewrite pass
+        pytest_asnames.update(getattr(transformer, "_exception_var_names", set()))
+        # apply ExceptionAttrRewriter for each collected name
+        for name in sorted(pytest_asnames):
+            if name:
+                new_mod = new_mod.visit(ExceptionAttrRewriter(name))
+    except Exception:
+        # be defensive: don't fail the entire stage on unexpected shapes
+        pass
+
     # signal the import injector only if we actually created pytest.raises usage
     return {"module": new_mod, "needs_pytest_import": bool(getattr(transformer, "made_changes", False))}
+
+
+def exceptioninfo_normalizer_stage(context: dict[str, object]) -> dict[str, object]:
+    """Pipeline stage: ensure NAME.exception -> NAME.value for pytest.raises bindings.
+
+    This runs after other stages (e.g., generator) that may restructure code and
+    re-introduce attribute accesses that need normalizing. It scans the entire
+    module for `with pytest.raises(...) as NAME` bindings and applies a
+    targeted ExceptionAttrRewriter pass for each found name.
+    """
+    maybe_module = context.get("module")
+    module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
+    if module is None:
+        return {}
+
+    class _WithCollector(cst.CSTVisitor):
+        def __init__(self) -> None:
+            self.names: set[str] = set()
+
+        def visit_With(self, node: cst.With) -> None:
+            try:
+                items = node.items or []
+                if not items:
+                    return None
+                first = items[0]
+                call = first.item
+                if isinstance(call, cst.Call) and isinstance(call.func, cst.Attribute):
+                    func = call.func
+                    if (
+                        isinstance(func.value, cst.Name)
+                        and func.value.value == "pytest"
+                        and isinstance(func.attr, cst.Name)
+                        and func.attr.value == "raises"
+                    ):
+                        asname = first.asname
+                        if asname and isinstance(asname.name, cst.Name):
+                            self.names.add(asname.name.value)
+            except Exception:
+                pass
+
+    collector = _WithCollector()
+    module.visit(collector)
+
+    new_mod = module
+    try:
+        for name in sorted(collector.names):
+            if name:
+                new_mod = new_mod.visit(ExceptionAttrRewriter(name))
+    except Exception:
+        # defensive: do not fail the pipeline on unexpected shapes
+        return {"module": module}
+
+    return {"module": new_mod}

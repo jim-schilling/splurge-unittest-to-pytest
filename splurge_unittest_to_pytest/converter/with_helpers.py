@@ -1,9 +1,23 @@
-"""Helpers for converting unittest assertRaises context managers to pytest.raises."""
+"""Convert unittest ``assertRaises`` context managers to pytest ``raises``.
+
+Contains a small, pure helper that inspects a :class:`libcst.With` node
+and returns a transformed :class:`libcst.With` using ``pytest.raises``
+when a matching ``assertRaises`` invocation is found. The helper also
+signals whether a ``pytest`` import is required.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 import libcst as cst
 
 from .call_utils import is_self_call
 from .raises import create_pytest_raises_withitem
+
+DOMAINS = ["converter", "assertions"]
+
+# Associated domains for this module
 
 
 def convert_assert_raises_with(node: cst.With) -> tuple[cst.With | None, bool]:

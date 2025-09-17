@@ -1,4 +1,17 @@
-"""Helpers to construct fixture function bodies for fixtures created from setUp/tearDown."""
+"""Construct fixture function bodies for converted fixtures.
+
+Helpers that produce :class:`libcst.IndentedBlock` nodes representing
+fixture bodies. Fixtures either yield a simple literal or bind a value
+to a local name and yield it followed by cleanup statements. Cleanup
+references are rewritten to refer to the local binding when necessary.
+
+Publics:
+    build_fixture_body: Create an IndentedBlock for a fixture with cleanup.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
@@ -8,6 +21,10 @@ import libcst as cst
 
 from .value_checks import is_simple_fixture_value
 from .fixture_builder import replace_attr_references_in_statements
+
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
 
 
 def build_fixture_body(

@@ -1,16 +1,41 @@
+"""Collect top-level names from a libcst module.
+
+Helpers used by the generator to determine which identifiers are
+already present at module scope so generated names avoid collisions
+with existing names.
+
+Publics:
+    collect_module_level_names
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from __future__ import annotations
 
 from typing import Any, Set
 
 import libcst as cst
 
+DOMAINS = ["generator", "naming"]
+
+
+# Associated domains for this module
+
 
 def collect_module_level_names(module_obj: Any) -> Set[str]:
-    """Collect top-level names defined in a module node.
+    """Collect top-level names defined in a libcst Module.
 
-    Mirrors the legacy logic in `stages/generator.py`: collects assigned
-    names, function and class names, and import targets/aliases. Accepts
-    a possibly-non-module input and returns an empty set in that case.
+    The function inspects assignments, function and class definitions,
+    and import targets to assemble a set of top-level identifiers.
+
+    Args:
+        module_obj: A libcst.Module instance or any object; non-Module
+            inputs result in an empty set.
+
+    Returns:
+        A set of top-level names (strings) defined in the module.
     """
     names: Set[str] = set()
     module = module_obj if isinstance(module_obj, cst.Module) else None

@@ -1,8 +1,17 @@
-"""Small helper to build a simple fixture that returns a value."""
+"""Small helper to build a simple fixture that returns a value.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
 import libcst as cst
+
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
 
 
 def create_simple_fixture(attr_name: str, value_expr: cst.BaseExpression) -> cst.FunctionDef:

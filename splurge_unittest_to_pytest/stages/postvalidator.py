@@ -1,5 +1,14 @@
-"""PostValidator stage: sanity-check the generated module by attempting to
-serialize and parse it back, returning errors if any.
+"""Sanity-check generated modules by attempting to reparse their source.
+
+If parsing fails, attach a ``postvalidator_error`` string into the
+pipeline context for later inspection.
+
+Publics:
+    postvalidator_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -7,6 +16,10 @@ from __future__ import annotations
 from typing import Any
 
 import libcst as cst
+
+DOMAINS = ["stages", "validation"]
+
+# Associated domains for this module
 
 
 def postvalidator_stage(context: dict[str, Any]) -> dict[str, Any]:

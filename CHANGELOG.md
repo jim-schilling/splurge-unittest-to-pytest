@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2025.1.1] - 2025-09-14
+
+### Changed
+- Bumped package version and metadata to 2025.1.1.
+
+### Fixed
+- Minor packaging metadata updates and consistency fixes for release.
+
+### Changed
+- Updated generator goldens to reflect improved literal-preservation and NamedTuple bundling behavior; regenerated sample goldens from `tests/data/samples`.
+ 
+### Notes
+- Purpose: preparatory patch release that stabilizes packaging metadata and brings
+  the generator goldens in line with recent conversion behavior changes.
+- Verification: local formatting (`ruff`), static typing (`mypy`), and unit tests
+  were run as part of validation (representative unit run: 859 passed, 1 skipped).
+- Goldens: If your CI or downstream tooling performs golden-file comparisons,
+  ensure the regenerated goldens under `tests/goldens/` are the intended
+  baseline. Use `tools/check_generated.py` to compare sample inputs under
+  `tests/data/samples` against the regenerated goldens.
+
+### Merge guidance
+- This release contains no API-breaking changes beyond previously announced
+  removals (see 2025.1.0). After merging, run CI to confirm goldens and tests
+  succeed in the target environment. If downstream projects pin goldens or rely
+  on exact textual output, coordinate the update to accept the new goldens.
+
 ## [2025.1.0] - 2025-09-13
 
 ### Removed

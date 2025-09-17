@@ -1,14 +1,30 @@
+"""Deterministic name allocation helpers for the generator.
+
+Small utilities used to allocate and reserve simple local identifiers
+for generated fixtures. The deterministic behavior keeps unit tests
+predictable.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from __future__ import annotations
 
 from typing import Set
 
+DOMAINS = ["generator", "naming"]
+
+
+# Associated domains for this module
+
 
 def choose_local_name(base: str, taken: Set[str]) -> str:
-    """Deterministically pick a unique local name by appending a numeric
-    suffix when needed. Reserves the chosen name in ``taken``.
+    """Pick a unique local name based on ``base`` and reserve it.
 
-    This mirrors the logic previously embedded in
-    `stages/generator.py` and is intentionally small and well-tested.
+    If ``base`` is already present in ``taken``, a numeric suffix is
+    appended (``_1``, ``_2``, ...) until a free name is found. The
+    chosen name is inserted into ``taken`` before returning.
     """
     if base not in taken:
         taken.add(base)
@@ -23,10 +39,11 @@ def choose_local_name(base: str, taken: Set[str]) -> str:
 
 
 class NameAllocator:
-    """Trivial name allocator for generated fixtures.
+    """Deterministic allocator for generated fixture names.
 
-    This scaffolding provides a deterministic name for a requested base
-    name and an incrementing suffix if needed.
+    On first allocation the base name is returned. Subsequent allocations
+    for the same base append an incrementing numeric suffix ("_2",
+    "_3", ...).
     """
 
     def __init__(self) -> None:

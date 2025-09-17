@@ -1,4 +1,22 @@
-"""Command line interface for splurge-unittest-to-pytest."""
+"""Command line interface for splurge-unittest-to-pytest.
+
+Provides the Click-based ``main`` console command used to convert
+unittest-style tests to pytest-style tests from the command line.
+
+This module parses CLI options (for example, ``--setup-methods``,
+``--teardown-methods``, ``--test-methods``, ``--dry-run``, and
+``--output``) and forwards them to the conversion helpers in
+``splurge_unittest_to_pytest.main`` and the converter package. The
+command supports dry-run mode and optional backup/output directory
+behaviour.
+
+Publics:
+    main: Click entry point suitable for use as a console script.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 import sys
 from pathlib import Path
@@ -15,8 +33,10 @@ from .exceptions import (
     PermissionDeniedError,
     SplurgeError,
 )
-from .main import convert_file, find_unittest_files, ConversionResult
+from .main import convert_file, find_unittest_files, ConversionResult, PatternConfigurator
 from .converter.helpers import parse_method_patterns
+
+DOMAINS = ["cli"]
 
 # If diagnostics are enabled, wire up a minimal console logger so messages are visible
 if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
@@ -24,6 +44,9 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
     diag_logger = logging.getLogger("splurge.diagnostics")
     if os.environ.get("SPLURGE_DIAGNOSTICS_VERBOSE"):
         diag_logger.setLevel(logging.DEBUG)
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
@@ -131,40 +154,29 @@ def main(
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
-    PATHS can be individual files or directories. Files can have any extension.
-    If directories are provided, use --recursive to search for unittest files within them.
+    PATHS may be individual files or directories. If directories are
+    provided, use ``--recursive`` to search them for unittest files.
 
-    Examples:
+    Args:
+        paths: One or more filesystem paths (files or directories).
+        output: Optional output directory; when omitted the converter
+            overwrites files in place.
+        dry_run: If True, only print potential changes without writing.
+        recursive: When True and a directory is supplied, search
+            recursively for unittest files.
+        encoding: Text encoding used for reading and writing files.
+        verbose: When True, print detailed progress messages.
+        backup: Optional directory to store backups of files before
+            conversion.
+        setup_methods: Additional setup method patterns (comma-separated
+            or provided across multiple flags).
+        teardown_methods: Additional teardown method patterns.
+        test_methods: Additional test method patterns.
+        autocreate: If True, enable autocreation of tmp_path-backed
+            fixtures when a sibling ``<prefix>_content`` file exists.
 
-        # Convert a single file
-        splurge-unittest-to-pytest test_example.py
-
-        # Convert files with any extension
-        splurge-unittest-to-pytest test_example.txt test_example.md
-
-        # Convert multiple files
-        splurge-unittest-to-pytest test_*.py
-
-        # Convert all unittest files in a directory
-        splurge-unittest-to-pytest --recursive tests/
-
-        # Dry run to see what would be changed
-        splurge-unittest-to-pytest --dry-run --recursive tests/
-
-        # Convert to a different directory
-        splurge-unittest-to-pytest --output converted_tests/ test_*.py
-
-        # Create backups before conversion
-        splurge-unittest-to-pytest --backup backups/ test_*.py
-
-        # Use custom method patterns (comma-separated)
-        splurge-unittest-to-pytest --setup-methods "setUp,beforeAll,setup_class" test.py
-
-        # Use custom method patterns (multiple flags)
-        splurge-unittest-to-pytest --setup-methods setUp --setup-methods beforeAll test.py
-
-        # Configure all method types
-        splurge-unittest-to-pytest --setup-methods "setUp,beforeAll" --teardown-methods "tearDown,afterAll" --test-methods "test_,it_,spec_" test.py
+    The command prints a short summary at completion and exits with status
+    code 1 if file-level errors occurred.
     """
     if not paths:
         click.echo("Error: No paths provided", err=True)
@@ -205,6 +217,20 @@ def main(
             click.echo(f"  Teardown: {', '.join(teardown_patterns)}")
         if test_patterns:
             click.echo(f"  Test: {', '.join(test_patterns)}")
+
+    # Build an optional PatternConfigurator from parsed CLI patterns so
+    # dry-run invocations that call convert_string may consult the
+    # configured patterns. For non-dry-run conversions we pass the raw
+    # pattern lists into convert_file which will build the configurator.
+    pc = None
+    if setup_patterns or teardown_patterns or test_patterns:
+        pc = PatternConfigurator()
+        for p in setup_patterns:
+            pc.add_setup_pattern(p)
+        for p in teardown_patterns:
+            pc.add_teardown_pattern(p)
+        for p in test_patterns:
+            pc.add_test_pattern(p)
 
     # Process each file
     converted_count = 0
@@ -252,13 +278,9 @@ def main(
                             errors=[],
                         )
                     else:
-                        result = convert_string(
-                            source_code,
-                            setup_patterns=setup_patterns,
-                            teardown_patterns=teardown_patterns,
-                            test_patterns=test_patterns,
-                            autocreate=autocreate,
-                        )
+                        # Pass the constructed PatternConfigurator so the
+                        # dry-run conversion can respect CLI-provided patterns.
+                        result = convert_string(source_code, autocreate=autocreate, pattern_config=pc)
 
                     if result.has_changes:
                         click.echo(f"Would convert: {file_path}")
@@ -283,14 +305,16 @@ def main(
                     error_count += 1
             else:
                 try:
+                    # Pass explicit pattern lists into convert_file so it can
+                    # construct a PatternConfigurator for the pipeline.
                     result = convert_file(
                         file_path,
                         output_path,
                         encoding=encoding,
-                        setup_patterns=setup_patterns,
-                        teardown_patterns=teardown_patterns,
-                        test_patterns=test_patterns,
                         autocreate=autocreate,
+                        setup_patterns=setup_patterns or None,
+                        teardown_patterns=teardown_patterns or None,
+                        test_patterns=test_patterns or None,
                     )
 
                     if result.has_changes:

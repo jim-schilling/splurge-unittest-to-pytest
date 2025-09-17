@@ -1,12 +1,16 @@
-"""Bundle local assignments into NamedTuple containers and emit fixtures.
+"""Group related local assignments into a NamedTuple-like container.
 
-This module extracts the NamedTuple-bundling logic from the large
-`stages/generator.py` file so it can be unit-tested in isolation.
+Find local assignments that originate from the same call site, emit a
+light container class (modeled after NamedTuple) and a paired composite
+fixture that constructs and yields instances of that container. The
+extraction makes bundling logic unit-testable.
 
-Public API:
-    bundle_named_locals(out_classes, existing_top_names) -> tuple[list[cst.BaseStatement], set[str]]
+Publics:
+    bundle_named_locals
 
-The function returns (fixture_nodes_to_prepend, typing_names_required).
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -15,27 +19,40 @@ from typing import Any, Dict, List, Set, Tuple
 
 import libcst as cst
 
+DOMAINS = ["generator", "bundles"]
+
+# Associated domains for this module
+
 
 def bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str]
-) -> Tuple[List[cst.BaseStatement], Set[str]]:
-    """Collect groups of local_assignments that should be bundled into a
-    NamedTuple and a single bundled fixture. Returns a list of nodes (class
-    def + fixture def) to prepend and a set of typing names required.
+) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
+    """Group related local assignments into a bundled NamedTuple fixture.
 
-    This mirrors the original generator bundling heuristics: group locals
-    produced by the same Call and where multiple locals map to attributes.
+    Returns (nodes, needs_typing, attr_to_fixture) where ``nodes`` contains
+    the emitted class and fixture nodes, ``needs_typing`` lists typing names
+    required, and ``attr_to_fixture`` maps attribute names to fixture names.
     """
     fixture_nodes: List[cst.BaseStatement] = []
     needs_typing: Set[str] = set()
     used_names: Set[str] = set()
+    # Map attribute name -> bundled fixture name (e.g., sql_file -> init_api_data)
+    attr_to_fixture: Dict[str, str] = {}
 
     for cls_name, cls in out_classes.items():
         local_map = getattr(cls, "local_assignments", {}) or {}
         # group by textual representation of the assigned call
-        call_groups: dict[str, list[tuple[str, int, Any]]] = {}
+        # Use flexible Any tuple element types to avoid tight mypy tuple shape
+        # assumptions - values may include optional index and Call nodes.
+        call_groups: dict[str, list[tuple[str, Any, Any]]] = {}
         for local_name, val in local_map.items():
-            assigned_call, idx = val if isinstance(val, tuple) else (val, None)
+            # support stored tuples of shape (call, idx) or (call, idx, refs)
+            if isinstance(val, tuple) or isinstance(val, list):
+                assigned_call = val[0]
+                idx = val[1] if len(val) > 1 else None
+            else:
+                assigned_call = val
+                idx = None
             if not isinstance(assigned_call, cst.Call):
                 continue
             try:
@@ -124,6 +141,59 @@ def bundle_named_locals(
                     return updated
 
             call_in_fixture = assigned_call.visit(_ReplaceSelfLocal())
+            # Collect simple Name dependencies from the call so the emitted
+            # composite fixture can accept and receive underlying fixtures
+            # (e.g., temp_dir, sql_content) as parameters. We conservatively
+            # filter out self/cls, builtins, capitalized names, and any
+            # existing top-level module names to avoid collisions.
+            try:
+
+                class _NameCollector(cst.CSTVisitor):
+                    def __init__(self) -> None:
+                        self.names: set[str] = set()
+
+                    def visit_Name(self, node: cst.Name) -> None:
+                        self.names.add(node.value)
+
+                nc = _NameCollector()
+                call_in_fixture.visit(nc)
+                collected = set(getattr(nc, "names", set()))
+            except Exception:
+                collected = set()
+
+            # Expand names that correspond to recorded local assignments to
+            # include their RHS refs (e.g., local sql_file -> temp_dir, sql_content)
+            expanded: set[str] = set()
+            import builtins as _builtins
+
+            for n in collected:
+                if not n or n in ("self", "cls"):
+                    continue
+                if n in existing_top_names:
+                    continue
+                if n[0].isupper():
+                    continue
+                if n in getattr(_builtins, "__dict__", {}):
+                    continue
+                # If name matches a local assignment, expand to its recorded refs
+                if n in local_map:
+                    try:
+                        entry = local_map.get(n)
+                        if isinstance(entry, tuple) and len(entry) >= 3:
+                            refs_from_local = entry[2] or set()
+                            for r in refs_from_local:
+                                expanded.add(r)
+                            continue
+                    except Exception:
+                        pass
+                expanded.add(n)
+
+            # Deterministic ordering for parameters
+            param_names = [r for r in sorted(expanded)]
+            if param_names:
+                params = cst.Parameters(params=[cst.Param(name=cst.Name(n)) for n in param_names])
+            else:
+                params = cst.Parameters()
             targets = [cst.Name(local) for local, _, _ in sorted_group]
             assign_target = cst.Assign(
                 targets=[cst.AssignTarget(target=cst.Tuple(elements=[cst.Element(value=t) for t in targets]))],
@@ -131,21 +201,83 @@ def bundle_named_locals(
             )
             assign_stmt = cst.SimpleStatementLine(body=[assign_target])
 
-            ctor_args = [cst.Arg(value=cst.Name(local)) for local, _, _ in sorted_group]
+            # Build constructor args for the NamedTuple. If the original
+            # class setup assigned the attribute using a transformation
+            # (for example: `self.sql_file = str(sql_file)`), preserve
+            # that transformation in the emitted fixture by using the
+            # recorded setup assignment expression (with `self.`/`cls.`
+            # replaced by bare names) so the NamedTuple yields the same
+            # shaped values (e.g., strings instead of Path objects).
+            ctor_args_list: list[cst.Arg] = []
+            for local, _, _ in sorted_group:
+                # default expression is the bare local name
+                expr: cst.BaseExpression = cst.Name(local)
+                # If this local mapped to an attribute and that attribute
+                # had a recorded setup assignment (like `self.x = str(local)`),
+                # use that expression instead (after removing `self.`).
+                attr = local_to_attr.get(local, local)
+                setup_assigns = getattr(cls, "setup_assignments", {}) or {}
+                if attr in setup_assigns:
+                    v = setup_assigns[attr]
+                    # v may be a list of assignments; prefer the last one
+                    if isinstance(v, list) and v:
+                        v = v[-1]
+                    try:
+                        # If the setup assignment is a simple Name that
+                        # references a recorded local assignment, prefer
+                        # the RHS from local_map so we preserve the
+                        # original transformation (e.g., str(sql_file)).
+                        if isinstance(v, cst.Name) and getattr(v, "value", None) in local_map:
+                            entry = local_map.get(v.value)
+                            if isinstance(entry, tuple) and len(entry) >= 1:
+                                rhs = entry[0]
+                                idx_from_local = entry[1] if len(entry) > 1 else None
+                                transformed = rhs.visit(_ReplaceSelfLocal())
+                                if idx_from_local is None:
+                                    if isinstance(transformed, cst.BaseExpression):
+                                        expr = transformed
+                                else:
+                                    # tuple-unpacked local: index into the call
+                                    try:
+                                        expr = cst.Subscript(
+                                            value=transformed,
+                                            slice=[
+                                                cst.SubscriptElement(
+                                                    slice=cst.Index(value=cst.Integer(str(idx_from_local)))
+                                                )
+                                            ],
+                                        )
+                                    except Exception:
+                                        expr = cst.Name(local)
+                        else:
+                            # reuse the same ReplaceSelfLocal logic to strip
+                            # `self.`/`cls.` prefixes from attribute expressions
+                            transformed = v.visit(_ReplaceSelfLocal())
+                            if isinstance(transformed, cst.BaseExpression):
+                                expr = transformed
+                    except Exception:
+                        # fall back to bare local name on any error
+                        expr = cst.Name(local)
+                ctor_args_list.append(cst.Arg(value=expr))
+            ctor_args = ctor_args_list
             ctor = cst.Call(func=cst.Name(namedtuple_name), args=ctor_args)
             yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(ctor))])
             decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
             body = cst.IndentedBlock(body=[assign_stmt, yield_stmt])
             fixture_func = cst.FunctionDef(
-                name=cst.Name(fixture_name), params=cst.Parameters(), body=body, decorators=[decorator]
+                name=cst.Name(fixture_name), params=params, body=body, decorators=[decorator]
             )
 
             # append in discovered order to preserve stable emission order
             fixture_nodes.append(class_def)
             fixture_nodes.append(fixture_func)
+            # record which attributes were bundled into this composite fixture
+            for local, _, _ in sorted_group:
+                attr_name = local_to_attr.get(local, local)
+                attr_to_fixture[attr_name] = fixture_name
             try:
                 needs_typing.update({"NamedTuple", "Any"})
             except Exception:
                 pass
 
-    return fixture_nodes, needs_typing
+    return fixture_nodes, needs_typing, attr_to_fixture

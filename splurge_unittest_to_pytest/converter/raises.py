@@ -1,8 +1,16 @@
-"""Raises/assertRaises conversion helpers.
+"""Helpers to build pytest raises context managers.
 
-Pure helper functions that build libcst nodes for pytest.raises usage. These
-helpers do not touch transformer instance state (e.g. flags) so they can be
-tested independently; the transformer will set flags and delegate to them.
+Construct libcst nodes for ``pytest.raises(...)`` context managers.
+These helper functions are pure and can be unit tested independently
+from transformer state.
+
+Publics:
+    make_pytest_raises_call, make_pytest_raises_regex_call,
+    create_pytest_raises_withitem
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,6 +18,8 @@ from __future__ import annotations
 from typing import Sequence
 
 import libcst as cst
+
+DOMAINS = ["converter", "exceptions"]
 
 
 def make_pytest_raises_call(args: Sequence[cst.Arg]) -> cst.Call:
@@ -58,6 +68,8 @@ def create_pytest_raises_withitem(method_name: str, args: Sequence[cst.Arg]) -> 
         )
     )
 
+
+# Associated domains for this module
 
 __all__: list[str] = [
     "make_pytest_raises_call",

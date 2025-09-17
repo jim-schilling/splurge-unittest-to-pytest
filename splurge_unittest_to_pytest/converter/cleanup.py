@@ -1,7 +1,18 @@
-"""Cleanup analysis helpers extracted from the main transformer.
+"""Helpers to analyze and extract relevant cleanup statements.
 
-These are pure functions that inspect libcst statement/expression nodes to
-determine whether cleanup statements reference a given attribute name.
+This module provides pure helper functions that inspect :mod:`libcst`
+statement and expression nodes to determine whether a given cleanup
+statement references a target attribute name. The primary utility is
+``extract_relevant_cleanup`` which scans common statement shapes and
+returns the subset that reference the attribute, preserving context for
+multi-statement constructs like ``if`` blocks.
+
+Publics:
+    extract_relevant_cleanup: Return cleanup statements that reference an attribute.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any
@@ -10,6 +21,10 @@ import libcst as cst
 
 from .cleanup_checks import references_attribute
 from .cleanup_inspect import simple_stmt_references_attribute
+
+DOMAINS = ["converter", "teardown"]
+
+# Associated domains for this module
 
 
 def extract_relevant_cleanup(cleanup_statements: list[Any], attr_name: str) -> list[Any]:

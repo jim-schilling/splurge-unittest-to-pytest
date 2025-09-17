@@ -1,15 +1,22 @@
 """Small libcst transformers used by the generator stage.
 
-These transformers are intentionally minimal: they perform narrow,
-well-specified rewrites (replace `self.name` with `name`, replace
-attribute access with a local name, etc.). Keeping them separate makes
-testing and reasoning simpler.
+Minimal, well-scoped transformers for small rewrite tasks used while
+emitting fixtures and test functions. These transformers are intentionally
+simple so they are easy to unit test.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
 
 
 import libcst as cst
+
+DOMAINS = ["generator", "transform"]
+
+# Associated domains for this module
 
 
 class ReplaceSelfWithName(cst.CSTTransformer):

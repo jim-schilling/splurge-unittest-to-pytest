@@ -1,13 +1,33 @@
+"""Collect attribute names referenced through ``self``/``cls``.
+
+This helper walks libcst expressions and returns attribute names that
+are accessed by ``self`` or ``cls``. It is defensive against unusual
+node shapes to keep generator tests stable.
+
+Publics:
+    collect_self_attrs
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from typing import Any, Set
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 def collect_self_attrs(expr: Any) -> Set[str]:
-    """Collect attribute names referenced as self.xxx or cls.xxx in expr.
+    """Collect attribute names referenced via ``self`` or ``cls``.
 
-    This duplicates the behavior previously embedded in generator.py but
-    is exposed as a small pure helper for unit testing and reuse.
+    Walks the supplied expression and returns the set of attribute names
+    referenced as ``self.<name>`` or ``cls.<name>``. The routine is
+    defensive and tolerates unexpected node shapes.
     """
     found: set[str] = set()
 

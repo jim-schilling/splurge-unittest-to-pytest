@@ -1,4 +1,24 @@
-"""Main conversion functions and utilities."""
+"""Main conversion helpers for programmatic and CLI usage.
+
+This module exposes the primary conversion helpers consumed by the
+command-line ``main`` and by programmatic callers. Key functions and
+classes include:
+
+- ``convert_string``: Convert a source string from unittest-style to
+    pytest-style and return a ``ConversionResult``.
+- ``convert_file``: Convenience wrapper to read, convert, and write
+    files.
+- ``PatternConfigurator``: Helper to customize detection of setup,
+    teardown, and test method names.
+
+These helpers orchestrate the staged pipeline implemented in
+``splurge_unittest_to_pytest.stages.pipeline`` and provide a
+lightweight, stable API for conversion operations.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,10 +30,22 @@ from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 from .converter.helpers import has_meaningful_changes, normalize_method_name
 
+DOMAINS = ["main"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+
 
 @dataclass
 class ConversionResult:
-    """Result of a unittest to pytest conversion."""
+    """Result of a unittest to pytest conversion.
+
+    Attributes:
+        original_code: The original input source text.
+        converted_code: The converted source text (or original on no-op).
+        has_changes: True if conversion produced meaningful changes.
+        errors: List of error messages encountered during conversion.
+    """
 
     original_code: str
     converted_code: str
@@ -23,21 +55,23 @@ class ConversionResult:
 
 def convert_string(
     source_code: str,
-    setup_patterns: list[str] | None = None,
-    teardown_patterns: list[str] | None = None,
-    test_patterns: list[str] | None = None,
     autocreate: bool = True,
+    pattern_config: Any | None = None,
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
     Args:
         source_code: The original unittest test code as a string.
-        setup_patterns: Optional list of setup method patterns to use.
-        teardown_patterns: Optional list of teardown method patterns to use.
-        test_patterns: Optional list of test method patterns to use.
+        autocreate: If True, enable autocreation of certain temporary-fixture
+            artifacts when converting (passed into stage context as
+            ``autocreate``).
+        pattern_config: Optional PatternConfigurator instance. If provided,
+            stages that perform method-name matching will consult it for
+            setup/teardown/test name detection. If ``None``, stages use
+            builtin defaults.
 
     Returns:
-        ConversionResult containing the converted code and metadata.
+        A ``ConversionResult`` describing the conversion outcome.
     """
     errors: list[str] = []
 
@@ -47,8 +81,87 @@ def convert_string(
 
         # Use the staged pipeline implementation. The pipeline returns a
         # libcst.Module representing strict pytest-style output.
-        converted_module = run_pipeline(tree, autocreate=autocreate)
+        # Pass any configured pattern configurator into the pipeline when
+        # the runtime run_pipeline accepts it. Some tests monkeypatch
+        # run_pipeline with a shim that doesn't accept the new kwarg, so
+        # check the callable signature and only pass the kwarg when
+        # supported (or when the callable accepts **kwargs).
+        try:
+            import inspect
+
+            sig = inspect.signature(run_pipeline)
+            params = sig.parameters
+            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+            if "pattern_config" in params or accepts_kwargs:
+                converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
+            else:
+                converted_module = run_pipeline(tree, autocreate=autocreate)
+        except Exception:
+            # If inspection fails for any reason, fall back to the simple
+            # call without the new kwarg to maintain compatibility with
+            # monkeypatched tests.
+            converted_module = run_pipeline(tree, autocreate=autocreate)
+        # Final AST-based normalization: run the exceptioninfo normalizer
+        # stage over the converted module to ensure any NAME.exception ->
+        # NAME.value conversions are applied. This stage runs late in the
+        # pipeline by default, but invoke it here again to be defensive in
+        # case stage ordering differs in some contexts (harmless no-op if
+        # already applied).
+        try:
+            from splurge_unittest_to_pytest.stages.raises_stage import exceptioninfo_normalizer_stage
+
+            # norm_ctx is a mapping used by pipeline stages; type it explicitly
+            # Use a dict[str, object] to match the stage signature
+            norm_ctx: dict[str, object] = {"module": converted_module}
+            out = exceptioninfo_normalizer_stage(norm_ctx)
+            # Be defensive: ensure we only assign a Module back to converted_module
+            if isinstance(out, dict):
+                maybe_mod = out.get("module")
+                if isinstance(maybe_mod, cst.Module):
+                    converted_module = maybe_mod
+        except Exception:
+            # Defensive: do not fail conversion if normalization errors
+            # occur; rely on earlier pipeline stages.
+            pass
+
+        # Apply a direct AST pass using ExceptionAttrRewriter as a last AST-only
+        # safeguard (not textual). This is preferred over string replacement
+        # and will rewrite NAME.exception -> NAME.value for any names bound by
+        # `with pytest.raises(...) as NAME` in the emitted AST.
+        try:
+            # Collect any attribute accesses like `NAME.exception` and apply
+            # the ExceptionAttrRewriter for each NAME found. This is a
+            # conservative AST-only transformation that rewrites attribute
+            # access to `NAME.value`. It avoids brittle text replacement and
+            # ensures we catch accesses that survived earlier stages.
+            class _AttrCollector(cst.CSTVisitor):
+                def __init__(self) -> None:
+                    self.names: set[str] = set()
+
+                def visit_Attribute(self, node: cst.Attribute) -> None:
+                    try:
+                        if isinstance(node.attr, cst.Name) and node.attr.value == "exception":
+                            if isinstance(node.value, cst.Name):
+                                self.names.add(node.value.value)
+                    except Exception:
+                        pass
+
+            collector = _AttrCollector()
+            converted_module.visit(collector)
+            from splurge_unittest_to_pytest.stages.raises_stage import ExceptionAttrRewriter
+
+            for nm in sorted(collector.names):
+                if nm:
+                    converted_module = converted_module.visit(ExceptionAttrRewriter(nm))
+        except Exception:
+            pass
         converted_code = converted_module.code
+
+        # NOTE: normalization of NAME.exception -> NAME.value is performed
+        # by the pipeline's `exceptioninfo_normalizer_stage` which runs late
+        # in the pipeline. A prior implementation included a conservative
+        # textual fallback here; that has been removed in favor of the
+        # AST-based transformation to avoid fragile string replacements.
 
         # Determine whether any meaningful conversion changes were made.
         try:
@@ -208,10 +321,10 @@ def convert_file(
     input_path: str | Path,
     output_path: str | Path | None = None,
     encoding: str = "utf-8",
+    autocreate: bool = True,
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
-    autocreate: bool = True,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -219,6 +332,13 @@ def convert_file(
         input_path: Path to the input unittest test file.
         output_path: Path to write the converted file. If None, overwrites input file.
         encoding: Text encoding to use for reading/writing files.
+        autocreate: When True, enable autocreation of tmp_path-backed file
+            fixtures (see `convert_string` for context propagation).
+        setup_patterns: Optional list of custom setup method names/patterns.
+            When provided a PatternConfigurator will be constructed from these
+            values and injected into the pipeline so stages can consult them.
+        teardown_patterns: Optional list of custom teardown method names/patterns.
+        test_patterns: Optional list of custom test name patterns.
 
     Returns:
         ConversionResult containing the converted code and metadata.
@@ -251,13 +371,22 @@ def convert_file(
         )
 
     # Convert the code
-    result = convert_string(
-        source_code,
-        setup_patterns=setup_patterns,
-        teardown_patterns=teardown_patterns,
-        test_patterns=test_patterns,
-        autocreate=autocreate,
-    )
+    # Build a PatternConfigurator from optional pattern lists and pass it
+    # into convert_string so stages may consult configured patterns.
+    pc: PatternConfigurator | None = None
+    if setup_patterns or teardown_patterns or test_patterns:
+        pc = PatternConfigurator()
+        if setup_patterns:
+            for p in setup_patterns:
+                pc.add_setup_pattern(p)
+        if teardown_patterns:
+            for p in teardown_patterns:
+                pc.add_teardown_pattern(p)
+        if test_patterns:
+            for p in test_patterns:
+                pc.add_test_pattern(p)
+
+    result = convert_string(source_code, autocreate=autocreate, pattern_config=pc)
 
     # Write the converted code if there were changes and no errors
     if result.has_changes and not result.errors:
@@ -265,7 +394,7 @@ def convert_file(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(result.converted_code, encoding=encoding)
         except PermissionError:
-            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionError
+            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionDeniedError
         except UnicodeEncodeError as e:
             raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
 
@@ -289,14 +418,12 @@ def is_unittest_file(file_path: str | Path) -> bool:
     file_path = Path(file_path)
 
     try:
-        exists = file_path.exists()
-    except PermissionError as e:
-        raise PermissionDeniedError(f"Permission denied checking file: {file_path}") from e
+        # Quick existence check: raise our project-level FileNotFoundError
+        # so callers (and tests) receive the expected exception type rather
+        # than the builtin FileNotFoundError raised by pathlib.
+        if not file_path.exists():
+            raise SplurgeFileNotFoundError(f"Input file not found: {file_path}")
 
-    if not exists:
-        raise SplurgeFileNotFoundError(f"File not found: {file_path}")
-
-    try:
         content = file_path.read_text(encoding="utf-8")
 
         # Skip files that are already using pytest
@@ -377,3 +504,7 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
             continue
 
     return unittest_files
+
+
+# Associated domains for this module
+DOMAINS = ["main"]

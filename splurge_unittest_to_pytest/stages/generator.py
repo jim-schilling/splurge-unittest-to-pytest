@@ -1,5 +1,16 @@
-"""FixtureGenerator stage: produce FixtureSpec entries and cst.FunctionDef fixture nodes
-from CollectorOutput.
+"""Generate fixture specifications and fixture function nodes.
+
+Consume a :class:`CollectorOutput` and place ``fixture_specs`` and
+``fixture_nodes`` into the pipeline context. Detailed inference
+(naming, filename inference, bundling) is delegated to helpers under
+``stages/generator_parts``.
+
+Publics:
+    generator_stage, FixtureSpec
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -22,6 +33,11 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
 from splurge_unittest_to_pytest.stages.generator_parts.shutil_detector import cleanup_needs_shutil
 
+DOMAINS = ["stages", "generator"]
+
+
+# Associated domains for this module
+
 
 @dataclass
 class FixtureSpec:
@@ -31,6 +47,10 @@ class FixtureSpec:
     cleanup_statements: list[Any]
     yield_style: bool
     local_value_name: Optional[str] = None
+    """Data container describing a generated fixture.
+
+    Fields mirror the earlier inlined FixtureSpec used by the generator.
+    """
 
 
 def _is_literal(expr: Optional[cst.BaseExpression]) -> bool:
@@ -56,6 +76,18 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # snapshot module-level names to detect collisions that should force
     # binding to a local name even when the value is a literal.
     module_level_names = set(used_local_names)
+
+    # Precompute bundling to know which attributes are emitted via composite
+    # fixtures. This lets us skip emitting per-attribute fixtures that would
+    # otherwise return literal basenames and conflict with the composite.
+    # request full mapping (3-tuple) so we know which attributes are bundled
+    # into composite fixtures
+    maybe = safe_bundle_named_locals(out.classes, module_level_names, full=True)
+    if len(maybe) == 3:
+        prepend_nodes, bundler_typing, bundled_attr_map = maybe  # type: ignore[assignment]
+    else:
+        prepend_nodes, bundler_typing = maybe  # type: ignore[assignment]
+        bundled_attr_map = {}
 
     # helper: infer filename literals from local_assignments recorded by collector
     def _infer_filename_for_local(local_name: str, cls_obj: Any) -> Optional[str]:
@@ -174,7 +206,12 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 autocreate = bool(context.get("autocreate", True))
             except Exception:
                 autocreate = True
-            if autocreate and value_expr is not None and isinstance(value_expr, cst.Call):
+            if (
+                autocreate
+                and value_expr is not None
+                and isinstance(value_expr, cst.Call)
+                and fname not in bundled_attr_map
+            ):
                 for a in value_expr.args:
                     av = getattr(a, "value", None)
                     if isinstance(av, cst.Name):
@@ -219,6 +256,13 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 return AttrRewriter(target, local)
 
             # body: return or yield
+            # If this attribute was bundled into a composite fixture, skip
+            # emitting a per-attribute fixture here; we'll create a thin
+            # wrapper that delegates to the composite fixture later.
+            if fname in bundled_attr_map:
+                specs[fname] = spec
+                continue
+
             # skip creating fixture if a top-level function with same name already exists
             if module is not None and any(
                 isinstance(n, cst.FunctionDef) and n.name.value == fname for n in module.body
@@ -306,11 +350,206 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                     fixture_nodes.append(func)
                 else:
                     # Non-literal: produce a fixture that accepts parameters for
-                    # any referenced self/cls attributes and returns the expression
-                    # directly. This matches expected golden output like
+                    # any referenced self/cls attributes and also for any plain
+                    # Name references that correspond to other fixtures or
+                    # previously recorded local assignments. This matches
+                    # expected golden output like:
                     # def config_dir(temp_dir):
                     #     return Path(temp_dir) / "config"
                     refs = _collect_self_attrs(value_expr)
+                    # Also collect plain Name references from value_expr that
+                    # refer to other fixtures/local assignments recorded by the collector.
+                    try:
+                        extra_names: set[str] = set()
+                        # value_expr may be None; defensively handle
+                        if value_expr is not None:
+
+                            class _NameCollector(cst.CSTVisitor):
+                                def __init__(self) -> None:
+                                    self.names: set[str] = set()
+
+                                def visit_Name(self, node: cst.Name) -> None:
+                                    self.names.add(node.value)
+
+                            nc = _NameCollector()
+                            value_expr.visit(nc)
+
+                            # Also collect names that appear as argument values in calls
+                            class _ArgNameCollector(cst.CSTVisitor):
+                                def __init__(self) -> None:
+                                    self.arg_names: set[str] = set()
+                                    self.attr_names: set[str] = set()
+                                    self.subscript_names: set[str] = set()
+
+                                def visit_Arg(self, node: cst.Arg) -> None:
+                                    val = getattr(node, "value", None)
+                                    if val is None:
+                                        return
+                                    # Walk the argument value expression and collect any Name nodes
+                                    try:
+
+                                        class _InnerNameCollector(cst.CSTVisitor):
+                                            def __init__(self) -> None:
+                                                self.names: set[str] = set()
+
+                                            def visit_Name(self, n: cst.Name) -> None:
+                                                self.names.add(n.value)
+
+                                        inc = _InnerNameCollector()
+                                        val.visit(inc)
+                                        for nm in inc.names:
+                                            self.arg_names.add(nm)
+                                    except Exception:
+                                        # be conservative on unexpected shapes
+                                        pass
+
+                                def visit_Attribute(self, node: cst.Attribute) -> None:
+                                    # collect simple Name values used as the base of an Attribute (e.g., foo.bar)
+                                    val = getattr(node, "value", None)
+                                    if isinstance(val, cst.Name):
+                                        self.attr_names.add(val.value)
+
+                                def visit_Subscript(self, node: cst.Subscript) -> None:
+                                    # collect Name values used inside subscripts (e.g., arr[temp_dir])
+                                    # node.slice may be an Index or an IndextedSlice depending on libcst
+                                    try:
+                                        # Visit the slice node and collect any Name nodes inside it.
+                                        class _InnerNameCollector(cst.CSTVisitor):
+                                            def __init__(self) -> None:
+                                                self.names: set[str] = set()
+
+                                            def visit_Name(self, node: cst.Name) -> None:
+                                                self.names.add(node.value)
+
+                                        inner = getattr(node, "slice", None)
+                                        if inner is None:
+                                            return
+                                        inc = _InnerNameCollector()
+                                        inner.visit(inc)
+                                        for nm in inc.names:
+                                            self.subscript_names.add(nm)
+                                    except Exception:
+                                        # ignore unexpected shapes
+                                        pass
+
+                                def visit_FormattedValue(self, node) -> None:
+                                    # collect simple Name values used inside f-strings
+                                    val = getattr(node, "value", None)
+                                    if isinstance(val, cst.Name):
+                                        self.arg_names.add(val.value)
+
+                                def visit_FormattedStringExpression(self, node) -> None:
+                                    # collect any Name nodes inside the formatted expression
+                                    try:
+
+                                        class _InnerNameCollector(cst.CSTVisitor):
+                                            def __init__(self) -> None:
+                                                self.names: set[str] = set()
+
+                                            def visit_Name(self, n: cst.Name) -> None:
+                                                self.names.add(n.value)
+
+                                        inc = _InnerNameCollector()
+                                        expr = getattr(node, "expression", None)
+                                        if expr is not None:
+                                            expr.visit(inc)
+                                            for nm in inc.names:
+                                                self.arg_names.add(nm)
+                                    except Exception:
+                                        pass
+
+                            anc = _ArgNameCollector()
+                            try:
+                                value_expr.visit(anc)
+                            except Exception:
+                                pass
+
+                            # consider a name a dependency if it appears in the
+                            # class's local_assignments (previously recorded),
+                            # is a setup_assignments key, or is used as an
+                            # argument value inside the value expression (e.g., Path(temp_dir)).
+                            local_map = getattr(cls, "local_assignments", {}) or {}
+                            import builtins as _builtins
+
+                            # consider names collected by NameCollector or by arg/attr/subscript collectors
+                            name_only = set(getattr(nc, "names", set()))
+                            arg_attr_sub_names = (
+                                set(getattr(anc, "arg_names", set()))
+                                | set(getattr(anc, "attr_names", set()))
+                                | set(getattr(anc, "subscript_names", set()))
+                            )
+                            # Accept names collected from args/attribute/subscript
+                            # unconditionally (subject to other filters). For plain Name
+                            # occurrences, require the name to be present in the
+                            # collector's local_assignments or setup_assignments to
+                            # avoid false positives. As a robust fallback, if our
+                            # structured collectors miss an index/attribute context,
+                            # detect it by rendering the expression and searching
+                            # for patterns like '[name]' or 'name.' in the source.
+                            collected_names = set(arg_attr_sub_names)
+                            # names present in local_map or setup_assignments are ok
+                            for n in name_only:
+                                # If the name corresponds to a recorded local assignment
+                                # (e.g., tuple-unpacked local like `sql_file` from
+                                # `sql_file, schema_file = create_sql_with_schema(...)`),
+                                # prefer expanding it into the RHS references collected
+                                # by the collector. This lets us emit parameters for
+                                # the actual dependencies (e.g., `temp_dir`,
+                                # `sql_content`) instead of the transient local name.
+                                if n in local_map:
+                                    try:
+                                        entry = local_map.get(n)
+                                        # Expect stored shape (value_expr, index_or_None, refs_set)
+                                        if isinstance(entry, tuple) and len(entry) >= 3:
+                                            refs_from_local = entry[2] or set()
+                                            for r in refs_from_local:
+                                                collected_names.add(r)
+                                            # don't add the ephemeral local name itself
+                                            continue
+                                    except Exception:
+                                        # fall back to conservative behavior
+                                        pass
+                                if n in getattr(cls, "setup_assignments", {}):
+                                    collected_names.add(n)
+                            # rendered-source fallback for cases like arr[temp_dir] when
+                            # the Subscript visitor didn't capture the name for some reason
+                            try:
+                                rendered = (
+                                    cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value_expr)])]).code
+                                    if value_expr is not None
+                                    else ""
+                                )
+                            except Exception:
+                                rendered = ""
+                            if rendered:
+                                for n in name_only:
+                                    if n in collected_names:
+                                        continue
+                                    if f"[{n}]" in rendered or f"{n}." in rendered:
+                                        collected_names.add(n)
+                            for n in collected_names:
+                                # Skip empty, instance, class, or module-level names.
+                                if not n:
+                                    continue
+                                if n in ("self", "cls"):
+                                    continue
+                                if n in module_level_names:
+                                    continue
+                                # Skip capitalized names (classes/constructors) and builtins
+                                if n[0].isupper():
+                                    continue
+                                if n in getattr(_builtins, "__dict__", {}):
+                                    continue
+                                # collected_names was assembled from arg/attr/subscript
+                                # contexts, names present in local_assignments/setup_assignments,
+                                # and rendered-source fallbacks. Add the name as an
+                                # extra dependency after the above filters pass.
+                                extra_names.add(n)
+                        # merge extra_names into refs
+                        refs = set(refs) | extra_names
+                    except Exception:
+                        # be conservative on unexpected shapes
+                        pass
                     # Build Parameter list from refs in deterministic order
                     param_names = [r for r in sorted(refs)]
                     params = cst.Parameters(params=[cst.Param(name=cst.Name(n)) for n in param_names])
@@ -340,7 +579,7 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
                 autocreate = bool(context.get("autocreate", True))
             except Exception:
                 autocreate = True
-            if autocreate and value_expr is not None:
+            if autocreate and value_expr is not None and fname not in bundled_attr_map:
                 # value_expr may be a call wrapping a local (e.g., str(local))
                 if isinstance(value_expr, cst.Call):
                     for a in value_expr.args:
@@ -357,7 +596,29 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
     # logic is extracted into generator_parts.namedtuple_bundler so we
     # can unit-test it independently and avoid moving code that relies
     # on lexical locals into a new module.
-    prepend_nodes, bundler_typing = safe_bundle_named_locals(out.classes, module_level_names)
+    prepend_nodes, bundler_typing, bundled_attr_map = safe_bundle_named_locals(out.classes, module_level_names)
+
+    # bundled_attr_map maps attribute name -> composite fixture name. For any
+    # attribute that was bundled, we should avoid emitting an independent
+    # fixture that returns a literal basename (e.g., 'test.sql'). Instead,
+    # generate a thin wrapper fixture that depends on the composite fixture and
+    # returns the appropriate attribute value from the NamedTuple instance.
+    # Build wrapper fixtures for bundled attributes.
+    wrapper_nodes: list[cst.FunctionDef] = []
+    for attr_name, composite_fixture in bundled_attr_map.items():
+        # create a function like:
+        # @pytest.fixture
+        # def sql_file(init_api_data):
+        #     return init_api_data.sql_file
+        decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
+        params = cst.Parameters(params=[cst.Param(name=cst.Name(composite_fixture))])
+        # access attribute on composite and return it
+        return_expr = cst.Attribute(value=cst.Name(composite_fixture), attr=cst.Name(attr_name))
+        body = cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Return(return_expr)])])
+        func = cst.FunctionDef(name=cst.Name(attr_name), params=params, body=body, decorators=[decorator])
+        wrapper_nodes.append(func)
+    # ensure wrapper nodes are appended after prepend_nodes
+    fixture_nodes = fixture_nodes + wrapper_nodes
 
     # Delegate final annotation/typing and result assembly to GeneratorCore
     core = GeneratorCore()

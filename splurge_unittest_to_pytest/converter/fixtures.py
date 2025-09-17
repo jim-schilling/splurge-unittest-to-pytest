@@ -1,9 +1,17 @@
-"""Fixture helper creators extracted from the monolithic converter.
+"""Fixture creator helpers used by the staged converter.
 
-These functions are pure-ish: they accept the needed inputs and return libcst
-nodes. These helpers were previously part of the legacy transformer implementation
-and were split into small modules for easier testing and maintenance.
-state (e.g., setting self.needs_pytest_import) and call these helpers.
+Functions to build pytest fixture function nodes from inferred setup
+assignments. The helpers return :class:`libcst.FunctionDef` nodes that
+can be inserted into modules by the fixture-injection stage. They are
+designed to be small, testable, and side-effect free.
+
+Publics:
+    create_fixture_with_cleanup: Build a fixture function that yields with cleanup.
+    create_simple_fixture: Build a fixture that returns a simple value.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst
@@ -14,7 +22,15 @@ __all__: list[str] = [
     "parse_setup_assignments",
 ]
 
+
 from .setup_parser import parse_setup_assignments
+
+DOMAINS = ["converter", "fixtures"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
+# Associated domains for this module
+DOMAINS = ["converter", "fixtures"]
 
 
 def _collect_identifiers_from_statements(stmts: list[cst.BaseStatement]) -> set[str]:

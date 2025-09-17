@@ -1,7 +1,15 @@
-"""Recursive utilities to check whether an expression references
-`self.<attr>` or a bare `<attr>` name.
+"""Detect references to ``self.<attr>`` or a bare attribute name.
 
-Extracted from stages/generator.py to make the logic unit-testable.
+Recursive utilities to check whether an expression references
+``self.<attr>`` or the bare attribute name. Extracted to make the
+logic unit-testable.
+
+Publics:
+    references_attribute
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,13 +18,17 @@ from typing import Any
 
 import libcst as cst
 
+DOMAINS = ["generator"]
+
+# Associated domains for this module
+
 
 def references_attribute(expr: Any, attr_name: str) -> bool:
-    """Recursively check if expression references self.<attr> or bare <attr>.
+    """Check whether ``expr`` references ``self.<attr>`` or a bare name.
 
-    Mirrors the legacy behavior used in the generator stage. Accepts
-    wrapper nodes (like AssignTargets) and is defensive about unexpected
-    shapes, returning False when the structure doesn't match known forms.
+    The function is defensive about unexpected libcst node shapes and
+    returns False when it cannot determine a match. Wrapper objects are
+    unwrapped where relevant (for example, AssignTarget wrappers).
     """
     # Accept AssignTarget and similar wrapper objects by unwrapping
     expr = getattr(expr, "target", expr)

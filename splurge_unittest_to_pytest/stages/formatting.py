@@ -1,7 +1,15 @@
-"""Shared formatting helpers for pipeline stages.
+"""Formatting utilities for deterministic module normalization.
 
-Provides helpers to normalize module- and class-level spacing so stages
-don't step on each other's EmptyLine insertions.
+Helpers to normalize class and module spacing, group and deduplicate
+imports, and produce stable blank-line counts so the final tidy
+formatting pass yields predictable output.
+
+Publics:
+    normalize_class_body, normalize_module
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -9,6 +17,8 @@ from __future__ import annotations
 from typing import Optional, cast, Any
 
 import libcst as cst
+
+DOMAINS = ["stages", "tidy"]
 
 
 def _node_to_str(node: Optional[cst.BaseExpression] | None) -> str:
@@ -33,8 +43,15 @@ def _node_to_str(node: Optional[cst.BaseExpression] | None) -> str:
 def normalize_class_body(indented: cst.IndentedBlock) -> cst.IndentedBlock:
     """Normalize class body spacing: exactly one blank line between methods.
 
-    Collapse runs of EmptyLine within the class body so there is at most one
-    EmptyLine between consecutive FunctionDef members.
+    Collapse runs of :class:`cst.EmptyLine` within the class body so there
+    is at most one blank line between consecutive :class:`cst.FunctionDef`
+    members.
+
+    Args:
+        indented: The :class:`cst.IndentedBlock` representing the class body.
+
+    Returns:
+        A new :class:`cst.IndentedBlock` with normalized spacing.
     """
     members = list(indented.body)
     new_members: list[Any] = []
@@ -70,10 +87,20 @@ def normalize_class_body(indented: cst.IndentedBlock) -> cst.IndentedBlock:
 def normalize_module(module: cst.Module) -> cst.Module:
     """Normalize module-level spacing and import grouping.
 
+    The function performs several normalization steps:
+
     - Deduplicate imports and group them (stdlib, thirdparty, local).
-    - Ensure exactly two blank lines after the import block.
-    - Collapse runs of EmptyLine between top-level defs to two where appropriate.
-    - Normalize class bodies with normalize_class_body.
+    - Ensure exactly two blank lines after the import block when imports are
+      present.
+    - Collapse runs of :class:`cst.EmptyLine` between top-level definitions to
+      two where appropriate.
+    - Normalize class bodies using :func:`normalize_class_body`.
+
+    Args:
+        module: The :class:`cst.Module` to normalize.
+
+    Returns:
+        A new :class:`cst.Module` with spacing and import grouping normalized.
     """
     body = list(module.body)
 
@@ -222,3 +249,6 @@ def normalize_module(module: cst.Module) -> cst.Module:
         i += 1
 
     return module.with_changes(body=normalized)
+
+
+# Associated domains for this module

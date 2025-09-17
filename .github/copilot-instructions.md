@@ -4,9 +4,11 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 
 ## Software Development Lifecycle Standards
 - Follow Research, Plan, and Implement lifecycle.
-- Document research in docs/research-[yyyy-MM-dd]-[sequence].md.
-- Document action plans in docs/plan-[yyyy-MM-dd]-[sequence].md.
-- Document requirements and specifications in docs/spec-[yyyy-MM-dd]-[sequence].md.
+- Document research in docs/research/research-[yyyy-MM-dd]-[sequence].md.
+- Document action plans in docs/plans/plan-[yyyy-MM-dd]-[sequence].md.
+- Document requirements and specifications in docs/specs/spec-[yyyy-MM-dd]-[sequence].md.
+- Document issues/bugs in docs/issues/issue-[yyyy-MM-dd]-[sequence].md.
+- Research shall include exploration of existing solutions, libraries, and tools.
 - Plans shall detail requirements, acceptance criteria, testing strategy (e.g. TDD and BDD), and a step-by-step implementation guide.
 - Each action plan shall be sub-divided into stages (e.g. Stage-1, Stage-2), while stages are subdivided into tasks (e.g. Task-[Stage].1, Task-[Stage].2).
 - Implementation lifecycle shall always: code failing tests, then implement code, then run tests, then iteratively refactor and run tests until all tests pass.
@@ -15,13 +17,19 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
   - Only integrate into larger applications after proving standalone functionality
 - Software tools, primary libraries, data tools, and development tools must expose their functionality through a CLI. Other software functionality may omit a CLI if appropriate.
 - If in doubt, prompt user for clarification and mark as [NEEDS CLARIFICATION].
+- Always ask for user confirmation before making significant changes.
+- Always ask for user confirmation before deleting files or data.
+- Always ask for user confirmation before overwriting existing files.
+- Use git for version control with feature branches and pull requests.
+- Write clear, concise commit messages in the imperative mood (e.g., "Add feature", "Fix bug").
 
 ## Project Organization Standards
 - Create top-level folder: docs/.
 - Create project README.md which summarizes the project.
 - Create project CHANGELOG.md which details changes for each version/feature-branch.
 - Create docs/README-DETAILS.md which details project features, usage, errors, dependencies, etc.
-- For code projects, create top-level folders: tests/, examples/, specs/.
+- Create sub-folders under docs/: research/, plans/, specs/, issues/.
+- For code projects, create top-level folders: tests/, examples/, and tools/.
 - For code projects, create sub-folders under tests/: unit/, integration/, e2e/.
 - For Python projects, create modern, standardized pyproject.toml.
 - For Python projects, use CalVer versioning.
@@ -66,6 +74,24 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Use separate statements for multiple context managers instead of nesting them.
 - Use mypy for type validation.
 - Use ruff for style, formatting, and security validation.
+- Place module-level constants in UPPER_SNAKE_CASE.
+- Place a single space before and after operators (=, +, -, *, /, ==, !=, <, >, <=, >=, etc.).
+- Place a single space after commas in lists, tuples, and function parameters.
+- Use 4 spaces for indentation, no tabs.
+- Use UTF-8 encoding without BOM for all text files.
+- Use f-strings for string interpolation.
+- Use triple double quotes for docstrings and comments.
+- Use single quotes for string literals, except when the string contains single quotes.
+- Add a DOMAINS list at the top of each module indicating associated domains (e.g., DOMAINS = ["generator", "helpers"]).
+- Add a package level constant __domains__ listing all associated domains for the package in __init__.py.
+- Use exceptions for error handling, not return codes.
+- Use __all__ to define public API of modules.
+- Use logging module for logging, not print statements.
+- Use pathlib for file and path operations.
+- Use context managers for file operations.
+- Use list comprehensions and generator expressions for creating lists and iterators.
+- Use enumerate() when needing both index and value in loops.
+- Use zip() to iterate over multiple iterables in parallel.
 
 ## Naming Standards
 - Use descriptive variable names with auxiliary verbs (e.g. is_active, has_permission).
@@ -73,6 +99,8 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - For SQL, prefer lower case column names.
 - Prefer upper snake case for constant names.
 - Environment variable names MUST use a project prefix [A-Z][A-Z0-9_]*_ (e.g., SPLURGE_DSV_).
+- Test module names should mirror the domains associated with the modules, where DOMAINS is a list of the module's domain names.
+ - e.g., for a module that has DOMAINS = ['dsv', 'csv'], the test module should be named test_csv_dsv_[SEQUENCE].py, where [SEQUENCE] is a unique identifier for the test module.
 
 ## Method Standards
 - Prefer parameters in method signatures and method calls to be listed on separate lines.
@@ -127,8 +155,10 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 ## Testing Standards
 - Validate behavior of public APIs only.
 - Prefer validation using actual data, interfaces, and objects
-- Avoid or minimize use of mocks, except where appropriate.
-- Target 85% code coverage for all public interfaces and methods.
+- Minimize use of mocks, except where appropriate.
+- Unit test must target 85% code coverage for all public interfaces and methods.
+- Combination of unit tests and integration tests must target 95% code coverage for all public interfaces and methods.
+- Prefer tests that are independent, repeatable, and deterministic.
 - Prefer shared helpers for common logic.
 - Avoid validation of implementation details and private APIs.
 - Prefer validation of patterns of text, and avoid exact matching of content and formatting.

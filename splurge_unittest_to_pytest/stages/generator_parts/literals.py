@@ -1,7 +1,11 @@
-"""Small utility to detect simple 'literal-ish' libcst expressions.
+"""Utilities to detect simple literal-like libcst expressions.
 
-Extracted from stages/generator.py so it can be unit-tested independently
-and reused by other generator helpers.
+Small helpers used by the generator to determine whether an expression is
+considered a literal for emission decisions.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,12 +14,25 @@ from typing import Optional
 
 import libcst as cst
 
+DOMAINS = ["generator", "literals"]
+
+# Associated domains for this module
+
 
 def is_literal(expr: Optional[cst.BaseExpression]) -> bool:
-    """Return True for true literals (numbers and simple strings).
+    """Determine whether an expression should be treated as a literal.
 
-    We treat bare Name nodes as non-literals so that references to
-    variables are handled consistently by binding to locals.
+    Numeric and simple string literals are treated as literals. Container
+    literals (tuple/list/set/dict) are also accepted for generator
+    decisions. Bare Name nodes are considered non-literals so variable
+    references are handled via local bindings.
+
+    Args:
+        expr: A libcst expression node or ``None``.
+
+    Returns:
+        True when ``expr`` is considered literal-like for generator
+        emission decisions, otherwise False.
     """
     if expr is None:
         return False

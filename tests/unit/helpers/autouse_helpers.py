@@ -1,87 +1,45 @@
+"""Test-only helper utilities for autouse fixture injection used by tests.
+
+These helpers re-use the internal fixture injector utilities so tests can
+import a stable, test-only API at `tests.unit.helpers.autouse_helpers`.
+"""
+
+from __future__ import annotations
+
+from typing import Iterable
+
 import libcst as cst
 
-from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
+from splurge_unittest_to_pytest.stages.fixture_injector import _find_insertion_index, _make_autouse_attach
 
 
-def make_autouse_attach(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
-    """Create an autouse attach fixture FunctionDef for tests to reuse.
+def make_autouse_attach(setup_fixtures: dict | Iterable[str] | None) -> cst.FunctionDef:
+    """Build a libcst.FunctionDef for an autouse fixture that attaches
+    named fixtures onto request.instance.
 
-    This is a test-only helper to replace duplicated local helpers across tests.
+    Accepts either a dict (keys are fixture names), an iterable of names,
+    or None/empty to produce an empty attach fixture.
     """
-    inst_assign = cst.SimpleStatementLine(
-        body=[
-            cst.Assign(
-                targets=[cst.AssignTarget(target=cst.Name("inst"))],
-                value=cst.Call(
-                    func=cst.Name("getattr"),
-                    args=[
-                        cst.Arg(value=cst.Name("request")),
-                        cst.Arg(value=cst.SimpleString("'instance'")),
-                        cst.Arg(value=cst.Name("None")),
-                    ],
-                ),
-            )
-        ]
-    )
-
-    set_calls: list[cst.BaseStatement] = []
-    for name in setup_fixtures.keys():
-        set_calls.append(
-            cst.SimpleStatementLine(
-                body=[
-                    cst.Expr(
-                        value=cst.Call(
-                            func=cst.Name("setattr"),
-                            args=[
-                                cst.Arg(value=cst.Name("inst")),
-                                cst.Arg(value=cst.SimpleString(f"'{name}'")),
-                                cst.Arg(value=cst.Name(name)),
-                            ],
-                        )
-                    )
-                ]
-            )
-        )
-
-    if_block = cst.IndentedBlock(body=set_calls)
-    if_stmt = cst.If(
-        test=cst.Comparison(
-            left=cst.Name("inst"), comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name("None"))]
-        ),
-        body=if_block,
-    )
-
-    decorator = build_pytest_fixture_decorator({"autouse": True})
-
-    func = cst.FunctionDef(
-        name=cst.Name("_attach_to_instance"),
-        params=cst.Parameters(params=[cst.Param(name=cst.Name("request"))]),
-        body=cst.IndentedBlock(body=[inst_assign, if_stmt]),
-        decorators=[decorator],
-    )
-
-    return func
+    if setup_fixtures is None:
+        names: list[str] = []
+    elif isinstance(setup_fixtures, dict):
+        names = list(setup_fixtures.keys())
+    else:
+        names = list(setup_fixtures)
+    return _make_autouse_attach(names)
 
 
-def insert_attach_fixture_into_module(module_node: cst.Module, fixture_func: cst.FunctionDef) -> cst.Module:
-    """Insert fixture_func into module_node after pytest import (if present).
+def insert_attach_fixture_into_module(module: cst.Module, func: cst.FunctionDef) -> cst.Module:
+    """Insert the given FunctionDef into the module at the canonical
+    insertion index (after imports/docstring).
 
-    Returns a new Module node with the fixture inserted.
+    Returns a new Module instance with the function inserted.
     """
-    new_body: list = list(module_node.body)
-    insert_pos = 0
-    for i, stmt in enumerate(new_body):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-            first = stmt.body[0]
-            if isinstance(first, cst.Import):
-                for alias in first.names:
-                    if isinstance(alias.name, cst.Name) and alias.name.value == "pytest":
-                        insert_pos = i + 1
-                        break
-            if insert_pos:
-                break
+    insert_idx = _find_insertion_index(module)
+    new_body = list(module.body)
+    # Insert the function at the calculated index. Preserve existing nodes.
+    new_body.insert(insert_idx, func)
+    return module.with_changes(body=new_body)
 
-    new_body.insert(insert_pos, cst.EmptyLine())
-    new_body.insert(insert_pos + 1, fixture_func)
 
-    return module_node.with_changes(body=new_body)
+__all__ = ["make_autouse_attach", "insert_attach_fixture_into_module"]

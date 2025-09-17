@@ -1,16 +1,34 @@
+"""Infer simple typing annotations from literal libcst expressions.
+
+These helpers are intentionally small and deterministic to support
+unit tests for the generator. They detect simple literal container
+shapes (list, tuple, set, dict) and produce a libcst annotation node
+plus a set of typing names required by that annotation.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from __future__ import annotations
 
 from typing import Tuple, Set
 
 import libcst as cst
 
+DOMAINS = ["generator", "transform", "literals"]
+
+
+# Associated domains for this module
+
 
 def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression | None, Set[str]]:
-    """Return an annotation node for a literal-ish expression and a set of typing names.
+    """Return a typing annotation node for a literal-like expression.
 
-    Mirrors the behavior previously embedded in stages/generator.py. This
-    helper focuses on common container types (List, Tuple, Set, Dict) and
-    returns None when no specific typing can be inferred.
+    Detects container literal shapes (List, Tuple, Set, Dict) and returns
+    a libcst annotation node (for example, ``List[str]``) plus a set of
+    typing names required by that annotation. Returns ``(None, set())`` if
+    no specific typing can be inferred.
     """
     names: Set[str] = set()
     if isinstance(node, cst.List):
@@ -84,10 +102,11 @@ def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression 
 
 
 class AnnotationInferer:
-    """Simple annotation inferer used during scaffolding.
+    """Simple annotation inferer used in tests.
 
-    Real implementation will inspect libcst nodes; scaffold exposes a
-    predictable interface for unit testing.
+    This lightweight inferer exposes a deterministic interface for unit
+    tests. The full production inferer will analyze libcst nodes; this
+    stub implements a trivial heuristic relied upon by generator tests.
     """
 
     def infer_return_annotation(self, func_name: str) -> str:

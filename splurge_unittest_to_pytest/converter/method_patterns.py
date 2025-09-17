@@ -1,6 +1,15 @@
-"""Helper utilities for method name normalization and pattern matching.
+"""Helpers for method-name normalization and pattern matching.
 
-These helpers were extracted from the legacy transformer implementation to make them easier to test.
+Provides functions to check whether a method name matches setup,
+teardown, or test patterns. Matching is tolerant of different naming
+styles (snake_case, CamelCase) by normalizing names before comparisons.
+
+Publics:
+    is_setup_method, is_teardown_method, is_test_method
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -8,6 +17,10 @@ from __future__ import annotations
 from typing import Iterable
 
 from .helpers import normalize_method_name
+
+DOMAINS = ["converter"]
+
+# Associated domains for this module
 
 
 def _pattern_in_name(method_name: str, pattern: str) -> bool:

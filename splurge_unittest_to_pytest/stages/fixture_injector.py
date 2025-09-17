@@ -1,8 +1,16 @@
-"""FixtureInjector: insert fixture FunctionDef nodes into a module body.
+"""Insert generated pytest fixture function nodes into a module.
 
-This stage expects `fixture_nodes` in the context (list of cst.FunctionDef) and
-inserts them after the pytest import if present, else after module docstring or
-imports (similar to ImportInjector logic).
+Place generated fixture functions deterministically after imports (or
+the module docstring) and signal via the returned context that a
+``pytest`` import is required. Fixtures are emitted with stable spacing
+markers so later formatting yields predictable output.
+
+Publics:
+    fixture_injector_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,6 +18,10 @@ from __future__ import annotations
 from typing import Any, Optional, cast
 
 import libcst as cst
+
+DOMAINS = ["stages", "fixtures"]
+
+# Associated domains for this module
 
 
 def _find_insertion_index(module: cst.Module) -> int:
@@ -131,6 +143,14 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
 
 
 def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+    """Insert generated fixture functions into ``module``.
+
+    The stage will insert two empty-line sentinels before each top-level
+    fixture to ensure canonical spacing. It returns a mapping containing the
+    possibly-updated ``module`` and signals that ``pytest`` import is needed
+    via the ``needs_pytest_import`` key.
+    """
+
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     nodes: list[cst.FunctionDef] = context.get("fixture_nodes") or []
@@ -156,6 +176,26 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # preserving behavior have been removed; generated fixtures are intended
     # to be used directly by top-level test wrappers. Signal that pytest
     # import is needed so ImportInjector will insert it.
+    # Normalize spacing: ensure exactly two EmptyLine nodes before each
+    # top-level FunctionDef or ClassDef. Collapse runs longer than two.
+    normalized: list[cst.BaseStatement | cst.BaseSmallStatement] = []
+    i = 0
+    while i < len(new_body):
+        node = new_body[i]
+        if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
+            # count trailing empties in normalized so far
+            # remove trailing EmptyLines to avoid accumulating more than needed
+            while normalized and isinstance(normalized[-1], cst.EmptyLine):
+                normalized.pop()
+            # append two EmptyLine sentinels before the top-level def
+            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            normalized.append(node)
+            i += 1
+            continue
+        # preserve existing empties and other nodes
+        normalized.append(node)
+        i += 1
 
-    new_module = module.with_changes(body=new_body)
+    new_module = module.with_changes(body=normalized)
     return {"module": new_module, "needs_pytest_import": True}

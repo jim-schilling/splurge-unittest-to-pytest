@@ -1,9 +1,25 @@
+"""Container for a small fixture specification used in the generator.
+
+The dataclass holds the parsed information for a fixture candidate so
+the generator code can reason about yield-style fixtures and cleanup
+statements.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Optional
 
 import libcst as cst
+
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
 
 
 @dataclass
@@ -15,4 +31,9 @@ class SimpleFixtureSpec:
 
 
 def _is_dir_like(name: str) -> bool:
+    """Return True when ``name`` looks like a directory/path indicator.
+
+    A simple substring check is used to determine whether a name is
+    directory-like (for example, contains ``dir``, ``path`` or ``temp``).
+    """
     return any(k in name for k in ("dir", "path", "temp"))

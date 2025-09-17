@@ -1,9 +1,16 @@
-"""Fixtures stage: remove class setUp/tearDown methods and add fixture params to tests.
+"""Transform TestCase setup/teardown into pytest fixtures and functions.
 
-This stage consumes `collector_output` (CollectorOutput) and `fixture_specs` produced
-by the `generator_stage`. It removes the class-level setup/teardown methods and
-updates test method signatures to remove instance/class first params and add
-fixture parameters (one per setup attribute) so tests receive the generated fixtures.
+Consume :class:`CollectorOutput` and emit top-level pytest functions
+and/or fixtures derived from recorded setup assignments. A
+``pattern_config`` object may be supplied in the pipeline context to
+customize method-name matching for setup/teardown detection.
+
+Publics:
+    fixtures_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -18,6 +25,11 @@ from splurge_unittest_to_pytest.converter.method_params import (
     first_param_name,
 )
 
+DOMAINS = ["stages", "fixtures"]
+
+
+# Associated domains for this module
+
 
 # NOTE: helper to decide removal of first param was removed; the current
 # staged pipeline keeps instance/class first params to make converted modules
@@ -25,11 +37,18 @@ from splurge_unittest_to_pytest.converter.method_params import (
 
 
 def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], remove_first: bool) -> cst.FunctionDef:
-    """Ensure instance methods keep `self`/`cls` (unless staticmethod) and append fixtures.
+    """Update a test method's parameters for pytest conversion.
 
-    We intentionally do not remove the first parameter; instead we make sure runnable
-    instance methods accept `self` (or `cls` for classmethods) and have fixture
-    parameters appended after existing parameters.
+    Args:
+        fn: The original :class:`libcst.FunctionDef` representing the method.
+        fixture_names: Sequence of fixture parameter names to append when the
+            first parameter is removed.
+        remove_first: When ``True`` drop the original first parameter
+            (``self``/``cls``) and append the fixture parameters. When
+            ``False`` retain the first parameter for runnability.
+
+    Returns:
+        A new :class:`libcst.FunctionDef` with updated parameters.
     """
     params = list(fn.params.params)
     # detect staticmethod/classmethod decorators using consolidated helpers
@@ -70,12 +89,26 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     if module is None or collector is None:
         return {"module": module}
 
-    # Allow configurable setup/teardown name lists via collector output when available
+    # Allow configurable setup/teardown name lists via a PatternConfigurator
+    # provided in the pipeline context under the 'pattern_config' key.
+    pattern_config: Optional[Any] = context.get("pattern_config")
+
     def _is_setup_name(name: str) -> bool:
-        # Collector records canonical setUp names; fall back to common defaults
+        # If a PatternConfigurator is provided, use its normalized matching
+        # helpers; otherwise fall back to common defaults.
+        try:
+            if pattern_config is not None:
+                return bool(getattr(pattern_config, "_is_setup_method", lambda n: False)(name))
+        except Exception:
+            pass
         return name in ("setUp", "setUpClass")
 
     def _is_teardown_name(name: str) -> bool:
+        try:
+            if pattern_config is not None:
+                return bool(getattr(pattern_config, "_is_teardown_method", lambda n: False)(name))
+        except Exception:
+            pass
         return name in ("tearDown", "tearDownClass")
 
     # module body may contain BaseStatement elements; some class members

@@ -1,12 +1,34 @@
+"""Transformer to replace ``self``/``cls`` attribute access with params.
+
+Used by the generator to convert attribute accesses like ``self.x`` into
+plain parameter names when the attribute is intended to be provided as a
+fixture parameter.
+
+Publics:
+    ReplaceSelfWithParam
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
+
 from __future__ import annotations
 
 import libcst as cst
 from typing import Set
 
+DOMAINS = ["generator"]
+
+
+# Associated domains for this module
+
 
 class ReplaceSelfWithParam(cst.CSTTransformer):
-    """Transformer that replaces occurrences of ``self.attr`` or ``cls.attr``
-    with a bare ``Name`` when the attribute matches one of the provided refs.
+    """Transformer to convert ``self.attr``/``cls.attr`` into parameter names.
+
+    Attributes present in the provided references set are replaced with a
+    :class:`libcst.Name` node so that generated fixtures can accept those
+    attributes as parameters instead of referencing ``self``/``cls``.
     """
 
     def __init__(self, refs_set: Set[str]) -> None:

@@ -1,8 +1,17 @@
-"""StageManager skeleton for orchestrating converter stages.
+"""Stage manager: register, wrap, and execute pipeline stages.
 
-This minimal manager supports registering callables that accept and return a
-`context` mapping. The context starts with the `module` (cst.Module) and may be
-extended with stage outputs (e.g., collector_output).
+This module provides :class:`StageManager` which registers stage callables
+and executes them sequentially over a shared context mapping. The
+manager wraps stages to optionally write intermediate diagnostics
+snapshots when diagnostics are enabled; it also exposes helpers to dump
+initial and final module snapshots.
+
+Publics:
+    StageManager
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -13,7 +22,11 @@ import libcst as cst
 from pathlib import Path
 from . import diagnostics
 
+DOMAINS = ["stages", "manager"]
+
 StageCallable = Callable[[dict[str, Any]], dict[str, Any]]
+
+# Associated domains for this module
 
 
 class StageManager:
@@ -80,9 +93,14 @@ class StageManager:
     def run(self, module: cst.Module, initial_context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Run registered stages over `module`.
 
-        An optional `initial_context` dict can be provided to seed the pipeline
-        context (for example configuration flags like 'autocreate'). This is
-        used by the pipeline runner to pass CLI/runtime options into stages.
+        Args:
+            module: The :class:`libcst.Module` to operate on.
+            initial_context: Optional mapping to seed the pipeline context (for
+                example configuration flags like ``'autocreate'``). This is used
+                by the pipeline runner to pass CLI/runtime options into stages.
+
+        Returns:
+            The final pipeline context mapping after all stages have executed.
         """
         context: dict[str, Any] = {"module": module}
         if initial_context and isinstance(initial_context, dict):

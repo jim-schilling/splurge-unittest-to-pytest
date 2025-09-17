@@ -1,8 +1,14 @@
-"""Assertion conversion helpers extracted from the monolithic converter.
+"""Helpers for converting ``unittest`` assertion methods to pytest asserts.
 
-These helpers are pure functions (avoid touching transformer instance state)
-so they can be moved and tested independently. Instance methods in the
-transformer will delegate to these functions.
+Small, pure functions that translate common ``unittest`` assertion
+method calls (for example ``assertEqual`` or ``assertTrue``) into
+``libcst`` nodes representing equivalent pytest ``assert`` statements.
+The implementations are stateless so they can be unit tested and reused
+by the conversion transformer.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,6 +16,11 @@ from __future__ import annotations
 from typing import Sequence, Callable
 
 import libcst as cst
+
+DOMAINS = ["converter", "assertions"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 def _assert_equal(args: Sequence[cst.Arg]) -> cst.Assert:
@@ -217,3 +228,6 @@ ASSERTIONS_MAP: dict[str, Callable[[Sequence[cst.Arg]], cst.Assert | None]] = {
 
 # Export the map as part of the module's public API
 __all__.append("ASSERTIONS_MAP")
+
+# Associated domains for this module
+DOMAINS = ["converter", "assertions"]

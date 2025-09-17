@@ -1,8 +1,20 @@
-"""Collector stage: read-only visitor that collects facts from a module.
+"""Collect class-level setUp/tearDown and module metadata.
 
-This is intentionally minimal: collect setUp assignments and teardown statements
-for each class, plus module docstring index and import info. The goal is to
-provide a stable data shape for the next stages.
+This visitor inspects a parsed :class:`libcst.Module` and records
+information required by downstream stages: top-level imports, the
+module docstring index, discovered classes and their ``setUp``,
+``tearDown``, and ``test`` methods, plus simple assignments inside
+``setUp`` methods used to infer fixture values.
+
+The collected data is exposed via :class:`CollectorOutput` for later
+stages to consume.
+
+Publics:
+    Collector, CollectorOutput, ClassInfo
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -12,6 +24,24 @@ from typing import Optional, cast, Sequence, Any
 
 import libcst as cst
 from libcst import matchers as m
+
+DOMAINS = ["stages"]
+
+
+def _collect_names_from_expr(expr: Any) -> set[str]:
+    refs: set[str] = set()
+
+    class _RefCollector(cst.CSTVisitor):
+        def visit_Name(self, node: cst.Name) -> None:
+            refs.add(node.value)
+
+    try:
+        if expr is not None:
+            expr.visit(_RefCollector())
+    except Exception:
+        # be conservative on unexpected shapes
+        pass
+    return refs
 
 
 @dataclass
@@ -114,14 +144,21 @@ class Collector(cst.CSTVisitor):
                         # target can be Name or Tuple
                         if isinstance(target, cst.Name):
                             lname = target.value
-                            self._current_class.local_assignments[lname] = (assign.value, None)
+                            # record the assigned expression and a placeholder
+                            # index for simple names. Also collect referenced
+                            # names inside the RHS so later stages can detect
+                            # fixture dependencies (e.g., Path(temp_dir)).
+                            refs = _collect_names_from_expr(assign.value)
+                            self._current_class.local_assignments[lname] = (assign.value, None, refs)
                         elif isinstance(target, cst.Tuple):
                             # tuple of names -> map each name to (value, index)
                             elements = getattr(target, "elements", []) or []
                             for idx, el in enumerate(elements):
                                 inner = getattr(el, "value", None)
                                 if isinstance(inner, cst.Name):
-                                    self._current_class.local_assignments[inner.value] = (assign.value, idx)
+                                    refs = _collect_names_from_expr(assign.value)
+                                    # tuple element: store index and refs
+                                    self._current_class.local_assignments[inner.value] = (assign.value, idx, refs)
         elif name in ("tearDown", "tearDownClass"):
             self._current_class.teardown_methods.append(node)
             # collect teardown statements as-is
@@ -131,6 +168,13 @@ class Collector(cst.CSTVisitor):
             self._current_class.test_methods.append(node)
 
     def as_output(self) -> CollectorOutput:
+        """Return a populated :class:`CollectorOutput`.
+
+        If nothing has been collected, returns an empty-but-typed
+        :class:`CollectorOutput` so downstream stages can rely on a stable
+        shape.
+        """
+
         if self.output is None:
             return CollectorOutput(
                 module=self._module or cst.Module([]),
@@ -138,3 +182,6 @@ class Collector(cst.CSTVisitor):
                 imports=self._imports.copy(),
             )
         return self.output
+
+
+# Associated domains for this module

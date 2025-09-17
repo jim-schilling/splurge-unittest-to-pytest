@@ -1,8 +1,23 @@
-"""Helpers for placing fixtures and nodes into module bodies."""
+"""Helpers for placing fixtures and nodes into module bodies.
+
+This module contains utilities to insert fixture :class:`libcst.FunctionDef`
+nodes into module bodies, typically after the last import statement.
+
+Publics:
+    insert_fixtures_into_module
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from typing import Any
 
 import libcst as cst
+
+DOMAINS = ["converter"]
+
+# Associated domains for this module
 
 
 def insert_fixtures_into_module(module_node: cst.Module, fixtures: dict[str, cst.FunctionDef]) -> cst.Module:

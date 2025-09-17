@@ -1,4 +1,19 @@
-"""ImportInjector: ensure `import pytest` exists and insert it after module docstring or imports."""
+"""Deterministically ensure required imports exist in a module.
+
+This stage inspects the pipeline context for flags such as
+``needs_pytest_import`` or a set of ``needs_typing_names`` and
+inserts minimal import statements at a deterministic location in the
+module (after the docstring or existing imports). The injector avoids
+duplicating existing imports and will merge or create a single
+``from typing import ...`` statement when typing names are requested.
+
+Publics:
+    import_injector_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
@@ -7,8 +22,18 @@ from typing import Optional
 
 import libcst as cst
 
+DOMAINS = ["stages", "imports"]
+
+# Associated domains for this module
+
 
 def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+    """Pipeline stage that ensures required imports exist in the module.
+
+    Inspects context flags (for example ``needs_pytest_import``) and scans
+    the module to detect and insert required imports deterministically.
+    """
+
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     # If flags are absent, default to adding pytest import to support

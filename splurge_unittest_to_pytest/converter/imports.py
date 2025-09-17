@@ -1,6 +1,18 @@
-"""Import helper utilities for the converter.
+"""Import helper utilities used by the converter stages.
 
-Contains pure functions that inspect or modify a libcst.Module to add imports or remove them.
+This module provides small, side-effect-free helpers that inspect and
+modify a :class:`libcst.Module` to ensure appropriate import statements
+are present for emitted pytest-style code. Functions include detection
+of existing ``pytest`` imports, inserting a ``pytest`` import at an
+appropriate position, and removing ``unittest`` imports no longer
+required after conversion.
+
+The helpers are intentionally minimal so they can be used from multiple
+conversion stages without producing duplicate imports.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any
@@ -8,6 +20,10 @@ import libcst as cst
 from libcst import matchers as m
 
 from .import_helpers import make_pytest_import_stmt
+
+DOMAINS = ["converter", "imports"]
+
+# Associated domains for this module
 
 
 def remove_unittest_importfrom(updated_node: cst.ImportFrom) -> cst.ImportFrom | cst.RemovalSentinel:

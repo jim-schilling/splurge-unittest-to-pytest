@@ -1,4 +1,17 @@
-"""Pipeline runner wiring the individual stages into a conversion pipeline."""
+"""Orchestrate and run the conversion pipeline over a :class:`libcst.Module`.
+
+Expose :func:`run_pipeline` which registers the canonical set of stages
+and executes them in order over a parsed module. The function accepts an
+optional ``pattern_config`` which is forwarded to stages that require
+method-name matching configuration.
+
+Publics:
+    run_pipeline
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
@@ -15,8 +28,29 @@ from .manager import StageManager
 from .postvalidator import postvalidator_stage
 from .tidy import tidy_stage
 
+DOMAINS = ["stages", "pipeline"]
 
-def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
+# Associated domains for this module
+
+
+def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: Any | None = None) -> cst.Module:
+    """Run the conversion pipeline on a libcst.Module and return transformed Module.
+
+    Args:
+        module: The parsed libcst.Module to transform.
+        autocreate: Flag propagated to stages indicating whether autocreation
+            of tmp_path-backed fixtures should be enabled.
+        pattern_config: Optional PatternConfigurator injected into the
+            initial pipeline context under the key 'pattern_config'. Stages
+            that perform method-name matching (setup/teardown/test) should
+            consult this object when present.
+
+    Returns:
+        The transformed :class:`libcst.Module`.
+
+        If the pipeline fails or returns a non-module result, the original
+        module is returned as a safe fallback.
+    """
     mgr = StageManager()
 
     def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -69,12 +103,28 @@ def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
     # detect the need for pytest import and place it before the @pytest.fixture
     # decorators deterministically.
     mgr.register(import_injector_stage)
+    # Run post-validation before final normalization so postvalidator can
+    # perform checks that might restructure the module. Apply the
+    # exceptioninfo normalizer immediately before the tidy stage so the
+    # AST-based ExceptionAttrRewriter runs after any stage that could
+    # re-introduce `.exception` attribute accesses tied to pytest.raises
+    # context managers.
     mgr.register(postvalidator_stage)
+    from .raises_stage import exceptioninfo_normalizer_stage
+
+    mgr.register(exceptioninfo_normalizer_stage)
     mgr.register(tidy_stage)
 
     # execute the pipeline and return the final module
     # Provide flags via initial context so stages can opt-in/out deterministically
-    context = mgr.run(module, initial_context={"autocreate": autocreate})
+    # Provide flags via initial context so stages can opt-in/out deterministically
+    # Include an optional `pattern_config` so stages that care about method
+    # name matching can consult the configured patterns.
+    initial_ctx: dict[str, Any] = {"autocreate": autocreate}
+    if pattern_config is not None:
+        initial_ctx["pattern_config"] = pattern_config
+
+    context = mgr.run(module, initial_context=initial_ctx)
     result = context.get("module")
     try:
         # Only call dump_final when we actually have a Module instance.

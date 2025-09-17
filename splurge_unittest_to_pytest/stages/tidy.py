@@ -1,18 +1,29 @@
-"""Tidy stage: central spacing and light post-processing.
+"""Final tidy stage: spacing normalization and light post-processing.
 
-This stage delegates spacing normalization to the shared
-`formatting.normalize_module` helper (ensures import grouping, dedup,
-and consistent blank-line counts). It also ensures class test methods
-have a `self` parameter when appropriate.
+Performs the centralized formatting pass using :func:`normalize_module`
+and enforces canonical blank-line counts and class-method parameter
+expectations. This is the last stage in the pipeline and prepares the
+module for output.
+
+Publics:
+    tidy_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.formatting import normalize_module
+
+DOMAINS = ["stages", "tidy"]
+
+# Associated domains for this module
 
 
 def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -23,6 +34,23 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     # Centralized formatting pass
     normalized = normalize_module(module)
+
+    # Final pass: ensure exactly two EmptyLine nodes before each top-level
+    # FunctionDef or ClassDef. This enforces canonical spacing regardless of
+    # what earlier stages inserted or omitted.
+    final_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
+    for node in list(normalized.body):
+        if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
+            # remove trailing EmptyLine nodes from final_body to avoid churn
+            while final_body and isinstance(final_body[-1], cst.EmptyLine):
+                final_body.pop()
+            final_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            final_body.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
+            final_body.append(node)
+            continue
+        final_body.append(node)
+
+    normalized = normalized.with_changes(body=final_body)
 
     # Ensure class test methods have a 'self' parameter when missing
     class EnsureSelfParam(cst.CSTTransformer):

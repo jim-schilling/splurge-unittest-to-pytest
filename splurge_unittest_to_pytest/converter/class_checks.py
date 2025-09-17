@@ -1,9 +1,26 @@
-"""Helpers for class base checks used by the transformer."""
+"""Utilities for inspecting class base expressions.
+
+Small helpers to detect whether a class inherits from ``unittest.TestCase``
+or a bare ``TestCase`` identifier. These utilities are used early in the
+pipeline to remove unittest-specific bases when converting to pytest.
+
+Publics:
+    is_unittest_testcase_base: Detect ``unittest.TestCase`` or ``TestCase`` bases.
+    remove_unittest_bases: Return bases with unittest TestCase entries removed.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
-
 import libcst as cst
+
+DOMAINS = ["converter"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 def is_unittest_testcase_base(base: cst.Arg) -> bool:

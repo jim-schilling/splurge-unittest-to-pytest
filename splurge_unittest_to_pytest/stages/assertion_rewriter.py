@@ -1,8 +1,16 @@
-"""Assertion rewriter stage: convert self.assert* calls to pytest-style asserts
-and convert assertRaises context managers to pytest.raises.
+"""Rewrite unittest-style assertions into pytest-style assertions.
 
-This is a focused stage (subset of the legacy transformer's behavior) used
-to migrate assertion rewriting into the staged pipeline.
+This module provides :class:`AssertionRewriter`, a :class:`libcst.CSTTransformer`
+that converts common unittest assertion calls (for example
+``self.assertEqual``) into native Python ``assert`` statements and
+rewrites ``assertRaises`` forms to use ``pytest.raises`` context managers.
+
+Publics:
+    AssertionRewriter
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -10,6 +18,11 @@ from __future__ import annotations
 from typing import Sequence, Optional, Any, cast
 
 import libcst as cst
+
+DOMAINS = ["stages", "assertions", "rewriter"]
+
+# Associated domains for this module
+# Moved to top of module after imports.
 
 
 class AssertionRewriter(cst.CSTTransformer):

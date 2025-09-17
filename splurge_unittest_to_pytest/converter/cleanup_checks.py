@@ -1,10 +1,28 @@
-"""Small helper module for cleanup attribute detection."""
+"""Helpers to detect attribute references inside libcst expressions.
+
+This module implements conservative checks that inspect :mod:`libcst`
+expression nodes (attributes, calls, subscripts, binary ops, containers)
+and determine whether they reference a given attribute name. It mirrors
+the attribute-detection logic extracted from the original monolithic
+converter and is intentionally recursive to handle nested expressions.
+
+Publics:
+    references_attribute: Return True when an expression references an attribute name.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 import libcst as cst
+
+DOMAINS = ["converter", "teardown"]
+
+# Associated domains for this module
 
 
 def references_attribute(expr: Any, attr_name: str) -> bool:

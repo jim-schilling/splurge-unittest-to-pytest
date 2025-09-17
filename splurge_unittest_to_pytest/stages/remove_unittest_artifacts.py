@@ -1,7 +1,14 @@
-"""Pipeline stage: remove unittest imports and strip unittest.TestCase inheritance.
+"""Remove unittest imports, TestCase bases, and test-run guards.
 
-This stage ensures that converted modules no longer retain the unittest import
-or TestCase base classes which were previously removed by the legacy transformer.
+Strips top-level ``unittest`` imports, removes ``TestCase`` bases from
+classes, and drops common ``if __name__ == '__main__'`` test-run guards.
+
+Publics:
+    remove_unittest_artifacts_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -9,6 +16,10 @@ from __future__ import annotations
 from typing import Any, cast, Sequence
 
 import libcst as cst
+
+DOMAINS = ["stages", "helpers"]
+
+# Associated domains for this module
 
 
 def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:

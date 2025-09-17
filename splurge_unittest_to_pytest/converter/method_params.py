@@ -1,4 +1,18 @@
-"""Helpers for analyzing and transforming method parameters."""
+"""Utilities for analyzing and transforming function and method parameters.
+
+This module provides helpers to decide whether the leading ``self`` or
+``cls`` parameter should be removed, and to construct or rewrite
+parameter lists when converting instance methods into top-level
+functions that accept fixtures.
+
+Publics:
+    should_remove_first_param, is_staticmethod, is_classmethod,
+    first_param_name, remove_method_self_references
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 
@@ -6,6 +20,10 @@ from __future__ import annotations
 import libcst as cst
 
 from .helpers import SelfReferenceRemover
+
+DOMAINS = ["converter", "parameters"]
+
+# Associated domains for this module
 
 
 def should_remove_first_param(node: cst.FunctionDef) -> bool:

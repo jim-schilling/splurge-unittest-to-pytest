@@ -1,9 +1,15 @@
-"""Pipeline stage to convert unittest decorators to pytest markers and
-fix problematic `from unittest.mock import ...` imports introduced by conversion.
+"""Convert unittest decorators to pytest markers and fix mock imports.
 
-This stage is conservative and focused on the common patterns seen in the
-sample data: `@unittest.skip`, `@unittest.expectedFailure`, and import lists
-that include non-importable names like `side_effect`.
+Rewrite decorators such as ``@unittest.skip`` into ``pytest.mark.skip`` and
+clean problematic ``from unittest.mock import ...`` imports so converted
+modules remain importable and compatible with pytest.
+
+Publics:
+    DecoratorAndMockTransformer
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
@@ -14,6 +20,10 @@ import json
 import importlib.resources as pkg_resources
 
 import libcst as cst
+
+DOMAINS = ["stages", "mocks"]
+
+# Associated domains for this module
 
 
 class DecoratorAndMockTransformer(cst.CSTTransformer):

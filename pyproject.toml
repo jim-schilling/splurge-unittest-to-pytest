@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.1.0"
+version = "2025.1.1"
 description = "Convert unittest-style tests to modern pytest-style tests using libcst"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["unittest", "pytest", "testing", "conversion", "refactoring"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers", 
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -76,6 +76,10 @@ python_version = "3.13"
 [tool.ruff]
 line-length = 120
 target-version = "py313"
+
+[tool.ruff.lint]
+ignore = ["E501"]
+extend-ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
