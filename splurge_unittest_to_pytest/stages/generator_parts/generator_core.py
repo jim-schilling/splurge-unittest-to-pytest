@@ -4,6 +4,10 @@ The ``GeneratorCore`` wires together small, testable components used by
 the generator pipeline: name allocation, annotation inferer, fixture
 builder, cleanup rewriter, and node emitter. It centralizes logic for
 creating fixture nodes and finalizing generated results.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -12,6 +12,10 @@ behaviour.
 
 Publics:
     main: Click entry point suitable for use as a console script.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import sys

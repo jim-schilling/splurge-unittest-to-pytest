@@ -3,6 +3,10 @@
 Small constructor helper that builds a :class:`libcst.FunctionDef` for a
 fixture given a name, body block, and decorator. Kept minimal so tests
 can directly assert expected node shapes.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

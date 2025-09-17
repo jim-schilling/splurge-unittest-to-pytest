@@ -8,6 +8,10 @@ the converter stages and make it easy to unit test import creation.
 
 Publics:
     make_pytest_import_stmt: Create a canonical ``import pytest`` statement node.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

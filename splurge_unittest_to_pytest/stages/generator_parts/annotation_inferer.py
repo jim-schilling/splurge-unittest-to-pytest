@@ -4,6 +4,10 @@ These helpers are intentionally small and deterministic to support
 unit tests for the generator. They detect simple literal container
 shapes (list, tuple, set, dict) and produce a libcst annotation node
 plus a set of typing names required by that annotation.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

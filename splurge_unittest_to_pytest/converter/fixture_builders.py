@@ -8,6 +8,10 @@ indicating whether a pytest import is required.
 
 Publics:
     build_fixtures_from_setup_assignments: Build fixture FunctionDef nodes and indicate pytest import need.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst

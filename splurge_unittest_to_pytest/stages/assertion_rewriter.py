@@ -7,6 +7,10 @@ rewrites ``assertRaises`` forms to use ``pytest.raises`` context managers.
 
 Publics:
     AssertionRewriter
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

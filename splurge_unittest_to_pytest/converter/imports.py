@@ -9,6 +9,10 @@ required after conversion.
 
 The helpers are intentionally minimal so they can be used from multiple
 conversion stages without producing duplicate imports.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any
