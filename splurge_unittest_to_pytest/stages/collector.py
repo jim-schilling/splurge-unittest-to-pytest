@@ -1,8 +1,9 @@
 """Collector stage: read-only visitor that collects facts from a module.
 
-This is intentionally minimal: collect setUp assignments and teardown statements
-for each class, plus module docstring index and import info. The goal is to
-provide a stable data shape for the next stages.
+This visitor collects per-class setup/teardown/test method metadata,
+assignments discovered inside ``setUp`` methods, top-level imports, and the
+module docstring location. The output is a :class:`CollectorOutput` used by
+downstream stages.
 """
 
 from __future__ import annotations
@@ -156,6 +157,13 @@ class Collector(cst.CSTVisitor):
             self._current_class.test_methods.append(node)
 
     def as_output(self) -> CollectorOutput:
+        """Return a populated :class:`CollectorOutput`.
+
+        If no data has been collected, this returns an empty-but-typed
+        :class:`CollectorOutput` instance so downstream stages can rely on a
+        stable shape.
+        """
+
         if self.output is None:
             return CollectorOutput(
                 module=self._module or cst.Module([]),

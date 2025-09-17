@@ -11,6 +11,12 @@ DOMAINS = ["stages", "diagnostics"]
 
 
 def diagnostics_enabled() -> bool:
+    """Return True when diagnostics are enabled via environment.
+
+    Reads the ``SPLURGE_ENABLE_DIAGNOSTICS`` environment variable and treats
+    common truthy values ("1", "true", "yes", "on") as enabled.
+    """
+
     val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")
     return val in ("1", "true", "True", "yes", "on")
 
@@ -29,7 +35,10 @@ _logger = logging.getLogger("splurge.diagnostics")
 def create_diagnostics_dir() -> Optional[Path]:
     """Create a per-run diagnostics directory and write a marker file.
 
-    Returns the created Path or None on failure or when diagnostics are disabled.
+    When diagnostics are enabled this function creates a temporary directory
+    (optionally under ``SPLURGE_DIAGNOSTICS_ROOT``) and writes a small marker
+    file containing the directory path. Returns the created :class:`Path` or
+    ``None`` when diagnostics are disabled or creation fails.
     """
     if not diagnostics_enabled():
         return None
@@ -73,10 +82,12 @@ def create_diagnostics_dir() -> Optional[Path]:
 
 
 def write_snapshot(out_dir: Optional[Path], filename: str, module: Any) -> None:
-    """Write a snapshot of `module` to `out_dir/filename`.
+    """Write a snapshot of ``module`` to ``out_dir/filename``.
 
-    The function is defensive: it no-ops when out_dir is None or the module
-    doesn't expose source code.
+    The function is defensive: it no-ops when ``out_dir`` is ``None`` or the
+    module does not expose source code. Any write failures are swallowed but
+    logged when diagnostics are enabled so instrumentation does not break
+    normal runs.
     """
     try:
         if out_dir is None:

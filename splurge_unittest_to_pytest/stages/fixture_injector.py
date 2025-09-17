@@ -1,8 +1,9 @@
-"""FixtureInjector: insert fixture FunctionDef nodes into a module body.
+"""Fixture injector stage: insert fixture FunctionDef nodes into a module body.
 
-This stage expects `fixture_nodes` in the context (list of cst.FunctionDef) and
-inserts them after the pytest import if present, else after module docstring or
-imports (similar to ImportInjector logic).
+This stage expects ``fixture_nodes`` in the pipeline context (a list of
+:class:`libcst.FunctionDef`) and inserts them into the module at a
+deterministic location: after the pytest import (if present), else after the
+module docstring or existing imports.
 """
 
 from __future__ import annotations
@@ -135,6 +136,14 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
 
 
 def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+    """Insert generated fixture functions into ``module``.
+
+    The stage will insert two empty-line sentinels before each top-level
+    fixture to ensure canonical spacing. It returns a mapping containing the
+    possibly-updated ``module`` and signals that ``pytest`` import is needed
+    via the ``needs_pytest_import`` key.
+    """
+
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     nodes: list[cst.FunctionDef] = context.get("fixture_nodes") or []

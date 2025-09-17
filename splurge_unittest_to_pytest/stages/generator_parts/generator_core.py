@@ -21,6 +21,23 @@ class GeneratorCore:
 
     The core can accept injected collaborators to make unit-testing and
     orchestration testing straightforward.
+
+    Methods
+    -------
+    make_fixture(base_name: str, body: str) -> cst.FunctionDef
+        Create a single fixture function from a body string. The method
+        allocates a unique name, rewrites cleanup code, builds a fixture
+        specification, attempts to infer a return annotation, and emits a
+        libcst.FunctionDef node for the fixture.
+
+    make_composite_dirs_fixture(base_name: str, mapping: dict[str, str]) -> cst.FunctionDef
+        Create a grouped yield-style fixture that returns a mapping of
+        attribute names to values. The mapping argument maps attribute
+        names to expression strings used to initialize the values.
+
+    finalize(prepend_nodes: list[cst.BaseStatement], fixture_nodes: list[cst.FunctionDef], specs: Mapping[str, Any], bundler_typing: set[str] | None = None) -> dict[str, object]
+        Annotate fixture nodes where possible, collect typing needs, and
+        return the final result dictionary expected by the pipeline.
     """
 
     def __init__(

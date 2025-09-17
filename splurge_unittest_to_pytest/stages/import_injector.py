@@ -3,8 +3,10 @@
 This stage inspects the generated module to determine which common imports
 are required (for example ``pytest`` or ``re``) and inserts them in a
 deterministic location after the module docstring or existing imports.
+
 It also supports inserting consolidated ``from typing import ...``
-statements when upstream stages request typing names.
+statements when upstream stages request typing names via the context key
+``'needs_typing_names'``.
 """
 
 from __future__ import annotations
@@ -20,6 +22,14 @@ DOMAINS = ["stages", "imports"]
 
 
 def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+    """Pipeline stage to ensure required imports exist in the module.
+
+    The stage inspects the pipeline context for flags (for example
+    ``needs_pytest_import``) and also scans the module text to conservatively
+    detect required imports. It returns a mapping containing the possibly
+    modified ``module`` under the same key.
+    """
+
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     # If flags are absent, default to adding pytest import to support

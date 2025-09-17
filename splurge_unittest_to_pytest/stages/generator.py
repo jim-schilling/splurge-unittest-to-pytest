@@ -1,5 +1,16 @@
-"""FixtureGenerator stage: produce FixtureSpec entries and cst.FunctionDef fixture nodes
-from CollectorOutput.
+"""Fixture generator stage: produce FixtureSpec entries and fixture nodes.
+
+This stage consumes a :class:`CollectorOutput` and emits two things in the
+pipeline context:
+
+- ``specs``: a mapping of fixture name -> :class:`FixtureSpec` describing
+    fixture metadata collected from ``setUp`` assignments.
+- ``fixture_nodes``: a list of :class:`libcst.FunctionDef` nodes that will be
+    inserted into the module by the fixture injector stage.
+
+The implementation delegates fine-grained inference (name allocation,
+filename inference, bundling) to helper modules under
+``stages/generator_parts`` so the logic remains testable and small.
 """
 
 from __future__ import annotations
@@ -36,6 +47,18 @@ class FixtureSpec:
     cleanup_statements: list[Any]
     yield_style: bool
     local_value_name: Optional[str] = None
+    """Specification for a generated fixture.
+
+    Attributes:
+        name: Fixture name.
+        value_expr: Optional expression to compute or return from the fixture.
+        cleanup_statements: Statements to run during teardown when the fixture
+            uses external resources.
+        yield_style: When ``True`` the fixture should be yield-style (uses
+            ``yield``) so teardown code can run after the test body.
+        local_value_name: Optional local identifier used when the fixture binds
+            to a generated variable name.
+    """
 
 
 def _is_literal(expr: Optional[cst.BaseExpression]) -> bool:

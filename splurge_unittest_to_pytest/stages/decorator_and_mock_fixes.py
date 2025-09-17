@@ -1,9 +1,10 @@
-"""Pipeline stage to convert unittest decorators to pytest markers and
-fix problematic `from unittest.mock import ...` imports introduced by conversion.
+"""Convert common unittest decorators to pytest markers and fix mock imports.
 
-This stage is conservative and focused on the common patterns seen in the
-sample data: `@unittest.skip`, `@unittest.expectedFailure`, and import lists
-that include non-importable names like `side_effect`.
+This conservative stage converts decorators such as ``@unittest.skip`` and
+``@unittest.expectedFailure`` to their :mod:`pytest` marker equivalents and
+also rewrites problematic ``from unittest.mock import ...`` import lists that
+may contain non-importable names. The transformation aims to produce
+importable, idiomatic pytest code while preserving semantics.
 """
 
 from __future__ import annotations

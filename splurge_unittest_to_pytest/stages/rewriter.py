@@ -1,8 +1,9 @@
-"""TestMethodRewriter stage: rewrite test methods to accept fixtures instead of self/cls.
+"""Rewrite test methods to accept fixtures instead of ``self``/``cls``.
 
-This stage expects `collector_output` in the context and will remove the
-first parameter from test methods if it's `self` or `cls`, then append fixture
-parameters inferred from the class's `setup_assignments` keys.
+This stage expects ``collector_output`` in the pipeline context and updates
+method signatures for test methods found in classes by removing the leading
+``self``/``cls`` parameter where appropriate and appending fixture parameters
+inferred from the class's ``setup_assignments``.
 """
 
 from __future__ import annotations

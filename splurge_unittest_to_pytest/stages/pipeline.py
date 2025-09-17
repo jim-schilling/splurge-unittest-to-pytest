@@ -40,8 +40,10 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
             consult this object when present.
 
     Returns:
-        The transformed libcst.Module. If the pipeline fails or returns a
-        non-module result, the original module is returned as a safe fallback.
+        The transformed :class:`libcst.Module`.
+
+        If the pipeline fails or returns a non-module result, the original
+        module is returned as a safe fallback.
     """
     mgr = StageManager()
 

@@ -84,9 +84,14 @@ class StageManager:
     def run(self, module: cst.Module, initial_context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Run registered stages over `module`.
 
-        An optional `initial_context` dict can be provided to seed the pipeline
-        context (for example configuration flags like 'autocreate'). This is
-        used by the pipeline runner to pass CLI/runtime options into stages.
+        Args:
+            module: The :class:`libcst.Module` to operate on.
+            initial_context: Optional mapping to seed the pipeline context (for
+                example configuration flags like ``'autocreate'``). This is used
+                by the pipeline runner to pass CLI/runtime options into stages.
+
+        Returns:
+            The final pipeline context mapping after all stages have executed.
         """
         context: dict[str, Any] = {"module": module}
         if initial_context and isinstance(initial_context, dict):

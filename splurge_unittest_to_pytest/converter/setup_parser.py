@@ -10,9 +10,13 @@ DOMAINS = ["converter"]
 
 
 def parse_setup_assignments(node: cst.FunctionDef) -> dict[str, cst.BaseExpression]:
-    """Parse a setUp function to extract assignments to self.<attr>.
+    """Parse a ``setUp`` function to extract assignments to ``self.<attr>``.
 
-    Returns a dict mapping attribute name -> assigned expression.
+    Args:
+        node: A :class:`libcst.FunctionDef` node representing a ``setUp`` method.
+
+    Returns:
+        A mapping from attribute name to the assigned :class:`libcst.BaseExpression`.
     """
     assignments: dict[str, cst.BaseExpression] = {}
     for stmt in node.body.body:

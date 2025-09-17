@@ -1,9 +1,8 @@
 """Tidy stage: central spacing and light post-processing.
 
-This stage delegates spacing normalization to the shared
-`formatting.normalize_module` helper (ensures import grouping, dedup,
-and consistent blank-line counts). It also ensures class test methods
-have a `self` parameter when appropriate.
+Delegates spacing normalization to :func:`formatting.normalize_module` (to
+ensure import grouping, deduplication, and consistent blank-line counts).
+Also ensures class test methods have a ``self`` parameter when appropriate.
 """
 
 from __future__ import annotations
