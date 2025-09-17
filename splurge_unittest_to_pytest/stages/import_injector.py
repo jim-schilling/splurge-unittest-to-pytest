@@ -1,7 +1,10 @@
 """Ensure required imports (pytest, re, typing, etc.) exist in the module.
 
 Insert deterministic imports after the docstring or existing imports and
-support optional `from typing import ...` insertion when requested.
+support optional ``from typing import ...`` insertion when requested by
+upstream stages. The injector is conservative and avoids duplicating
+existing imports while remaining deterministic about insertion order.
+
 """
 
 from __future__ import annotations

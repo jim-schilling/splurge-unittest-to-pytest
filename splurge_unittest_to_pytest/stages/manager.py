@@ -1,7 +1,10 @@
-"""StageManager that registers and runs pipeline stages.
+"""Stage manager for registering and executing pipeline stages.
 
 Provides registration and execution helpers for stages that mutate a
-shared pipeline context mapping.
+shared pipeline context mapping. The manager also optionally writes
+diagnostic snapshots when diagnostics are enabled to help debug stage
+transformations.
+
 """
 
 from __future__ import annotations

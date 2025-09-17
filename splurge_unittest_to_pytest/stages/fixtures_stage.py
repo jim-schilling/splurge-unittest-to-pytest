@@ -1,8 +1,12 @@
-"""Convert class setUp/tearDown into top-level pytest functions.
+"""Convert class setUp/tearDown methods into top-level pytest functions.
 
 Consumes ``collector_output`` and emits top-level pytest functions derived
 from recorded setup assignments. When provided, a ``pattern_config`` may
 customize which method names are treated as setup/teardown.
+
+This stage focuses on producing runnable pytest-style modules by mapping
+TestCase patterns into fixture-driven functions.
+
 """
 
 from __future__ import annotations

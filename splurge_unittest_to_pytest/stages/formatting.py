@@ -1,7 +1,10 @@
-"""Formatting helpers for pipeline stages.
+"""Formatting helpers used by multiple pipeline stages.
 
 Normalize module- and class-level spacing and make blank-line counts
-deterministic across stages.
+deterministic across stages. Helpers include class-body spacing normalization
+and import grouping so the final tidy stage can produce stable, human-
+readable output.
+
 """
 
 from __future__ import annotations
