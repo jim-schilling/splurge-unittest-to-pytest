@@ -1,8 +1,7 @@
-"""Ensure required imports (pytest, re, typing) are present in the module.
+"""Ensure required imports (pytest, re, typing, etc.) exist in the module.
 
-Inserts deterministic imports after the module docstring or existing
-imports and supports injecting ``from typing import ...`` when requested
-via the pipeline context.
+Insert deterministic imports after the docstring or existing imports and
+support optional `from typing import ...` insertion when requested.
 """
 
 from __future__ import annotations
@@ -18,12 +17,10 @@ DOMAINS = ["stages", "imports"]
 
 
 def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
-    """Pipeline stage to ensure required imports exist in the module.
+    """Pipeline stage that ensures required imports exist in the module.
 
-    The stage inspects the pipeline context for flags (for example
-    ``needs_pytest_import``) and also scans the module text to conservatively
-    detect required imports. It returns a mapping containing the possibly
-    modified ``module`` under the same key.
+    Inspects context flags (for example ``needs_pytest_import``) and scans
+    the module to detect and insert required imports deterministically.
     """
 
     maybe_module = context.get("module")

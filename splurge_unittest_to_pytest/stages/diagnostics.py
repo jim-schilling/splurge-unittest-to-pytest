@@ -11,11 +11,9 @@ DOMAINS = ["stages", "diagnostics"]
 
 
 def diagnostics_enabled() -> bool:
-    """Return True when diagnostics are enabled via environment.
+    """Return True when diagnostics are enabled via environment var.
 
-    Reads the ``SPLURGE_ENABLE_DIAGNOSTICS`` environment variable and treats
-    common truthy values (``"1"``, ``"true"``, ``"yes"``, ``"on"``) as
-    enabled.
+    Treats common truthy values ("1", "true", "yes", "on") as enabled.
     """
 
     val = os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS", "0")

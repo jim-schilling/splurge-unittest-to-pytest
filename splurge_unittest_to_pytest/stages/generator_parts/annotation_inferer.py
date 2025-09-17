@@ -11,14 +11,12 @@ DOMAINS = ["generator", "transform", "literals"]
 
 
 def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression | None, Set[str]]:
-    """Return an annotation node for a literal-like expression.
+    """Return a typing annotation node for a literal-like expression.
 
-    This helper mirrors logic previously embedded in `stages/generator.py`.
-    It detects common container literal shapes (``List``, ``Tuple``,
-    ``Set``, ``Dict``) and returns a :class:`libcst` node representing the
-    typing subscript (for example, ``List[str]``) plus a set of typing names
-    required by the annotation. If no specific typing can be inferred, the
-    function returns ``(None, set())``.
+    Detects container literal shapes (List, Tuple, Set, Dict) and returns
+    a libcst annotation node (for example, ``List[str]``) plus a set of
+    typing names required by that annotation. Returns ``(None, set())`` if
+    no specific typing can be inferred.
     """
     names: Set[str] = set()
     if isinstance(node, cst.List):

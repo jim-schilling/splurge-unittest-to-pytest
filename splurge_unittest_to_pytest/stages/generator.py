@@ -40,17 +40,9 @@ class FixtureSpec:
     cleanup_statements: list[Any]
     yield_style: bool
     local_value_name: Optional[str] = None
-    """Specification for a generated fixture.
+    """Data container describing a generated fixture.
 
-    Attributes:
-        name: Fixture name.
-        value_expr: Optional expression to compute or return from the fixture.
-        cleanup_statements: Statements to run during teardown when the fixture
-            uses external resources.
-        yield_style: When ``True`` the fixture should be yield-style (uses
-            ``yield``) so teardown code can run after the test body.
-        local_value_name: Optional local identifier used when the fixture binds
-            to a generated variable name.
+    Fields mirror the earlier inlined FixtureSpec used by the generator.
     """
 
 
