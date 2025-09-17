@@ -47,7 +47,7 @@ def test_params_helpers():
 
     # build parameters
     existing = cst.Parameters()
-    p = params.make_fixture_params(existing, ["a", "b"])
+    p = params.make_fixture_params(["a", "b"])
     assert any(param.name.value == "a" for param in p.params)
 
     combined = params.append_fixture_params(existing, ["x"])

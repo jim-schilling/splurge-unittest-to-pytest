@@ -1,7 +1,9 @@
-"""Helper to infer filename string literals from recorded local assignments.
+"""Infer filename string literals from recorded local assignments.
 
-This logic was extracted from stages/generator.py to simplify testing and
-separate concerns.
+Extracted from ``stages/generator.py`` to simplify testing and separate
+concerns. The primary function returns a filename string when a recorded
+local assignment corresponds to a Call whose first positional argument is
+a string literal.
 """
 
 from __future__ import annotations

@@ -1,7 +1,10 @@
-"""Pipeline stage: remove unittest imports and strip unittest.TestCase inheritance.
+"""Pipeline stage that removes unittest imports and TestCase inheritance.
 
-This stage ensures that converted modules no longer retain the unittest import
-or TestCase base classes which were previously removed by the legacy transformer.
+This stage removes top-level imports of ``unittest`` and strips
+``unittest.TestCase`` (or bare ``TestCase``) from class bases. It also
+eliminates common ``if __name__ == '__main__'`` guards that call test
+runners such as ``unittest.main()`` to avoid executing tests when pytest
+imports the generated module.
 """
 
 from __future__ import annotations

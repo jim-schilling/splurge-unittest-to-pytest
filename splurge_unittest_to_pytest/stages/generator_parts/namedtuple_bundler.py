@@ -1,12 +1,9 @@
 """Bundle local assignments into NamedTuple containers and emit fixtures.
 
-This module extracts the NamedTuple-bundling logic from the large
-`stages/generator.py` file so it can be unit-tested in isolation.
-
-Public API:
-    bundle_named_locals(out_classes, existing_top_names) -> tuple[list[cst.BaseStatement], set[str]]
-
-The function returns (fixture_nodes_to_prepend, typing_names_required).
+Extracted from the generator to enable isolated testing. The primary
+function ``bundle_named_locals`` groups recorded local assignments that
+share a call site, emits a small ``NamedTuple`` container class and a
+composite fixture that constructs instances of that container.
 """
 
 from __future__ import annotations

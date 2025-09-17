@@ -1,5 +1,8 @@
-"""PostValidator stage: sanity-check the generated module by attempting to
-serialize and parse it back, returning errors if any.
+"""Post-validation stage that sanity-checks generated modules.
+
+Attempts to parse the generated module source to detect serialization or
+syntax errors introduced during conversion. If parsing fails the stage
+attaches a ``postvalidator_error`` entry to the pipeline context.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""Small utility to detect simple 'literal-ish' libcst expressions.
+"""Utilities to detect simple literal-like libcst expressions.
 
-Extracted from stages/generator.py so it can be unit-tested independently
-and reused by other generator helpers.
+Extracted from ``stages/generator.py`` to enable focused testing and reuse
+by generator helper components.
 """
 
 from __future__ import annotations

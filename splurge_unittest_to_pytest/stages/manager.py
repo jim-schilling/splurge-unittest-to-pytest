@@ -1,8 +1,8 @@
-"""StageManager skeleton for orchestrating converter stages.
+"""StageManager for orchestrating converter stages.
 
-This minimal manager supports registering callables that accept and return a
-`context` mapping. The context starts with the `module` (cst.Module) and may be
-extended with stage outputs (e.g., collector_output).
+The manager registers stage callables that accept and return a ``context``
+mapping. The pipeline context begins with the ``module`` (a ``cst.Module``)
+and is extended by stage outputs such as ``collector_output``.
 """
 
 from __future__ import annotations

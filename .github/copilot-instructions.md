@@ -29,7 +29,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Create project CHANGELOG.md which details changes for each version/feature-branch.
 - Create docs/README-DETAILS.md which details project features, usage, errors, dependencies, etc.
 - Create sub-folders under docs/: research/, plans/, specs/, issues/.
-- For code projects, create top-level folders: tests/, examples/, specs/.
+- For code projects, create top-level folders: tests/, examples/, and tools/.
 - For code projects, create sub-folders under tests/: unit/, integration/, e2e/.
 - For Python projects, create modern, standardized pyproject.toml.
 - For Python projects, use CalVer versioning.
@@ -99,6 +99,8 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - For SQL, prefer lower case column names.
 - Prefer upper snake case for constant names.
 - Environment variable names MUST use a project prefix [A-Z][A-Z0-9_]*_ (e.g., SPLURGE_DSV_).
+- Test module names should mirror the domains associated with the modules, where DOMAINS is a list of the module's domain names.
+ - e.g., for a module that has DOMAINS = ['dsv', 'csv'], the test module should be named test_csv_dsv_[SEQUENCE].py, where [SEQUENCE] is a unique identifier for the test module.
 
 ## Method Standards
 - Prefer parameters in method signatures and method calls to be listed on separate lines.
@@ -153,7 +155,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 ## Testing Standards
 - Validate behavior of public APIs only.
 - Prefer validation using actual data, interfaces, and objects
-- Avoid or minimize use of mocks, except where appropriate.
+- Minimize use of mocks, except where appropriate.
 - Target 85% code coverage for all public interfaces and methods.
 - Prefer shared helpers for common logic.
 - Avoid validation of implementation details and private APIs.

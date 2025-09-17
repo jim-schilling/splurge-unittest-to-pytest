@@ -1,11 +1,8 @@
-"""Canonical small helper implementations for the converter package.
+"""Canonical helper implementations for the converter package.
 
-This module centralizes small, well-tested helpers used internally by the
-converter. It is the canonical location for normalization, parsing, and
-change-detection helpers. These implementations were moved here during the
-simplification refactor. Note: `converter.core` (a prior thin shim) was
-removed to reduce indirection; consumers should import from this module if
-they must access internal helpers.
+This module centralizes small, well-tested helpers used by the converter
+stages. Helpers include name normalization, pattern parsing, AST
+transform utilities, and change-detection routines.
 """
 
 from __future__ import annotations
@@ -21,7 +18,12 @@ DOMAINS = ["converter", "helpers"]
 
 
 class SelfReferenceRemover(cst.CSTTransformer):
-    """Remove self/cls references from attribute accesses."""
+    """Remove ``self``/``cls`` references from attribute accesses.
+
+    Useful when creating top-level functions from instance methods; the
+    transformer replaces ``self.attr`` with ``attr`` by stripping the
+    attribute's value when it references the instance name.
+    """
 
     def __init__(self, param_names: set[str] | None = None) -> None:
         self.param_names = param_names or {"self", "cls"}
@@ -33,7 +35,11 @@ class SelfReferenceRemover(cst.CSTTransformer):
 
 
 def normalize_method_name(name: str) -> str:
-    """Normalize method name for pattern matching (convert camelCase to snake_case)."""
+    """Normalize a method name for pattern matching.
+
+    Converts CamelCase or mixedCase identifiers into snake_case which makes
+    pattern matching and comparisons more predictable.
+    """
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
@@ -41,7 +47,12 @@ def normalize_method_name(name: str) -> str:
 def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> list[str]:
     """Parse method patterns supporting comma-separated values and multiple flags.
 
-    Returns a list of unique patterns preserving order.
+    Args:
+        pattern_args: A tuple or list of pattern arguments as provided by the
+            CLI or None.
+
+    Returns:
+        A list of unique pattern strings in their original order.
     """
     if not pattern_args:
         return []
@@ -67,12 +78,17 @@ def parse_method_patterns(pattern_args: tuple[str, ...] | list[str] | None) -> l
 
 
 def has_meaningful_changes(original_code: str, converted_code: str) -> bool:
-    """Return True if converted_code has meaningful differences from original_code.
+    """Return True if ``converted_code`` has meaningful differences from ``original_code``.
 
-    This function tries three strategies in order:
-    1. Normalize both modules using the project's formatting normalizer and compare.
-    2. Compare the ASTs (ignoring formatting-only differences).
+    The function uses three strategies in order:
+
+    1. Normalize both modules with the project's formatting normalizer and
+       compare the resulting source text.
+    2. Compare Python AST dumps to ignore formatting-only differences.
     3. Fallback to direct text comparison.
+
+    Returns:
+        ``True`` if a meaningful difference is detected, otherwise ``False``.
     """
     # Try formatting-normalized comparison first. If normalized modules are
     # identical, then there is no meaningful change. If they differ, do not

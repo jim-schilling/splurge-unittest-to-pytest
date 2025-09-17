@@ -1,6 +1,8 @@
 """Heuristics to detect simple cleanup statements used by the generator.
 
-Extracted from stages/generator.py to enable focused testing.
+Provides helpers to identify simple cleanup patterns (assignments or
+deletes targeting ``self.<attr>`` / ``cls.<attr>`` or bare attribute names)
+so the generator can emit corresponding teardown fixtures.
 """
 
 from __future__ import annotations

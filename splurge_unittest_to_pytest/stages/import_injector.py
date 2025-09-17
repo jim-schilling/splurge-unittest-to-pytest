@@ -1,4 +1,11 @@
-"""ImportInjector: ensure `import pytest` exists and insert it after module docstring or imports."""
+"""Ensure necessary imports (pytest, re, typing) exist in the module.
+
+This stage inspects the generated module to determine which common imports
+are required (for example ``pytest`` or ``re``) and inserts them in a
+deterministic location after the module docstring or existing imports.
+It also supports inserting consolidated ``from typing import ...``
+statements when upstream stages request typing names.
+"""
 
 from __future__ import annotations
 

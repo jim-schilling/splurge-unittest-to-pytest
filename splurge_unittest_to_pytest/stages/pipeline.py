@@ -1,4 +1,11 @@
-"""Pipeline runner wiring the individual stages into a conversion pipeline."""
+"""Pipeline runner wiring the individual stages into a conversion pipeline.
+
+This module constructs the staged pipeline and provides ``run_pipeline``
+which accepts a parsed ``libcst.Module`` and returns a transformed
+``libcst.Module``. The runner accepts an optional ``pattern_config`` which
+is injected into the pipeline initial context for stages that consult
+method-name patterns.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +27,22 @@ DOMAINS = ["stages", "pipeline"]
 # Associated domains for this module
 
 
-def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
+def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: Any | None = None) -> cst.Module:
+    """Run the conversion pipeline on a libcst.Module and return transformed Module.
+
+    Args:
+        module: The parsed libcst.Module to transform.
+        autocreate: Flag propagated to stages indicating whether autocreation
+            of tmp_path-backed fixtures should be enabled.
+        pattern_config: Optional PatternConfigurator injected into the
+            initial pipeline context under the key 'pattern_config'. Stages
+            that perform method-name matching (setup/teardown/test) should
+            consult this object when present.
+
+    Returns:
+        The transformed libcst.Module. If the pipeline fails or returns a
+        non-module result, the original module is returned as a safe fallback.
+    """
     mgr = StageManager()
 
     def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
@@ -87,7 +109,14 @@ def run_pipeline(module: cst.Module, autocreate: bool = True) -> cst.Module:
 
     # execute the pipeline and return the final module
     # Provide flags via initial context so stages can opt-in/out deterministically
-    context = mgr.run(module, initial_context={"autocreate": autocreate})
+    # Provide flags via initial context so stages can opt-in/out deterministically
+    # Include an optional `pattern_config` so stages that care about method
+    # name matching can consult the configured patterns.
+    initial_ctx: dict[str, Any] = {"autocreate": autocreate}
+    if pattern_config is not None:
+        initial_ctx["pattern_config"] = pattern_config
+
+    context = mgr.run(module, initial_context=initial_ctx)
     result = context.get("module")
     try:
         # Only call dump_final when we actually have a Module instance.

@@ -15,7 +15,7 @@ def test_get_fixture_param_names_order():
 
 
 def test_make_fixture_params_creates_params():
-    p = conv_params.make_fixture_params(cst.Parameters(), ["fx", "fy"])
+    p = conv_params.make_fixture_params(["fx", "fy"])
     assert isinstance(p, cst.Parameters)
     assert [param.name.value for param in p.params] == ["fx", "fy"]
 

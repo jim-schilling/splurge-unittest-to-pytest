@@ -13,9 +13,9 @@ DOMAINS = ["generator", "naming"]
 def collect_module_level_names(module_obj: Any) -> Set[str]:
     """Collect top-level names defined in a module node.
 
-    Mirrors the legacy logic in `stages/generator.py`: collects assigned
-    names, function and class names, and import targets/aliases. Accepts
-    a possibly-non-module input and returns an empty set in that case.
+    Collects assigned names, function/class names, and import targets or
+    aliases. If the provided object is not a ``cst.Module`` an empty set is
+    returned.
     """
     names: Set[str] = set()
     module = module_obj if isinstance(module_obj, cst.Module) else None

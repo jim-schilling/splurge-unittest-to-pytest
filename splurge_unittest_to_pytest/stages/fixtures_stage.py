@@ -1,9 +1,18 @@
-"""Fixtures stage: remove class setUp/tearDown methods and add fixture params to tests.
+"""Fixtures stage: remove class setUp/tearDown and emit top-level pytest functions.
 
-This stage consumes `collector_output` (CollectorOutput) and `fixture_specs` produced
-by the `generator_stage`. It removes the class-level setup/teardown methods and
-updates test method signatures to remove instance/class first params and add
-fixture parameters (one per setup attribute) so tests receive the generated fixtures.
+This stage consumes ``collector_output`` (a ``CollectorOutput``) produced
+by the collector stage. Responsibilities:
+
+- Drop class-level unittest ``setUp``/``tearDown`` methods when operating
+    in strict pytest mode.
+- Emit top-level pytest functions that accept fixture parameters derived
+    from recorded setup assignments.
+- Update test method signatures when required.
+
+Stages may provide an optional ``pattern_config`` in the pipeline context
+under the key ``'pattern_config'``. When present the stage consults
+``pattern_config._is_setup_method`` / ``pattern_config._is_teardown_method``
+to determine which method names should be treated as setup/teardown.
 """
 
 from __future__ import annotations
@@ -30,11 +39,11 @@ DOMAINS = ["stages", "fixtures"]
 
 
 def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], remove_first: bool) -> cst.FunctionDef:
-    """Ensure instance methods keep `self`/`cls` (unless staticmethod) and append fixtures.
+    """Ensure instance methods keep ``self``/``cls`` (unless staticmethod) and append fixtures.
 
-    We intentionally do not remove the first parameter; instead we make sure runnable
-    instance methods accept `self` (or `cls` for classmethods) and have fixture
-    parameters appended after existing parameters.
+    This function updates the given ``FunctionDef`` to ensure it either
+    keeps the instance/class first parameter (for runnability) or has it
+    removed with fixture parameters appended depending on ``remove_first``.
     """
     params = list(fn.params.params)
     # detect staticmethod/classmethod decorators using consolidated helpers
@@ -75,12 +84,26 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     if module is None or collector is None:
         return {"module": module}
 
-    # Allow configurable setup/teardown name lists via collector output when available
+    # Allow configurable setup/teardown name lists via a PatternConfigurator
+    # provided in the pipeline context under the 'pattern_config' key.
+    pattern_config: Optional[Any] = context.get("pattern_config")
+
     def _is_setup_name(name: str) -> bool:
-        # Collector records canonical setUp names; fall back to common defaults
+        # If a PatternConfigurator is provided, use its normalized matching
+        # helpers; otherwise fall back to common defaults.
+        try:
+            if pattern_config is not None:
+                return bool(getattr(pattern_config, "_is_setup_method", lambda n: False)(name))
+        except Exception:
+            pass
         return name in ("setUp", "setUpClass")
 
     def _is_teardown_name(name: str) -> bool:
+        try:
+            if pattern_config is not None:
+                return bool(getattr(pattern_config, "_is_teardown_method", lambda n: False)(name))
+        except Exception:
+            pass
         return name in ("tearDown", "tearDownClass")
 
     # module body may contain BaseStatement elements; some class members

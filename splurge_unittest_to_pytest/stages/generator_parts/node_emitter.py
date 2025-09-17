@@ -11,8 +11,9 @@ DOMAINS = ["generator"]
 class NodeEmitter:
     """Emit libcst AST nodes for fixtures from small body source strings.
 
-    The emitter creates a FunctionDef node from simple lines or builds a
-    composite dirs fixture when requested.
+    The emitter creates a ``FunctionDef`` node from simple source lines
+    or builds composite fixture nodes (for example, fixtures that yield a
+    dict) when requested.
     """
 
     def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:

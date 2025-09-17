@@ -1,7 +1,10 @@
-"""Raises stage: handle various forms of assertRaises/assertRaisesRegex.
+"""Handle conversion of unittest assertRaises forms to pytest.raises.
 
-This stage focuses on converting both context-manager uses and callable-form
-uses of assertRaises/assertRaisesRegex into pytest.raises equivalents.
+This stage converts both context-manager and callable forms of
+``assertRaises``/``assertRaisesRegex`` into ``pytest.raises`` constructs.
+It also rewrites uses that bind exception objects (e.g., ``as cm``)
+so attribute access like ``cm.exception`` becomes ``cm.value`` to match
+pytest's ``ExceptionInfo`` API.
 """
 
 from __future__ import annotations
@@ -16,13 +19,12 @@ DOMAINS = ["stages", "exceptions"]
 
 
 class ExceptionAttrRewriter(cst.CSTTransformer):
-    """Transformer to rewrite NAME.exception -> NAME.value for a target name.
+    """Rewrite ``NAME.exception`` to ``NAME.value`` for a target name.
 
-    This is used after converting a unittest assertRaises context-manager to
-    pytest.raises when the original code bound the exception to a context
-    variable (e.g., `as cm`). Pytest exposes the caught exception via
-    ExceptionInfo.value, so accesses like `cm.exception` should become
-    `cm.value`.
+    After converting ``assertRaises`` context managers to ``pytest.raises``
+    the bound exception object is an ``ExceptionInfo`` whose attribute is
+    ``value`` rather than ``exception``. This transformer updates attribute
+    accesses accordingly while respecting lexical shadowing.
     """
 
     def __init__(self, target_name: str) -> None:
@@ -104,12 +106,14 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
 
 
 class RaisesRewriter(cst.CSTTransformer):
-    """Rewrites assertRaises forms to pytest.raises.
+    """Rewrite ``assertRaises`` usages into ``pytest.raises`` equivalents.
 
-    - with self.assertRaises(E): ...  -> with pytest.raises(E): ...
-    - with self.assertRaisesRegex(E, 'pat'): -> with pytest.raises(E, match='pat'):
-    - self.assertRaises(E, func, *args) -> with pytest.raises(E): func(*args)
-    - self.assertRaisesRegex(E, 'pat', func, *args) -> with pytest.raises(E, match='pat'): func(*args)
+    Supported rewrites include:
+
+    - ``with self.assertRaises(E): ...`` -> ``with pytest.raises(E): ...``
+    - ``with self.assertRaisesRegex(E, 'pat')`` -> ``with pytest.raises(E, match='pat')``
+    - ``self.assertRaises(E, func, *args)`` -> ``with pytest.raises(E): func(*args)``
+    - Callable forms with regex -> ``pytest.raises(..., match=...)``
     """
 
     def __init__(self) -> None:
