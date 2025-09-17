@@ -1,3 +1,10 @@
+"""Collect attribute names referenced through ``self``/``cls``.
+
+This helper walks libcst expressions and returns attribute names that
+are accessed by ``self`` or ``cls``. It is defensive against unusual
+node shapes to keep generator tests stable.
+"""
+
 from typing import Any, Set
 
 import libcst as cst

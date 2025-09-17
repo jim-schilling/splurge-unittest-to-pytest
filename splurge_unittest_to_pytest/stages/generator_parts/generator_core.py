@@ -1,3 +1,11 @@
+"""Compact core that composes generator collaborators.
+
+The ``GeneratorCore`` wires together small, testable components used by
+the generator pipeline: name allocation, annotation inferer, fixture
+builder, cleanup rewriter, and node emitter. It centralizes logic for
+creating fixture nodes and finalizing generated results.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Mapping

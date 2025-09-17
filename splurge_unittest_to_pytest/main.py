@@ -1,8 +1,7 @@
-"""Main conversion functions and utilities.
+"""Main conversion helpers used by the CLI and programmatic callers.
 
-This module exposes the programmatic conversion helpers used by the CLI and
-consumer code. Public helpers include ``convert_string``, ``convert_file``,
-and ``PatternConfigurator``.
+Public helpers include ``convert_string``, ``convert_file``, and the
+``PatternConfigurator`` helper used to customize method-name matching.
 """
 
 from dataclasses import dataclass

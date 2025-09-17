@@ -1,3 +1,11 @@
+"""Emit libcst nodes for generated fixtures.
+
+This module contains a small emitter that constructs
+:class:`libcst.FunctionDef` nodes from short source fragments. It is
+kept minimal so generator unit tests can rely on predictable node
+structures.
+"""
+
 import libcst as cst
 from libcst import parse_statement
 from typing import List

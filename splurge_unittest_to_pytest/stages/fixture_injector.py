@@ -1,10 +1,8 @@
-"""Insert generated fixture functions into the module body.
+"""Insert generated fixture functions into a module body.
 
-Places fixtures deterministically after imports or the module docstring and
-signals that the ``pytest`` import is required. Generated fixtures are
-inserted with deterministic spacing so subsequent normalization yields stable
-output.
-
+Places fixtures deterministically after imports or the module docstring
+and signals that the ``pytest`` import is required. Fixtures are inserted
+with stable spacing so later normalization produces predictable output.
 """
 
 from __future__ import annotations

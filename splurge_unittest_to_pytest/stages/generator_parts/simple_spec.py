@@ -1,3 +1,10 @@
+"""Container for a small fixture specification used in the generator.
+
+The dataclass holds the parsed information for a fixture candidate so
+the generator code can reason about yield-style fixtures and cleanup
+statements.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

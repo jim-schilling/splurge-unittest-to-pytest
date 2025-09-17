@@ -1,8 +1,9 @@
-"""Raises/assertRaises conversion helpers.
+"""Helpers to build :mod:`pytest` raises context managers.
 
-Pure helper functions that build libcst nodes for pytest.raises usage. These
-helpers do not touch transformer instance state (e.g. flags) so they can be
-tested independently; the transformer will set flags and delegate to them.
+The helpers in this module construct :class:`libcst.Call` and
+:class:`libcst.WithItem` nodes that represent ``pytest.raises(...)``
+context managers. They are intentionally pure functions so they can be
+tested independently from transformer state.
 """
 
 from __future__ import annotations

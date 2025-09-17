@@ -1,8 +1,11 @@
-"""Assertion conversion helpers extracted from the monolithic converter.
+"""Helpers for converting unittest assertion methods to pytest asserts.
 
-These helpers are pure functions (avoid touching transformer instance state)
-so they can be moved and tested independently. Instance methods in the
-transformer will delegate to these functions.
+This module exposes small, pure functions that translate common
+``unittest`` style assertions (for example ``assertEqual`` or
+``assertTrue``) into equivalent :mod:`libcst` nodes that produce the
+corresponding pytest-style ``assert`` statements. The functions are
+designed to be independent of transformer state so they can be tested
+in isolation and reused by the conversion transformer.
 """
 
 from __future__ import annotations

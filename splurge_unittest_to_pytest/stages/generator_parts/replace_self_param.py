@@ -1,3 +1,10 @@
+"""Transformer to replace ``self``/``cls`` attribute access with params.
+
+Used by the generator to convert attribute accesses like ``self.x`` into
+plain parameter names when the attribute is intended to be provided as a
+fixture parameter.
+"""
+
 from __future__ import annotations
 
 import libcst as cst

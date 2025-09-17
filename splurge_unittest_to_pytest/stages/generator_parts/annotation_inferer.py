@@ -1,3 +1,11 @@
+"""Infer simple typing annotations from literal libcst expressions.
+
+These helpers are intentionally small and deterministic to support
+unit tests for the generator. They detect simple literal container
+shapes (list, tuple, set, dict) and produce a libcst annotation node
+plus a set of typing names required by that annotation.
+"""
+
 from __future__ import annotations
 
 from typing import Tuple, Set

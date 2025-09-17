@@ -1,3 +1,11 @@
+"""Safe wrapper around the named-local bundler.
+
+The bundler may raise exceptions for complex inputs; this small wrapper
+ensures the generator remains robust by catching errors and returning a
+well-formed, empty result on failure. It mirrors the production API but
+is defensive for tests.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Set, Tuple

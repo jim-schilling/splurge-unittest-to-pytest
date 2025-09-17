@@ -1,3 +1,10 @@
+"""Detect whether generated cleanup code requires the ``shutil`` API.
+
+The routine renders small statement nodes to source and looks for
+``shutil`` usage. It is deliberately conservative and returns False on
+rendering errors.
+"""
+
 from __future__ import annotations
 
 from typing import Sequence, Any

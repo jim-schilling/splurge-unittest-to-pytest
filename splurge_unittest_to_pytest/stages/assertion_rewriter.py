@@ -1,11 +1,9 @@
-"""Rewrite unittest-style assertions to pytest-style asserts and context managers.
-
-Converts calls like ``self.assertEqual`` to ``assert`` and rewrites
-``assertRaises`` forms to ``pytest.raises``.
+"""Rewrite unittest-style assertions into pytest-style assertions.
 
 This module provides :class:`AssertionRewriter`, a :class:`libcst.CSTTransformer`
-used by the conversion pipeline to translate unittest-style assertions into
-idiomatic pytest assertions and context managers.
+that converts common unittest assertion calls (for example
+``self.assertEqual``) into native Python ``assert`` statements and
+rewrites ``assertRaises`` forms to use ``pytest.raises`` context managers.
 """
 
 from __future__ import annotations

@@ -1,12 +1,13 @@
 """Command line interface for splurge-unittest-to-pytest.
 
-This module exposes the console entrypoint ``main`` (a Click command).
-It parses CLI flags including ``--setup-methods``, ``--teardown-methods``,
-and ``--test-methods`` and wires those pattern lists into the conversion
-implementation. For dry-run conversions a ``PatternConfigurator`` is
-constructed and passed to ``convert_string``; for non-dry-run conversions
-the raw pattern lists are forwarded to ``convert_file`` which will build
-the configurator and inject it into the pipeline context.
+This module exposes the Click-based console entry point ``main`` used to
+invoke conversions from the command line. It parses CLI flags such as
+``--setup-methods``, ``--teardown-methods``, and ``--test-methods`` and
+forwards them to the conversion helpers. The CLI supports dry-run
+behavior and output redirection.
+
+The primary public symbol is ``main`` which is a Click command
+function suitable for use as a console script entry point.
 """
 
 import sys

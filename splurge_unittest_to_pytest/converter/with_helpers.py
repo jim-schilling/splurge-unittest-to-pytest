@@ -1,4 +1,10 @@
-"""Helpers for converting unittest assertRaises context managers to pytest.raises."""
+"""Convert unittest ``assertRaises`` context managers to pytest ``raises``.
+
+Contains a small, pure helper that inspects a :class:`libcst.With` node
+and returns a transformed :class:`libcst.With` using ``pytest.raises``
+when a matching ``assertRaises`` invocation is found. The helper also
+signals whether a ``pytest`` import is required.
+"""
 
 import libcst as cst
 

@@ -1,3 +1,11 @@
+"""Helpers to rewrite attribute access to local names.
+
+This module contains a small libcst transformer used in generator
+tests to replace attribute expressions like ``self.attr`` or ``cls.attr``
+with a plain :class:`libcst.Name` node when the attribute name matches
+the configured target.
+"""
+
 from __future__ import annotations
 
 

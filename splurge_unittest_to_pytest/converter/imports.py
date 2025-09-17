@@ -1,6 +1,11 @@
 """Import helper utilities for the converter.
 
-Contains pure functions that inspect or modify a libcst.Module to add imports or remove them.
+Small, pure helper functions that inspect or modify a
+:class:`libcst.Module` to add or remove imports as part of the
+conversion process. Typical responsibilities include detecting whether
+``pytest`` is already imported and inserting the appropriate import
+statement, or removing ``unittest`` imports when they are no longer
+required.
 """
 
 from typing import Any

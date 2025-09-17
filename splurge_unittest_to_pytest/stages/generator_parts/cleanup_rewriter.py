@@ -1,3 +1,10 @@
+"""Test-scoped cleanup rewriter.
+
+Provides a tiny, deterministic rewrite used by generator unit tests.
+The real production rewriter performs more advanced transformations;
+this class keeps behavior minimal for repeatable tests.
+"""
+
 DOMAINS = ["generator", "rewriter"]
 
 # Associated domains for this module

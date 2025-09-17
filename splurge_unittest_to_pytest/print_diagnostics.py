@@ -1,11 +1,8 @@
-"""Command-line wrapper to locate and print splurge diagnostics artifacts.
+"""Locate and print diagnostics artifacts produced by the tool.
 
-This module provides a `main()` function so it can be executed as a module:
-
-    python -m splurge_unittest_to_pytest.print_diagnostics --root /path/to/root
-
-It mirrors the earlier `tools/print_diagnostics.py` helper for backwards
-compatibility.
+Provides a small CLI wrapper exposing ``main()`` so callers can list and
+inspect diagnostics run directories. This is primarily a developer
+utility mirroring the older ``tools/print_diagnostics.py`` script.
 """
 
 from __future__ import annotations

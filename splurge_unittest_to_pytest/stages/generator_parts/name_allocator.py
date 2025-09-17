@@ -1,3 +1,10 @@
+"""Deterministic name allocation helpers for the generator.
+
+Small utilities used to allocate and reserve simple local identifiers
+for generated fixtures. The deterministic behavior keeps unit tests
+predictable.
+"""
+
 from __future__ import annotations
 
 from typing import Set
