@@ -8,6 +8,10 @@ the transform to an iterable of statements and returns the rewritten list.
 Publics:
     NameReplacer: A CSTTransformer to replace name/attribute occurrences.
     replace_names_in_statements: Apply the transformer to statements.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

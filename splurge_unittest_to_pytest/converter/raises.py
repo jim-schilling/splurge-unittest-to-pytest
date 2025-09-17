@@ -7,6 +7,10 @@ from transformer state.
 Publics:
     make_pytest_raises_call, make_pytest_raises_regex_call,
     create_pytest_raises_withitem
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

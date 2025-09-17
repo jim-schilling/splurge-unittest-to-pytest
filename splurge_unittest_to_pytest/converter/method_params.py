@@ -8,6 +8,10 @@ functions that accept fixtures.
 Publics:
     should_remove_first_param, is_staticmethod, is_classmethod,
     first_param_name, remove_method_self_references
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -2,6 +2,10 @@
 
 Small utilities to create and append fixture parameters (``cst.Param``)
 when constructing top-level pytest functions from TestCase methods.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst

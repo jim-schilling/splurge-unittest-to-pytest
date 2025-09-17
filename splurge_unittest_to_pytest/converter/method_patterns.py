@@ -6,6 +6,10 @@ styles (snake_case, CamelCase) by normalizing names before comparisons.
 
 Publics:
     is_setup_method, is_teardown_method, is_test_method
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -3,6 +3,10 @@
 This module exposes predicate helpers used by the generator to decide when
 an expression is 'literal-like' and safe to embed into generated fixture
 annotations or return values.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

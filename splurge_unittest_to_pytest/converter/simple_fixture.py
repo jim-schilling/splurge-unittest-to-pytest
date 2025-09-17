@@ -1,4 +1,9 @@
-"""Small helper to build a simple fixture that returns a value."""
+"""Small helper to build a simple fixture that returns a value.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
+"""
 
 from __future__ import annotations
 

@@ -7,6 +7,10 @@ statements for one or more fixture names.
 
 Publics:
     associate_cleanup_with_fixtures
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

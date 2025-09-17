@@ -5,6 +5,10 @@ nodes into module bodies, typically after the last import statement.
 
 Publics:
     insert_fixtures_into_module
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any
