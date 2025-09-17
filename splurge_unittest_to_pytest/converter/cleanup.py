@@ -1,7 +1,11 @@
-"""Cleanup analysis helpers extracted from the main transformer.
+"""Helpers to analyze and extract relevant cleanup statements.
 
-These are pure functions that inspect libcst statement/expression nodes to
-determine whether cleanup statements reference a given attribute name.
+This module provides pure helper functions that inspect :mod:`libcst`
+statement and expression nodes to determine whether a given cleanup
+statement references a target attribute name. The primary utility is
+``extract_relevant_cleanup`` which scans common statement shapes and
+returns the subset that reference the attribute, preserving context for
+multi-statement constructs like ``if`` blocks.
 """
 
 from typing import Any

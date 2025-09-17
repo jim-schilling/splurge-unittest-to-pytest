@@ -1,4 +1,11 @@
-"""Small helper module for cleanup attribute detection."""
+"""Helpers to detect attribute references inside libcst expressions.
+
+This module implements conservative checks that inspect :mod:`libcst`
+expression nodes (attributes, calls, subscripts, binary ops, containers)
+and determine whether they reference a given attribute name. It mirrors
+the attribute-detection logic extracted from the original monolithic
+converter and is intentionally recursive to handle nested expressions.
+"""
 
 from __future__ import annotations
 

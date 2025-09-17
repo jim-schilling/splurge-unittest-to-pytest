@@ -1,4 +1,9 @@
-"""Small helpers for import statement creation used by imports.py."""
+"""Helpers to construct common import statement nodes.
+
+Exports convenience helpers that build canonical :class:`libcst` import
+statement nodes (for example the canonical ``import pytest`` statement)
+so import construction remains consistent across the injector code.
+"""
 
 from __future__ import annotations
 

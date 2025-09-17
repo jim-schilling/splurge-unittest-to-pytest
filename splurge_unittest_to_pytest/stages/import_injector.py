@@ -1,9 +1,11 @@
-"""Ensure required imports (pytest, typing, etc.) exist in the module.
+"""Deterministically ensure required imports exist in a module.
 
-Deterministically insert imports after the module docstring or existing
-imports. The injector avoids duplicating existing imports and supports
-inserting a consolidated ``from typing import ...`` statement when
-upstream stages request specific typing names.
+This stage inspects the pipeline context for flags such as
+``needs_pytest_import`` or a set of ``needs_typing_names`` and
+inserts minimal import statements at a deterministic location in the
+module (after the docstring or existing imports). The injector avoids
+duplicating existing imports and will merge or create a single
+``from typing import ...`` statement when typing names are requested.
 """
 
 from __future__ import annotations

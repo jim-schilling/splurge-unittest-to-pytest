@@ -1,9 +1,10 @@
-"""Fixture helper creators extracted from the monolithic converter.
+"""Fixture creator helpers used by the staged converter.
 
-These functions are pure-ish: they accept the needed inputs and return libcst
-nodes. These helpers were previously part of the legacy transformer implementation
-and were split into small modules for easier testing and maintenance.
-state (e.g., setting self.needs_pytest_import) and call these helpers.
+This module exposes functions to build pytest fixture function nodes from
+inferred setup assignments. Helpers are intentionally small and return
+:class:`libcst.FunctionDef` nodes that can be inserted into the module
+by the fixture-injection stage. They are designed to be testable in
+isolation.
 """
 
 import libcst as cst

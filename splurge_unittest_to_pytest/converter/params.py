@@ -1,8 +1,7 @@
-"""Helpers to build fixture parameters for test methods.
+"""Helpers to construct libcst parameter lists for fixture injection.
 
-This module provides small helpers used by stages that construct or
-manipulate function parameter lists when converting TestCase methods into
-pytest-style functions.
+Small utilities to create and append fixture parameters (``cst.Param``)
+when constructing top-level pytest functions from TestCase methods.
 """
 
 import libcst as cst

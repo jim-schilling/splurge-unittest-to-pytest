@@ -1,10 +1,9 @@
-"""Run and orchestrate conversion stages over a libcst.Module.
+"""Orchestrate and run the conversion pipeline over a :class:`libcst.Module`.
 
-Provides :func:`run_pipeline` which wires registered stages, executes them
-in order over a :class:`libcst.Module`, and returns the transformed module.
-An optional ``pattern_config`` may be injected into the initial context so
-stages that perform method-name matching can consult configured patterns.
-
+Expose :func:`run_pipeline` which registers the canonical set of stages
+and executes them in order over a parsed module. The function accepts an
+optional ``pattern_config`` which is forwarded to stages that require
+method-name matching configuration.
 """
 
 from __future__ import annotations

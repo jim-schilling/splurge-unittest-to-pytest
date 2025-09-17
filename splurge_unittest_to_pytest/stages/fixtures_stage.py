@@ -1,9 +1,9 @@
-"""Convert TestCase setup/teardown into top-level pytest functions.
+"""Transform TestCase setup/teardown into pytest fixtures and functions.
 
-This stage consumes the :class:`CollectorOutput` produced by the
-collector stage and emits top-level pytest functions derived from recorded
-setup assignments. A provided ``pattern_config`` may customize which
-method names are treated as setup/teardown.
+Consumes :class:`CollectorOutput` and emits top-level pytest functions
+and/or fixtures derived from recorded setup assignments. A
+``pattern_config`` object may be supplied in the pipeline context to
+customize method-name matching for setup/teardown detection.
 """
 
 from __future__ import annotations

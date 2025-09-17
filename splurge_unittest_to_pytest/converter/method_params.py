@@ -1,4 +1,10 @@
-"""Helpers for analyzing and transforming method parameters."""
+"""Helpers for analyzing and transforming function/method parameters.
+
+Contains utilities to decide whether the leading ``self``/``cls``
+parameter should be removed, and to create or rewrite parameter lists
+when converting instance methods into top-level functions that accept
+fixtures.
+"""
 
 from __future__ import annotations
 

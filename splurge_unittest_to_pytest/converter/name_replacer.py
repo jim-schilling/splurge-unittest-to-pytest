@@ -1,7 +1,9 @@
-"""Small helper to replace Name/Attribute occurrences in CST nodes.
+"""Name replacer: replace Name/Attribute occurrences in libcst nodes.
 
-This isolates the ReplaceName transformer used by fixtures.create_fixture_with_cleanup
-so it can be tested in isolation.
+Provides :class:`NameReplacer` which rewrites occurrences of a named
+attribute (including ``self.attr`` or ``cls.attr``) to a provided
+value name. The helper :func:`replace_names_in_statements` applies the
+transform to an iterable of statements and returns the rewritten list.
 """
 
 from __future__ import annotations

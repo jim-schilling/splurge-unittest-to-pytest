@@ -1,4 +1,10 @@
-"""Helpers for managing teardown cleanup mappings."""
+"""Utilities to associate teardown cleanup statements with fixtures.
+
+Provides helpers that record mappings from fixture names to the list of
+cleanup statement nodes to execute when a fixture is torn down. The
+primary function mutates a provided mapping in-place to append cleanup
+statements for one or more fixture names.
+"""
 
 from __future__ import annotations
 

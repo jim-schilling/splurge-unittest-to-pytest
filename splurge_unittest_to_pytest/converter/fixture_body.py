@@ -1,4 +1,10 @@
-"""Helpers to construct fixture function bodies for fixtures created from setUp/tearDown."""
+"""Construct fixture function bodies for converted fixtures.
+
+The helpers produce :class:`libcst.IndentedBlock` nodes representing
+fixture bodies that either yield a simple literal or bind a value to a
+local name and yield it followed by cleanup statements. Cleanup
+references are rewritten to refer to the local binding when necessary.
+"""
 
 from __future__ import annotations
 

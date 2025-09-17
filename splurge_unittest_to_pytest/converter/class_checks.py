@@ -1,4 +1,9 @@
-"""Helpers for class base checks used by the transformer."""
+"""Helpers to inspect class base expressions.
+
+Utilities to detect whether a class inherits from ``unittest.TestCase``
+or a bare ``TestCase`` identifier. These helpers are used early in the
+pipeline to remove unittest-specific bases when converting to pytest.
+"""
 
 from __future__ import annotations
 

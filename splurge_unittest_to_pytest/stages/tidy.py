@@ -1,7 +1,9 @@
-"""Tidy stage: spacing normalization and light post-processing.
+"""Final tidy stage: spacing normalization and light post-processing.
 
-Normalizes import grouping and blank-line counts and performs final
-checks such as ensuring class test methods have a ``self`` parameter.
+Performs the centralized formatting pass using :func:`normalize_module`
+and enforces canonical blank-line counts and class-method parameter
+expectations. This is the last stage in the pipeline and prepares the
+module for output.
 """
 
 from __future__ import annotations

@@ -1,4 +1,9 @@
-"""Small helpers to construct decorator nodes used by fixtures."""
+"""Helpers to construct :mod:`libcst` decorator nodes for fixtures.
+
+Provides :func:`build_pytest_fixture_decorator` which builds a
+``@pytest.fixture`` decorator node, optionally accepting keyword
+arguments (for example ``autouse=True``) in a deterministic order.
+"""
 
 from __future__ import annotations
 

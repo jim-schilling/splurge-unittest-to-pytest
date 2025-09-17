@@ -1,8 +1,9 @@
-"""Insert generated fixture functions into a module body.
+"""Insert generated pytest fixture FunctionDef nodes into a module.
 
-Places fixtures deterministically after imports or the module docstring
-and signals that the ``pytest`` import is required. Fixtures are inserted
-with stable spacing so later normalization produces predictable output.
+The stage places generated fixture functions deterministically after
+imports (or the module docstring) and signals via the context that a
+``pytest`` import is required. Fixtures are emitted with stable
+spacing markers so later formatting produces predictable output.
 """
 
 from __future__ import annotations

@@ -1,4 +1,9 @@
-"""Utilities for analyzing Call nodes."""
+"""Utilities for analyzing :class:`libcst.Call` nodes.
+
+Small helper used to detect call patterns such as ``self.method(...)``
+so stages can special-case instance method invocations during
+conversion. The primary exported function is :func:`is_self_call`.
+"""
 
 from typing import Sequence
 

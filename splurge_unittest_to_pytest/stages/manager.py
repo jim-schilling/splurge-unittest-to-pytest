@@ -1,8 +1,10 @@
-"""Manager for registering and executing pipeline stages.
+"""Stage manager: register, wrap, and execute pipeline stages.
 
-Provides registration and execution helpers for pipeline stages that
-mutate a shared context mapping. When diagnostics are enabled the manager
-writes intermediate snapshots to aid debugging of stage transforms.
+This module provides :class:`StageManager` which registers stage callables
+and executes them sequentially over a shared context mapping. The
+manager wraps stages to optionally write intermediate diagnostics
+snapshots when diagnostics are enabled; it also exposes helpers to dump
+initial and final module snapshots.
 """
 
 from __future__ import annotations

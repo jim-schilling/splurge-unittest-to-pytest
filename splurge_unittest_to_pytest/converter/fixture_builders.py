@@ -1,4 +1,11 @@
-"""Helpers to build fixtures from setup assignments and teardown cleanup."""
+"""Helpers to construct fixtures from setup assignments and teardown cleanup.
+
+This module collects setup assignments and teardown cleanup and delegates
+to lower-level helpers (for example, :func:`create_fixture_for_attribute`)
+to build :class:`libcst.FunctionDef` nodes representing pytest fixtures.
+It returns a mapping of fixture name → function node and a boolean
+indicating whether a pytest import is required.
+"""
 
 import libcst as cst
 

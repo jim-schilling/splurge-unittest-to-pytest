@@ -1,6 +1,8 @@
-"""Helper utilities for method name normalization and pattern matching.
+"""Utilities for method-name normalization and pattern matching.
 
-These helpers were extracted from the legacy transformer implementation to make them easier to test.
+Provides helpers to test whether a given method name matches setup,
+teardown, or test patterns. Matching is tolerant of different naming
+styles (snake_case, CamelCase) by normalizing names before comparisons.
 """
 
 from __future__ import annotations

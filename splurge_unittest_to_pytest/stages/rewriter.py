@@ -1,7 +1,9 @@
-"""Rewrite class test methods to accept fixture parameters.
+"""Rewriter stage: update class test method signatures for fixtures.
 
-Updates function signatures for class test methods using data from
-``collector_output`` so tests accept fixtures rather than ``self``/``cls``.
+Uses collector metadata to decide whether to remove the leading
+``self``/``cls`` parameter and append fixture parameters inferred from
+``setUp`` assignments. Operates as a :class:`libcst.CSTTransformer` that
+visits class and function definitions and adjusts parameter lists.
 """
 
 from __future__ import annotations
