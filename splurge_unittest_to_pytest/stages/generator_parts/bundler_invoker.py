@@ -15,11 +15,12 @@ DOMAINS = ["generator", "bundles"]
 def safe_bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str], full: bool = False
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
-    """Safely invoke the named-local bundler and return a normalized result.
+    """Invoke the named-local bundler with a defensive wrapper.
 
-    Calls :func:`bundle_named_locals` and returns ``(nodes, needs, mapping)``.
-    Any exception during bundling is caught and an empty result is returned
-    for robustness in the generator pipeline.
+    Returns a 3-tuple ``(nodes, needs, mapping)`` by delegating to
+    :func:`bundle_named_locals`. Any exceptions raised by the bundler are
+    caught and an empty result is returned to keep the generator stage
+    robust.
     """
     try:
         nodes, needs, mapping = bundle_named_locals(out_classes, existing_top_names)

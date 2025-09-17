@@ -1,7 +1,8 @@
 """Small libcst transformers used by the generator stage.
 
-Minimal, well-scoped transformers for simple rewrites used when emitting
-fixtures and test functions.
+Minimal, well-scoped transformers for small rewrite tasks used while
+emitting fixtures and test functions. These transformers are intentionally
+simple so they are easy to unit test.
 """
 
 from __future__ import annotations

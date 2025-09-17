@@ -1,7 +1,10 @@
 """Convert common unittest decorators to pytest markers and fix mock imports.
 
 Rewrites decorators like ``@unittest.skip`` to ``pytest.mark.skip`` and
-cleans problematic ``from unittest.mock import ...`` imports.
+cleans problematic ``from unittest.mock import ...`` imports so the converted
+module remains importable and compatible with pytest.
+
+The primary transformer in this module is :class:`DecoratorAndMockTransformer`.
 """
 
 from __future__ import annotations

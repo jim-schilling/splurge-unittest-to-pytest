@@ -16,10 +16,11 @@ DOMAINS = ["generator"]
 
 
 def references_attribute(expr: Any, attr_name: str) -> bool:
-    """Recursively check whether ``expr`` references ``self.<attr>`` or ``<attr>``.
+    """Check whether ``expr`` references ``self.<attr>`` or a bare name.
 
-    Defensive about unexpected shapes; returns False when a match cannot be
-    determined. Accepts wrapper objects by unwrapping them.
+    The function is defensive about unexpected libcst node shapes and
+    returns False when it cannot determine a match. Wrapper objects are
+    unwrapped where relevant (for example, AssignTarget wrappers).
     """
     # Accept AssignTarget and similar wrapper objects by unwrapping
     expr = getattr(expr, "target", expr)

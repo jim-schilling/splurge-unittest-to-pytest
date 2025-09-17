@@ -9,9 +9,11 @@ DOMAINS = ["generator"]
 
 
 def collect_self_attrs(expr: Any) -> Set[str]:
-    """Collect attribute names referenced as ``self.xxx`` or ``cls.xxx``.
+    """Collect attribute names referenced via ``self`` or ``cls``.
 
-    Walk the given expression and return a set of referenced attribute names.
+    Walks the supplied expression and returns the set of attribute names
+    referenced as ``self.<name>`` or ``cls.<name>``. The routine is
+    defensive and tolerates unexpected node shapes.
     """
     found: set[str] = set()
 

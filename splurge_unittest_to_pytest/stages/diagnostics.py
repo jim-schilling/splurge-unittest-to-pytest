@@ -1,3 +1,13 @@
+"""Helpers for optional diagnostics and run-time instrumentation.
+
+Provide utilities used by the pipeline to create per-run diagnostics
+folders, write snapshot files, and centralize diagnostics-related checks.
+
+These helpers are defensive and no-op when diagnostics are disabled to
+avoid affecting normal runs.
+
+"""
+
 from __future__ import annotations
 
 import os

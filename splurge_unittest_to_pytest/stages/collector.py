@@ -1,8 +1,11 @@
-"""Collector visitor that gathers per-class setup/teardown/test metadata.
+"""Collect per-class setup/teardown/test metadata from a module.
 
 Collects assignments from ``setUp`` methods, top-level imports, and the
-module docstring index, returning a :class:`CollectorOutput` for later
-stages.
+module docstring index, returning a :class:`CollectorOutput` that later
+stages consume to produce fixtures and test wrappers.
+
+This visitor is designed to be executed via :class:`libcst.MetadataWrapper`.
+
 """
 
 from __future__ import annotations

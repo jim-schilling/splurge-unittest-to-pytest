@@ -9,11 +9,11 @@ DOMAINS = ["generator", "naming"]
 
 
 def choose_local_name(base: str, taken: Set[str]) -> str:
-    """Deterministically pick a unique local name by appending a numeric
-    suffix when needed. Reserves the chosen name in ``taken``.
+    """Pick a unique local name based on ``base`` and reserve it.
 
-    This mirrors the logic previously embedded in
-    `stages/generator.py` and is intentionally small and well-tested.
+    If ``base`` is already present in ``taken``, a numeric suffix is
+    appended (``_1``, ``_2``, ...) until a free name is found. The
+    chosen name is inserted into ``taken`` before returning.
     """
     if base not in taken:
         taken.add(base)
@@ -30,8 +30,9 @@ def choose_local_name(base: str, taken: Set[str]) -> str:
 class NameAllocator:
     """Deterministic allocator for generated fixture names.
 
-    Returns the base name on first use and appends an incrementing suffix
-    ("_2", "_3", ...) for subsequent allocations.
+    On first allocation the base name is returned. Subsequent allocations
+    for the same base append an incrementing numeric suffix ("_2",
+    "_3", ...).
     """
 
     def __init__(self) -> None:

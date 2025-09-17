@@ -11,10 +11,11 @@ DOMAINS = ["generator", "helpers"]
 
 
 def cleanup_needs_shutil(stmts: Sequence[Any]) -> bool:
-    """Return True if any statement appears to reference shutil.
+    """Detect whether any provided statements reference the ``shutil`` API.
 
-    Renders statements to source and searches for ``shutil.`` or
-    ``import shutil``; rendering errors are ignored.
+    The implementation renders statements to source and looks for the
+    substrings ``shutil.`` or ``import shutil``. Rendering errors are
+    ignored and the function returns False in those cases.
     """
     for s in stmts:
         try:

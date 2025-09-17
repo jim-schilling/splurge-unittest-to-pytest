@@ -2,6 +2,10 @@
 
 Converts calls like ``self.assertEqual`` to ``assert`` and rewrites
 ``assertRaises`` forms to ``pytest.raises``.
+
+This module provides :class:`AssertionRewriter`, a :class:`libcst.CSTTransformer`
+used by the conversion pipeline to translate unittest-style assertions into
+idiomatic pytest assertions and context managers.
 """
 
 from __future__ import annotations

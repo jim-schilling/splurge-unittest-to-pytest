@@ -1,8 +1,8 @@
 """Generator stage helper components.
 
-This package contains small, well-defined components used by the
-generator stage. Stage 1 scaffolds minimal implementations so we can
-incrementally refactor with tests.
+This package exposes small, focused components used by the generator
+stage. The implementations are minimal scaffolds to support incremental
+refactoring and deterministic unit tests.
 """
 
 from .name_allocator import NameAllocator

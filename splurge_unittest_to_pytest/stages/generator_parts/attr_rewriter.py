@@ -10,11 +10,11 @@ DOMAINS = ["generator", "rewriter"]
 
 
 class AttrRewriter(cst.CSTTransformer):
-    """Transformer replacing ``self.attr``/``cls.attr`` with a Name.
+    """Transformer to replace ``self.attr`` or ``cls.attr`` with a Name.
 
-    Replaces attribute accesses where the value is ``self`` or ``cls`` and
-    the attribute matches ``target_attr`` with a plain Name node using the
-    provided ``local`` value.
+    When the attribute base is ``self`` or ``cls`` and the attribute name
+    matches the configured target, this transformer returns a plain
+    :class:`libcst.Name` node with the provided local identifier.
     """
 
     def __init__(self, target_attr: str, local: str) -> None:

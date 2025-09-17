@@ -1,6 +1,9 @@
-"""Legacy inference helpers for inferring annotation shapes from nodes.
+"""Legacy helpers to infer typing annotations from libcst nodes.
 
-Helpers extracted to simplify the generator and enable isolated testing.
+These helpers provide a lightweight heuristic for mapping literal-like
+libcst expressions to :class:`libcst.Annotation` nodes and a set of
+typing names required by the annotation. They are extracted to support
+isolated unit testing and gradual replacement by a fuller implementation.
 """
 
 from __future__ import annotations
