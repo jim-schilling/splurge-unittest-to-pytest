@@ -1,11 +1,8 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.converter.assertion_dispatch import convert_assertion
 from splurge_unittest_to_pytest.converter.assertions import _assert_equal, _assert_is_none
 from splurge_unittest_to_pytest.converter.fixtures import create_simple_fixture
 from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
-
-DOMAINS = ["assertions", "converter", "fixtures"]
 
 
 def _arg_from_expr(src: str) -> cst.Arg:
@@ -18,12 +15,10 @@ def test_assert_equal_direct_helper():
     a2 = _arg_from_expr("2")
     node = _assert_equal([a1, a2])
     assert isinstance(node, cst.Assert)
-    # verify the Assert contains a Comparison with Equal operator and comparator 2
     assert isinstance(node.test, cst.Comparison)
     comps = node.test.comparisons
     assert len(comps) == 1
     assert isinstance(comps[0].operator, cst.Equal)
-    # comparator should be the integer literal 2
     assert isinstance(comps[0].comparator, cst.Integer)
 
 
@@ -37,16 +32,13 @@ def test_convert_assertion_via_map():
 def test_assert_is_none_returns_none_for_literals():
     a1 = _arg_from_expr("1")
     node = _assert_is_none([a1])
-    # For literal integer argument, _assert_is_none returns None to avoid `1 is None`
     assert node is None
 
 
 def test_create_simple_fixture_and_autouse_attach_insertion():
-    # create a simple fixture function
     val_expr = cst.parse_expression("42")
     fixture = create_simple_fixture("my_fixture", val_expr)
     assert isinstance(fixture, cst.FunctionDef)
-    # create a module and insert autouse attach fixture
     module = cst.parse_module("\n")
 
     def _make_autouse_attach_local(setup_fixtures: dict[str, cst.FunctionDef]) -> cst.FunctionDef:
@@ -65,7 +57,6 @@ def test_create_simple_fixture_and_autouse_attach_insertion():
                 )
             ]
         )
-
         set_calls: list[cst.BaseStatement] = []
         for name in setup_fixtures.keys():
             set_calls.append(
@@ -84,7 +75,6 @@ def test_create_simple_fixture_and_autouse_attach_insertion():
                     ]
                 )
             )
-
         if_block = cst.IndentedBlock(body=set_calls)
         if_stmt = cst.If(
             test=cst.Comparison(
@@ -93,18 +83,15 @@ def test_create_simple_fixture_and_autouse_attach_insertion():
             ),
             body=if_block,
         )
-
         from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
 
         decorator = build_pytest_fixture_decorator({"autouse": True})
-
         func = cst.FunctionDef(
             name=cst.Name("_attach_to_instance"),
             params=cst.Parameters(params=[cst.Param(name=cst.Name("request"))]),
             body=cst.IndentedBlock(body=[inst_assign, if_stmt]),
             decorators=[decorator],
         )
-
         return func
 
     def _insert_attach_fixture_local(module_node: cst.Module, fixture_func: cst.FunctionDef) -> cst.Module:
@@ -120,16 +107,12 @@ def test_create_simple_fixture_and_autouse_attach_insertion():
                             break
                 if insert_pos:
                     break
-
         new_body.insert(insert_pos, cst.EmptyLine())
         new_body.insert(insert_pos + 1, fixture_func)
-
         new_module = module_node.with_changes(body=new_body)
         return new_module
 
-    # Insert an autouse attach fixture (created via shared test helper) into the module
     autouse_fn = make_autouse_attach({"my_fixture": fixture})
     mod2 = insert_attach_fixture_into_module(module, autouse_fn)
-    # ensure the _attach_to_instance function name appears among module function defs
-    found = any(isinstance(s, cst.FunctionDef) and s.name.value == "_attach_to_instance" for s in mod2.body)
+    found = any((isinstance(s, cst.FunctionDef) and s.name.value == "_attach_to_instance" for s in mod2.body))
     assert found

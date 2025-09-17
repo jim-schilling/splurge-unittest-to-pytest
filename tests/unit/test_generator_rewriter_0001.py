@@ -1,15 +1,11 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.generator_parts.attr_rewriter import AttrRewriter, replace_in_node
-
-DOMAINS = ["generator", "rewriter"]
 
 
 def parse_expr(src: str) -> cst.BaseExpression:
     mod = cst.parse_module(src)
-    # assume single expression statement
     stmt = mod.body[0]
-    return stmt.body[0].value  # type: ignore[attr-defined]
+    return stmt.body[0].value
 
 
 def test_attr_rewriter_self_replaced():
@@ -29,5 +25,4 @@ def test_attr_rewriter_cls_replaced():
 def test_attr_rewriter_non_matching_preserved():
     expr = parse_expr("obj.attr")
     rewritten = expr.visit(AttrRewriter("attr", "_a"))
-    # should remain an Attribute since the base isn't self/cls
     assert isinstance(rewritten, cst.Attribute)

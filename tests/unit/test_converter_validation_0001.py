@@ -1,8 +1,5 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.converter.value_checks import is_simple_fixture_value
-
-DOMAINS = ["converter", "validation"]
 
 
 def test_is_simple_fixture_value_true_for_literals():

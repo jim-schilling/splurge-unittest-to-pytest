@@ -1,14 +1,10 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.converter import method_params
 from splurge_unittest_to_pytest.converter import helpers
-
-DOMAINS = ["core"]
 
 
 def make_func(src: str) -> cst.FunctionDef:
     mod = cst.parse_module(src)
-    # assume the first top-level statement is a simple function def
     for node in mod.body:
         if isinstance(node, cst.FunctionDef):
             return node
@@ -41,9 +37,7 @@ def test_remove_method_self_references_removes_self_attr():
     src = "def f(self, x):\n    return self.value + x\n"
     fn = make_func(src)
     new_params, new_body = method_params.remove_method_self_references(fn)
-    # first param removed
     assert len(new_params) == 1 and new_params[0].name.value == "x"
-    # body should have attributes rewritten (self.value -> value)
     assert isinstance(new_body, cst.BaseSuite)
     assert "value" in cst.Module(body=[new_body]).code
 
@@ -63,6 +57,5 @@ def test_has_meaningful_changes_ast_vs_text():
     orig = "def f():\n    return 1\n"
     conv = "def f():\n    return 1\n"
     assert helpers.has_meaningful_changes(orig, conv) is False
-
     conv2 = "def f():\n    return 2\n"
     assert helpers.has_meaningful_changes(orig, conv2) is True

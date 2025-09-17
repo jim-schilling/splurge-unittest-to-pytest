@@ -1,8 +1,5 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.generator_parts.shutil_detector import cleanup_needs_shutil
-
-DOMAINS = ["generator", "helpers"]
 
 
 def test_cleanup_needs_shutil_true_for_shutil_call():

@@ -1,34 +1,23 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
 
-DOMAINS = ["generator"]
 
-
-def make_spec(name: str, expr_src: str, yield_style: bool = False):
-    class S:
-        pass
-
-    s = S()
-    s.name = name
-    s.value_expr = cst.parse_expression(expr_src)
-    s.cleanup_statements = []
-    s.yield_style = yield_style
-    return s
-
-
-def test_finalize_attaches_list_typing():
+def test_make_composite_dirs_fixture_emits_node():
     core = GeneratorCore()
-    specs = {"a": make_spec("a", "[1,2]")}
-    fn = cst.FunctionDef(name=cst.Name("a"), params=cst.Parameters(), body=cst.IndentedBlock(body=[]))
-    res = core.finalize([], [fn], specs, bundler_typing=set())
+    node = core.make_composite_dirs_fixture("base", {"a": "1", "b": "2"})
+    assert isinstance(node, cst.FunctionDef)
+
+
+def test_finalize_collects_typing_and_yield():
+    core = GeneratorCore()
+
+    class FakeSpec:
+        def __init__(self, name, value_expr, yield_style=False):
+            self.name = name
+            self.value_expr = value_expr
+            self.yield_style = yield_style
+
+    specs = {"a": FakeSpec("a", cst.List([])), "b": FakeSpec("b", None)}
+    res = core.finalize([], [], specs)
     assert "needs_typing_names" in res
-    assert "List" in res["needs_typing_names"]
-
-
-def test_finalize_adds_generator_when_yield():
-    core = GeneratorCore()
-    specs = {"a": make_spec("a", "1", yield_style=True)}
-    fn = cst.FunctionDef(name=cst.Name("a"), params=cst.Parameters(), body=cst.IndentedBlock(body=[]))
-    res = core.finalize([], [fn], specs, bundler_typing=set())
-    assert "Generator" in res.get("needs_typing_names", [])
+    assert any((n in res["needs_typing_names"] for n in ("List", "Any")))

@@ -77,6 +77,10 @@ python_version = "3.13"
 line-length = 120
 target-version = "py313"
 
+[tool.ruff.lint]
+ignore = ["E501"]
+extend-ignore = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

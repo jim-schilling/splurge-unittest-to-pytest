@@ -1,7 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.postvalidator import postvalidator_stage
-
-DOMAINS = ["stages", "validation"]
+from types import SimpleNamespace
 
 
 def test_postvalidator_accepts_valid_module() -> None:
@@ -12,11 +11,20 @@ def test_postvalidator_accepts_valid_module() -> None:
 
 
 def test_postvalidator_detects_syntax_error() -> None:
-    # craft a module that becomes invalid when string is replaced (simulate bad transform)
-    # Monkey-patch a module-like object whose .code property reports
-    # invalid source to simulate a post-validation failure.
     class M:
         code = "def f(:\n"
 
     res = postvalidator_stage({"module": M()})
     assert "postvalidator_error" in res
+
+
+def test_postvalidator_returns_error_for_invalid_code() -> None:
+    bad = SimpleNamespace(code="def foo(\n")
+    out = postvalidator_stage({"module": bad})
+    assert "postvalidator_error" in out
+
+
+def test_postvalidator_passes_through_non_string_code() -> None:
+    obj = SimpleNamespace(code=None)
+    out = postvalidator_stage({"module": obj})
+    assert "postvalidator_error" not in out

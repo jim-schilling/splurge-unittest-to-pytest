@@ -3,8 +3,6 @@ from libcst import parse_expression
 from splurge_unittest_to_pytest.stages.generator_parts import literals
 from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
 
-DOMAINS = ["generator", "literals"]
-
 
 def test_is_literal_none_and_name():
     assert literals.is_literal(None) is False
@@ -35,7 +33,5 @@ def test_literals_containers():
 
 
 def test_non_literals():
-    # names are not considered literals
     assert not is_literal(parse_expression("foo"))
-    # calls are not literals
     assert not is_literal(parse_expression("open('x')"))

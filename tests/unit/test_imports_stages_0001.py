@@ -1,8 +1,5 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
-
-DOMAINS = ["imports", "stages"]
 
 
 def test_import_injector_inserts_pytest_after_docstring() -> None:
@@ -11,10 +8,8 @@ def test_import_injector_inserts_pytest_after_docstring() -> None:
     out = import_injector_stage({"module": module, "needs_pytest_import": True})
     new_mod = out.get("module")
     assert new_mod is not None
-    # first non-docstring node should be the inserted import (or similar)
     first = new_mod.body[0]
     assert isinstance(first, cst.BaseSmallStatement) or isinstance(first, cst.SimpleStatementLine)
-    # ensure pytest import exists somewhere
     found = False
     for s in new_mod.body:
         if isinstance(s, cst.SimpleStatementLine) and s.body:

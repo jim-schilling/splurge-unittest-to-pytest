@@ -1,9 +1,6 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
 from splurge_unittest_to_pytest.stages.manager import StageManager
-
-DOMAINS = ["converter", "manager", "stages"]
 
 
 def test_build_pytest_fixture_no_kwargs():
@@ -22,7 +19,6 @@ def test_stage_manager_register_run_dump():
     mgr = StageManager()
 
     def sample_stage(ctx):
-        # mutate the context to emulate a stage
         return {"ok": True}
 
     mgr.register(sample_stage)

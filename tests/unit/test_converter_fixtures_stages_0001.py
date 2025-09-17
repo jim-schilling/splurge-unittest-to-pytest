@@ -1,9 +1,6 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.converter.simple_fixture import create_simple_fixture
 from splurge_unittest_to_pytest.stages.fixture_injector import _find_insertion_index, fixture_injector_stage
-
-DOMAINS = ["converter", "fixtures", "stages"]
 
 
 def test_create_simple_fixture_int():
@@ -25,5 +22,4 @@ def test_fixture_injector_stage_inserts_nodes():
     out = fixture_injector_stage({"module": module, "fixture_nodes": [fn]})
     assert "module" in out
     new_mod = out["module"]
-    # ensure fixture name present in module code
     assert "def a(" in new_mod.code

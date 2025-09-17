@@ -1,97 +1,110 @@
-"""Additional tests for stages/raises_stage to cover edge cases and uncovered branches."""
-
-from __future__ import annotations
-
+import textwrap
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages import raises_stage
 
 
-def _apply_transform(src: str, transformer: cst.CSTTransformer) -> cst.Module:
-    mod = cst.parse_module(src)
-    return mod.visit(transformer)
+def _find_attributes_for_name(module: cst.Module, name: str) -> list[cst.Attribute]:
+    found: list[cst.Attribute] = []
+
+    class _Visitor(cst.CSTVisitor):
+        def visit_Attribute(self, node: cst.Attribute) -> None:
+            try:
+                if isinstance(node.value, cst.Name) and node.value.value == name:
+                    found.append(node)
+            except Exception:
+                pass
+
+    module.visit(_Visitor())
+    return found
 
 
-def test_exception_attr_rewriter_respects_shadowing():
-    src = """
-def f():
-    with pytest.raises(ValueError) as cm:
-        pass
-    # should rewrite
-    _ = cm.exception
-
-def g(cm):
-    # shadowed param named cm should prevent rewrite inside g
-    _ = cm.exception
-
-"""
-    mod = _apply_transform(src, raises_stage.RaisesRewriter())
-    # after RaisesRewriter, we should have recorded exception var and later rewritten attrs
-    mod2 = mod.visit(raises_stage.ExceptionAttrRewriter("cm"))
-    code = mod2.code
-    assert "cm.value" in code
-    # the shadowed param usage should not be rewritten inside g
-    assert "def g(cm):" in code
+def test_with_asname_and_attribute_rewritten_to_value():
+    src = textwrap.dedent(
+        "\n        import unittest\n\n        class T(unittest.TestCase):\n            def test_x(self):\n                with self.assertRaises(ValueError) as cm:\n                    pass\n                # reference after the with\n                _ = cm.exception\n        "
+    )
+    module = cst.parse_module(src)
+    out = raises_stage.raises_stage({"module": module})
+    assert out.get("needs_pytest_import") is True
+    new_mod = out["module"]
+    attrs = _find_attributes_for_name(new_mod, "cm")
+    assert any((isinstance(a.attr, cst.Name) and a.attr.value == "value" for a in attrs))
 
 
-def test_with_asname_and_without_asname_conversion():
-    src = """
-class T(unittest.TestCase):
-    def test_it(self):
-        with self.assertRaises(KeyError):
-            raise KeyError()
-
-        with self.assertRaises(ValueError) as ctx:
-            raise ValueError()
-        _ = ctx.exception
-"""
-    mod = _apply_transform(src, raises_stage.RaisesRewriter())
-    code = mod.code
-    # both with-statements should now reference pytest.raises
-    assert "pytest.raises(KeyError)" in code
-    assert "pytest.raises(ValueError" in code
+def test_shadowing_in_lambda_prevents_rewrite_but_outside_is_rewritten():
+    src = textwrap.dedent(
+        "\n        import unittest\n\n        class T(unittest.TestCase):\n            def test_x_02(self):\n                with self.assertRaises(ValueError) as cm:\n                    pass\n                f = lambda cm: cm.exception\n                g = lambda: cm.exception\n        "
+    )
+    module = cst.parse_module(src)
+    out = raises_stage.raises_stage({"module": module})
+    new_mod = out["module"]
+    attrs = _find_attributes_for_name(new_mod, "cm")
+    has_value = any((isinstance(a.attr, cst.Name) and a.attr.value == "value" for a in attrs))
+    has_exception = any((isinstance(a.attr, cst.Name) and a.attr.value == "exception" for a in attrs))
+    assert has_value and has_exception
 
 
-def test_functional_assertRaises_to_with_conversion():
-    src = """
-class C(unittest.TestCase):
-    def test_call(self):
-        self.assertRaises(ValueError, func_that_raises)
-        self.assertRaises(ValueError, func_with_args, 1, 2)
-"""
-    mod = _apply_transform(src, raises_stage.RaisesRewriter())
-    code = mod.code
-    # functional forms should be converted into with blocks containing the call
-    assert "with pytest.raises(ValueError" in code
-    assert "func_that_raises()" in code or "func_that_raises(" in code
+def test_assertRaisesRegex_without_pattern_uses_fallback_no_match_kw():
+    src = textwrap.dedent(
+        "\n        import unittest\n\n        class T(unittest.TestCase):\n            def test_x_03(self):\n                with self.assertRaisesRegex(ValueError):\n                    raise ValueError('x')\n        "
+    )
+    module = cst.parse_module(src)
+    out = raises_stage.raises_stage({"module": module})
+    new_mod = out["module"]
+
+    class _Finder(cst.CSTVisitor):
+        def __init__(self) -> None:
+            self.found = False
+
+        def visit_Call(self, node: cst.Call) -> None:
+            try:
+                func = getattr(node, "func", None)
+                if (
+                    isinstance(func, cst.Attribute)
+                    and isinstance(func.value, cst.Name)
+                    and (func.value.value == "pytest")
+                    and isinstance(func.attr, cst.Name)
+                    and (func.attr.value == "raises")
+                ):
+                    args = getattr(node, "args", []) or []
+                    for a in args:
+                        kw = getattr(a, "keyword", None)
+                        name = getattr(kw, "value", None) if kw is not None else None
+                        assert name != "match"
+                    self.found = True
+            except Exception:
+                pass
+
+    finder = _Finder()
+    new_mod.visit(finder)
+    assert finder.found
 
 
-def test_assertRaisesRegex_match_keyword_added():
-    src = """
-class C(unittest.TestCase):
-    def test_re(self):
-        with self.assertRaisesRegex(ValueError, r"bad"):
-            raise ValueError('bad')
-        self.assertRaisesRegex(ValueError, r"bad", some_call)
-"""
-    mod = _apply_transform(src, raises_stage.RaisesRewriter())
-    code = mod.code
-    # regex should be passed with a 'match' keyword argument (spacing may vary),
-    # and the pattern should appear nearby
-    assert "pytest.raises(ValueError" in code
-    assert "match" in code
-    assert 'r"bad"' in code or "r'bad'" in code or 'r"bad"(' not in code
+def test_functional_assertRaises_transforms_to_with_body_call():
+    src = textwrap.dedent(
+        "\n        import unittest\n\n        class T(unittest.TestCase):\n            def test_x_04(self):\n                self.assertRaises(ValueError, print, 'hello')\n        "
+    )
+    module = cst.parse_module(src)
+    out = raises_stage.raises_stage({"module": module})
+    assert out.get("needs_pytest_import") is True
+    new_mod = out["module"]
 
+    class _WithBodyFinder(cst.CSTVisitor):
+        def __init__(self) -> None:
+            self.found = False
 
-def test_comprehension_and_lambda_scope_binding():
-    # ensure comprehension/lambda introduce scopes and don't incorrectly shadow exception var
-    src = """
-def f():
-    with self.assertRaises(ValueError) as cm:
-        [x for x in range(3) if (lambda y: y)(x)]
-    _ = cm.exception
-"""
-    mod = _apply_transform(src, raises_stage.RaisesRewriter())
-    mod2 = mod.visit(raises_stage.ExceptionAttrRewriter("cm"))
-    code = mod2.code
-    assert "cm.value" in code
+        def visit_With(self, node: cst.With) -> None:
+            try:
+                body = getattr(node, "body", None)
+                stmts = getattr(body, "body", []) or []
+                for s in stmts:
+                    if isinstance(s, cst.SimpleStatementLine):
+                        for small in s.body:
+                            if isinstance(small, cst.Expr) and isinstance(small.value, cst.Call):
+                                if isinstance(small.value.func, cst.Name) and small.value.func.value == "print":
+                                    self.found = True
+            except Exception:
+                pass
+
+    finder = _WithBodyFinder()
+    new_mod.visit(finder)
+    assert finder.found

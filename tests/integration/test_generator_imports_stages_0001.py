@@ -5,9 +5,6 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.generator import generator as generator_stage
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
 
-DOMAINS = ["generator", "imports", "stages"]
-
-
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data"
 
 
@@ -22,14 +19,11 @@ def _run_pipeline(src: str) -> cst.Module:
     collector = Collector()
     wrapper.visit(collector)
     out = collector.as_output()
-    # generator_stage returns fixture_nodes and optionally needs_typing_names
     ctx = {"collector_output": out, "module": module, "autocreate": True}
     gen_res = generator_stage(ctx)
     fixture_nodes = gen_res.get("fixture_nodes", [])
-    # attach generated nodes to the original module body (simulating downstream stages)
     new_body = list(module.body) + list(fixture_nodes)
     new_module = module.with_changes(body=new_body)
-    # call import_injector with typing names passed through
     inject_ctx = {"module": new_module}
     if "needs_typing_names" in gen_res:
         inject_ctx["needs_typing_names"] = gen_res["needs_typing_names"]
@@ -41,11 +35,8 @@ def test_init_api_bak_generates_typing_and_namedtuple():
     src = _load_bak("test_init_api.py.bak.txt")
     mod = _run_pipeline(src)
     text = getattr(mod, "code", "")
-    # ensure typing import present
     assert "from typing import" in text
-    # ensure pytest import present
     assert "import pytest" in text
-    # expect a NamedTuple or fixture name derived from InitAPI
     assert "class _InitAPIData" in text or "init_api_data" in text
 
 
@@ -53,5 +44,34 @@ def test_cli_bak_basic_conversion():
     src = _load_bak("test_cli.py.bak.txt")
     mod = _run_pipeline(src)
     text = getattr(mod, "code", "")
-    # We expect pytest import to be present; typing imports are optional
     assert "import pytest" in text
+
+
+test_unit = '\nimport unittest\n\nclass TestExact(unittest.TestCase):\n    def setUp(self):\n        self.pair = ("a", 1)\n\n    def test_something(self):\n        assert self.pair[1] == 1\n'
+
+
+def normalize(s: str) -> str:
+    import re
+
+    s2 = re.sub("\\s+", " ", s).strip()
+    return s2
+
+
+def test_golden_tuple_fixture_matches_expected(tmp_path, request):
+    module = cst.parse_module(test_unit)
+    wrapper = MetadataWrapper(module)
+    collector = Collector()
+    wrapper.visit(collector)
+    out = collector.as_output()
+    ctx = {"collector_output": out, "module": module}
+    gen_res = generator_stage(ctx)
+    nodes = gen_res.get("fixture_nodes", [])
+    generated_module = cst.Module(body=list(nodes))
+    inj_ctx = {"module": generated_module, "needs_typing_names": gen_res.get("needs_typing_names", [])}
+    inj_res = import_injector_stage(inj_ctx)
+    final_mod = inj_res.get("module")
+    assert final_mod is not None
+    generated_text = final_mod.code
+    golden_path = request.config.rootpath / "tests" / "data" / "golden_tuple.expected"
+    expected_text = golden_path.read_text(encoding="utf8")
+    assert normalize(generated_text) == normalize(expected_text)

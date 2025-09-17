@@ -1,18 +1,13 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.generator import generator
 from splurge_unittest_to_pytest.stages import fixture_injector, assertion_rewriter, import_injector
 from splurge_unittest_to_pytest.stages.collector import Collector, CollectorOutput
-
-DOMAINS = ["generator", "stages"]
 
 
 def test_references_attribute_detects_in_if_call_and_subscript():
     module = cst.parse_module("x = 0\n")
     cls_info = type("CI", (), {})()
-    # setup assignment
     cls_info.setup_assignments = {"v": [cst.Integer("1")]}
-    # teardown: If, Call, Subscript referencing self.v
     if_stmt = cst.parse_statement("if self.v:\n    pass")
     call_stmt = cst.parse_statement("f(self.v)")
     sub_stmt = cst.parse_statement("a[self.v]")
@@ -30,7 +25,6 @@ def test_delete_detection_and_rendered_fallback():
     module = cst.parse_module("x = 0\n")
     cls_info = type("CI", (), {})()
     cls_info.setup_assignments = {"y": [cst.Integer("2")]}
-    # include a del self.y statement
     del_stmt = cst.parse_statement("del self.y")
     cls_info.teardown_statements = [del_stmt]
     out = CollectorOutput(
@@ -45,7 +39,6 @@ def test_delete_detection_and_rendered_fallback():
 def test_non_literal_return_binds_to_local_and_returns_local():
     module = cst.parse_module("x = 0\n")
     cls_info = type("CI", (), {})()
-    # non-literal value: Call expression
     cls_info.setup_assignments = {"a": [cst.parse_expression("make()")]}
     cls_info.teardown_statements = []
     out = CollectorOutput(
@@ -55,44 +48,25 @@ def test_non_literal_return_binds_to_local_and_returns_local():
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "a" in specs
-    # generator produces a fixture node assigning/binding a local when
-    # the setup value is non-literal; detect that by looking for the
-    # conventional `_a_value` fragment in rendered fixture nodes.
-    rendered = "\n\n".join(cst.Module(body=[n]).code for n in (nodes or []))
-    # Accept either a binding to a local or direct return/yield of the call.
-    assert ("_a_value" in rendered) or ("return make()" in rendered) or ("yield make()" in rendered)
+    rendered = "\n\n".join((cst.Module(body=[n]).code for n in nodes or []))
+    assert "_a_value" in rendered or "return make()" in rendered or "yield make()" in rendered
 
 
 def test_pipeline_integration_basic_flow():
-    src = """
-class C:
-    def setUp(self):
-        self.x = 1
-
-    def tearDown(self):
-        self.x = None
-
-    def test_it(self):
-        self.assertEqual(self.x, 1)
-"""
+    src = "\nclass C:\n    def setUp(self):\n        self.x = 1\n\n    def tearDown(self):\n        self.x = None\n\n    def test_it(self):\n        self.assertEqual(self.x, 1)\n"
     module = cst.parse_module(src)
-    # Collector: use MetadataWrapper and Collector visitor
     wrapper = cst.MetadataWrapper(module)
     collector = Collector()
     wrapper.visit(collector)
     out = collector.as_output()
-    # generator
     gen_res = generator({"collector_output": out, "module": module})
     fixture_nodes = gen_res.get("fixture_nodes") or []
-    # inject fixtures
     inj_res = fixture_injector.fixture_injector_stage(
         {"module": module, "fixture_nodes": fixture_nodes, "collector_output": out}
     )
     mod2 = inj_res.get("module")
-    # rewrite asserts
     rewrite_res = assertion_rewriter.assertion_rewriter_stage({"module": mod2})
     mod3 = rewrite_res.get("module")
-    # import injector
     import_res = import_injector.import_injector_stage(
         {"module": mod3, "needs_pytest_import": rewrite_res.get("needs_pytest_import", False)}
     )

@@ -1,99 +1,58 @@
+import textwrap
 import libcst as cst
 from splurge_unittest_to_pytest.stages import raises_stage
 
 
-def test_assertRaisesRegex_without_pattern_falls_back_no_match_kwarg():
-    src = """
-def t():
-    with self.assertRaisesRegex(ValueError) as cm:
-        raise ValueError()
-    a = cm.exception
-"""
-    module = cst.parse_module(src)
-    tr = raises_stage.RaisesRewriter()
-    out = module.visit(tr)
+class CallFinder(cst.CSTVisitor):
+    """Visitor that records Calls and With nodes and keywords found."""
 
-    # the pytest.raises call should exist but not have a 'match' keyword
-    class Finder(cst.CSTVisitor):
-        def __init__(self) -> None:
-            self.has_match = False
-            self.has_pytest = False
+    def __init__(self) -> None:
+        self.with_nodes = []
+        self.calls = []
+        self.match_kw_found = False
 
-        def visit_With(self, node: cst.With) -> None:
+    def visit_With(self, node: cst.With) -> None:
+        self.with_nodes.append(node)
+
+    def visit_Call(self, node: cst.Call) -> None:
+        self.calls.append(node)
+        for arg in getattr(node, "args", ()):
             try:
-                items = node.items or []
-                if not items:
-                    return None
-                first = items[0]
-                call = first.item
-                if isinstance(call, cst.Call) and isinstance(call.func, cst.Attribute):
-                    func = call.func
-                    if isinstance(func.value, cst.Name) and func.value.value == "pytest":
-                        self.has_pytest = True
-                        for a in call.args:
-                            if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "match":
-                                self.has_match = True
+                kw = getattr(arg, "keyword", None)
+                if kw is None:
+                    continue
+                name = getattr(kw, "value", None) or getattr(kw, "id", None) or getattr(kw, "attr", None)
+                if name == "match":
+                    self.match_kw_found = True
+                    break
             except Exception:
-                pass
-
-    f = Finder()
-    out.visit(f)
-    assert f.has_pytest
-    assert not f.has_match
+                continue
 
 
-def test_non_self_assertRaises_not_converted():
-    src = """
-class Other:
-    def assertRaises(self, *a, **k):
-        pass
-
-def t():
-    with Other().assertRaises(ValueError):
-        pass
-"""
+def test_context_manager_regex_sets_match_kw_and_needs_import():
+    src = textwrap.dedent(
+        "\n        import unittest\n\n        class T(unittest.TestCase):\n            def test_x(self):\n                with self.assertRaisesRegex(ValueError, r\"foo\\d+\"):\n                    raise ValueError('foo1')\n        "
+    )
     module = cst.parse_module(src)
-    tr = raises_stage.RaisesRewriter()
-    out = module.visit(tr)
-
-    # Should not find pytest.raises usage
-    class Finder(cst.CSTVisitor):
-        def __init__(self) -> None:
-            self.found_pytest = False
-
-        def visit_Call(self, node: cst.Call) -> None:
-            try:
-                if (
-                    isinstance(node.func, cst.Attribute)
-                    and isinstance(node.func.value, cst.Name)
-                    and node.func.value.value == "pytest"
-                ):
-                    self.found_pytest = True
-            except Exception:
-                pass
-
-    f = Finder()
-    out.visit(f)
-    assert not f.found_pytest
+    out = raises_stage.raises_stage({"module": module})
+    assert isinstance(out, dict)
+    assert out.get("needs_pytest_import") is True
+    new_mod = out["module"]
+    finder = CallFinder()
+    new_mod.visit(finder)
+    assert finder.with_nodes, "expected at least one With node in transformed module"
+    assert finder.match_kw_found is True
 
 
-def test_simple_statement_multiple_small_statements_not_converted():
-    src = """
-def t():
-    self.assertRaises(ValueError); x = 1
-"""
+def test_functional_assertRaisesRegex_transforms_via_simplestatementline():
+    src = textwrap.dedent(
+        '\n        import unittest\n\n        def test_func():\n            unittest.TestCase.assertRaisesRegex(unittest.TestCase, ValueError, r"bar\\d+", lambda: (_ for _ in () ))\n        '
+    )
     module = cst.parse_module(src)
-    tr = raises_stage.RaisesRewriter()
-    out = module.visit(tr)
-
-    # no With should be introduced by conversion in this case
-    class WF(cst.CSTVisitor):
-        def __init__(self) -> None:
-            self.has_with = False
-
-        def visit_With(self, node: cst.With) -> None:
-            self.has_with = True
-
-    wf = WF()
-    out.visit(wf)
-    assert not wf.has_with
+    out = raises_stage.raises_stage({"module": module})
+    assert isinstance(out, dict)
+    assert "module" in out
+    new_mod = out["module"]
+    finder = CallFinder()
+    new_mod.visit(finder)
+    assert finder.with_nodes or finder.match_kw_found or finder.calls

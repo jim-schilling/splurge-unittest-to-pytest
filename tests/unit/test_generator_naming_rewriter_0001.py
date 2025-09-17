@@ -1,8 +1,5 @@
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.generator_parts import filename_inferer, attr_rewriter, replace_self_param
-
-DOMAINS = ["core"]
 
 
 class Dummy:
@@ -11,7 +8,6 @@ class Dummy:
 
 def test_infer_filename_simple_string():
     d = Dummy()
-    # emulate collector local_assignments: local -> (Call(func=Name(...), args=[SimpleString('"file.txt"')]), None)
     call = cst.Call(func=cst.Name("helper"), args=[cst.Arg(value=cst.SimpleString('"file.txt"'))])
     d.local_assignments = {"cfg": (call, None)}
     assert filename_inferer.infer_filename_for_local("cfg", d) == "file.txt"
@@ -34,7 +30,6 @@ def test_attr_rewriter_replaces_self_attr():
 def test_replace_self_with_param():
     expr = cst.parse_expression("self.val + 1")
     out = expr.visit(replace_self_param.ReplaceSelfWithParam({"val"}))
-    # ensure 'self.val' was replaced with bare 'val'
     s = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(out)])]).code
     assert "self.val" not in s
     assert "val" in s
