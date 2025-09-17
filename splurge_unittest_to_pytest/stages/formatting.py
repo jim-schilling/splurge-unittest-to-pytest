@@ -6,6 +6,10 @@ formatting pass yields predictable output.
 
 Publics:
     normalize_class_body, normalize_module
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

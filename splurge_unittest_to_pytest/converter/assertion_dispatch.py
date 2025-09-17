@@ -7,6 +7,10 @@ delegates to the concrete converters defined in :mod:`.assertions`.
 
 Publics:
     convert_assertion: Convert a unittest assertion method into a libcst node.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Sequence

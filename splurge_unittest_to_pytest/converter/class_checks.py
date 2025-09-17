@@ -7,6 +7,10 @@ pipeline to remove unittest-specific bases when converting to pytest.
 Publics:
     is_unittest_testcase_base: Detect ``unittest.TestCase`` or ``TestCase`` bases.
     remove_unittest_bases: Return bases with unittest TestCase entries removed.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

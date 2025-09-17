@@ -8,6 +8,10 @@ initial and final module snapshots.
 
 Publics:
     StageManager
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

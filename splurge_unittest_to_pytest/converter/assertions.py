@@ -5,6 +5,10 @@ method calls (for example ``assertEqual`` or ``assertTrue``) into
 ``libcst`` nodes representing equivalent pytest ``assert`` statements.
 The implementations are stateless so they can be unit tested and reused
 by the conversion transformer.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

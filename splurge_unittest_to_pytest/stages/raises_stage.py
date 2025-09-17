@@ -7,6 +7,10 @@ Converts both context-manager and callable ``assertRaises`` usages to
 Publics:
     ExceptionAttrRewriter
     RaisesRewriter
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

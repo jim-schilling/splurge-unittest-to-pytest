@@ -3,6 +3,10 @@
 Small helper used to detect call patterns such as ``self.method(...)``
 so stages can special-case instance method invocations during
 conversion. The primary exported function is :func:`is_self_call`.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Sequence

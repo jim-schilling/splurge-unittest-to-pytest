@@ -7,6 +7,10 @@ Consume a :class:`CollectorOutput` and place ``fixture_specs`` and
 
 Publics:
     generator_stage, FixtureSpec
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

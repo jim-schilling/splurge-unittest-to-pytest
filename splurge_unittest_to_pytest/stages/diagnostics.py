@@ -8,6 +8,10 @@ runs are unaffected.
 Publics:
     diagnostics_enabled, diagnostics_verbose, create_diagnostics_dir,
     write_snapshot
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

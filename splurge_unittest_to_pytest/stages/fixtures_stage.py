@@ -7,6 +7,10 @@ customize method-name matching for setup/teardown detection.
 
 Publics:
     fixtures_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -7,6 +7,10 @@ references are rewritten to refer to the local binding when necessary.
 
 Publics:
     build_fixture_body: Create an IndentedBlock for a fixture with cleanup.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

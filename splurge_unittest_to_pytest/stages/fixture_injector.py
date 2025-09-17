@@ -7,6 +7,10 @@ markers so later formatting yields predictable output.
 
 Publics:
     fixture_injector_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

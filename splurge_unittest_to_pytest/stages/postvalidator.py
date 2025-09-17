@@ -5,6 +5,10 @@ pipeline context for later inspection.
 
 Publics:
     postvalidator_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -9,6 +9,10 @@ multi-statement constructs like ``if`` blocks.
 
 Publics:
     extract_relevant_cleanup: Return cleanup statements that reference an attribute.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from typing import Any

@@ -12,6 +12,10 @@ and easy to unit test. Highlights:
     of canonical patterns.
 - has_meaningful_changes: Determine whether conversion produced
     semantic changes while ignoring formatting-only differences.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

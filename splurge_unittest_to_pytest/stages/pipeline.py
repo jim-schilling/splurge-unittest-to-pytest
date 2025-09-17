@@ -7,6 +7,10 @@ method-name matching configuration.
 
 Publics:
     run_pipeline
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

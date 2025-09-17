@@ -9,6 +9,10 @@ duplicating existing imports and will merge or create a single
 
 Publics:
     import_injector_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

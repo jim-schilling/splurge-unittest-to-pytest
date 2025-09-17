@@ -8,6 +8,10 @@ converter and is intentionally recursive to handle nested expressions.
 
 Publics:
     references_attribute: Return True when an expression references an attribute name.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
