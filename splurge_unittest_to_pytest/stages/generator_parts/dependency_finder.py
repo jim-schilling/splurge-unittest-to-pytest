@@ -16,10 +16,14 @@ DOMAINS = ["generator"]
 
 
 def collect_self_attributes(node: cst.CSTNode) -> Set[str]:
-    """Return attribute names accessed via ``self`` or ``cls`` in ``node``.
+    """Collect attribute names referenced via ``self`` or ``cls``.
 
-    The helper traverses the provided libcst node and collects simple
-    attribute accesses like ``self.name``.
+    Args:
+        node: A libcst node to inspect.
+
+    Returns:
+        A set of attribute names (strings) accessed as ``self.attr`` or
+        ``cls.attr`` within the given node.
     """
 
     class _Visitor(cst.CSTVisitor):

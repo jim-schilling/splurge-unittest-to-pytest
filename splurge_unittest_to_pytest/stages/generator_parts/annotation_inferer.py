@@ -90,11 +90,11 @@ def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression 
 
 
 class AnnotationInferer:
-    """Simple annotation inferer used during scaffolding.
+    """Simple annotation inferer used in tests.
 
-    The scaffolded inferer exposes a predictable interface for unit tests.
-    The real implementation will later examine libcst nodes; this mock
-    provides a trivial heuristic used by generator tests.
+    This lightweight inferer exposes a deterministic interface for unit
+    tests. The full production inferer will analyze libcst nodes; this
+    stub implements a trivial heuristic relied upon by generator tests.
     """
 
     def infer_return_annotation(self, func_name: str) -> str:

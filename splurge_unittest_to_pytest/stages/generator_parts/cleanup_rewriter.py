@@ -4,11 +4,11 @@ DOMAINS = ["generator", "rewriter"]
 
 
 class CleanupRewriter:
-    """Scaffold cleanup rewriter that returns a normalized cleanup string.
+    """Minimal cleanup rewriter used in tests.
 
-    The current implementation performs minimal normalization suitable for
-    unit tests. The real rewriter will perform more sophisticated cleanup
-    transformations on the fixture body.
+    This scaffolded rewriter performs trivial normalization of cleanup
+    code strings. It exists to keep generator tests deterministic; the
+    production rewriter will implement more comprehensive transforms.
     """
 
     def rewrite(self, cleanup_code: str) -> str:

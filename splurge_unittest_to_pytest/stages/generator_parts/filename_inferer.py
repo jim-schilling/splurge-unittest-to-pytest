@@ -1,7 +1,9 @@
 """Infer filename string literals from recorded local assignments.
 
-Return a filename string when a recorded local assignment corresponds to
-a libcst.Call whose first positional argument is a string literal.
+This module tries to recover a filename string when a recorded local
+assignment corresponds to a :class:`libcst.Call` whose first positional
+argument is a string literal. Returns the unquoted filename on success
+or ``None`` when no filename can be inferred.
 """
 
 from __future__ import annotations

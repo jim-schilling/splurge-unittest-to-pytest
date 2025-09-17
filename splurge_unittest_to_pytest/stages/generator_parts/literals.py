@@ -16,11 +16,19 @@ DOMAINS = ["generator", "literals"]
 
 
 def is_literal(expr: Optional[cst.BaseExpression]) -> bool:
-    """Return True for expressions considered literal for generator logic.
+    """Determine whether an expression should be treated as a literal.
 
-    Numeric and simple string literals are treated as literals. Bare Name
-    nodes are treated as non-literals so variable references are handled
-    via local bindings.
+    Numeric and simple string literals are treated as literals. Container
+    literals (tuple/list/set/dict) are also accepted for generator
+    decisions. Bare Name nodes are considered non-literals so variable
+    references are handled via local bindings.
+
+    Args:
+        expr: A libcst expression node or ``None``.
+
+    Returns:
+        True when ``expr`` is considered literal-like for generator
+        emission decisions, otherwise False.
     """
     if expr is None:
         return False

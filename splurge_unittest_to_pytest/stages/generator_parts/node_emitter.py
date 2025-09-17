@@ -11,9 +11,10 @@ DOMAINS = ["generator"]
 class NodeEmitter:
     """Emit libcst nodes for small fixture bodies.
 
-    Builds :class:`libcst.FunctionDef` nodes from short body source strings
-    and can emit composite yield-style fixtures that initialize locals and
-    yield a dict of values.
+    The emitter builds :class:`libcst.FunctionDef` nodes from short body
+    source strings. It also supports creating composite yield-style
+    fixtures that initialize local variables and yield a dictionary of
+    values.
     """
 
     def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:

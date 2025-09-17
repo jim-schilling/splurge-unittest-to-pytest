@@ -17,22 +17,19 @@ DOMAINS = ["generator"]
 
 
 class GeneratorCore:
-    """Compose small components to provide a simple generator facade.
+    """Core generator facade composed from small, testable parts.
 
-    The core accepts injected collaborators for testing and orchestration.
+    The core wires together collaborators (name allocator, inferer,
+    builder, rewriter, and emitter) to provide a compact interface for
+    creating fixture nodes and finalizing generated results.
 
-    Public methods
-    --------------
-    make_fixture
-        Create a single fixture FunctionDef from a body string.
-
-    make_composite_dirs_fixture
-        Create a grouped yield-style fixture that returns a dict of names
-        to values.
-
-    finalize
-        Annotate fixture nodes, collect typing requirements, and return
-        the final result dict expected by the pipeline.
+    Public methods:
+        make_fixture: Create a single fixture FunctionDef from a body
+            string.
+        make_composite_dirs_fixture: Create a grouped yield-style
+            fixture that returns a dict of names to values.
+        finalize: Annotate fixture nodes, collect typing requirements,
+            and return the final result dict expected by the pipeline.
     """
 
     def __init__(

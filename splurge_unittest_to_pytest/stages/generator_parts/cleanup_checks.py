@@ -17,11 +17,19 @@ DOMAINS = ["generator"]
 
 
 def is_simple_cleanup_statement(s: Any, attr: str) -> bool:
-    """Return True when ``s`` is a simple cleanup targeting ``attr``.
+    """Detect simple cleanup statements targeting an attribute.
 
-    Accepts Assign, Expr-wrapped Assign, and Delete-like nodes and returns
-    True when the target matches ``self.attr``, ``cls.attr``, or a bare
-    name equal to ``attr``.
+    The function recognizes simple assignment, expression-wrapped
+    assignment, and delete-like nodes that target ``self.<attr>``,
+    ``cls.<attr>``, or a bare name equal to ``attr``.
+
+    Args:
+        s: A libcst statement-like object.
+        attr: The attribute name to check for.
+
+    Returns:
+        True if the statement is a simple cleanup for ``attr``; False
+        otherwise.
     """
     if isinstance(s, cst.SimpleStatementLine) and s.body:
         expr = s.body[0]

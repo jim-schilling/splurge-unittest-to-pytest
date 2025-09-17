@@ -13,8 +13,15 @@ DOMAINS = ["generator", "naming"]
 def collect_module_level_names(module_obj: Any) -> Set[str]:
     """Collect top-level names defined in a libcst Module.
 
-    Names are gathered from assignments, function/class defs, and import
-    targets. Returns an empty set for non-Module inputs.
+    The function inspects assignments, function and class definitions,
+    and import targets to assemble a set of top-level identifiers.
+
+    Args:
+        module_obj: A libcst.Module instance or any object; non-Module
+            inputs result in an empty set.
+
+    Returns:
+        A set of top-level names (strings) defined in the module.
     """
     names: Set[str] = set()
     module = module_obj if isinstance(module_obj, cst.Module) else None
