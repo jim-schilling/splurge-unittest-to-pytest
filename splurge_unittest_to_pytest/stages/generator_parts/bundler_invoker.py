@@ -15,12 +15,12 @@ DOMAINS = ["generator", "bundles"]
 def safe_bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str], full: bool = False
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
-    """Call bundle_named_locals but be tolerant to exceptions.
+    """Safely invoke the named-local bundler and return a normalized result.
 
-    The original `generator.py` wrapped the bundler call in a try/except
-    to avoid crashing fixture generation if the heuristic code encounters
-    an unexpected input. This preserves that behavior in one place so
-    it's easier to unit-test and reason about.
+    This wrapper calls :func:`bundle_named_locals` and preserves the
+    original tolerant behavior: any exception during bundling yields empty
+    results rather than propagating the error. The returned tuple is
+    always ``(nodes, needs, mapping)`` where ``mapping`` may be empty.
     """
     try:
         nodes, needs, mapping = bundle_named_locals(out_classes, existing_top_names)

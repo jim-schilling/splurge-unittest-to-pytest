@@ -2,8 +2,8 @@
 
 Extracted from ``stages/generator.py`` to simplify testing and separate
 concerns. The primary function returns a filename string when a recorded
-local assignment corresponds to a Call whose first positional argument is
-a string literal.
+local assignment corresponds to a :class:`libcst.Call` whose first
+positional argument is a string literal.
 """
 
 from __future__ import annotations
@@ -21,8 +21,10 @@ def infer_filename_for_local(local_name: str, cls_obj: Any) -> Optional[str]:
     """Return a filename string inferred from a recorded local assignment.
 
     The collector records local assignments as a mapping from local name to
-    a tuple (call_node, ...). We only handle the simple case where the
-    assignment is a Call whose first positional argument is a string literal.
+    a tuple like ``(call_node, ...)``. This function handles the simple
+    case where the recorded assignment is a :class:`libcst.Call` whose first
+    positional argument is a string literal, returning the unquoted string
+    value when found.
     """
     try:
         local_map = getattr(cls_obj, "local_assignments", {}) or {}

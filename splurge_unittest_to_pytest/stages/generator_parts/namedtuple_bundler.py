@@ -1,9 +1,10 @@
 """Bundle local assignments into NamedTuple containers and emit fixtures.
 
-Extracted from the generator to enable isolated testing. The primary
-function ``bundle_named_locals`` groups recorded local assignments that
-share a call site, emits a small ``NamedTuple`` container class and a
-composite fixture that constructs instances of that container.
+This module is extracted from the generator to enable isolated testing and
+focus. The primary function, :func:`bundle_named_locals`, groups recorded
+local assignments produced by the same call site and emits a small
+``NamedTuple``-like container class and a composite fixture that constructs
+instances of that container.
 """
 
 from __future__ import annotations
@@ -20,12 +21,24 @@ DOMAINS = ["generator", "bundles"]
 def bundle_named_locals(
     out_classes: Dict[str, Any], existing_top_names: Set[str]
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
-    """Collect groups of local_assignments that should be bundled into a
-    NamedTuple and a single bundled fixture. Returns a list of nodes (class
-    def + fixture def) to prepend and a set of typing names required.
+    """Group related local assignments into a bundled NamedTuple fixture.
 
-    This mirrors the original generator bundling heuristics: group locals
-    produced by the same Call and where multiple locals map to attributes.
+    Args:
+        out_classes: Mapping from test-class name to a small class-like
+            object that contains recorded ``local_assignments`` and
+            ``setup_assignments``.
+        existing_top_names: Set of top-level names already used in the
+            module to avoid collisions.
+
+    Returns:
+        A tuple ``(nodes, needs_typing, attr_to_fixture)`` where ``nodes`` is
+        a list of :class:`libcst` nodes to prepend (class + fixture),
+        ``needs_typing`` is a set of typing names required by emitted code,
+        and ``attr_to_fixture`` maps attribute names to the emitted fixture
+        name.
+
+    The function preserves the original generator heuristics while keeping
+    the implementation tolerant to irregular inputs for unit testing.
     """
     fixture_nodes: List[cst.BaseStatement] = []
     needs_typing: Set[str] = set()

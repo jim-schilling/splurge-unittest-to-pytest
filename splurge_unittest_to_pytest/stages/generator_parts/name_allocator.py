@@ -28,10 +28,11 @@ def choose_local_name(base: str, taken: Set[str]) -> str:
 
 
 class NameAllocator:
-    """Deterministic name allocator for generated fixtures.
+    """Deterministic allocator for generated fixture names.
 
-    Provides a deterministic base name and appends an incrementing suffix
-    when collisions occur.
+    The allocator returns the base name on first use and appends an
+    incrementing suffix (``_2``, ``_3``, ...) for subsequent allocations
+    using the same base.
     """
 
     def __init__(self) -> None:

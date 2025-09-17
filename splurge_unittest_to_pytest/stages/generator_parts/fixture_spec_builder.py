@@ -13,7 +13,11 @@ class FixtureSpec:
 
 
 class FixtureSpecBuilder:
-    """Create a minimal FixtureSpec for scaffolding tests."""
+    """Create a minimal ``FixtureSpec`` used for scaffolding tests.
+
+    The builder currently constructs a simple dataclass containing the
+    fixture name and the source body string.
+    """
 
     def build(self, name: str, body: str) -> FixtureSpec:
         return FixtureSpec(name=name, body=body)

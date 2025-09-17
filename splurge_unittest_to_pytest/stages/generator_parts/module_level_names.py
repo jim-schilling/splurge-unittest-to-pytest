@@ -13,9 +13,10 @@ DOMAINS = ["generator", "naming"]
 def collect_module_level_names(module_obj: Any) -> Set[str]:
     """Collect top-level names defined in a module node.
 
-    Collects assigned names, function/class names, and import targets or
-    aliases. If the provided object is not a ``cst.Module`` an empty set is
-    returned.
+    The function examines a :class:`libcst.Module` and collects names from
+    assignments, function and class definitions, and import targets (with
+    defensive handling for different import node shapes). If the provided
+    object is not a :class:`libcst.Module`, an empty set is returned.
     """
     names: Set[str] = set()
     module = module_obj if isinstance(module_obj, cst.Module) else None

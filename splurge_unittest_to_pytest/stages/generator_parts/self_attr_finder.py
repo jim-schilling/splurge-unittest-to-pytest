@@ -9,10 +9,11 @@ DOMAINS = ["generator"]
 
 
 def collect_self_attrs(expr: Any) -> Set[str]:
-    """Collect attribute names referenced as self.xxx or cls.xxx in expr.
+    """Collect attribute names referenced as ``self.xxx`` or ``cls.xxx``.
 
-    This duplicates the behavior previously embedded in generator.py but
-    is exposed as a small pure helper for unit testing and reuse.
+    The function walks the provided expression and returns a set of attribute
+    names referenced via ``self`` or ``cls``. This small helper is extracted
+    from the generator stage to simplify unit testing and reuse.
     """
     found: set[str] = set()
 

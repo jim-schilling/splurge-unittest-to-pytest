@@ -10,12 +10,15 @@ DOMAINS = ["generator", "rewriter"]
 
 
 class AttrRewriter(cst.CSTTransformer):
-    """Transformer that replaces attributes of the form ``self.attr`` or
-    ``cls.attr`` with a bare ``Name`` using either the fixture name or a
-    provided local name.
+    """Transformer that replaces ``self.attr`` or ``cls.attr`` with a name.
 
-    This encapsulates the small visitor class previously embedded inline in
-    `stages/generator.py` so it can be unit tested independently.
+    The transformer replaces attribute accesses whose value is ``self`` or
+    ``cls`` and whose attribute name matches the configured
+    ``target_attr``. The attribute is replaced with a plain :class:`libcst.Name`
+    whose value is provided via ``local``.
+
+    This class extracts a small visitor previously embedded inline in
+    ``stages/generator.py`` so it can be tested in isolation.
     """
 
     def __init__(self, target_attr: str, local: str) -> None:

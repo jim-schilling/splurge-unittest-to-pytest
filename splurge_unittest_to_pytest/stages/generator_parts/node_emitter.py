@@ -11,9 +11,26 @@ DOMAINS = ["generator"]
 class NodeEmitter:
     """Emit libcst AST nodes for fixtures from small body source strings.
 
-    The emitter creates a ``FunctionDef`` node from simple source lines
-    or builds composite fixture nodes (for example, fixtures that yield a
-    dict) when requested.
+    The emitter creates a :class:`libcst.FunctionDef` node from simple source
+    lines or builds composite fixture nodes (for example, fixtures that yield
+    a dict) when requested.
+
+    Methods
+    -------
+    emit_fixture_node(name: str, body: str, returns: str | None = None) -> cst.FunctionDef
+        Build a :class:`libcst.FunctionDef` from a body string. Statements are
+        parsed individually and a conservative fallback (``pass``) is used on
+        parse errors.
+
+    _normalize_body(body: str) -> List[str]
+        Return non-empty lines from the body preserving indentation.
+
+    _parse_statement_safe(line: str) -> cst.BaseStatement
+        Parse a single statement; on error return a ``Pass`` statement node.
+
+    emit_composite_dirs_node(base_name: str, mapping: dict[str, str]) -> cst.FunctionDef
+        Emit a grouped yield-style fixture that initializes locals from the
+        provided mapping and yields a dict of those values.
     """
 
     def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:

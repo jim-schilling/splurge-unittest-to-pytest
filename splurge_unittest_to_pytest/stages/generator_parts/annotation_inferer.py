@@ -11,11 +11,14 @@ DOMAINS = ["generator", "transform", "literals"]
 
 
 def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression | None, Set[str]]:
-    """Return an annotation node for a literal-ish expression and a set of typing names.
+    """Return an annotation node for a literal-like expression.
 
-    Mirrors the behavior previously embedded in stages/generator.py. This
-    helper focuses on common container types (List, Tuple, Set, Dict) and
-    returns None when no specific typing can be inferred.
+    This helper mirrors logic previously embedded in `stages/generator.py`.
+    It detects common container literal shapes (``List``, ``Tuple``,
+    ``Set``, ``Dict``) and returns a :class:`libcst` node representing the
+    typing subscript (for example, ``List[str]``) plus a set of typing names
+    required by the annotation. If no specific typing can be inferred, the
+    function returns ``(None, set())``.
     """
     names: Set[str] = set()
     if isinstance(node, cst.List):
@@ -91,8 +94,9 @@ def type_name_for_literal(node: cst.BaseExpression) -> Tuple[cst.BaseExpression 
 class AnnotationInferer:
     """Simple annotation inferer used during scaffolding.
 
-    Real implementation will inspect libcst nodes; scaffold exposes a
-    predictable interface for unit testing.
+    The scaffolded inferer exposes a predictable interface for unit tests.
+    The real implementation will later examine libcst nodes; this mock
+    provides a trivial heuristic used by generator tests.
     """
 
     def infer_return_annotation(self, func_name: str) -> str:

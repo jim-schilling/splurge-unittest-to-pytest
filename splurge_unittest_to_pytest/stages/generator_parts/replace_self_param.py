@@ -10,8 +10,12 @@ DOMAINS = ["generator"]
 
 
 class ReplaceSelfWithParam(cst.CSTTransformer):
-    """Transformer that replaces occurrences of ``self.attr`` or ``cls.attr``
-    with a bare ``Name`` when the attribute matches one of the provided refs.
+    """Transformer that replaces ``self.attr``/``cls.attr`` with a plain name.
+
+    When an attribute name matches an entry in the provided reference set,
+    the transformer returns a :class:`libcst.Name` node for the attribute
+    name. This is used to rewrite self-references into parameter references
+    for generated fixtures.
     """
 
     def __init__(self, refs_set: Set[str]) -> None:
