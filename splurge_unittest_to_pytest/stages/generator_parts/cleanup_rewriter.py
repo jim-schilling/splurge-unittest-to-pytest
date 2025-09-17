@@ -3,6 +3,10 @@
 Provides a tiny, deterministic rewrite used by generator unit tests.
 The real production rewriter performs more advanced transformations;
 this class keeps behavior minimal for repeatable tests.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 DOMAINS = ["generator", "rewriter"]

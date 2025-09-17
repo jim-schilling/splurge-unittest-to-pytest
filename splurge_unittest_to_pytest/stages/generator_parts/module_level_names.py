@@ -6,6 +6,10 @@ with existing names.
 
 Publics:
     collect_module_level_names
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

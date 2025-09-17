@@ -2,6 +2,10 @@
 
 Small, testable helpers used by the generator to inspect nodes and collect
 attribute names referenced via ``self`` or ``cls``.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

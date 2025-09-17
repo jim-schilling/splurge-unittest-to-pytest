@@ -7,6 +7,10 @@ extraction makes bundling logic unit-testable.
 
 Publics:
     bundle_named_locals
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -3,6 +3,10 @@
 This module exposes a dataclass ``FixtureSpec`` and a small builder
 class used by generator tests to produce predictable fixture
 descriptions.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from dataclasses import dataclass

@@ -4,6 +4,10 @@ This module contains a small libcst transformer used in generator
 tests to replace attribute expressions like ``self.attr`` or ``cls.attr``
 with a plain :class:`libcst.Name` node when the attribute name matches
 the configured target.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -7,6 +7,10 @@ filename can be inferred.
 
 Publics:
     infer_filename_for_local
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

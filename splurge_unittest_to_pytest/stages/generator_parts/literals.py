@@ -2,6 +2,10 @@
 
 Small helpers used by the generator to determine whether an expression is
 considered a literal for emission decisions.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

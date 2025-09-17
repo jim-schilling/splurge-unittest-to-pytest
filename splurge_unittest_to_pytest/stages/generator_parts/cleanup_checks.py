@@ -6,6 +6,10 @@ emit teardown fixtures.
 
 Publics:
     is_simple_cleanup_statement
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

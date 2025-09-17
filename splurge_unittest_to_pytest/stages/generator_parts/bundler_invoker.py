@@ -4,6 +4,10 @@ The bundler may raise exceptions for complex inputs; this small wrapper
 ensures the generator remains robust by catching errors and returning a
 well-formed, empty result on failure. It mirrors the production API but
 is defensive for tests.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
