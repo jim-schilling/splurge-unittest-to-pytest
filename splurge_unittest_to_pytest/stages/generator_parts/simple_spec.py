@@ -3,6 +3,10 @@
 The dataclass holds the parsed information for a fixture candidate so
 the generator code can reason about yield-style fixtures and cleanup
 statements.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

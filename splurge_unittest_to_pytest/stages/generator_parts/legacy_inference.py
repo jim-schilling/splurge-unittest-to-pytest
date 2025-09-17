@@ -7,6 +7,10 @@ replacement by a fuller implementation.
 
 Publics:
     _infer_ann, _get_callable_name
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

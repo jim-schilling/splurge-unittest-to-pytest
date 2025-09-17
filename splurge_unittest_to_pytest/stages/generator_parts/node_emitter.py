@@ -4,6 +4,10 @@ This module contains a small emitter that constructs
 :class:`libcst.FunctionDef` nodes from short source fragments. It is
 kept minimal so generator unit tests can rely on predictable node
 structures.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst

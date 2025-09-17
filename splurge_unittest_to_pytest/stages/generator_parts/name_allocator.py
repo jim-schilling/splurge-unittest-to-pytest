@@ -3,6 +3,10 @@
 Small utilities used to allocate and reserve simple local identifiers
 for generated fixtures. The deterministic behavior keeps unit tests
 predictable.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
