@@ -3,6 +3,10 @@
 Provides the public package metadata and re-exports the primary
 conversion helpers and exception types for convenient import by
 callers.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 __version__ = "2025.1.1"

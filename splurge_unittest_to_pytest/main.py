@@ -14,6 +14,10 @@ classes include:
 These helpers orchestrate the staged pipeline implemented in
 ``splurge_unittest_to_pytest.stages.pipeline`` and provide a
 lightweight, stable API for conversion operations.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from dataclasses import dataclass

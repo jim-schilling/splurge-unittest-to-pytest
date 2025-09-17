@@ -15,6 +15,10 @@ Exceptions:
     PermissionDeniedError: Permission issues while operating on files.
     EncodingError: Encoding-related file errors.
     BackupError: Failures relating to backup operations.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 DOMAINS = ["exceptions"]

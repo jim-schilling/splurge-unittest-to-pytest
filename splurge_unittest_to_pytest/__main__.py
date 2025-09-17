@@ -7,6 +7,10 @@ work minimal and primarily exists to provide a discoverable
 
 Publics:
         None (the package CLI is exposed via the console script).
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 DOMAINS = ["cli"]

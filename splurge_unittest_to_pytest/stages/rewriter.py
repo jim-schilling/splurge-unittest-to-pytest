@@ -7,6 +7,10 @@ visits class and function definitions and adjusts parameter lists.
 
 Publics:
     rewriter_stage
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

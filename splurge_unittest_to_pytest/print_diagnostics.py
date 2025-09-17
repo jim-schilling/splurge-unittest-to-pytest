@@ -3,6 +3,10 @@
 Provides a small CLI wrapper exposing ``main()`` so callers can list and
 inspect diagnostics run directories. This is primarily a developer
 utility mirroring the older ``tools/print_diagnostics.py`` script.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

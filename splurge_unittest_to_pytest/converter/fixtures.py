@@ -8,6 +8,10 @@ designed to be small, testable, and side-effect free.
 Publics:
     create_fixture_with_cleanup: Build a fixture function that yields with cleanup.
     create_simple_fixture: Build a fixture that returns a simple value.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 import libcst as cst

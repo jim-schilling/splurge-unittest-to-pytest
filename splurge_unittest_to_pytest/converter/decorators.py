@@ -6,6 +6,10 @@ arguments (for example ``autouse=True``) in a deterministic order.
 
 Publics:
     build_pytest_fixture_decorator: Build a canonical @pytest.fixture decorator node.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations

@@ -4,6 +4,10 @@ Small helper used by the cleanup analysis to determine whether a
 ``SimpleStatementLine`` contains references to a named attribute. The
 function handles common shapes (calls, expressions, assignments) and
 delegates detailed checks to :mod:`.cleanup_checks` where appropriate.
+
+Copyright (c) 2025 Jim Schilling
+
+License: MIT
 """
 
 from __future__ import annotations
