@@ -1,12 +1,8 @@
-"""Ensure necessary imports (pytest, re, typing) exist in the module.
+"""Ensure required imports (pytest, re, typing) are present in the module.
 
-This stage inspects the generated module to determine which common imports
-are required (for example ``pytest`` or ``re``) and inserts them in a
-deterministic location after the module docstring or existing imports.
-
-It also supports inserting consolidated ``from typing import ...``
-statements when upstream stages request typing names via the context key
-``'needs_typing_names'``.
+Inserts deterministic imports after the module docstring or existing
+imports and supports injecting ``from typing import ...`` when requested
+via the pipeline context.
 """
 
 from __future__ import annotations

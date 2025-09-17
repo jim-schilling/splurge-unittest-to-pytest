@@ -1,18 +1,8 @@
-"""Fixtures stage: remove class setUp/tearDown and emit top-level pytest functions.
+"""Convert class setUp/tearDown into top-level pytest functions.
 
-        This stage consumes ``collector_output`` (a :class:`CollectorOutput`) and
-        performs the following responsibilities:
-
-        - Drop class-level unittest ``setUp``/``tearDown`` methods when operating
-            in strict pytest mode.
-        - Emit top-level pytest functions that accept fixture parameters derived
-            from recorded setup assignments.
-        - Update test method signatures when required.
-
-        Stages may provide an optional ``pattern_config`` in the pipeline context
-        under the key ``'pattern_config'``. When present the stage should consult
-        ``pattern_config._is_setup_method`` / ``pattern_config._is_teardown_method``
-        to determine which method names should be treated as setup/teardown.
+Consumes ``collector_output`` and emits top-level pytest functions derived
+from recorded setup assignments. When provided, a ``pattern_config`` may
+customize which method names are treated as setup/teardown.
 """
 
 from __future__ import annotations

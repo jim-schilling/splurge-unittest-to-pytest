@@ -1,9 +1,7 @@
 """Bundle local assignments into NamedTuple containers and emit fixtures.
 
-This module is extracted from the generator to enable isolated testing and
-focus. The primary function, :func:`bundle_named_locals`, groups recorded
-local assignments produced by the same call site and emits a small
-``NamedTuple``-like container class and a composite fixture that constructs
+Group recorded local assignments produced by the same call site and emit a
+NamedTuple-like container class and a composite fixture that constructs
 instances of that container.
 """
 
@@ -23,22 +21,9 @@ def bundle_named_locals(
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
     """Group related local assignments into a bundled NamedTuple fixture.
 
-    Args:
-        out_classes: Mapping from test-class name to a small class-like
-            object that contains recorded ``local_assignments`` and
-            ``setup_assignments``.
-        existing_top_names: Set of top-level names already used in the
-            module to avoid collisions.
-
-    Returns:
-        A tuple ``(nodes, needs_typing, attr_to_fixture)`` where ``nodes`` is
-        a list of :class:`libcst` nodes to prepend (class + fixture),
-        ``needs_typing`` is a set of typing names required by emitted code,
-        and ``attr_to_fixture`` maps attribute names to the emitted fixture
-        name.
-
-    The function preserves the original generator heuristics while keeping
-    the implementation tolerant to irregular inputs for unit testing.
+    Returns (nodes, needs_typing, attr_to_fixture) where ``nodes`` contains
+    the emitted class and fixture nodes, ``needs_typing`` lists typing names
+    required, and ``attr_to_fixture`` maps attribute names to fixture names.
     """
     fixture_nodes: List[cst.BaseStatement] = []
     needs_typing: Set[str] = set()

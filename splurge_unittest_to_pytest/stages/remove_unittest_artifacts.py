@@ -1,10 +1,7 @@
-"""Pipeline stage that removes unittest imports and TestCase inheritance.
+"""Remove unittest imports, TestCase bases, and test-run guards.
 
-This stage removes top-level imports of ``unittest`` and strips
-``unittest.TestCase`` (or bare ``TestCase``) from class bases. It also
-eliminates common ``if __name__ == '__main__'`` guards that call test
-runners such as ``unittest.main()`` to avoid executing tests when pytest
-imports the generated module.
+Strips top-level ``unittest`` imports, removes ``TestCase`` bases from
+classes, and drops common ``if __name__ == '__main__'`` test-run guards.
 """
 
 from __future__ import annotations

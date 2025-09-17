@@ -1,9 +1,7 @@
-"""Rewrite test methods to accept fixtures instead of ``self``/``cls``.
+"""Rewrite class test methods to accept fixture parameters.
 
-This stage expects ``collector_output`` in the pipeline context and updates
-method signatures for test methods found in classes by removing the leading
-``self``/``cls`` parameter where appropriate and appending fixture parameters
-inferred from the class's ``setup_assignments``.
+Updates function signatures for class test methods using data from
+``collector_output`` so tests accept fixtures rather than ``self``/``cls``.
 """
 
 from __future__ import annotations

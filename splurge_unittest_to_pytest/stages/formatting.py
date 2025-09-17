@@ -1,10 +1,7 @@
-"""Shared formatting helpers for pipeline stages.
+"""Formatting helpers for pipeline stages.
 
-This module provides helpers to normalize module- and class-level spacing so
-that stages can independently insert EmptyLine sentinel nodes without
-producing inconsistent spacing. The normalization rules aim to produce
-stable, PEP8-friendly blank-line counts between imports, classes and
-top-level functions.
+Provides functions to normalize module- and class-level spacing and make
+blank-line counts deterministic across stages.
 """
 
 from __future__ import annotations

@@ -19,25 +19,20 @@ DOMAINS = ["generator"]
 class GeneratorCore:
     """Compose small components to provide a simple generator facade.
 
-    The core can accept injected collaborators to make unit-testing and
-    orchestration testing straightforward.
+    The core accepts injected collaborators for testing and orchestration.
 
-    Methods
-    -------
-    make_fixture(base_name: str, body: str) -> cst.FunctionDef
-        Create a single fixture function from a body string. The method
-        allocates a unique name, rewrites cleanup code, builds a fixture
-        specification, attempts to infer a return annotation, and emits a
-        libcst.FunctionDef node for the fixture.
+    Public methods
+    --------------
+    make_fixture
+        Create a single fixture FunctionDef from a body string.
 
-    make_composite_dirs_fixture(base_name: str, mapping: dict[str, str]) -> cst.FunctionDef
-        Create a grouped yield-style fixture that returns a mapping of
-        attribute names to values. The mapping argument maps attribute
-        names to expression strings used to initialize the values.
+    make_composite_dirs_fixture
+        Create a grouped yield-style fixture that returns a dict of names
+        to values.
 
-    finalize(prepend_nodes: list[cst.BaseStatement], fixture_nodes: list[cst.FunctionDef], specs: Mapping[str, Any], bundler_typing: set[str] | None = None) -> dict[str, object]
-        Annotate fixture nodes where possible, collect typing needs, and
-        return the final result dictionary expected by the pipeline.
+    finalize
+        Annotate fixture nodes, collect typing requirements, and return
+        the final result dict expected by the pipeline.
     """
 
     def __init__(

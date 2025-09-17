@@ -1,9 +1,7 @@
 """Helpers to collect self/attribute dependencies from fixture bodies.
 
-This module contains a small public API used by the generator stage to
-inspect function bodies and collect attributes referenced on ``self`` or
-module-level fixtures. Kept minimal and pure so it can be tested in
-isolation.
+Small, testable helpers used by the generator to inspect nodes and collect
+attribute names referenced via ``self`` or ``cls``.
 """
 
 from __future__ import annotations
@@ -18,16 +16,10 @@ DOMAINS = ["generator"]
 
 
 def collect_self_attributes(node: cst.CSTNode) -> Set[str]:
-    """Return the set of attribute names accessed via ``self`` or ``cls`` in
-    the provided node. The node can be a Module, a BaseExpression, or any
-    other libcst node; this helper will traverse it and collect simple
+    """Return attribute names accessed via ``self`` or ``cls`` in ``node``.
+
+    The helper traverses the provided libcst node and collects simple
     attribute accesses like ``self.name``.
-
-    Args:
-        node: A libcst node to inspect.
-
-    Returns:
-        A set of attribute names accessed as ``self.<name>`` or ``cls.<name>``.
     """
 
     class _Visitor(cst.CSTVisitor):

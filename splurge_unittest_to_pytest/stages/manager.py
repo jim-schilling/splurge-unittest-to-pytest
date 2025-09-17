@@ -1,8 +1,7 @@
-"""StageManager for orchestrating converter stages.
+"""StageManager that registers and runs pipeline stages.
 
-The manager registers stage callables that accept and return a ``context``
-mapping. The pipeline context begins with the ``module`` (a ``cst.Module``)
-and is extended by stage outputs such as ``collector_output``.
+Provides registration and execution helpers for stages that mutate a
+shared pipeline context mapping.
 """
 
 from __future__ import annotations

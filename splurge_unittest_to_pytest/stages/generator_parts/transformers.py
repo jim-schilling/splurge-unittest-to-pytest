@@ -1,9 +1,7 @@
 """Small libcst transformers used by the generator stage.
 
-These transformers are intentionally minimal: they perform narrow,
-well-specified rewrites (replace `self.name` with `name`, replace
-attribute access with a local name, etc.). Keeping them separate makes
-testing and reasoning simpler.
+Minimal, well-scoped transformers for simple rewrites used when emitting
+fixtures and test functions.
 """
 
 from __future__ import annotations

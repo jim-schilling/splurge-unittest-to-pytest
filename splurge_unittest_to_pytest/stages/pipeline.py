@@ -1,10 +1,8 @@
-"""Pipeline runner wiring the individual stages into a conversion pipeline.
+"""Pipeline runner that wires and executes conversion stages.
 
-This module constructs the staged pipeline and provides ``run_pipeline``
-which accepts a parsed ``libcst.Module`` and returns a transformed
-``libcst.Module``. The runner accepts an optional ``pattern_config`` which
-is injected into the pipeline initial context for stages that consult
-method-name patterns.
+Provides ``run_pipeline`` which runs registered stages over a
+``libcst.Module`` and returns the transformed module. An optional
+``pattern_config`` may be injected into the initial pipeline context.
 """
 
 from __future__ import annotations

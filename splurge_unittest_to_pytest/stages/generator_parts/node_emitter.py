@@ -9,28 +9,11 @@ DOMAINS = ["generator"]
 
 
 class NodeEmitter:
-    """Emit libcst AST nodes for fixtures from small body source strings.
+    """Emit libcst nodes for small fixture bodies.
 
-    The emitter creates a :class:`libcst.FunctionDef` node from simple source
-    lines or builds composite fixture nodes (for example, fixtures that yield
-    a dict) when requested.
-
-    Methods
-    -------
-    emit_fixture_node(name: str, body: str, returns: str | None = None) -> cst.FunctionDef
-        Build a :class:`libcst.FunctionDef` from a body string. Statements are
-        parsed individually and a conservative fallback (``pass``) is used on
-        parse errors.
-
-    _normalize_body(body: str) -> List[str]
-        Return non-empty lines from the body preserving indentation.
-
-    _parse_statement_safe(line: str) -> cst.BaseStatement
-        Parse a single statement; on error return a ``Pass`` statement node.
-
-    emit_composite_dirs_node(base_name: str, mapping: dict[str, str]) -> cst.FunctionDef
-        Emit a grouped yield-style fixture that initializes locals from the
-        provided mapping and yields a dict of those values.
+    This class builds :class:`libcst.FunctionDef` nodes from short body
+    source strings. It also emits composite yield-style fixtures that
+    initialize locals from a mapping and yield a dictionary of values.
     """
 
     def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:
@@ -60,14 +43,19 @@ class NodeEmitter:
         )
 
     def _normalize_body(self, body: str) -> List[str]:
-        """Return non-empty lines from the body preserving indentation."""
+        """Return non-empty lines from ``body`` preserving indentation.
+
+        Empty or whitespace-only lines are filtered out but indentation is
+        preserved for parsing.
+        """
         return [line for line in body.splitlines() if line.strip()]
 
     def _parse_statement_safe(self, line: str) -> cst.BaseStatement:
-        """Parse a single statement; on error return a Pass statement node.
+        """Parse a single statement from ``line``.
 
-        This isolates the try/except so tests can assert the fallback behavior
-        deterministically.
+        Returns a parsed statement node or a ``Pass`` node when parsing fails.
+        The try/except is isolated so tests can deterministically assert the
+        fallback behavior.
         """
         try:
             return parse_statement(line)

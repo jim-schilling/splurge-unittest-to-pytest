@@ -11,9 +11,7 @@ DOMAINS = ["generator"]
 def collect_self_attrs(expr: Any) -> Set[str]:
     """Collect attribute names referenced as ``self.xxx`` or ``cls.xxx``.
 
-    The function walks the provided expression and returns a set of attribute
-    names referenced via ``self`` or ``cls``. This small helper is extracted
-    from the generator stage to simplify unit testing and reuse.
+    Walk the given expression and return a set of referenced attribute names.
     """
     found: set[str] = set()
 

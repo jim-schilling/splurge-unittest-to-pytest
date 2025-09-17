@@ -10,11 +10,10 @@ DOMAINS = ["generator"]
 
 
 class ReplaceSelfWithParam(cst.CSTTransformer):
-    """Transformer that replaces ``self.attr``/``cls.attr`` with a plain name.
+    """Transformer that replaces ``self.attr``/``cls.attr`` with a Name.
 
-    When an attribute name matches an entry in the provided reference set,
-    the transformer returns a :class:`libcst.Name` node for the attribute
-    name. This is used to rewrite self-references into parameter references
+    When an attribute matches the provided reference set, returns a Name
+    node for the attribute so self-references become parameter references
     for generated fixtures.
     """
 

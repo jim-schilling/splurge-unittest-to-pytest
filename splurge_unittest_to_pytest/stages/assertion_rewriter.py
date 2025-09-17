@@ -1,8 +1,7 @@
-"""Assertion rewriter stage: convert self.assert* calls to pytest-style asserts
-and convert assertRaises context managers to pytest.raises.
+"""Rewrite unittest-style assertions to pytest-style asserts and context managers.
 
-This is a focused stage (subset of the legacy transformer's behavior) used
-to migrate assertion rewriting into the staged pipeline.
+Converts calls like ``self.assertEqual`` to ``assert`` and rewrites
+``assertRaises`` forms to ``pytest.raises``.
 """
 
 from __future__ import annotations

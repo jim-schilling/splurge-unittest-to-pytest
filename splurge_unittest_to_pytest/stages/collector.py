@@ -1,9 +1,8 @@
-"""Collector stage: read-only visitor that collects facts from a module.
+"""Collector visitor that gathers per-class setup/teardown/test metadata.
 
-This visitor gathers per-class setup/teardown/test method metadata,
-assignments discovered inside ``setUp`` methods, top-level imports, and the
-module docstring location. The output is a :class:`CollectorOutput` used by
-downstream stages.
+Collects assignments from ``setUp`` methods, top-level imports, and the
+module docstring index, returning a :class:`CollectorOutput` for later
+stages.
 """
 
 from __future__ import annotations

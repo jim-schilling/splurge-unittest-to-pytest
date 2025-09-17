@@ -1,7 +1,7 @@
 """Recursive utilities to check whether an expression references
 ``self.<attr>`` or a bare ``<attr>`` name.
 
-Extracted from ``stages/generator.py`` to make the logic unit-testable.
+Extracted to make the logic unit-testable.
 """
 
 from __future__ import annotations
@@ -18,10 +18,8 @@ DOMAINS = ["generator"]
 def references_attribute(expr: Any, attr_name: str) -> bool:
     """Recursively check whether ``expr`` references ``self.<attr>`` or ``<attr>``.
 
-    The function is defensive about unexpected node shapes and returns
-    ``False`` when it cannot determine a match. It mirrors legacy logic
-    used in the generator stage and accepts wrapper objects like
-    ``AssignTarget`` by unwrapping them.
+    Defensive about unexpected shapes; returns False when a match cannot be
+    determined. Accepts wrapper objects by unwrapping them.
     """
     # Accept AssignTarget and similar wrapper objects by unwrapping
     expr = getattr(expr, "target", expr)

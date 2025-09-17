@@ -1,10 +1,7 @@
 """Convert common unittest decorators to pytest markers and fix mock imports.
 
-This conservative stage converts decorators such as ``@unittest.skip`` and
-``@unittest.expectedFailure`` to their :mod:`pytest` marker equivalents and
-also rewrites problematic ``from unittest.mock import ...`` import lists that
-may contain non-importable names. The transformation aims to produce
-importable, idiomatic pytest code while preserving semantics.
+Rewrites decorators like ``@unittest.skip`` to ``pytest.mark.skip`` and
+cleans problematic ``from unittest.mock import ...`` imports.
 """
 
 from __future__ import annotations

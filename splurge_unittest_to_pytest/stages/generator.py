@@ -1,16 +1,9 @@
-"""Fixture generator stage: produce FixtureSpec entries and fixture nodes.
+"""Generate fixture specifications and fixture function nodes.
 
-This stage consumes a :class:`CollectorOutput` and emits two things in the
-pipeline context:
-
-- ``specs``: a mapping of fixture name -> :class:`FixtureSpec` describing
-    fixture metadata collected from ``setUp`` assignments.
-- ``fixture_nodes``: a list of :class:`libcst.FunctionDef` nodes that will be
-    inserted into the module by the fixture injector stage.
-
-The implementation delegates fine-grained inference (name allocation,
-filename inference, bundling) to helper modules under
-``stages/generator_parts`` so the logic remains testable and small.
+Consumes a :class:`CollectorOutput` and places ``fixture_specs`` and
+``fixture_nodes`` into the pipeline context. Detailed inference (naming,
+filename inference, bundling) is delegated to helpers under
+``stages/generator_parts``.
 """
 
 from __future__ import annotations

@@ -17,10 +17,9 @@ def safe_bundle_named_locals(
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
     """Safely invoke the named-local bundler and return a normalized result.
 
-    This wrapper calls :func:`bundle_named_locals` and preserves the
-    original tolerant behavior: any exception during bundling yields empty
-    results rather than propagating the error. The returned tuple is
-    always ``(nodes, needs, mapping)`` where ``mapping`` may be empty.
+    Calls :func:`bundle_named_locals` and returns ``(nodes, needs, mapping)``.
+    Any exception during bundling is caught and an empty result is returned
+    for robustness in the generator pipeline.
     """
     try:
         nodes, needs, mapping = bundle_named_locals(out_classes, existing_top_names)

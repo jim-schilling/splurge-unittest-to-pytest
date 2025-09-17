@@ -20,4 +20,8 @@ class SimpleFixtureSpec:
 
 
 def _is_dir_like(name: str) -> bool:
+    """Return True if the name looks directory-like.
+
+    Checks for common substrings used for directory/path-like names.
+    """
     return any(k in name for k in ("dir", "path", "temp"))

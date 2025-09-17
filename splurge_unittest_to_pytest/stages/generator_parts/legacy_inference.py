@@ -1,8 +1,6 @@
-"""Legacy inference helpers extracted from stages/generator.py.
+"""Legacy inference helpers for inferring annotation shapes from nodes.
 
-This module contains the previously-local helpers that infer return
-annotation shapes from libcst expression nodes. It is intended as a
-drop-in move to enable incremental decomposition.
+Helpers extracted to simplify the generator and enable isolated testing.
 """
 
 from __future__ import annotations

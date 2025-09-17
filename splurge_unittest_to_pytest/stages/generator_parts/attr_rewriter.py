@@ -10,15 +10,11 @@ DOMAINS = ["generator", "rewriter"]
 
 
 class AttrRewriter(cst.CSTTransformer):
-    """Transformer that replaces ``self.attr`` or ``cls.attr`` with a name.
+    """Transformer replacing ``self.attr``/``cls.attr`` with a Name.
 
-    The transformer replaces attribute accesses whose value is ``self`` or
-    ``cls`` and whose attribute name matches the configured
-    ``target_attr``. The attribute is replaced with a plain :class:`libcst.Name`
-    whose value is provided via ``local``.
-
-    This class extracts a small visitor previously embedded inline in
-    ``stages/generator.py`` so it can be tested in isolation.
+    Replaces attribute accesses where the value is ``self`` or ``cls`` and
+    the attribute matches ``target_attr`` with a plain Name node using the
+    provided ``local`` value.
     """
 
     def __init__(self, target_attr: str, local: str) -> None:
@@ -35,5 +31,8 @@ class AttrRewriter(cst.CSTTransformer):
 def replace_in_node(
     node: cst.CSTNode, target_attr: str, local: str
 ) -> cst.CSTNode | cst.RemovalSentinel | cst.FlattenSentinel[cst.CSTNode]:
-    """Apply AttrRewriter to a CST node and return the rewritten node."""
+    """Apply AttrRewriter to ``node`` and return the rewritten node.
+
+    This helper visits the node with AttrRewriter(target_attr, local).
+    """
     return node.visit(AttrRewriter(target_attr, local))

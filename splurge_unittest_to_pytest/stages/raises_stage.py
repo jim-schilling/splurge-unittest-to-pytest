@@ -1,10 +1,8 @@
-"""Handle conversion of unittest assertRaises forms to pytest.raises.
+"""Convert unittest.assertRaises forms to pytest.raises and fix attributes.
 
-This stage converts both context-manager and callable forms of
-``assertRaises``/``assertRaisesRegex`` into ``pytest.raises`` constructs.
-It also rewrites uses that bind exception objects (e.g., ``as cm``)
-so attribute access like ``cm.exception`` becomes ``cm.value`` to match
-pytest's ``ExceptionInfo`` API.
+Converts both context-manager and callable ``assertRaises`` usages to
+``pytest.raises`` and updates bound exception attribute access to use
+``ExceptionInfo.value``.
 """
 
 from __future__ import annotations

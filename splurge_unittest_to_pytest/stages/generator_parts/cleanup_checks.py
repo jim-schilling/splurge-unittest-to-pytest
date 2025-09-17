@@ -1,8 +1,8 @@
 """Heuristics to detect simple cleanup statements used by the generator.
 
-This module exposes helpers to identify simple cleanup patterns (assigns
-or deletes targeting ``self.<attr>`` / ``cls.<attr>`` or bare attribute
-names) so the generator can emit corresponding teardown fixtures.
+Helpers identify simple cleanup patterns (assigns or deletes targeting
+``self.<attr>``/``cls.<attr>`` or bare names) so the generator can emit
+teardown fixtures.
 """
 
 from __future__ import annotations
@@ -19,10 +19,9 @@ DOMAINS = ["generator"]
 def is_simple_cleanup_statement(s: Any, attr: str) -> bool:
     """Return True when ``s`` is a simple cleanup targeting ``attr``.
 
-    The function accepts :class:`libcst.Assign`, expression-wrapped
-    assignments, and delete-like nodes and returns ``True`` when the
-    target matches either ``self.attr``/``cls.attr`` or a bare name equal to
-    ``attr``.
+    Accepts Assign, Expr-wrapped Assign, and Delete-like nodes and returns
+    True when the target matches ``self.attr``, ``cls.attr``, or a bare
+    name equal to ``attr``.
     """
     if isinstance(s, cst.SimpleStatementLine) and s.body:
         expr = s.body[0]

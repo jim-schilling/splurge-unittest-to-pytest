@@ -1,9 +1,7 @@
-"""Fixture injector stage: insert fixture FunctionDef nodes into a module body.
+"""Insert generated fixture FunctionDef nodes into the module body.
 
-This stage expects ``fixture_nodes`` in the pipeline context (a list of
-:class:`libcst.FunctionDef`) and inserts them into the module at a
-deterministic location: after the pytest import (if present), else after the
-module docstring or existing imports.
+Places fixtures deterministically after imports or the module docstring
+and signals that the ``pytest`` import is required.
 """
 
 from __future__ import annotations
