@@ -1,11 +1,12 @@
-"""Console entry point for the package.
+"""Package __main__ entry for running the converter as a script.
 
-This module exposes the package ``__main__`` entry point so the
-package can be executed with ``python -m splurge_unittest_to_pytest``.
+Allows executing the package with ``python -m splurge_unittest_to_pytest``
+to invoke the CLI entry point. The module intentionally keeps runtime
+work minimal and primarily exists to provide a discoverable
+``__main__`` entry.
 
-The module currently only declares associated domains for tooling and
-does not perform significant runtime work; keeping a minimal docstring
-improves discoverability for maintainers.
+Publics:
+        None (the package CLI is exposed via the console script).
 """
 
 DOMAINS = ["cli"]

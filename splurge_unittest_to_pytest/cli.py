@@ -1,13 +1,17 @@
 """Command line interface for splurge-unittest-to-pytest.
 
-This module exposes the Click-based console entry point ``main`` used to
-invoke conversions from the command line. It parses CLI flags such as
-``--setup-methods``, ``--teardown-methods``, and ``--test-methods`` and
-forwards them to the conversion helpers. The CLI supports dry-run
-behavior and output redirection.
+Provides the Click-based ``main`` console command used to convert
+unittest-style tests to pytest-style tests from the command line.
 
-The primary public symbol is ``main`` which is a Click command
-function suitable for use as a console script entry point.
+This module parses CLI options (for example, ``--setup-methods``,
+``--teardown-methods``, ``--test-methods``, ``--dry-run``, and
+``--output``) and forwards them to the conversion helpers in
+``splurge_unittest_to_pytest.main`` and the converter package. The
+command supports dry-run mode and optional backup/output directory
+behaviour.
+
+Publics:
+    main: Click entry point suitable for use as a console script.
 """
 
 import sys

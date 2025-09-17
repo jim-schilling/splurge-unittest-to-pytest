@@ -1,4 +1,21 @@
-"""Domain-specific exceptions for splurge-unittest-to-pytest."""
+"""Domain-specific exceptions used across the package.
+
+This module defines a small hierarchy of exceptions used by the
+converter and CLI code. The hierarchy is intentionally shallow so
+callers can catch broad categories (for example ``SplurgeError``) or
+more specific failures (for example ``ParseError``).
+
+Exceptions:
+    SplurgeError: Base class for all package-specific errors.
+    ConversionError: Conversion-specific failures.
+    ParseError: Raised when source code parsing fails.
+    FileOperationError: File operation related errors (I/O, encoding,
+        permissions).
+    FileNotFoundError: Input file not found.
+    PermissionDeniedError: Permission issues while operating on files.
+    EncodingError: Encoding-related file errors.
+    BackupError: Failures relating to backup operations.
+"""
 
 DOMAINS = ["exceptions"]
 

@@ -1,11 +1,10 @@
-"""Helpers for converting unittest assertion methods to pytest asserts.
+"""Helpers for converting ``unittest`` assertion methods to pytest asserts.
 
-This module exposes small, pure functions that translate common
-``unittest`` style assertions (for example ``assertEqual`` or
-``assertTrue``) into equivalent :mod:`libcst` nodes that produce the
-corresponding pytest-style ``assert`` statements. The functions are
-designed to be independent of transformer state so they can be tested
-in isolation and reused by the conversion transformer.
+Small, pure functions that translate common ``unittest`` assertion
+method calls (for example ``assertEqual`` or ``assertTrue``) into
+``libcst`` nodes representing equivalent pytest ``assert`` statements.
+The implementations are stateless so they can be unit tested and reused
+by the conversion transformer.
 """
 
 from __future__ import annotations

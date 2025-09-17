@@ -1,6 +1,8 @@
-"""Splurge unittest to pytest converter.
+"""Top-level package for the splurge unittest -> pytest converter.
 
-A Python library for converting unittest-style tests to modern pytest-style tests.
+Provides the public package metadata and re-exports the primary
+conversion helpers and exception types for convenient import by
+callers.
 """
 
 __version__ = "2025.1.1"

@@ -1,11 +1,14 @@
-"""Import helper utilities for the converter.
+"""Import helper utilities used by the converter stages.
 
-Small, pure helper functions that inspect or modify a
-:class:`libcst.Module` to add or remove imports as part of the
-conversion process. Typical responsibilities include detecting whether
-``pytest`` is already imported and inserting the appropriate import
-statement, or removing ``unittest`` imports when they are no longer
-required.
+This module provides small, side-effect-free helpers that inspect and
+modify a :class:`libcst.Module` to ensure appropriate import statements
+are present for emitted pytest-style code. Functions include detection
+of existing ``pytest`` imports, inserting a ``pytest`` import at an
+appropriate position, and removing ``unittest`` imports no longer
+required after conversion.
+
+The helpers are intentionally minimal so they can be used from multiple
+conversion stages without producing duplicate imports.
 """
 
 from typing import Any

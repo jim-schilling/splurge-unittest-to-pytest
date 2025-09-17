@@ -1,7 +1,19 @@
-"""Main conversion helpers used by the CLI and programmatic callers.
+"""Main conversion helpers for programmatic and CLI usage.
 
-Public helpers include ``convert_string``, ``convert_file``, and the
-``PatternConfigurator`` helper used to customize method-name matching.
+This module exposes the primary conversion helpers consumed by the
+command-line ``main`` and by programmatic callers. Key functions and
+classes include:
+
+- ``convert_string``: Convert a source string from unittest-style to
+    pytest-style and return a ``ConversionResult``.
+- ``convert_file``: Convenience wrapper to read, convert, and write
+    files.
+- ``PatternConfigurator``: Helper to customize detection of setup,
+    teardown, and test method names.
+
+These helpers orchestrate the staged pipeline implemented in
+``splurge_unittest_to_pytest.stages.pipeline`` and provide a
+lightweight, stable API for conversion operations.
 """
 
 from dataclasses import dataclass

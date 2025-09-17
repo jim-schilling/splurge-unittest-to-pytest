@@ -1,9 +1,9 @@
-"""Dispatch helper for converting unittest assertions to pytest.
+"""Dispatch helper that maps unittest assertion names to converters.
 
-This module exposes ``convert_assertion`` which maps a unittest-style
-assertion method name and its arguments to a corresponding
-:mod:`libcst` node representing a pytest-style assertion. The dispatcher
-delegates to the implementations found in :mod:`.assertions`.
+Expose ``convert_assertion`` which takes a unittest-style assertion
+method name and its argument list and returns a ``libcst`` node
+representing the corresponding pytest-style assertion. The dispatcher
+delegates to the concrete converters defined in :mod:`.assertions`.
 """
 
 from typing import Sequence

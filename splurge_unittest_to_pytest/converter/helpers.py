@@ -1,20 +1,17 @@
-"""Canonical helpers used by the converter package.
+"""Helper utilities used by the converter package.
 
-This module provides small, well-tested utilities used throughout the
-converter package. Key helpers include:
+Small, focused utilities used across the converter implementation. The
+module exposes transformers and functions that are intentionally pure
+and easy to unit test. Highlights:
 
-- ``SelfReferenceRemover``: a :class:`libcst.CSTTransformer` used to
-    remove ``self``/``cls`` attribute anchors when extracting instance
-    methods to top-level functions.
-- ``normalize_method_name``: convert mixed/camel case method names to
+- SelfReferenceRemover: a ``libcst.CSTTransformer`` to remove ``self``/
+    ``cls`` attribute anchors when extracting instance methods.
+- normalize_method_name: Convert mixed/camel case identifiers to
     ``snake_case`` for consistent pattern matching.
-- ``parse_method_patterns``: parse CLI-style pattern arguments into a
-    list of canonical patterns.
-- ``has_meaningful_changes``: helper that compares original and
-    converted source while ignoring formatting-only differences.
-
-The functions and classes here are small and intentionally pure so they
-can be exercised independently in unit tests.
+- parse_method_patterns: Parse CLI-style pattern arguments into a list
+    of canonical patterns.
+- has_meaningful_changes: Determine whether conversion produced
+    semantic changes while ignoring formatting-only differences.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Locate and print diagnostics artifacts produced by the tool.
+"""Diagnostics helper to locate and print tool-run artifacts.
 
 Provides a small CLI wrapper exposing ``main()`` so callers can list and
 inspect diagnostics run directories. This is primarily a developer
