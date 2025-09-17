@@ -1,42 +1,50 @@
-import os
-from pathlib import Path
-
 import libcst as cst
+
 from splurge_unittest_to_pytest.stages.manager import StageManager
-from splurge_unittest_to_pytest.stages import diagnostics
 
 DOMAINS = ["manager", "stages"]
 
 
-def test_stage_manager_writes_snapshots(tmp_path: Path) -> None:
-    # Enable diagnostics for this test
-    os.environ["SPLURGE_ENABLE_DIAGNOSTICS"] = "1"
-    try:
-        manager = StageManager()
+def test_diagnostics_marker_and_dir_created(monkeypatch, tmp_path):
+    # Enable diagnostics via env var
+    monkeypatch.setenv("SPLURGE_ENABLE_DIAGNOSTICS", "1")
+    mgr = StageManager()
+    # If diagnostics couldn't be created, skip the assertions
+    if mgr._diagnostics_dir is None:
+        return
 
-        # simple stage that appends a comment to the module
-        def stage_append_comment(ctx: dict):
-            mod = ctx.get("module")
-            if mod is None:
-                return {"module": mod}
-            src = getattr(mod, "code", None) or ""
-            new_src = src + "\n# appended by stage"
-            new_mod = cst.parse_module(new_src)
-            return {"module": new_mod}
+    # Marker file should exist in the diagnostics dir
+    files = list(mgr._diagnostics_dir.iterdir())
+    assert any(p.name.startswith("splurge-diagnostics-") for p in files)
 
-        manager.register(stage_append_comment)
 
-        # run the manager with a tiny module
-        module = cst.parse_module("x = 1\n")
-        manager.run(module)
+def test_register_writes_stage_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPLURGE_ENABLE_DIAGNOSTICS", "1")
+    mgr = StageManager()
+    if mgr._diagnostics_dir is None:
+        return
 
-        # diagnostics.create_diagnostics_dir should have returned a Path when enabled
-        ddir = diagnostics.create_diagnostics_dir()
-        # Manager stores its diagnostics dir privately but the helper returns one for this run too.
-        assert ddir is None or isinstance(ddir, Path) or ddir is None
-        # If diagnostics were created, ensure at least one file exists under it
-        if ddir is not None:
-            files = list(ddir.iterdir())
-            assert files, "Expected diagnostics files to be written"
-    finally:
-        os.environ.pop("SPLURGE_ENABLE_DIAGNOSTICS", None)
+    # Stage that mutates module in context
+    def stage(context):
+        new_mod = cst.parse_module("a = 1")
+        context["module"] = new_mod
+        return {"ok": True}
+
+    mgr.register(stage)
+    initial = cst.parse_module("x = 0")
+    mgr.run(initial)
+
+    files = list(mgr._diagnostics_dir.iterdir())
+    # Expect multiple files (marker + snapshots)
+    assert any(
+        p.name.endswith("00_initial_input.py") or p.name.endswith("99_final_output.py") or p.suffix == ".py"
+        for p in files
+    )
+
+
+def test_no_diagnostics_when_disabled(monkeypatch):
+    # Ensure diagnostics disabled
+    monkeypatch.delenv("SPLURGE_ENABLE_DIAGNOSTICS", raising=False)
+    mgr = StageManager()
+    # Should not have a diagnostics dir
+    assert mgr._diagnostics_dir is None

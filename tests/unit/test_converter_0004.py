@@ -1,35 +1,24 @@
-from splurge_unittest_to_pytest.converter.method_patterns import (
-    normalize_method_name,
-    is_setup_method,
-    is_teardown_method,
-    is_test_method,
-)
+import libcst as cst
+
+from splurge_unittest_to_pytest.converter.placement import insert_fixtures_into_module
 
 DOMAINS = ["converter"]
 
 
-def test_normalize_camel_to_snake():
-    assert normalize_method_name("setUp") == "set_up"
-    assert normalize_method_name("tearDown") == "tear_down"
-    assert normalize_method_name("shouldDoThing") == "should_do_thing"
+def test_insert_fixtures_after_imports():
+    module = cst.Module(
+        body=[
+            cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("os"))])]),
+            cst.SimpleStatementLine(body=[cst.Expr(value=cst.Call(func=cst.Name("setup"), args=[]))]),
+        ]
+    )
 
+    fixture_func = cst.FunctionDef(
+        name=cst.Name("my_fixture"),
+        params=cst.Parameters(),
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])]),
+    )
 
-def test_is_setup_method_matches_common_names():
-    patterns = {"setup", "before_each"}
-    assert is_setup_method("setUp", patterns)
-    assert is_setup_method("before_each", patterns)
-    assert is_setup_method("setup_method", patterns)
-
-
-def test_is_teardown_method_matches_common_names():
-    patterns = {"teardown", "after_each"}
-    assert is_teardown_method("tearDown", patterns)
-    assert is_teardown_method("after_each", patterns)
-    assert is_teardown_method("teardown_method", patterns)
-
-
-def test_is_test_method_matches_prefixes():
-    patterns = {"test_", "should_"}
-    assert is_test_method("test_example", patterns)
-    assert is_test_method("should_do_it", patterns)
-    assert is_test_method("it_handles_case", {"it_"})
+    new_mod = insert_fixtures_into_module(module, {"my_fixture": fixture_func})
+    # expecting module body to have import, then fixture, then setup call
+    assert any(isinstance(n, cst.FunctionDef) for n in new_mod.body)

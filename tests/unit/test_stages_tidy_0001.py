@@ -1,37 +1,64 @@
 import libcst as cst
-
-from splurge_unittest_to_pytest.converter import helpers, imports
+from typing import cast, Sequence
+from splurge_unittest_to_pytest.stages.tidy import tidy_stage
 
 DOMAINS = ["stages", "tidy"]
 
 
-def test_has_meaningful_changes_with_normalizer_exception(monkeypatch):
-    # Force formatting.normalize_module to raise so we exercise AST comparison
-    import splurge_unittest_to_pytest.stages.formatting as formatting
-
-    monkeypatch.setattr(formatting, "normalize_module", lambda m: (_ for _ in ()).throw(Exception("boom")))
-
-    orig = "def f():\n    return 1\n"
-    conv = "def f():\n    return 1\n"
-    assert helpers.has_meaningful_changes(orig, conv) is False
+def make_fixture(name: str) -> cst.FunctionDef:
+    decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
+    body = cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Return(cst.Name("None"))])])
+    return cst.FunctionDef(name=cst.Name(name), params=cst.Parameters(), body=body, decorators=[decorator])
 
 
-def test_has_meaningful_changes_ast_detects_change(monkeypatch):
-    import splurge_unittest_to_pytest.stages.formatting as formatting
+def test_tidy_inserts_emptyline_after_fixtures() -> None:
+    src = "import pytest\n\n"
+    module = cst.parse_module(src)
+    fixtures: list[cst.FunctionDef] = [make_fixture("a"), make_fixture("b")]
+    # create module with fixtures followed by class
+    # Use a SimpleStatementLine containing Pass so the class body conforms to
+    # libcst's BaseSmallStatement expectations for module bodies.
+    class_block = cst.ClassDef(
+        name=cst.Name("A"),
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])]),
+    )
+    # module.body is a Sequence[cst.BaseSmallStatement] but we construct a
+    # mixed list for test purposes — cast at the call site to satisfy mypy.
+    new_body = list(module.body) + fixtures + [class_block]
+    mod = module.with_changes(body=cast(Sequence[cst.BaseSmallStatement], new_body))
+    res = tidy_stage({"module": mod})
+    new_mod = cast(cst.Module, res.get("module"))
+    # find EmptyLine in body
+    has_empty = any(isinstance(s, cst.EmptyLine) for s in new_mod.body)
+    assert has_empty
 
-    monkeypatch.setattr(formatting, "normalize_module", lambda m: (_ for _ in ()).throw(Exception("boom")))
 
-    orig = "def f():\n    return 1\n"
-    conv = "def f():\n    return 2\n"
-    assert helpers.has_meaningful_changes(orig, conv) is True
+def test_tidy_adds_self_to_test_methods_without_params() -> None:
+    src = """class TestA:\n    def test_one(self):\n        pass\n\nclass B:\n    def test_two():\n        pass\n"""
+    module = cst.parse_module(src)
+    res = tidy_stage({"module": module})
+    new_mod = cast(cst.Module, res.get("module"))
+    # find class B and its method
+    cls_b = next((s for s in new_mod.body if isinstance(s, cst.ClassDef) and s.name.value == "B"), None)
+    assert isinstance(cls_b, cst.ClassDef)
+    func = next((m for m in cls_b.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_two"), None)
+    assert isinstance(func, cst.FunctionDef)
+    # method should now have one param named 'self'
+    assert len(func.params.params) == 1
+    assert func.params.params[0].name.value == "self"
 
 
-def test_remove_unittest_import_with_alias():
-    imp = cst.Import(names=[cst.ImportAlias(name=cst.Name("unittest"), asname=cst.AsName(name=cst.Name("u")))])
-    out = imports.remove_unittest_import(imp)
-    assert out is cst.RemovalSentinel.REMOVE
-
-
-def test_has_pytest_import_with_alias_import():
-    module = cst.parse_module("import pytest as p\n")
-    assert imports.has_pytest_import(module)
+def test_tidy_keeps_existing_params_on_test_methods() -> None:
+    src = """class C:\n    def test_with_param(x):\n        pass\n"""
+    module = cst.parse_module(src)
+    res = tidy_stage({"module": module})
+    new_mod = cast(cst.Module, res.get("module"))
+    cls = next((s for s in new_mod.body if isinstance(s, cst.ClassDef) and s.name.value == "C"), None)
+    assert isinstance(cls, cst.ClassDef)
+    func = next(
+        (m for m in cls.body.body if isinstance(m, cst.FunctionDef) and m.name.value == "test_with_param"), None
+    )
+    assert isinstance(func, cst.FunctionDef)
+    # original param should be preserved
+    assert len(func.params.params) == 1
+    assert func.params.params[0].name.value == "x"

@@ -1,27 +1,21 @@
-from click.testing import CliRunner
-from splurge_unittest_to_pytest import cli
+import libcst as cst
+from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
+
+DOMAINS = ["misc"]
 
 
-def test_cli_dry_run_respects_patterns(tmp_path, monkeypatch):
-    # Create a temp file that looks like a unittest TestCase but uses a
-    # custom setup method 'custom_setup' that we'll pass via CLI flags.
-    src = """
-import unittest
+def test_build_attach_fixture_empty():
+    func = make_autouse_attach({})
+    assert isinstance(func, cst.FunctionDef)
+    assert func.name.value == "_attach_to_instance"
 
-class TestX(unittest.TestCase):
-    def custom_setup(self):
-        self.x = 1
 
-    def test_foo(self):
-        assert self.x == 1
-"""
-    file_path = tmp_path / "test_x.py"
-    file_path.write_text(src, encoding="utf-8")
-
-    runner = CliRunner()
-
-    # Run CLI in dry-run mode and pass --setup-methods custom_setup
-    result = runner.invoke(cli.main, [str(file_path), "--dry-run", "--setup-methods", "custom_setup"])
-    assert result.exit_code == 0
-    # Output should include "Would convert" because the custom setup should be recognized
-    assert "Would convert" in result.output
+def test_insert_attach_fixture_into_module():
+    module = cst.parse_module("import pytest\n\n")
+    func = make_autouse_attach(
+        {"res": cst.FunctionDef(name=cst.Name("res"), params=cst.Parameters(), body=cst.IndentedBlock(body=[]))}
+    )
+    # Use the insertion helper that accepts an already-built FunctionDef
+    new_mod = insert_attach_fixture_into_module(module, func)
+    # Ensure the function appears in module body
+    assert any(isinstance(s, cst.FunctionDef) and s.name.value == "_attach_to_instance" for s in new_mod.body)

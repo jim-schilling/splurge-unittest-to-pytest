@@ -156,7 +156,9 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Validate behavior of public APIs only.
 - Prefer validation using actual data, interfaces, and objects
 - Minimize use of mocks, except where appropriate.
-- Target 85% code coverage for all public interfaces and methods.
+- Unit test must target 85% code coverage for all public interfaces and methods.
+- Combination of unit tests and integration tests must target 95% code coverage for all public interfaces and methods.
+- Prefer tests that are independent, repeatable, and deterministic.
 - Prefer shared helpers for common logic.
 - Avoid validation of implementation details and private APIs.
 - Prefer validation of patterns of text, and avoid exact matching of content and formatting.

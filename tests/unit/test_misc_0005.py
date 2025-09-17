@@ -1,36 +1,27 @@
-import subprocess
-import sys
 from pathlib import Path
 
-DOMAINS = ["misc"]
+from tools.rename_tests_by_domains import build_proposals
 
 
-def test_print_diagnostics_finds_run(tmp_path: Path) -> None:
-    # Create a fake diagnostics root
-    root = tmp_path / "diag_root"
-    root.mkdir()
+def test_renamer_skips_helpers_and_non_test_files(tmp_path: Path) -> None:
+    # create structure
+    root = tmp_path / "tests"
+    helpers = root / "unit" / "helpers"
+    helpers.mkdir(parents=True)
+    tests_dir = root / "unit"
+    # file inside helpers should be ignored
+    h = helpers / "autouse_helpers.py"
+    h.write_text("DOMAINS = ['core']\n")
+    # non-test file at top-level should be ignored
+    conf = tests_dir / "conftest.py"
+    conf.write_text("DOMAINS = ['misc']\n")
+    # a real test file should be picked up
+    real = tests_dir / "test_example.py"
+    real.write_text("DOMAINS = ['core']\n")
 
-    # Create a run dir
-    run_dir = root / "splurge-diagnostics-2025-09-12_12-00-00"
-    run_dir.mkdir()
-
-    # Marker file
-    marker = run_dir / "splurge-diagnostics-2025-09-12_12-00-00"
-    marker.write_text(str(run_dir.resolve()), encoding="utf-8")
-
-    # A sample snapshot file
-    sample = run_dir / "test_snapshot.py"
-    sample.write_text("x = 1", encoding="utf-8")
-
-    # Run the helper script pointing at the root
-    proc = subprocess.run(
-        [sys.executable, "tools/print_diagnostics.py", "--root", str(root)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    out = proc.stdout + proc.stderr
-    assert "Diagnostics run directory" in out
-    assert "splurge-diagnostics-2025-09-12_12-00-00" in out
-    assert "test_snapshot.py" in out
+    proposals = build_proposals(root)
+    # only the real test should be proposed
+    names = [p.name for _, p in proposals]
+    assert any("test_core" in n for n in names)
+    assert not any("autouse_helpers" in n for n in names)
+    assert not any("conftest" in n for n in names)

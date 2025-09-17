@@ -1,105 +1,36 @@
-import importlib
-import inspect
-import pkgutil
-import types
-
-import pytest
+import subprocess
+import sys
+from pathlib import Path
 
 DOMAINS = ["misc"]
-PACKAGE = "splurge_unittest_to_pytest"
-
-# Modules to skip because they intentionally perform side-effects or are
-# heavyweight. Add to this list if a module causes the smoke test to fail.
-SKIP_MODULES = {
-    f"{PACKAGE}.print_diagnostics",
-}
 
 
-def _safe_call(obj):
-    """Call a callable if it has no required parameters.
+def test_print_diagnostics_finds_run(tmp_path: Path) -> None:
+    # Create a fake diagnostics root
+    root = tmp_path / "diag_root"
+    root.mkdir()
 
-    Returns True if called, False otherwise.
-    """
-    if not callable(obj):
-        return False
-    try:
-        sig = inspect.signature(obj)
-    except (ValueError, TypeError):
-        # Some C builtins may not expose a signature; skip them.
-        return False
-    # Only call callables with no required positional or keyword-only args.
-    for p in sig.parameters.values():
-        if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
-            # skip varargs/kwargs: we don't provide any
-            return False
-        if p.default is inspect._empty and p.kind in (
-            p.POSITIONAL_ONLY,
-            p.POSITIONAL_OR_KEYWORD,
-            p.KEYWORD_ONLY,
-        ):
-            return False
-    # If we reached here, attempt call without arguments
-    try:
-        obj()
-        return True
-    except Exception:
-        # Swallow exceptions from calls — we only aim to exercise code paths,
-        # not assert specific behavior. Tests should still fail for import-time
-        # errors.
-        return False
+    # Create a run dir
+    run_dir = root / "splurge-diagnostics-2025-09-12_12-00-00"
+    run_dir.mkdir()
 
+    # Marker file
+    marker = run_dir / "splurge-diagnostics-2025-09-12_12-00-00"
+    marker.write_text(str(run_dir.resolve()), encoding="utf-8")
 
-@pytest.mark.parametrize("module_name", list(pkgutil.iter_modules([PACKAGE.replace(".", "/")])))
-def test_import_and_call_public_symbols(module_name):
-    # param module_name is a ModuleInfo tuple-like; convert to full name
-    if isinstance(module_name, pkgutil.ModuleInfo):
-        name = module_name.name
-    else:
-        # Backwards compat: some pkgutil variants yield tuples
-        name = module_name[1]
-    full = f"{PACKAGE}.{name}"
-    if full in SKIP_MODULES:
-        pytest.skip(f"Skipping unsafe module {full}")
-    # Import the module
-    mod = importlib.import_module(full)
-    assert isinstance(mod, types.ModuleType)
-    # Iterate public attributes and call safe zero-arg callables
-    for attr_name in dir(mod):
-        if attr_name.startswith("_"):
-            continue
-        try:
-            attr = getattr(mod, attr_name)
-        except Exception:
-            # attribute access raised; consider this a failure
-            pytest.fail(f"Accessing attribute {full}.{attr_name} raised")
-        # If it's a submodule, attempt to import it
-        if inspect.ismodule(attr):
-            continue
-        _safe_call(attr)
+    # A sample snapshot file
+    sample = run_dir / "test_snapshot.py"
+    sample.write_text("x = 1", encoding="utf-8")
 
+    # Run the helper script pointing at the root
+    proc = subprocess.run(
+        [sys.executable, "tools/print_diagnostics.py", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-# Also exercise subpackages 'stages' and 'converter' modules' top-level modules
-for subpkg in ("stages", "converter"):
-    iter_path = f"{PACKAGE}/{subpkg}".replace(".", "/")
-    for _info in pkgutil.iter_modules([iter_path]):
-        name = _info.name if isinstance(_info, pkgutil.ModuleInfo) else _info[1]
-        full = f"{PACKAGE}.{subpkg}.{name}"
-
-        def _make_test(modname=full):
-            def _test():
-                if modname in SKIP_MODULES:
-                    pytest.skip(f"Skipping unsafe module {modname}")
-                mod = importlib.import_module(modname)
-                assert isinstance(mod, types.ModuleType)
-                for attr_name in dir(mod):
-                    if attr_name.startswith("_"):
-                        continue
-                    try:
-                        attr = getattr(mod, attr_name)
-                    except Exception:
-                        pytest.fail(f"Accessing attribute {modname}.{attr_name} raised")
-                    _safe_call(attr)
-
-            return _test
-
-        globals()[f"test_smoke_{subpkg}_{name}"] = _make_test()
+    out = proc.stdout + proc.stderr
+    assert "Diagnostics run directory" in out
+    assert "splurge-diagnostics-2025-09-12_12-00-00" in out
+    assert "test_snapshot.py" in out
