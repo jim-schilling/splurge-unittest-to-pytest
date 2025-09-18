@@ -16,15 +16,18 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Callable, Any, cast
 
 import libcst as cst
 from pathlib import Path
 from . import diagnostics
 
+from ..types import PipelineContext
+
 DOMAINS = ["stages", "manager"]
 
-StageCallable = Callable[[dict[str, Any]], dict[str, Any]]
+# Stage callables accept and return PipelineContext directly.
+StageCallable = Callable[[PipelineContext], PipelineContext]
 
 # Associated domains for this module
 
@@ -66,31 +69,14 @@ class StageManager:
             pass
 
     def register(self, stage: StageCallable) -> None:
-        # Wrap the stage so we can dump the module after it runs for
-        # deterministic debugging output without modifying stage code.
-        def wrapped_stage(context: dict[str, Any]) -> dict[str, Any]:
-            result = stage(context)
-            # merge result like run() would
-            if isinstance(result, dict):
-                context.update(result)
-            # Dump current module snapshot
-            try:
-                current_module = context.get("module")
-                # Only write intermediate debug snapshots when diagnostics are
-                # explicitly enabled via environment variable. This prevents
-                # the pipeline from creating 'build/intermediates' during
-                # normal development or test runs.
-                if self._diagnostics_dir is not None and isinstance(current_module, cst.Module):
-                    stage_name = getattr(stage, "__name__", "<stage>")
-                    idx = len(list(self._diagnostics_dir.iterdir()))
-                    diagnostics.write_snapshot(self._diagnostics_dir, f"{idx:02d}_{stage_name}.py", current_module)
-            except Exception:
-                pass
-            return result
+        """Register a typed stage.
 
-        self.stages.append(wrapped_stage)
+        Stages are kept as typed callables and executed by :meth:`run`, which
+        is responsible for merging outputs and writing diagnostics snapshots.
+        """
+        self.stages.append(stage)
 
-    def run(self, module: cst.Module, initial_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    def run(self, module: cst.Module, initial_context: PipelineContext | None = None) -> PipelineContext:
         """Run registered stages over `module`.
 
         Args:
@@ -102,20 +88,25 @@ class StageManager:
         Returns:
             The final pipeline context mapping after all stages have executed.
         """
-        context: dict[str, Any] = {"module": module}
-        if initial_context and isinstance(initial_context, dict):
+        context: PipelineContext = {"module": module}
+        # Use an untyped view when merging arbitrary keys to avoid mypy
+        # TypedDict key restrictions; PipelineContext remains the runtime
+        # representation.
+        untyped_ctx = cast(dict[str, Any], context)
+        if initial_context:
             # Merge initial context values (do not override module)
             for k, v in initial_context.items():
                 if k != "module":
-                    context[k] = v
+                    untyped_ctx[k] = v
         for stage in self.stages:
+            # Each stage accepts and returns a PipelineContext mapping.
             result = stage(context)
             # allow stages to either mutate context in-place or return a new
-            # dict with their outputs; merge conservatively
+            # mapping; merge conservatively
             if result is None:
                 continue
             if isinstance(result, dict):
-                context.update(result)
+                untyped_ctx.update(result)
             # Debug: dump the current module source after this stage for
             # inspection during pipeline debugging. Files are written under
             # build/intermediates/<index>_<stage_name>.py
