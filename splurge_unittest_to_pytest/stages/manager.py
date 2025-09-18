@@ -17,12 +17,24 @@ License: MIT
 from __future__ import annotations
 
 from typing import Callable, Any, cast
+import uuid
 
 import libcst as cst
 from pathlib import Path
 from . import diagnostics
 
 from ..types import PipelineContext
+from .events import (
+    EventBus,
+    PipelineStarted,
+    PipelineCompleted,
+    StageStarted,
+    StageCompleted,
+    DiagnosticsObserver,
+    LoggingObserver,
+    logging_enabled,
+    HookRegistry,
+)
 
 DOMAINS = ["stages", "manager"]
 
@@ -45,6 +57,24 @@ class StageManager:
         # system temporary directory.
         # Diagnostics directory (created when diagnostics are enabled)
         self._diagnostics_dir: Path | None = diagnostics.create_diagnostics_dir()
+        # Stage-0 scaffolding: resources/event bus
+        self._event_bus: EventBus = EventBus()
+        self._run_id: str = uuid.uuid4().hex
+        self._hooks = HookRegistry()
+        self._stage_versions: dict[str, str] = {}
+        # Stage-1: install default observers (diagnostics + logging)
+        try:
+            # Diagnostics observer is controlled by diagnostics env vars
+            self._event_bus.subscribe(StageCompleted, DiagnosticsObserver(self._diagnostics_dir))
+            # Logging observers gated by SPLURGE_ENABLE_PIPELINE_LOGS
+            if logging_enabled():
+                log_obs = LoggingObserver()
+                self._event_bus.subscribe(PipelineStarted, log_obs)
+                self._event_bus.subscribe(PipelineCompleted, log_obs)
+                self._event_bus.subscribe(StageStarted, log_obs)
+                self._event_bus.subscribe(StageCompleted, log_obs)
+        except Exception:
+            pass
 
     def _diagnostics_enabled(self) -> bool:
         """Return True when diagnostics are enabled via environment.
@@ -96,6 +126,11 @@ class StageManager:
             The final pipeline context mapping after all stages have executed.
         """
         context: PipelineContext = {"module": module}
+        # Emit pipeline started (Stage-0: no behavior change)
+        try:
+            self._event_bus.publish(PipelineStarted(self._run_id))
+        except Exception:
+            pass
         # Use an untyped view when merging arbitrary keys to avoid mypy
         # TypedDict key restrictions; PipelineContext remains the runtime
         # representation.
@@ -105,8 +140,36 @@ class StageManager:
             for k, v in initial_context.items():
                 if k != "module":
                     untyped_ctx[k] = v
-        for stage in self.stages:
+        # Expose bus and hooks to stages (opt-in usage by pilot Task-based stages)
+        untyped_ctx["__event_bus__"] = self._event_bus
+        untyped_ctx["__hooks__"] = self._hooks
+        for idx, stage in enumerate(self.stages, start=1):
             # Each stage accepts and returns a PipelineContext mapping.
+            try:
+                # Publish stage start event
+                stage_name = getattr(stage, "__name__", "<stage>")
+                stage_id = f"stages.{stage_name}"
+                # If the stage module provides STAGE_VERSION, use it
+                try:
+                    mod = getattr(stage, "__module__", None)
+                    if isinstance(mod, str):
+                        import importlib
+
+                        m = importlib.import_module(mod)
+                        version = getattr(m, "STAGE_VERSION", self._stage_versions.get(stage_name, "1"))
+                        self._stage_versions[stage_name] = str(version)
+                    else:
+                        version = self._stage_versions.get(stage_name, "1")
+                except Exception:
+                    version = self._stage_versions.get(stage_name, "1")
+                self._event_bus.publish(StageStarted(self._run_id, stage_id, stage_name, version, idx))
+            except Exception:
+                pass
+            # Trigger before_stage hook (best-effort)
+            try:
+                self._hooks.before_stage(getattr(stage, "__name__", "<stage>"), untyped_ctx)
+            except Exception:
+                pass
             result = stage(context)
             # allow stages to either mutate context in-place or return a new
             # mapping; merge conservatively
@@ -114,19 +177,25 @@ class StageManager:
                 continue
             if isinstance(result, dict):
                 untyped_ctx.update(result)
-            # Debug: dump the current module source after this stage for
-            # inspection during pipeline debugging. Files are written under
-            # build/intermediates/<index>_<stage_name>.py
+            # Publish stage completed event with module for observers
             try:
-                # Only write intermediate debug snapshots when diagnostics are
-                # explicitly enabled. Delegate to diagnostics.write_snapshot
-                # which is defensive and will no-op on None/invalid inputs.
                 current_module = context.get("module")
-                if self._diagnostics_dir is not None and isinstance(current_module, cst.Module):
-                    stage_name = getattr(stage, "__name__", "<stage>")
-                    idx = len(list(self._diagnostics_dir.iterdir()))
-                    diagnostics.write_snapshot(self._diagnostics_dir, f"{idx:02d}_{stage_name}.py", current_module)
+                stage_name = getattr(stage, "__name__", "<stage>")
+                stage_id = f"stages.{stage_name}"
+                version = self._stage_versions.get(stage_name, "1")
+                self._event_bus.publish(
+                    StageCompleted(self._run_id, stage_id, stage_name, version, idx, current_module)
+                )
             except Exception:
-                # Do not let debugging instrumentation break the pipeline
                 pass
+            # Trigger after_stage hook with result
+            try:
+                self._hooks.after_stage(getattr(stage, "__name__", "<stage>"), cast(dict[str, Any], result))
+            except Exception:
+                pass
+        # Emit pipeline completed
+        try:
+            self._event_bus.publish(PipelineCompleted(self._run_id))
+        except Exception:
+            pass
         return context

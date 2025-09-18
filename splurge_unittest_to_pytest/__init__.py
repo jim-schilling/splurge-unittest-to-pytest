@@ -9,7 +9,7 @@ Copyright (c) 2025 Jim Schilling
 License: MIT
 """
 
-__version__ = "2025.1.1"
+__version__ = "2025.3.0"
 __author__ = "Jim Schilling"
 
 from splurge_unittest_to_pytest.exceptions import (

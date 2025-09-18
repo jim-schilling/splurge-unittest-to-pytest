@@ -19,50 +19,13 @@ from typing import Optional, cast
 from ..types import PipelineContext
 
 import libcst as cst
+from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+from .fixture_injector_tasks import InsertFixtureNodesTask
+from .fixture_injector_tasks import _find_insertion_index as _task_find_insertion_index
 
 DOMAINS = ["stages", "fixtures"]
 
 # Associated domains for this module
-
-
-def _find_insertion_index(module: cst.Module) -> int:
-    # prefer after pytest import
-    for idx, stmt in enumerate(module.body):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-            expr = stmt.body[0]
-            if isinstance(expr, cst.Import):
-                for name in expr.names:
-                    if name.name.value == "pytest":
-                        return idx + 1
-    # Find the first index after any leading imports (and optional
-    # module docstring). This ensures fixtures are placed after the
-    # import block even if import nodes are represented in varying ways.
-    start_idx = 0
-    if module.body:
-        first = module.body[0]
-        if (
-            isinstance(first, cst.SimpleStatementLine)
-            and first.body
-            and isinstance(first.body[0], cst.Expr)
-            and isinstance(first.body[0].value, cst.SimpleString)
-        ):
-            # skip docstring
-            start_idx = 1
-
-    insert_idx = start_idx
-    for idx in range(start_idx, len(module.body)):
-        stmt = module.body[idx]
-        if (
-            isinstance(stmt, cst.SimpleStatementLine)
-            and stmt.body
-            and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
-        ):
-            insert_idx = idx + 1
-            continue
-        # stop at first non-import statement
-        break
-
-    return insert_idx
 
 
 def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
@@ -143,59 +106,31 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
     return func
 
 
-def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
-    """Insert generated fixture functions into ``module``.
+def _find_insertion_index(module: cst.Module) -> int:
+    """Compatibility wrapper for tests importing from this module.
 
-    The stage will insert two empty-line sentinels before each top-level
-    fixture to ensure canonical spacing. It returns a mapping containing the
-    possibly-updated ``module`` and signals that ``pytest`` import is needed
-    via the ``needs_pytest_import`` key.
+    Delegates to the task helper to keep a single source of truth.
     """
+    return _task_find_insertion_index(module)
 
+
+def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
+    """Insert generated fixture functions into ``module`` via a task."""
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
-    nodes: list[cst.FunctionDef] = cast(list[cst.FunctionDef], context.get("fixture_nodes") or [])
-    # This stage emits strict pytest-style fixtures. Insert two EmptyLine
-    # sentinels before each top-level fixture to ensure canonical spacing
-    # after formatting.
-    if module is None or not nodes:
-        return {"module": module}
-    insert_idx = _find_insertion_index(module)
-    # allow a mix of statement and small-statement/EmptyLine nodes in the new body
-    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
-    # Insert fixture FunctionDef nodes at the calculated insertion index.
-    # Always emit strict spacing: insert two EmptyLine sentinels before
-    # each top-level fixture so the module normalizer produces two blank
-    # lines between top-level defs.
-    for offset, fn in enumerate(nodes):
-        insert_pos = insert_idx + offset * 3
-        # Insert two EmptyLine sentinels followed by the FunctionDef
-        new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
-        new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
-        new_body.insert(insert_pos + 2, fn)
-    # Insert fixtures into module body. Generated fixtures are intended to
-    # be used directly by top-level test wrappers. Signal that pytest
-    # import is needed so ImportInjector will insert it.
-    # Normalize spacing: ensure exactly two EmptyLine nodes before each
-    # top-level FunctionDef or ClassDef. Collapse runs longer than two.
-    normalized: list[cst.BaseStatement | cst.BaseSmallStatement] = []
-    i = 0
-    while i < len(new_body):
-        node = new_body[i]
-        if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
-            # count trailing empties in normalized so far
-            # remove trailing EmptyLines to avoid accumulating more than needed
-            while normalized and isinstance(normalized[-1], cst.EmptyLine):
-                normalized.pop()
-            # append two EmptyLine sentinels before the top-level def
-            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
-            normalized.append(cast(cst.BaseSmallStatement, cst.EmptyLine()))
-            normalized.append(node)
-            i += 1
-            continue
-        # preserve existing empties and other nodes
-        normalized.append(node)
-        i += 1
-
-    new_module = module.with_changes(body=normalized)
-    return {"module": new_module, "needs_pytest_import": True}
+    if module is None:
+        return cast(PipelineContext, {"module": module})
+    stage_id = "stages.fixture_injector"
+    bus = context.get("__event_bus__")
+    task = InsertFixtureNodesTask()
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
+        res = task.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+        return cast(PipelineContext, {"module": module})
+    return cast(PipelineContext, res.delta.values)

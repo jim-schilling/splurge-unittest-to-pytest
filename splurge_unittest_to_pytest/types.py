@@ -15,7 +15,8 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, TypedDict
-from typing import Protocol, Iterable, Optional
+from typing import Protocol, Iterable, Optional, Mapping, Sequence
+from dataclasses import dataclass, field
 
 DOMAINS = ["types", "pipeline"]
 
@@ -79,3 +80,89 @@ class TextWriterProtocol(Protocol):
 
 
 __all__.append("TextWriterProtocol")
+
+
+# --------------------
+# Stage/Task contracts
+# --------------------
+
+# Stable identifiers for stages and tasks
+StageId = str
+TaskId = str
+
+
+@dataclass(frozen=True)
+class ContextDelta:
+    """Represents changes produced by a Task or Stage.
+
+    Keys are merged into the pipeline context by the manager. The manager owns
+    merge semantics; producers return deltas and should avoid mutating the input
+    context in place when practical.
+    """
+
+    values: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TaskResult:
+    """Result of executing a single Task."""
+
+    delta: ContextDelta
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    errors: list[Exception] = field(default_factory=list)
+    skipped: bool = False
+
+
+@dataclass(frozen=True)
+class StageResult:
+    """Aggregated result of executing a Stage (composed of Tasks)."""
+
+    delta: ContextDelta
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    errors: list[Exception] = field(default_factory=list)
+
+
+class Task(Protocol):
+    """Task protocol for first-class, testable pipeline steps."""
+
+    id: TaskId
+    name: str
+
+    def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult: ...
+
+
+class Stage(Protocol):
+    """Stage protocol composed of multiple Tasks."""
+
+    id: StageId
+    version: str
+    name: str
+    tasks: Sequence[Task]
+
+    def execute(self, context: Mapping[str, Any], resources: Any) -> StageResult: ...
+
+
+__all__ += [
+    "StageId",
+    "TaskId",
+    "ContextDelta",
+    "TaskResult",
+    "StageResult",
+    "Task",
+    "Stage",
+]
+
+
+class Resources(Protocol):
+    """Resources passed to stages/tasks (logger, tracer, hooks, clock).
+
+    Protocol-only for Stage-0. Implementations are provided by the manager.
+    """
+
+    logger: Any
+    tracer: Any
+    hooks: Any
+    clock: Any
+
+
+__all__.append("Resources")

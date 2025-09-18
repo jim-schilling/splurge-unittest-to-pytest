@@ -13,32 +13,32 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any
 from ..types import PipelineContext
+from typing import cast
 
-import libcst as cst
 
 DOMAINS = ["stages", "validation"]
+STAGE_ID = "stages.postvalidator"
+STAGE_VERSION = "1"
 
 # Associated domains for this module
 
 
 def postvalidator_stage(context: PipelineContext) -> PipelineContext:
-    maybe_module: Any = context.get("module")
-    if maybe_module is None:
-        return {}
+    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .postvalidator_tasks import ValidateModuleTask
 
-    # Accept either a real libcst.Module or any module-like object that
-    # exposes a .code attribute (tests provide a simple object with .code).
-    code = getattr(maybe_module, "code", None)
-    if not isinstance(code, str):
-        # Nothing to validate; return the module-like object unchanged.
-        return {"module": maybe_module}
-
-    # Try to generate code and reparse
+    stage_id = STAGE_ID
+    bus = context.get("__event_bus__")
+    task = ValidateModuleTask()
     try:
-        _ = cst.parse_module(code)
-    except Exception as exc:  # parse error
-        # attach an error key to context for later inspection
-        return {"module": maybe_module, "postvalidator_error": str(exc)}
-    return {"module": maybe_module}
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
+        res = task.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+        return cast(PipelineContext, {})
+    return cast(PipelineContext, res.delta.values)

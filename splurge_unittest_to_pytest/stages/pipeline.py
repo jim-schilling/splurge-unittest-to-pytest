@@ -73,22 +73,14 @@ def run_pipeline(
     # accepts PipelineContext callables.
     mgr.register(collect_stage)
 
-    # The StageManager now accepts PipelineContext-typed callables and
-    # stages are registered directly. Legacy adapter wrappers
-    # have been removed as part of the strict-only migration.
+    # The StageManager accepts PipelineContext-typed callables; register stages directly.
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage
 
-    # Wrap other stages with thin adapters when necessary so the StageManager
-    # always receives callables matching Callable[[dict[str, Any]], dict[str, Any]].
     mgr.register(remove_unittest_artifacts_stage)
 
-    # Note: legacy transformer previously ran early here.
-    # Per project decision to ignore legacy behavior and make the staged
-    # pipeline authoritative, we no longer run the legacy transformer here.
-    # If legacy behavior is ever required, reintroduce this wrapper
-    # behind an explicit flag.
+    # The staged pipeline is authoritative; legacy transformer paths were removed.
 
     # core pipeline stages
     # assertion rewriter: convert self.assert* -> pytest assert and assertRaises contexts
@@ -105,12 +97,7 @@ def run_pipeline(
     # update test function signatures before injecting fixture FunctionDefs
     from .fixtures_stage import fixtures_stage
 
-    # Provide a thin helper to wrap typed PipelineContext stages so the
-    # StageManager continues to receive callables that accept an untyped
-    # dict[str, Any] and return dict[str, Any]. This keeps StageManager's
-    # public signature unchanged and confines typed usage inside stages.
-    # Register typed stages directly; StageManager now accepts
-    # PipelineContext-typed callables.
+    # Register typed stages directly
     mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
     # Run decorator and mock fixes before import injection so the injector can

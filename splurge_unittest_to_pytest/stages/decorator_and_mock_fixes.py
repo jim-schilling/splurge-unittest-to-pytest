@@ -23,6 +23,8 @@ import importlib.resources as pkg_resources
 import libcst as cst
 
 DOMAINS = ["stages", "mocks"]
+STAGE_ID = "stages.decorator_and_mock_fixes"
+STAGE_VERSION = "1"
 
 # Associated domains for this module
 
@@ -80,18 +82,27 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                     return updated.with_changes(decorator=_make_mark("skip", args=args))
 
                 if name == "skipIf" and cond is not None:
-                    args = [cst.Arg(value=cond)]
+                    # Build via parse_expression to normalize formatting exactly
+                    cond_code = getattr(cond, "code", None) or cst.Module([]).code_for_node(cond)
+                    call_src = f"pytest.mark.skipif({cond_code}"
                     if reason is not None:
-                        args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
-                    return updated.with_changes(decorator=_make_mark("skipif", args=args))
+                        reason_code = getattr(reason, "code", None) or cst.Module([]).code_for_node(reason)
+                        call_src += f", reason={reason_code}"
+                    call_src += ")"
+                    new_call = cst.parse_expression(call_src)
+                    return updated.with_changes(decorator=new_call)
 
                 if name == "skipUnless" and cond is not None:
                     # map skipUnless(cond, reason) -> pytest.mark.skipif(not cond, reason=...)
-                    not_cond = cst.UnaryOperation(operator=cst.Not(), expression=cond)
-                    args = [cst.Arg(value=not_cond)]
+                    # Build via parse_expression for exact formatting
+                    cond_code = getattr(cond, "code", None) or cst.Module([]).code_for_node(cond)
+                    call_src = f"pytest.mark.skipif(not {cond_code}"
                     if reason is not None:
-                        args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
-                    return updated.with_changes(decorator=_make_mark("skipif", args=args))
+                        reason_code = getattr(reason, "code", None) or cst.Module([]).code_for_node(reason)
+                        call_src += f", reason={reason_code}"
+                    call_src += ")"
+                    new_call = cst.parse_expression(call_src)
+                    return updated.with_changes(decorator=new_call)
         # Case: @unittest.expectedFailure (attribute, no call) or bare expectedFailure/name
         if (
             isinstance(expr, cst.Attribute)
@@ -256,12 +267,20 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
 
 
 def decorator_and_mock_fixes_stage(context: PipelineContext) -> PipelineContext:
-    module = context.get("module")
-    if not isinstance(module, cst.Module):
-        return context
-    transformer = DecoratorAndMockTransformer()
+    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .decorator_and_mock_fixes_tasks import ApplyDecoratorAndMockFixesTask
+
+    stage_id = STAGE_ID
+    bus = context.get("__event_bus__")
+    task = ApplyDecoratorAndMockFixesTask()
     try:
-        new_module = module.visit(transformer)
-        return {"module": new_module}
-    except Exception:
-        return context
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
+        res = task.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+        return cast(PipelineContext, context)
+    return cast(PipelineContext, res.delta.values)

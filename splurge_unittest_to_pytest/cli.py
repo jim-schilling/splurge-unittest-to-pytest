@@ -59,6 +59,13 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
 # Note: the canonical public parser is `converter.helpers.parse_method_patterns`.
 
 
+def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
+    """Dynamic proxy to main.convert_string for test monkeypatch flexibility."""
+    from .main import convert_string as _cs
+
+    return _cs(src, autocreate=autocreate, pattern_config=pattern_config)
+
+
 @click.command()
 @click.version_option(version=__version__)
 @click.argument("paths", nargs=-1, type=click.Path(exists=True, path_type=Path))
@@ -320,8 +327,6 @@ def main(
                 # Convert the file
                 if dry_run:
                     try:
-                        from .main import convert_string
-
                         source_code = file_path.read_text(encoding=encoding)
 
                         # If the file already imports pytest, treat it as unchanged
@@ -350,7 +355,9 @@ def main(
                                 click.echo(rec)
                         else:
                             # Human-friendly output
-                            if result.has_changes:
+                            # In some unit tests, convert_string is monkeypatched at the CLI module path.
+                            # Use that hook when present to reflect expected behavior in dry-run tests.
+                            if result.has_changes and not json_output:
                                 click.echo(f"Would convert: {file_path}")
                                 if verbose:
                                     click.echo("Changes would be made:")
@@ -361,6 +368,7 @@ def main(
                                         unified_diff_text(result.original_code, result.converted_code, path=file_path)
                                     )
                             else:
+                                # In dry-run non-JSON mode, do not print anything for unchanged files to keep output minimal
                                 if verbose:
                                     click.echo(f"No changes needed: {file_path}")
 
@@ -375,6 +383,9 @@ def main(
                     except (ParseError, EncodingError) as e:
                         click.echo(f"Error processing {file_path}: {e}", err=True)
                         error_count += 1
+                        # Ensure non-zero exit for dry-run parse error per tests
+                        # Let summary and final exit below handle status
+                        continue
                     except (SplurgeFileNotFoundError, PermissionDeniedError) as e:
                         click.echo(f"File access error for {file_path}: {e}", err=True)
                         error_count += 1
@@ -484,6 +495,9 @@ def main(
 
     if error_count > 0:
         sys.exit(1)
+    # In dry-run mode, exit code should reflect whether changes would be made.
+    # Some tests expect a non-zero exit when a parse error occurs; that path is
+    # handled above via error_count. Otherwise keep zero.
 
 
 def _show_diff_summary(original: str, converted: str) -> None:
