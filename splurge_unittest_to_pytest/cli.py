@@ -49,35 +49,12 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
 # Moved to top of module after imports.
 
 
-def _parse_method_patterns(pattern_args: tuple[str, ...]) -> list[str]:
-    """Parse method patterns from CLI arguments.
+# Note: parsing of comma-separated or multiple-flag method patterns is
+# provided by `converter.helpers.parse_method_patterns` which is imported
+# at module top. The local `_parse_method_patterns` helper was removed to
+# avoid duplication; CLI now delegates to the shared helper.
 
-    Supports both comma-separated values and multiple flags.
-    Properly trims whitespace from all values.
-    Examples:
-        ('setUp,beforeAll', 'teardown') -> ['setUp', 'beforeAll', 'teardown']
-        ('  setUp  ,  beforeAll  ',) -> ['setUp', 'beforeAll']
-    """
-    patterns = []
-    for arg in pattern_args:
-        # Trim the entire argument first, then split on commas
-        trimmed_arg = arg.strip()
-        if trimmed_arg:  # Skip empty arguments
-            # Split on commas and strip each pattern
-            for pattern in trimmed_arg.split(","):
-                trimmed_pattern = pattern.strip()
-                if trimmed_pattern:  # Skip empty patterns
-                    patterns.append(trimmed_pattern)
-
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_patterns = []
-    for pattern in patterns:
-        if pattern not in seen:
-            seen.add(pattern)
-            unique_patterns.append(pattern)
-
-    return unique_patterns
+# Note: the canonical public parser is `converter.helpers.parse_method_patterns`.
 
 
 @click.command()

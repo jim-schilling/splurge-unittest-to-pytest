@@ -1,5 +1,4 @@
 from splurge_unittest_to_pytest.converter import helpers
-from splurge_unittest_to_pytest import cli
 
 
 def test_normalize_method_name_camel_to_snake():
@@ -9,9 +8,9 @@ def test_normalize_method_name_camel_to_snake():
 
 
 def test_parse_method_patterns_various_inputs():
-    patterns = cli._parse_method_patterns(("setUp", "beforeAll"))
+    patterns = helpers.parse_method_patterns(("setUp", "beforeAll"))
     assert "setUp" in patterns and "beforeAll" in patterns
-    patterns = cli._parse_method_patterns(("  setUp  ,  beforeAll  ",))
+    patterns = helpers.parse_method_patterns(("  setUp  ,  beforeAll  ",))
     assert patterns == ["setUp", "beforeAll"]
-    patterns = cli._parse_method_patterns(("setUp,setUp,beforeAll",))
+    patterns = helpers.parse_method_patterns(("setUp,setUp,beforeAll",))
     assert patterns == ["setUp", "beforeAll"]

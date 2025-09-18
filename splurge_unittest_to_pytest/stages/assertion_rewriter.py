@@ -15,7 +15,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, Any, cast
+from typing import Sequence, Optional, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -569,7 +570,7 @@ class AssertionRewriter(cst.CSTTransformer):
         )
 
 
-def assertion_rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
+def assertion_rewriter_stage(context: PipelineContext) -> PipelineContext:
     module = context.get("module")
     if module is None:
         return {}

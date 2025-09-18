@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2025.2.0] - 2025-09-17
+
+### Removed (breaking)
+- Legacy compatibility mode and all `compat` flags removed. The converter now
+  emits strict pytest-native code by default and no longer supports the
+  historical compatibility engine. Consumers that relied on `--compat` or
+  programmatic compatibility toggles must update their workflows to accept
+  strict output or implement custom adapters.
+
+### Changed
+- Project version bumped to `2025.2.0`.
+- Documentation and tests updated to reflect strict-only behavior. Fixtures are
+  emitted as canonical pytest fixtures and lifecycle methods (setUp/tearDown)
+  are converted to top-level fixtures and test function parameters.
+
+### Migration notes
+- If you relied on compatibility mode to retain unittest-style class layouts
+  (for example to preserve TestCase subclasses at runtime), update your
+  workflows to accept top-level pytest test functions. To preserve class-style
+  organization you can manually wrap converted functions into classes or use
+  test grouping helpers in your test suite.
+
+### Verification
+- Full test-suite run: local verification performed after changes (tests and
+  docs updates). Run `pytest -n 7` in your environment to confirm behavior for
+  your target Python version and optional dependencies.
+
+
 ## [2025.1.1] - 2025-09-14
 
 ### Changed
@@ -214,6 +242,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    the staged pipeline is now the authoritative conversion engine.
  - Add an end-to-end integration test verifying converted modules are executable and
    autouse fixtures attach correctly.
+
+## [2025.2.0] - 2025-09-17
+
+### Removed (breaking)
+- Legacy compatibility mode and all `compat` flags removed. The converter now
+  emits strict pytest-native code by default and no longer supports the
+  historical compatibility engine. Consumers that relied on `--compat` or
+  programmatic compatibility toggles must update their workflows to accept
+  strict output or implement custom adapters.
+
+### Changed
+- Project version bumped to `2025.2.0`.
+- Documentation and tests updated to reflect strict-only behavior. Fixtures are
+  emitted as canonical pytest fixtures and lifecycle methods (setUp/tearDown)
+  are converted to top-level fixtures and test function parameters.
+
+### Migration notes
+- If you relied on compatibility mode to retain unittest-style class layouts
+  (for example to preserve TestCase subclasses at runtime), update your
+  workflows to accept top-level pytest test functions. To preserve class-style
+  organization you can manually wrap converted functions into classes or use
+  test grouping helpers in your test suite.
+
+### Verification
+- Full test-suite run: local verification performed after changes (tests and
+  docs updates). Run `pytest -n 7` in your environment to confirm behavior for
+  your target Python version and optional dependencies.
 
 ## Previous Versions
 

@@ -15,6 +15,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, cast
+from ..types import PipelineContext
 import importlib
 import json
 import importlib.resources as pkg_resources
@@ -246,7 +247,7 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
         return updated
 
 
-def decorator_and_mock_fixes_stage(context: dict[str, Any]) -> dict[str, Any]:
+def decorator_and_mock_fixes_stage(context: PipelineContext) -> PipelineContext:
     module = context.get("module")
     if not isinstance(module, cst.Module):
         return context

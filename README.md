@@ -14,7 +14,7 @@
 [![Quick status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/ci.yml?label=quick&style=flat-square&query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
 [![Coverage status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/coverage.yml?label=coverage&style=flat-square)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
 
-A small library and CLI tool to convert unittest-style tests into pytest-style tests while preserving formatting and comments using libcst.
+A small library and CLI tool to convert unittest-style tests into strict pytest-style tests while preserving formatting and comments using libcst.
 
 Full developer documentation is available in `docs/README-DETAILS.md`.
 
@@ -58,6 +58,43 @@ splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 
 The CLI no longer accepts compatibility toggles; it emits strict pytest-style
 output by default. See `--help` for remaining options.
+
+## Migration note (breaking change)
+
+As of release 2025.2.0 this project no longer supports a "compat" compatibility
+mode. The converter emits strict pytest-style output only. If you previously
+relied on the compat mode to preserve `unittest.TestCase` classes or to
+generate autouse-attachment glue, you must update converted code manually.
+
+Example — before (unittest-style class):
+
+```python
+import unittest
+
+class TestCalc(unittest.TestCase):
+  def setUp(self):
+    self.calc = Calculator()
+
+  def test_add(self):
+    self.assertEqual(self.calc.add(2, 3), 5)
+```
+
+After conversion (strict pytest-style):
+
+```python
+import pytest
+
+@pytest.fixture
+def calc():
+  return Calculator()
+
+def test_add(calc):
+  assert calc.add(2, 3) == 5
+```
+
+If you need to preserve class structure, convert using the CLI with `--dry-run`
+to inspect changes, then apply manual edits (class preservation is no longer
+automated by the converter).
 
 ## Supported conversions (high level)
 

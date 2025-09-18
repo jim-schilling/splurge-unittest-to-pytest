@@ -15,7 +15,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Optional, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -26,7 +27,7 @@ DOMAINS = ["stages", "tidy"]
 # Associated domains for this module
 
 
-def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
+def tidy_stage(context: PipelineContext) -> PipelineContext:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:

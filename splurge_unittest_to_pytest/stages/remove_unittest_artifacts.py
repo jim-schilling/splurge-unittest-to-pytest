@@ -14,6 +14,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, cast, Sequence
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -22,7 +23,7 @@ DOMAINS = ["stages", "helpers"]
 # Associated domains for this module
 
 
-def remove_unittest_artifacts_stage(context: dict[str, Any]) -> dict[str, Any]:
+def remove_unittest_artifacts_stage(context: PipelineContext) -> PipelineContext:
     module: cst.Module | None = context.get("module")
     if module is None:
         return {"module": module}

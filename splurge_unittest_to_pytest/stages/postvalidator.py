@@ -14,6 +14,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -22,7 +23,7 @@ DOMAINS = ["stages", "validation"]
 # Associated domains for this module
 
 
-def postvalidator_stage(context: dict[str, Any]) -> dict[str, Any]:
+def postvalidator_stage(context: PipelineContext) -> PipelineContext:
     maybe_module: Any = context.get("module")
     if maybe_module is None:
         return {}

@@ -22,7 +22,7 @@ License: MIT
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import libcst as cst
 
@@ -111,8 +111,10 @@ def convert_string(
             from splurge_unittest_to_pytest.stages.raises_stage import exceptioninfo_normalizer_stage
 
             # norm_ctx is a mapping used by pipeline stages; type it explicitly
-            # Use a dict[str, object] to match the stage signature
-            norm_ctx: dict[str, object] = {"module": converted_module}
+            # Cast to PipelineContext to interoperate with the typed stages
+            from splurge_unittest_to_pytest import types as _types
+
+            norm_ctx = cast(_types.PipelineContext, {"module": converted_module})
             out = exceptioninfo_normalizer_stage(norm_ctx)
             # Be defensive: ensure we only assign a Module back to converted_module
             if isinstance(out, dict):

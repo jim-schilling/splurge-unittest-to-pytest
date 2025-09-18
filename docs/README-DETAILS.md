@@ -142,8 +142,14 @@ pytest -k "test_convert"
 
 This repository recently completed a migration to remove legacy compatibility shims and to modernize the test surface. The following summarizes what changed and why:
 
-- Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native output by default.
-- Duplicate test-local autouse helpers were consolidated into a single test-only helper module: `tests/unit/helpers/autouse_helpers.py`. Tests import this module to avoid duplicating implementation details while keeping test-only utilities out of the package API.
+ Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native (strict-only) output by default as of the 2025.2.0 release.
+ If you maintain tooling or CI that relied on older compat flags, update your workflows to accept strict pytest-native output. Key migration guidance:
+
+- Files that relied on `--compat` to preserve TestCase class structure will now be emitted as top-level pytest functions and fixtures. If you need to preserve class-style organization, wrap converted functions into classes manually or use grouping helpers in your test suite.
+- Update any automation that parsed textual output of converted files (for example golden-file checks) to accept the stricter pytest-native formatting: fixtures are emitted with two blank lines before top-level fixtures and `@pytest.fixture` decorated functions are inserted before tests.
+- Replace references to `--compat` or `compat=True/False` in CI scripts and programmatic calls with direct use of the staged pipeline (`convert_string`, `convert_file`) which now implements strict behavior.
+
+ Run `pytest -n 7` locally after updating your tooling to ensure converted modules pass in your target environment.
 - The local `build/` directory (generated artifacts) was removed from the working tree and `build/` is ignored via `.gitignore` to prevent accidental commits of generated files.
 
 Verification performed locally during the migration:

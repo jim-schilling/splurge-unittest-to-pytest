@@ -17,8 +17,9 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any
 from typing import Optional
+from typing import cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -27,7 +28,7 @@ DOMAINS = ["stages", "imports"]
 # Associated domains for this module
 
 
-def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+def import_injector_stage(context: PipelineContext) -> PipelineContext:
     """Pipeline stage that ensures required imports exist in the module.
 
     Inspects context flags (for example ``needs_pytest_import``) and scans
@@ -161,7 +162,7 @@ def import_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
     # should be an iterable of names (e.g., ['Any', 'List']). We'll insert a
     # single `from typing import ...` ImportFrom statement for any missing
     # names, deduplicating against existing typing imports.
-    typing_names = context.get("needs_typing_names") or []
+    typing_names = cast(list, context.get("needs_typing_names") or [])
     # normalize to set of strings
     typing_needed: set[str] = set()
     for n in typing_names:

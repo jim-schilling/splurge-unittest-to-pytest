@@ -45,21 +45,6 @@ def test_fixture_injector_inserts_fixtures_after_import() -> None:
     assert len(found) == 2
 
 
-def test_fixture_injector_adds_compat_attacher() -> None:
-    src = '"""doc"""\n\nclass A:\n    pass\n'
-    module = parse_module(src)
-    fixtures = [make_dummy_fixture("res")]
-
-    class Co:
-        has_unittest_usage = True
-
-    ctx = {"module": module, "fixture_nodes": fixtures, "collector_output": Co()}
-    res = fixture_injector_stage(ctx)
-    new_module = cast(cst.Module, res.get("module"))
-    fixtures = [n for n in new_module.body if isinstance(n, cst.FunctionDef) and n.name.value == "res"]
-    assert len(fixtures) == 1
-
-
 def test_fixture_injector_inserts_nodes_and_autouse_when_unittest_used() -> None:
     src = "import pytest\n\nclass T:\n    pass\n"
     module = cst.parse_module(src)
@@ -88,28 +73,9 @@ def _make_fn(name: str) -> cst.FunctionDef:
     return cst.FunctionDef(name=cst.Name(name), params=cst.Parameters(), body=cst.IndentedBlock(body=[cst.Pass()]))
 
 
-def test_no_compat_inserts_two_blank_lines_before_defs() -> None:
+def test_inserts_two_blank_lines_before_defs() -> None:
     mod = _make_module_with_placeholders()
     nodes = [_make_fn("fix1"), _make_fn("fix2")]
-    ctx = {"module": mod, "fixture_nodes": nodes}
-    out = fixture_injector_stage(ctx)
-    new_mod = out.get("module")
-    assert isinstance(new_mod, cst.Module)
-    body = list(new_mod.body)
-    positions = [i for i, n in enumerate(body) if isinstance(n, cst.FunctionDef)]
-    assert positions, "No FunctionDef found"
-    for pos in positions:
-        cnt = 0
-        j = pos - 1
-        while j >= 0 and isinstance(body[j], cst.EmptyLine):
-            cnt += 1
-            j -= 1
-        assert cnt >= 2, f"Expected >=2 EmptyLine before def at pos {pos}, found {cnt}"
-
-
-def test_compat_preserves_single_empty_between_fixtures() -> None:
-    mod = _make_module_with_placeholders()
-    nodes = [_make_fn("a"), _make_fn("b")]
     ctx = {"module": mod, "fixture_nodes": nodes}
     out = fixture_injector_stage(ctx)
     new_mod = out.get("module")

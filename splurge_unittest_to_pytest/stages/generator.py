@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, List, Optional, Set, cast, Sequence
+from ..types import PipelineContext
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.generator_parts.bundler_invoker import safe_bundle_named_locals
@@ -58,7 +59,7 @@ def _is_literal(expr: Optional[cst.BaseExpression]) -> bool:
     return is_literal(expr)
 
 
-def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
+def generator_stage(context: PipelineContext) -> PipelineContext:
     maybe_out: Any = context.get("collector_output")
     out: Optional[CollectorOutput] = maybe_out if isinstance(maybe_out, CollectorOutput) else None
     if out is None:
@@ -622,7 +623,10 @@ def generator_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     # Delegate final annotation/typing and result assembly to GeneratorCore
     core = GeneratorCore()
-    return core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing)
+    # GeneratorCore.finalize returns a mapping used as a pipeline context
+    # piece. Cast to PipelineContext to satisfy staged pipeline typing until
+    # GeneratorCore is fully typed.
+    return cast(PipelineContext, core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing))
 
 
 # Backwards-compatible alias used by the pipeline and older callers

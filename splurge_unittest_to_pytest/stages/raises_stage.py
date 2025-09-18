@@ -16,6 +16,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Sequence, Optional, Any, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -398,7 +399,7 @@ class RaisesRewriter(cst.CSTTransformer):
         )
 
 
-def raises_stage(context: dict[str, object]) -> dict[str, object]:
+def raises_stage(context: PipelineContext) -> PipelineContext:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
@@ -447,7 +448,7 @@ def raises_stage(context: dict[str, object]) -> dict[str, object]:
     return {"module": new_mod, "needs_pytest_import": bool(getattr(transformer, "made_changes", False))}
 
 
-def exceptioninfo_normalizer_stage(context: dict[str, object]) -> dict[str, object]:
+def exceptioninfo_normalizer_stage(context: PipelineContext) -> PipelineContext:
     """Pipeline stage: ensure NAME.exception -> NAME.value for pytest.raises bindings.
 
     This runs after other stages (e.g., generator) that may restructure code and

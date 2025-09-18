@@ -16,6 +16,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
+from ..types import PipelineContext
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -78,7 +79,7 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], rem
     return fn.with_changes(params=new_params)
 
 
-def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
+def fixtures_stage(context: PipelineContext) -> PipelineContext:
     module: Optional[cst.Module] = context.get("module")
     collector: Optional[CollectorOutput] = context.get("collector_output")
     # fixture_specs and compat may be provided by earlier stages; they are
@@ -118,11 +119,9 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
-    # The project has removed compatibility mode. This stage now always
-    # operates in strict pytest mode: drop unittest.TestCase classes, remove
-    # setUp/tearDown methods, and emit top-level pytest functions that
-    # accept fixture parameters. Autouse attach fixtures are no longer
-    # produced.
+    # This stage operates in strict pytest mode: drop unittest.TestCase
+    # classes, remove setUp/tearDown methods, and emit top-level pytest
+    # functions that accept fixture parameters.
     strict_pytest_mode = True
 
     for stmt in module.body:
@@ -142,12 +141,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
                     # In strict mode, drop setUp/tearDown entirely
-                    if strict_pytest_mode:
-                        continue
-                    else:
-                        # Preserve in compat mode for back-compat runnability
-                        new_class_body.append(member)
-                        continue
+                    continue
 
                 # update test functions discovered by collector or named with test* prefix
                 if mname.startswith("test") or member in cls_info.test_methods:
@@ -179,22 +173,16 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                                 return True
                         return False
 
-                    # Keep the original first parameter (self/cls) so the
-                    # converted module remains runnable by default. The
-                    # autouse attach fixture will ensure pytest runs still
-                    # receive fixture values via request.getfixturevalue.
-                    # In strict mode, convert to plain functions (remove first param and add fixtures)
-                    updated_fn = _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
+                    # Convert TestCase methods into plain pytest functions
+                    _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
                     # Ensure one blank line between methods inside the class
                     if new_class_body:
                         last = new_class_body[-1]
                         # If the last appended element is not an EmptyLine, insert one
                         if not isinstance(last, cst.EmptyLine):
                             new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                    # Retain updated method only in compat mode; in strict mode we will
-                    # drop the class and rely on top-level functions.
-                    if not strict_pytest_mode:
-                        new_class_body.append(updated_fn)
+                    # In strict mode we will drop the class and rely on
+                    # top-level functions generated below.
                     continue
 
                 # otherwise retain the member unchanged
