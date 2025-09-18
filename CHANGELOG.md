@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   docs updates). Run `pytest -n 7` in your environment to confirm behavior for
   your target Python version and optional dependencies.
 
+### Fixed
+- CLI backup handling: backups are now written with a stable content-hash
+  suffix (e.g., `.bak-<sha256:8>`) to avoid collisions and preserve history.
+- Discovery and .gitignore handling: `find_unittest_files` now supports
+  `--follow-symlinks/--no-follow-symlinks` and optionally respects `.gitignore`
+  via `pathspec` when present. The discovery logic includes fallbacks for
+  differing `pathspec` APIs and robust handling of unreadable files.
+  Focused unit tests were added to cover both `pathspec.match_file` and
+  `pathspec.match_files` variants.
+
 
 ## [2025.1.1] - 2025-09-14
 

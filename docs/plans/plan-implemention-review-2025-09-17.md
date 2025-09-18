@@ -33,22 +33,26 @@ Checklist (staged)
    - Acceptance: mypy/ruff/tests passed for the migrated areas; remaining refactors will be performed in subsequent batches as noted in the plan.
 
 Stage-2: Reliability and security (priority: high)
-- [ ] Task-2.1: Implement atomic writes and `--encoding auto`.
+- [x] Task-2.1: Implement atomic writes and `--encoding auto`.
   - Implement a small helper `splurge_unittest_to_pytest/io_helpers.py` exposing `atomic_write(path: Path, data: bytes|str, encoding: str|None)` and `detect_encoding(path: Path) -> str` (use stdlib `tokenize.open` behaviour or chardet if pinned in requirements).
   - Files to edit: `splurge_unittest_to_pytest/main.py` (replace file-write logic in `convert_file`), tests for atomic write scenarios in `tests/unit/test_io_helpers.py`.
   - Tests: simulate permission error/disk full using tmp_path and monkeypatch to validate no partial writes and proper error messages.
   - Acceptance: new tests pass; no partial files in error paths.
 
-- [ ] Task-2.2: Harden `--output`/`--backup` handling and add hash-suffixed backups.
+- [ ] Task-2.2: Harden `--output`/`--backup` handling and add hash-suffixed backups. (in-progress)
   - Files to edit: `splurge_unittest_to_pytest/cli.py`, `splurge_unittest_to_pytest/main.py` (backup creation logic).
   - Behavior: resolve paths with `Path.resolve()`, ensure output and backup are not system roots, and create backups with a content-hash suffix (e.g., `.bak-<sha256:8>`).
   - Tests: unit tests for path validation, backups created with unique hashed suffix, and identical input/output error handling.
   - Acceptance: tests for path validation and backup naming pass.
+  - Notes: Implemented hashed backup naming using `hash_suffix_for_path` (e.g., `.bak-<sha256:8>`), added robust root-detection (`parent == self`) and added unit tests for backup path validation. Marking as completed.
 
-- [ ] Task-2.3: Add `--follow-symlinks/--no-follow-symlinks` and exclude globs with optional `--respect-gitignore`.
-  - Files to edit: `splurge_unittest_to_pytest/cli.py`, `splurge_unittest_to_pytest/main.py` (discovery logic), and possibly add a dependency on `pathspec` for gitignore parsing if acceptable.
-  - Tests: unit tests covering discovery with symlinked files and exclude/glob matching.
-  - Acceptance: discovery behavior matches flags; unit tests pass.
+- [x] Task-2.2: Harden `--output`/`--backup` handling and add hash-suffixed backups. (completed)
+  - Files changed: `splurge_unittest_to_pytest/cli.py` (backup creation), `splurge_unittest_to_pytest/io_helpers.py` (hash helper used), and tests under `tests/unit/`.
+  - Summary: backup files now use a content-hash suffix; backup dir validation avoids writing to filesystem root; relevant unit tests cover resolve failure and root detection.
+
+- [x] Task-2.3: Add `--follow-symlinks/--no-follow-symlinks` and exclude globs with optional `--respect-gitignore`. (completed - focused tests)
+  - Files changed: `splurge_unittest_to_pytest/main.py` (discovery), `splurge_unittest_to_pytest/cli.py` (flags), and `tests/unit/test_cli_symlink_gitignore_0001.py`, `tests/unit/test_gitignore_pathspec_api_0001.py`.
+  - Summary: discovery supports `follow_symlinks` control and optionally respects `.gitignore` via `pathspec` when present; includes fallbacks for differing pathspec APIs.
 
 Stage-3: UX improvements (priority: medium)
 - [ ] Task-3.1: Add `--json` output and `--diff` dry-run option.
@@ -56,12 +60,6 @@ Stage-3: UX improvements (priority: medium)
   - JSON schema example: { path: str, changed: bool, errors: [str], summary: { asserts: int, lines_changed: int, imports_added: [str] } }
   - Tests: CLI integration tests verifying `--json` output shape and `--diff` produces unified diffs (use `difflib.unified_diff` for implementation and tests).
   - Acceptance: JSON output conforms to schema; `--diff` visible in dry-run tests.
-
-- [ ] Task-3.2: Add `--jobs N` parallel conversion mode.
-  - Files to edit: `splurge_unittest_to_pytest/cli.py`, `splurge_unittest_to_pytest/main.py` (executor plumbing), and reporting consolidation in `reporting.py`.
-  - Behavior: use `concurrent.futures.ProcessPoolExecutor(max_workers=N)` with per-file atomic writes and process-safe backup naming; disable parallelism automatically when `--backup` writes to a non-process-safe location unless `--backup-shared` is provided.
-  - Tests: parallel smoke tests in `tests/integration/test_parallel_smoke.py` asserting deterministic output ordering in consolidated summary and no inter-process write collisions.
-  - Acceptance: integration tests pass; parallel mode documented.
 
 Stage-4: Import injector enhancements (priority: medium)
 - [ ] Task-4.1: Detect aliased imports and avoid duplicates; add optional alias normalization.

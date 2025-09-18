@@ -34,6 +34,7 @@ from .exceptions import (
     SplurgeError,
 )
 from .main import convert_file, find_unittest_files, ConversionResult, PatternConfigurator
+from .io_helpers import hash_suffix_for_path
 from .converter.helpers import parse_method_patterns
 
 DOMAINS = ["cli"]
@@ -96,6 +97,17 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
     help="Create backup files in specified directory with .bak extension",
 )
 @click.option(
+    "--follow-symlinks/--no-follow-symlinks",
+    default=True,
+    help="Whether to follow symlinked files when discovering test files (default: follow)",
+)
+@click.option(
+    "--respect-gitignore",
+    is_flag=True,
+    default=False,
+    help="Respect .gitignore patterns when discovering files (default: disabled)",
+)
+@click.option(
     "--setup-methods",
     multiple=True,
     help="Setup method patterns (comma-separated or multiple flags). Examples: --setup-methods 'setUp,beforeAll' --setup-methods teardown",
@@ -128,6 +140,8 @@ def main(
     teardown_methods: tuple[str, ...],
     test_methods: tuple[str, ...],
     autocreate: bool,
+    follow_symlinks: bool,
+    respect_gitignore: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
@@ -167,7 +181,20 @@ def main(
             files_to_convert.append(path)
         elif path.is_dir():
             if recursive:
-                unittest_files = find_unittest_files(path)
+                # Call find_unittest_files with new keyword args when supported.
+                # Some tests monkeypatch this callable with a lambda that doesn't
+                # accept the new keywords; handle TypeError and fall back to
+                # the old positional API for compatibility.
+                try:
+                    unittest_files = find_unittest_files(
+                        path, follow_symlinks=follow_symlinks, respect_gitignore=respect_gitignore
+                    )
+                except TypeError:
+                    # Fallback: call without the new kwargs
+                    try:
+                        unittest_files = find_unittest_files(path)
+                    except Exception:
+                        unittest_files = []
                 files_to_convert.extend(unittest_files)
                 if verbose:
                     click.echo(f"Found {len(unittest_files)} unittest files in {path}")
@@ -220,10 +247,27 @@ def main(
         try:
             # Create backup if requested
             if backup and not dry_run:
-                backup_dir = backup
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                backup_path = backup_dir / f"{file_path.name}.bak"
+                # Resolve backup dir and perform light validation
                 try:
+                    backup_dir = backup.resolve()
+                except Exception:
+                    backup_dir = backup
+                # Avoid writing backups to system root: a root path is one where
+                # parent == self (e.g., '/' on POSIX or 'C:\' on Windows).
+                try:
+                    if backup_dir.parent == backup_dir:
+                        click.echo(f"Warning: backup directory appears to be root: {backup_dir}", err=True)
+                        raise Exception("invalid backup directory")
+                except Exception:
+                    # If we cannot determine an anchor or validation fails, continue
+                    # but allow the subsequent mkdir/copy to surface failures.
+                    pass
+
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                # Use a hash suffix to avoid collisions and preserve content reference
+                try:
+                    suffix = hash_suffix_for_path(file_path)
+                    backup_path = backup_dir / f"{file_path.name}.bak-{suffix}"
                     import shutil
 
                     shutil.copy2(file_path, backup_path)

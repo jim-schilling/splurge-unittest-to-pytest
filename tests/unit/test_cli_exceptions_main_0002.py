@@ -75,6 +75,30 @@ def test_recursive_find_unittest_files_and_verbose(monkeypatch, tmp_path):
     assert "Found 2 unittest files" in result.output
 
 
+def test_find_unittest_files_monkeypatched_lambda_fallback(monkeypatch, tmp_path):
+    """Ensure CLI calls fallback when find_unittest_files is monkeypatched to a lambda
+    that doesn't accept the new keyword args (follow_symlinks, respect_gitignore).
+    """
+    d = tmp_path / "dir2"
+    d.mkdir()
+    f1 = d / "a.py"
+    f1.write_text("print(1)")
+
+    # Monkeypatch find_unittest_files to a lambda that only accepts one arg
+    monkeypatch.setattr("splurge_unittest_to_pytest.cli.find_unittest_files", lambda p: [f1], raising=False)
+
+    def fake_convert_file(
+        file_path, output_path, encoding, autocreate, setup_patterns, teardown_patterns, test_patterns
+    ):
+        return ConversionResult(original_code="a", converted_code="a", has_changes=False, errors=[])
+
+    monkeypatch.setattr("splurge_unittest_to_pytest.cli.convert_file", fake_convert_file, raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["--recursive", "--verbose", str(d)])
+    assert result.exit_code == 0
+    assert "Found 1 unittest files" in result.output
+
+
 def test_output_path_passed_to_convert_file(monkeypatch, tmp_path):
     f = tmp_path / "z.py"
     f.write_text("z")

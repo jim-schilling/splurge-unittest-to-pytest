@@ -472,7 +472,9 @@ def is_unittest_file(file_path: str | Path) -> bool:
         raise EncodingError(f"Failed to decode file with UTF-8 encoding: {file_path}") from e
 
 
-def find_unittest_files(directory: str | Path) -> list[Path]:
+def find_unittest_files(
+    directory: str | Path, *, follow_symlinks: bool = True, respect_gitignore: bool = False
+) -> list[Path]:
     """Find all Python files that appear to contain unittest tests.
 
     Args:
@@ -486,44 +488,93 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
     if not directory.is_dir():
         return []
 
-    unittest_files = []
+    unittest_files: list[Path] = []
 
-    for file_path in directory.rglob("*"):
-        # Skip __pycache__ directories early
+    # Optionally load .gitignore via pathspec if requested
+    gitignore_spec = None
+    if respect_gitignore:
         try:
-            if "__pycache__" in file_path.parts:
-                continue
+            from pathspec import PathSpec
+            from pathspec.patterns import GitWildMatchPattern
+
+            gitignore_file = directory / ".gitignore"
+            if gitignore_file.exists():
+                with gitignore_file.open("r", encoding="utf-8") as fh:
+                    gitignore_spec = PathSpec.from_lines(GitWildMatchPattern, fh)
         except Exception:
-            # Defensive: if Path.parts access fails for some reason, skip this path
+            # If pathspec isn't available or parsing fails, ignore gitignore behavior
+            gitignore_spec = None
+
+    # Walk the directory tree with control over following symlinks
+    for root, dirs, files in __import__("os").walk(directory, followlinks=bool(follow_symlinks)):
+        root_path = Path(root)
+        # Skip __pycache__ directories early
+        if "__pycache__" in root_path.parts:
             continue
 
-        if not file_path.is_file():
-            continue
+        for fname in files:
+            file_path = root_path / fname
 
-        # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
-        try:
-            with file_path.open("r", encoding="utf-8") as fh:
-                _ = fh.read(1024)
-        except UnicodeDecodeError:
-            # Binary or non-UTF8 file; skip it
-            continue
-        except PermissionError:
-            # Can't read this file; skip it
-            continue
-        except FileNotFoundError:
-            # Race: file removed between rglob and read; skip
-            continue
+            # Skip __pycache__ directories early
+            try:
+                if "__pycache__" in file_path.parts:
+                    continue
+            except Exception:
+                # Defensive: if Path.parts access fails for some reason, skip this path
+                continue
 
-        # Now safely check for unittest content; is_unittest_file may still raise specific errors
-        try:
-            if is_unittest_file(file_path):
-                unittest_files.append(file_path)
-        except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
-            # Skip files that cannot be read or decoded
-            continue
-        except OSError:
-            # Any OS-level error (e.g., path issues) should not break discovery; skip and continue
-            continue
+            # If gitignore spec is present, skip matching files
+            try:
+                if gitignore_spec is not None:
+                    # PathSpec.match_file expects a posix-style path relative to the root
+                    rel = file_path.relative_to(directory).as_posix()
+                    # Prefer the simple match_file API if present
+                    if hasattr(gitignore_spec, "match_file"):
+                        try:
+                            if gitignore_spec.match_file(rel):
+                                continue
+                        except Exception:
+                            # Fall back to match_files below
+                            pass
+                    # Fallback: use match_files generator to check for a match
+                    try:
+                        matches = list(gitignore_spec.match_files([rel]))
+                        if matches:
+                            continue
+                    except Exception:
+                        # If anything goes wrong with gitignore matching, skip filtering
+                        pass
+            except Exception:
+                # Defensive: do not let gitignore checks break discovery
+                pass
+
+            if not file_path.is_file():
+                continue
+
+            # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
+            try:
+                with file_path.open("r", encoding="utf-8") as fh:
+                    _ = fh.read(1024)
+            except UnicodeDecodeError:
+                # Binary or non-UTF8 file; skip it
+                continue
+            except PermissionError:
+                # Can't read this file; skip it
+                continue
+            except FileNotFoundError:
+                # Race: file removed between rglob and read; skip
+                continue
+
+            # Now safely check for unittest content; is_unittest_file may still raise specific errors
+            try:
+                if is_unittest_file(file_path):
+                    unittest_files.append(file_path)
+            except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
+                # Skip files that cannot be read or decoded
+                continue
+            except OSError:
+                # Any OS-level error (e.g., path issues) should not break discovery; skip and continue
+                continue
 
     return unittest_files
 
