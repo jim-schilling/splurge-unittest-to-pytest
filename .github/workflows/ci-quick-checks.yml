@@ -8,7 +8,7 @@ on:
 
 jobs:
   quick:
-    name: Quick checks (lint, type, tests)
+    name: Quick checks (lint, type)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,8 +29,3 @@ jobs:
       - name: Run mypy
         run: mypy splurge_unittest_to_pytest || true
 
-      - name: Run unit tests (no coverage)
-        run: |
-          pytest -q -o addopts= -p no:pytest_cov tests/unit
-
-  # coverage job moved to .github/workflows/coverage.yml
