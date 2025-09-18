@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Focused unit tests were added to cover both `pathspec.match_file` and
   `pathspec.match_files` variants.
 
+### Added
+- Unit tests for assertion conversion helpers: added `tests/unit/test_assertions_0001.py` to cover mapping transformations and edge cases in `splurge_unittest_to_pytest.converter.assertions`.
+
 
 ## [2025.1.1] - 2025-09-14
 

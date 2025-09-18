@@ -63,13 +63,12 @@ Stage-4: Import injector enhancements (priority: medium)
   - Tests: existing unit tests covering alias variants (`tests/unit/test_converter_imports_0001.py`, `tests/unit/test_imports_stages_tidy_0001.py`, and `tests/unit/test_imports_stages_0001.py`) validate behavior. No duplicate `import pytest` statements are inserted when aliases or from-imports are present.
   - Acceptance: no duplicate `pytest` imports inserted; alias tests pass.
 
-- [ ] Task-4.2: Add tests for typing/pathlib merge scenarios.
-  - Files to edit: `tests/unit/test_import_injector.py`, `tests/data/goldens/` as needed.
-  - Acceptance: new tests pass and no regressions in existing goldens.
+ - [x] Task-4.2: Add tests for typing/pathlib merge scenarios.
+  - Files edited: `tests/unit/test_import_injector_typing_pathlib_merge_0001.py` (new)
+  - Acceptance: new unit test verifies merging of `typing` names and insertion of a single `from pathlib import Path` import; test passed locally.
 
 Testing & CI
 - [ ] Task-5.1: Expand tests as described in the review — atomic writes, mixed-mode behavior, alias handling, parallel smoke tests, property-based transforms.
-  - Suggested property-based tooling: `hypothesis` (add to `requirements-dev.txt` if accepted).
   - Acceptance: tests increased to cover new features; core coverage for stages remains >= 95%.
 - [x] Task-5.2: Run linters and typecheck: `ruff` and `mypy`. (completed)
   - Fix type issues introduced by PipelineContext refactor.
