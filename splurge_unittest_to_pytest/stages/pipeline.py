@@ -142,6 +142,7 @@ def run_pipeline(
     initial_ctx: PipelineContext = {"autocreate": autocreate}
     if pattern_config is not None:
         initial_ctx["pattern_config"] = pattern_config
+    # (No additional initial flags expected.)
 
     # StageManager.run expects a PipelineContext; pass initial_ctx directly
     context = mgr.run(module, initial_context=initial_ctx)

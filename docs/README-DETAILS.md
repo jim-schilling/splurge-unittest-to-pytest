@@ -311,6 +311,55 @@ splurge-unittest-to-pytest test_*.py
 
 # Recursive directory conversion
 splurge-unittest-to-pytest --recursive tests/
+
+## CLI flags: JSON & diff output
+
+The CLI supports structured JSON output and a dry-run unified-diff mode to inspect changes without writing files.
+
+- `--json` : Emit one JSON record per processed file to stdout (NDJSON). Useful for machine consumption.
+- `--json-file <path>` : Write NDJSON output to the given file path using UTF-8. The tool writes atomically and performs safety checks to avoid accidental writes to system locations. Supplying `--json-file` implies `--json`.
+- `--diff` : Show a unified diff (textual) for each changed file in dry-run mode instead of applying the change.
+
+NDJSON schema (one JSON object per line)
+
+Each line is a JSON object describing a processed file. Minimal schema example:
+
+{
+   "path": "path/to/file.py",
+   "changed": true,
+   "errors": [],
+   "summary": {
+      "asserts_converted": 3,
+      "lines_changed": 12,
+      "imports_added": ["pytest"]
+   }
+}
+
+Notes & behaviour
+
+- The `--json-file` writer uses an atomic, temporary-file backed writer and will refuse obviously dangerous targets (for example OS root directories and common Windows system locations) to avoid accidental overwrites.
+- NDJSON output is always UTF-8 encoded and newline-delimited; each line is a complete JSON object. When writing to a file the writer will perform an atomic replace so partial files are not left on interrupted runs.
+- The `--diff` output is produced using Python's `difflib.unified_diff` algorithm to produce familiar unified diffs for each file.
+
+Example
+
+Emit NDJSON to stdout:
+
+```bash
+splurge-unittest-to-pytest --json tests/ > report.ndjson
+```
+
+Write NDJSON to a file atomically:
+
+```bash
+splurge-unittest-to-pytest --json-file reports/run-20250918.ndjson tests/ --dry-run
+```
+
+Process files but show diffs only:
+
+```bash
+splurge-unittest-to-pytest --diff --dry-run tests/
+```
 ```
 
 ## Diagnostics and Smoke Test Behavior

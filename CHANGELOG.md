@@ -74,40 +74,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025.1.0] - 2025-09-13
 
 ### Removed
-- Historical: legacy compatibility mode (previously toggled via compatibility flags) and engine selection were removed in release 2025.1.0. The converter now supports the staged pipeline and emits strict pytest-native code.
 
 - Historical: legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` removed in 2025.1.0 — callers should use `stages.generator` or the staged pipeline directly.
 
 ### Changed
 - Public API: `convert_string` and `convert_file` no longer accept compatibility or `engine` parameters. Use the staged pipeline via the public API instead.
 - Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
-
-### Removed
 - Test helpers: duplicate test-local autouse helper implementations were consolidated into a single test-only module (`tests/unit/helpers/autouse_helpers.py`) and removed from production code. This keeps test utilities out of the package public API.
 
 ### Repository cleanup
 - Removed local generated `build/` artifacts from the working tree and ensured `build/` is ignored in `.gitignore` to avoid committing generated files.
-
 ### Verification (local)
 - ruff format/check: passed (minor formatting changes)
 - mypy: no type errors reported for the package
 - pytest: unit tests passed locally (unit run: 859 passed, 1 skipped). Full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage recorded during the run (~86% project coverage).
 
 ### Notes
-- The legacy transformer implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` and the staged pipeline. The converter now emits canonical per-attribute pytest fixtures by default.
 
 
 ## [2025.0.5] - 2025-09-13
 
-### Added
-- Historical: Strict-only behavior was introduced before 2025.1.0. See the migration notes for how the staged pipeline now emits strict pytest-native code by default.
 
 ### Changed
 - CLI default and help: CLI now advertises strict output as the default.
-- Fixture injection: strict output inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Historical compatibility behavior preserved the previous single-empty-line spacing.
 
 ### Fixed
-- CLI dry-run verbose reporting: when a file already imports `pytest`, dry-run verbose now reports "No changes needed" (avoids noisy diffs for already-converted files).
 - Fixture autouse placement: historical compatibility behavior inserted the autouse `_attach_to_instance` fixture after injected fixtures so golden comparisons and emitted code remained stable.
 - Added unit test `tests/unit/test_fixture_spacing.py` to assert historical compatibility vs strict spacing behavior.
 

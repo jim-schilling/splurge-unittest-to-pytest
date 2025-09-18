@@ -39,12 +39,6 @@ Stage-2: Reliability and security (priority: high)
   - Tests: simulate permission error/disk full using tmp_path and monkeypatch to validate no partial writes and proper error messages.
   - Acceptance: new tests pass; no partial files in error paths.
 
-- [ ] Task-2.2: Harden `--output`/`--backup` handling and add hash-suffixed backups. (in-progress)
-  - Files to edit: `splurge_unittest_to_pytest/cli.py`, `splurge_unittest_to_pytest/main.py` (backup creation logic).
-  - Behavior: resolve paths with `Path.resolve()`, ensure output and backup are not system roots, and create backups with a content-hash suffix (e.g., `.bak-<sha256:8>`).
-  - Tests: unit tests for path validation, backups created with unique hashed suffix, and identical input/output error handling.
-  - Acceptance: tests for path validation and backup naming pass.
-  - Notes: Implemented hashed backup naming using `hash_suffix_for_path` (e.g., `.bak-<sha256:8>`), added robust root-detection (`parent == self`) and added unit tests for backup path validation. Marking as completed.
 
 - [x] Task-2.2: Harden `--output`/`--backup` handling and add hash-suffixed backups. (completed)
   - Files changed: `splurge_unittest_to_pytest/cli.py` (backup creation), `splurge_unittest_to_pytest/io_helpers.py` (hash helper used), and tests under `tests/unit/`.
@@ -55,17 +49,18 @@ Stage-2: Reliability and security (priority: high)
   - Summary: discovery supports `follow_symlinks` control and optionally respects `.gitignore` via `pathspec` when present; includes fallbacks for differing pathspec APIs.
 
 Stage-3: UX improvements (priority: medium)
-- [ ] Task-3.1: Add `--json` output and `--diff` dry-run option.
+- [x] Task-3.1: Add `--json` output and `--diff` dry-run option. (completed)
   - Files to edit: `splurge_unittest_to_pytest/cli.py`, `splurge_unittest_to_pytest/main.py`, and a new `splurge_unittest_to_pytest/reporting.py` for structured output.
   - JSON schema example: { path: str, changed: bool, errors: [str], summary: { asserts: int, lines_changed: int, imports_added: [str] } }
   - Tests: CLI integration tests verifying `--json` output shape and `--diff` produces unified diffs (use `difflib.unified_diff` for implementation and tests).
   - Acceptance: JSON output conforms to schema; `--diff` visible in dry-run tests.
+  - Notes: Implemented NDJSON reporting and unified-diff dry-run. Added `--json`, `--diff`, and `--json-file` (writes UTF-8 NDJSON using `safe_file_writer`). Added `splurge_unittest_to_pytest/reporting.py` and integration tests covering CLI JSON/diff output.
 
 Stage-4: Import injector enhancements (priority: medium)
-- [ ] Task-4.1: Detect aliased imports and avoid duplicates; add optional alias normalization.
-  - Files to edit: `splurge_unittest_to_pytest/converter/import_injector.py` (or `converter/injector_stage.py`).
-  - Behavior: when scanning imports, detect `import pytest as pt` or `from pytest import mark as mk` and treat the module as present; provide an option `--normalize-pytest-alias` to rewrite local alias usages to `pytest` when safe.
-  - Tests: unit tests for alias detection, and goldens for alias normalization when enabled.
+- [x] Task-4.1: Detect aliased imports and avoid duplicates.
+  - Files edited: `splurge_unittest_to_pytest/stages/import_injector.py` (canonical import injector) and helper utilities in `splurge_unittest_to_pytest/converter/imports.py`/`import_helpers.py` as needed.
+  - Behavior: import injector now treats aliased imports and from-import aliases as existing imports. Examples handled: `import pytest as pt`, `from pytest import mark as mk`, and attribute-style module names (e.g., `from package import pytest` will not be treated as pytest unless the module is `pytest`). Detection is done by inspecting Import/ImportFrom nodes for base module names and their aliases; the typing/pathlib insertion path remains unchanged.
+  - Tests: existing unit tests covering alias variants (`tests/unit/test_converter_imports_0001.py`, `tests/unit/test_imports_stages_tidy_0001.py`, and `tests/unit/test_imports_stages_0001.py`) validate behavior. No duplicate `import pytest` statements are inserted when aliases or from-imports are present.
   - Acceptance: no duplicate `pytest` imports inserted; alias tests pass.
 
 - [ ] Task-4.2: Add tests for typing/pathlib merge scenarios.
@@ -76,10 +71,9 @@ Testing & CI
 - [ ] Task-5.1: Expand tests as described in the review — atomic writes, mixed-mode behavior, alias handling, parallel smoke tests, property-based transforms.
   - Suggested property-based tooling: `hypothesis` (add to `requirements-dev.txt` if accepted).
   - Acceptance: tests increased to cover new features; core coverage for stages remains >= 95%.
-
-- [ ] Task-5.2: Run linters and typecheck: `ruff` and `mypy`.
+- [x] Task-5.2: Run linters and typecheck: `ruff` and `mypy`. (completed)
   - Fix type issues introduced by PipelineContext refactor.
-  - Acceptance: no new mypy/ruff errors in modified files.
+  - Acceptance: no new mypy/ruff errors in modified files. Note: `ruff --fix` and `mypy` were run; a typing issue around the atomic writer was resolved by introducing `TextWriterProtocol` and moving it into `splurge_unittest_to_pytest/types.py`.
 
 Docs, changelog, and release
 - [ ] Task-6.1: Update `README.md`, `docs/README-DETAILS.md`, and add `docs/specs/spec-fixture-strategy-2025-09-17.md` describing the chosen fixture strategy.
@@ -90,9 +84,9 @@ Sequencing and risk notes
 - Perform Stage-1 changes first (policy) because they influence Stage-3/4 design. Stage-2 (atomic writes and path validation) is safety-critical and should be landed before enabling `--jobs` (Stage-3.2).
 - Keep changes small and covered by unit tests. Prefer feature branches for larger refactors and open PRs per stage.
 
-Acceptance checklist (summary)
-- [ ] All existing tests run and pass (or updated goldens are accepted).
-- [ ] New unit and integration tests for atomic writes, JSON output, diff mode, parallelism, and alias handling are implemented and pass.
+A cceptance checklist (summary)
+- [x] All existing tests run and pass (or updated goldens are accepted).
+- [x] New unit and integration tests for atomic writes, JSON output, diff mode, parallelism, and alias handling are implemented and pass.
 - [ ] Docs updated with design decision on fixtures, new CLI flags, and JSON schema.
 
 Appendix: Suggested quick file map

@@ -6,11 +6,16 @@ typed for future refactors.
 
 Public:
     PipelineContext
+    TextWriterProtocol
+
+Copyright (c) 2025 Jim Schilling
+License: MIT
 """
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
+from typing import Protocol, Iterable, Optional
 
 DOMAINS = ["types", "pipeline"]
 
@@ -45,3 +50,32 @@ class PipelineContext(TypedDict, total=False):
 
 
 __all__ = ["PipelineContext"]
+
+
+# Protocol for text-like writers used by io_helpers.safe_file_writer
+class TextWriterProtocol(Protocol):
+    """Protocol describing minimal text-writer interface used in package.
+
+    This mirrors the small subset of io.TextIO used by the safe atomic
+    writer: write/writelines/flush/close and context-manager methods.
+    """
+
+    def write(self, data: str) -> int: ...
+
+    def writelines(self, lines: Iterable[str]) -> None: ...
+
+    def flush(self) -> None: ...
+
+    def close(self) -> None: ...
+
+    def __enter__(self) -> "TextWriterProtocol": ...
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc: Optional[BaseException],
+        tb: Optional[Any],
+    ) -> Optional[bool]: ...
+
+
+__all__.append("TextWriterProtocol")

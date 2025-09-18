@@ -28,8 +28,9 @@ import libcst as cst
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
+from .io_helpers import atomic_write
 from .converter.helpers import has_meaningful_changes, normalize_method_name
-from .io_helpers import atomic_write, detect_encoding
+from .types import PipelineContext
 
 DOMAINS = ["main"]
 
@@ -56,7 +57,6 @@ class ConversionResult:
 
 def convert_string(
     source_code: str,
-    *,
     autocreate: bool = True,
     pattern_config: Any | None = None,
 ) -> ConversionResult:
@@ -88,20 +88,21 @@ def convert_string(
         # run_pipeline with a shim that doesn't accept the new kwarg, so
         # check the callable signature and only pass the kwarg when
         # supported (or when the callable accepts **kwargs).
-        # Call the staged pipeline with the configured PatternConfigurator
-        # directly. Keep a small fallback for environments where a
-        # monkeypatched or older `run_pipeline` may not accept
-        # `pattern_config` (TypeError), but avoid runtime inspection.
         try:
-            converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
-        except TypeError:
-            # Older or monkeypatched run_pipeline may not accept the
-            # pattern_config kwarg; retry without it.
-            converted_module = run_pipeline(tree, autocreate=autocreate)
+            import inspect
+
+            sig = inspect.signature(run_pipeline)
+            params = sig.parameters
+            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+            if "pattern_config" in params or accepts_kwargs:
+                converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
+            else:
+                converted_module = run_pipeline(tree, autocreate=autocreate)
         except Exception:
-            # If the pipeline fails unexpectedly, fall back to the
-            # original parsed module to avoid crashing callers.
-            converted_module = tree
+            # If inspection fails for any reason, fall back to the simple
+            # call without the new kwarg to maintain compatibility with
+            # monkeypatched tests.
+            converted_module = run_pipeline(tree, autocreate=autocreate)
         # Final AST-based normalization: run the exceptioninfo normalizer
         # stage over the converted module to ensure any NAME.exception ->
         # NAME.value conversions are applied. This stage runs late in the
@@ -111,11 +112,10 @@ def convert_string(
         try:
             from splurge_unittest_to_pytest.stages.raises_stage import exceptioninfo_normalizer_stage
 
-            # norm_ctx is a mapping used by pipeline stages; type it explicitly
-            # Cast to PipelineContext to interoperate with the typed stages
-            from splurge_unittest_to_pytest import types as _types
-
-            norm_ctx = cast(_types.PipelineContext, {"module": converted_module})
+            # norm_ctx is a mapping used by pipeline stages; use the
+            # canonical PipelineContext type so mypy and callers agree on
+            # the expected shape.
+            norm_ctx: PipelineContext = {"module": converted_module}
             out = exceptioninfo_normalizer_stage(norm_ctx)
             # Be defensive: ensure we only assign a Module back to converted_module
             if isinstance(out, dict):
@@ -322,13 +322,13 @@ class PatternConfigurator:
 
 def convert_file(
     input_path: str | Path,
-    *,
     output_path: str | Path | None = None,
     encoding: str = "utf-8",
     autocreate: bool = True,
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
+    normalize_pytest_alias: bool = False,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -396,29 +396,18 @@ def convert_file(
     if result.has_changes and not result.errors:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            write_encoding = encoding
-            if isinstance(write_encoding, str) and write_encoding == "auto":
-                write_encoding = detect_encoding(input_path)
-
-            # Use atomic_write to ensure the final placement is atomic. Call
-            # the atomic helper directly rather than performing a preflight
-            # Path.write_text. Tests that need to simulate write failures
-            # should patch the atomic_write helper.
+            # Use the project's atomic writer when available so tests can
+            # monkeypatch main.atomic_write for error simulation.
             try:
-                atomic_write(output_path, result.converted_code, encoding=write_encoding)
-            except PermissionError as e:
-                # Permission errors from the atomic writer map to our
-                # domain-specific PermissionDeniedError.
-                raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from e
-            except UnicodeEncodeError as e:
-                raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
-        except PermissionDeniedError:
-            # Re-raise our domain-specific PermissionDeniedError
-            raise
-        except Exception as e:
-            # Any other unexpected errors during write should be surfaced as
-            # PermissionDeniedError for callers that expect a simple API.
-            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from e
+                atomic_write(output_path, result.converted_code, encoding=encoding)
+            except TypeError:
+                # Some older atomic_write signatures may not accept encoding kw;
+                # fall back to positional form.
+                atomic_write(output_path, result.converted_code)
+        except PermissionError:
+            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionDeniedError
+        except UnicodeEncodeError as e:
+            raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
 
     return result
 
@@ -490,91 +479,106 @@ def find_unittest_files(
 
     unittest_files: list[Path] = []
 
-    # Optionally load .gitignore via pathspec if requested
-    gitignore_spec = None
+    # Choose an iterator that respects follow_symlinks
+    if follow_symlinks:
+        iterator = directory.rglob("*")
+    else:
+        import os
+
+        def _iter_no_follow(d: Path):
+            for root, dirs, files in os.walk(str(d), followlinks=False):
+                for f in files:
+                    yield Path(root) / f
+
+        iterator = _iter_no_follow(directory)
+
+    # Prepare .gitignore handling if requested
+    gitignore_patterns: list[str] = []
+    spec = None
     if respect_gitignore:
-        try:
-            from pathspec import PathSpec
-            from pathspec.patterns import GitWildMatchPattern
+        gitignore_path = directory / ".gitignore"
+        if gitignore_path.exists():
+            try:
+                text = gitignore_path.read_text(encoding="utf-8")
+                gitignore_patterns = [
+                    line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
+                ]
+                try:
+                    import pathspec
 
-            gitignore_file = directory / ".gitignore"
-            if gitignore_file.exists():
-                with gitignore_file.open("r", encoding="utf-8") as fh:
-                    gitignore_spec = PathSpec.from_lines(GitWildMatchPattern, fh)
-        except Exception:
-            # If pathspec isn't available or parsing fails, ignore gitignore behavior
-            gitignore_spec = None
+                    # Attempt to fetch a GitWildMatchPattern factory if
+                    # available; otherwise fall back to passing the
+                    # patterns as-is. Use cast to silence mypy about the
+                    # dynamic type of the factory value.
+                    pattern_factory = getattr(pathspec.patterns, "GitWildMatchPattern", None)
+                    try:
+                        spec = pathspec.PathSpec.from_lines(cast(Any, pattern_factory), gitignore_patterns)
+                    except Exception:
+                        spec = None
+                except Exception:
+                    spec = None
+            except Exception:
+                gitignore_patterns = []
 
-    # Walk the directory tree with control over following symlinks
-    for root, dirs, files in __import__("os").walk(directory, followlinks=bool(follow_symlinks)):
-        root_path = Path(root)
+    for file_path in iterator:
         # Skip __pycache__ directories early
-        if "__pycache__" in root_path.parts:
+        try:
+            if "__pycache__" in file_path.parts:
+                continue
+        except Exception:
             continue
 
-        for fname in files:
-            file_path = root_path / fname
+        if not file_path.is_file():
+            continue
 
-            # Skip __pycache__ directories early
-            try:
-                if "__pycache__" in file_path.parts:
-                    continue
-            except Exception:
-                # Defensive: if Path.parts access fails for some reason, skip this path
-                continue
+        # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
+        try:
+            with file_path.open("r", encoding="utf-8") as fh:
+                _ = fh.read(1024)
+        except UnicodeDecodeError:
+            # Binary or non-UTF8 file; skip it
+            continue
+        except PermissionError:
+            # Can't read this file; skip it
+            continue
+        except FileNotFoundError:
+            # Race: file removed between rglob and read; skip
+            continue
 
-            # If gitignore spec is present, skip matching files
-            try:
-                if gitignore_spec is not None:
-                    # PathSpec.match_file expects a posix-style path relative to the root
-                    rel = file_path.relative_to(directory).as_posix()
-                    # Prefer the simple match_file API if present
-                    if hasattr(gitignore_spec, "match_file"):
-                        try:
-                            if gitignore_spec.match_file(rel):
-                                continue
-                        except Exception:
-                            # Fall back to match_files below
-                            pass
-                    # Fallback: use match_files generator to check for a match
+        # Now safely check for unittest content; is_unittest_file may still raise specific errors
+        try:
+            if respect_gitignore and gitignore_patterns:
+                try:
+                    rel = str(file_path.relative_to(directory)).replace("\\", "/")
+                except Exception:
+                    rel = file_path.name
+
+                ignored = False
+                if spec is not None:
                     try:
-                        matches = list(gitignore_spec.match_files([rel]))
-                        if matches:
-                            continue
+                        if hasattr(spec, "match_file") and spec.match_file(rel):
+                            ignored = True
+                        elif hasattr(spec, "match_files"):
+                            matched = set(spec.match_files([rel]))
+                            if rel in matched:
+                                ignored = True
                     except Exception:
-                        # If anything goes wrong with gitignore matching, skip filtering
-                        pass
-            except Exception:
-                # Defensive: do not let gitignore checks break discovery
-                pass
+                        ignored = False
+                else:
+                    if rel in gitignore_patterns or Path(rel).name in gitignore_patterns:
+                        ignored = True
 
-            if not file_path.is_file():
-                continue
+                if ignored:
+                    continue
 
-            # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
-            try:
-                with file_path.open("r", encoding="utf-8") as fh:
-                    _ = fh.read(1024)
-            except UnicodeDecodeError:
-                # Binary or non-UTF8 file; skip it
-                continue
-            except PermissionError:
-                # Can't read this file; skip it
-                continue
-            except FileNotFoundError:
-                # Race: file removed between rglob and read; skip
-                continue
-
-            # Now safely check for unittest content; is_unittest_file may still raise specific errors
-            try:
-                if is_unittest_file(file_path):
-                    unittest_files.append(file_path)
-            except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
-                # Skip files that cannot be read or decoded
-                continue
-            except OSError:
-                # Any OS-level error (e.g., path issues) should not break discovery; skip and continue
-                continue
+            if is_unittest_file(file_path):
+                unittest_files.append(file_path)
+        except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
+            # Skip files that cannot be read or decoded
+            continue
+        except OSError:
+            # Any OS-level error (e.g., path issues) should not break discovery; skip and continue
+            continue
 
     return unittest_files
 
