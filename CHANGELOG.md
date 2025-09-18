@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2025.3.0] - 2025-09-18
+
+### Added
+- Stage tasks completed for the remaining stages:
+  - `fixture_injector`: `InsertFixtureNodesTask`
+  - `rewriter`: `RewriteTestMethodParamsTask`
+- Developer spec documenting stage/task contracts, observers, and hooks:
+  - `docs/specs/spec-stages-contracts-and-observers-2025-09-18.md`
+- Observability documentation:
+  - Added Observability section to `docs/README-DETAILS.md`
+  - README notes on `SPLURGE_ENABLE_PIPELINE_LOGS` and diagnostics env vars
+
+### Changed
+- All stages now follow the task-based pattern with per-task lifecycle events and stable `STAGE_ID`/`STAGE_VERSION`.
+- Refactored `fixture_injector` and `rewriter` stages to execute tasks and emit events.
+- Tightened stage return typing to `PipelineContext` (explicit casts) to satisfy mypy.
+- Cleaned transitional comments in `stages/pipeline.py` to reflect the staged pipeline as authoritative.
+- CLI: improved dry-run behavior and monkeypatchable `convert_string` proxy to support tests; NDJSON/diff dry-run paths adjusted for clearer reporting.
+
+### Fixed
+- Import injector heuristics: avoid defaulting `needs_pytest_import=True` unless requested/detected; add defensive pytest/unittest usage detection; handle empty/no-import modules deterministically.
+- Raises stage: propagate `needs_pytest_import` only when `pytest.raises` constructs are created; always include explicit boolean flag for test clarity.
+- Generator: removed dead/legacy code and circular import by extracting `FixtureSpec` to `generator_types.py`.
+- Fixture injector: restored `_find_insertion_index` shim delegating to task helper for test imports.
+- Various mypy and Ruff issues across stages resolved; project is clean under both tools.
+
+### Docs
+- Plan updated (`docs/plans/plans-implement-stages-redesign-2025-09-18.md`) to mark Stage-4 items for `fixture_injector` and `rewriter`, and Stage-5 items (context-delta cleanup, developer spec) as completed.
+- README updated with logging/diagnostics controls; details expanded in `docs/README-DETAILS.md`.
+
+### Verification
+- Test suite: 1096 passed, 5 skipped, 1 xfailed (on Windows, Python 3.12 local run).
+- Coverage reports generated under `reports/` (HTML, XML) and JUnit XML `reports/junit.xml`.
+
+### Version
+- Bumped package version to `2025.3.0`.
 
 ## [2025.2.0] - 2025-09-17
 

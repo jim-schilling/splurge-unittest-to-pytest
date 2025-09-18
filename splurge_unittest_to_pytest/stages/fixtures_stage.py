@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
 from ..types import PipelineContext
+from .fixtures_stage_tasks import BuildTopLevelTestsTask
+from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -27,6 +29,8 @@ from splurge_unittest_to_pytest.converter.method_params import (
 )
 
 DOMAINS = ["stages", "fixtures"]
+STAGE_ID = "stages.fixtures_stage"
+STAGE_VERSION = "1"
 
 
 # Associated domains for this module
@@ -92,7 +96,7 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     # focused on producing runnable classes and top-level wrappers.
 
     if module is None or collector is None:
-        return {"module": module}
+        return cast(PipelineContext, {"module": module})
 
     # Allow configurable setup/teardown name lists via a PatternConfigurator
     # provided in the pipeline context under the 'pattern_config' key.
@@ -116,151 +120,18 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
             pass
         return name in ("tearDown", "tearDownClass")
 
-    # module body may contain BaseStatement elements; some class members
-    # and injected lines are BaseSmallStatement variants. Use a list that
-    # accepts either to avoid append type errors when inserting existing
-    # nodes from the original tree.
-    new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
-    classes = collector.classes
-
-    # This stage operates in strict pytest mode: drop unittest.TestCase
-    # classes, remove setUp/tearDown methods, and emit top-level pytest
-    # functions that accept fixture parameters. The pipeline no longer
-    # emits alternate variants that preserve TestCase class shapes.
-
-    for stmt in module.body:
-        if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
-            cls_info = classes[stmt.name.value]
-            new_class_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
-            # per-class fixture names come from setup_assignments keys (stable order)
-            fixture_names = list(cls_info.setup_assignments.keys())
-
-            for member in stmt.body.body:
-                # preserve non-function members (assign, pass, etc.)
-                if not isinstance(member, cst.FunctionDef):
-                    new_class_body.append(member)
-                    continue
-
-                mname = member.name.value
-                # handle exact setup/teardown functions
-                if _is_setup_name(mname) or _is_teardown_name(mname):
-                    # In strict mode, drop setUp/tearDown entirely
-                    continue
-
-                # update test functions discovered by collector or named with test* prefix
-                if mname.startswith("test") or member in cls_info.test_methods:
-                    # Decide per-class whether to remove the first param by checking
-                    # if the class originally inherited from unittest.TestCase.
-                    # The collector stores the original ClassDef node which we
-                    # consult to detect unittest.TestCase inheritance.
-                    cls_info_local = classes.get(stmt.name.value)
-                    if cls_info_local is None:
-                        # fallback to previously recorded class info if missing
-                        cls_info_local = cast(Any, collector.classes.get(stmt.name.value))
-
-                    def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
-                        # Use the original node saved in the collector to detect
-                        # unittest.TestCase inheritance.
-                        node = getattr(class_info, "node", None)
-                        if node is None:
-                            return False
-                        for base in getattr(node, "bases", []) or []:
-                            bval = getattr(base, "value", base)
-                            if isinstance(bval, cst.Attribute):
-                                if (
-                                    isinstance(bval.value, cst.Name)
-                                    and bval.value.value == "unittest"
-                                    and getattr(bval.attr, "value", "") == "TestCase"
-                                ):
-                                    return True
-                            if isinstance(bval, cst.Name) and bval.value == "TestCase":
-                                return True
-                        return False
-
-                    # Convert TestCase methods into plain pytest functions
-                    _update_test_function(member, fixture_names, remove_first=True)
-                    # Ensure one blank line between methods inside the class
-                    if new_class_body:
-                        last = new_class_body[-1]
-                        # If the last appended element is not an EmptyLine, insert one
-                        if not isinstance(last, cst.EmptyLine):
-                            new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                    # In strict mode we will drop the class and rely on
-                    # top-level functions generated below.
-                    continue
-
-                # otherwise retain the member unchanged
-                # ensure spacing between methods/defs inside the class
-                if new_class_body and isinstance(member, cst.FunctionDef):
-                    last = new_class_body[-1]
-                    if not isinstance(last, cst.EmptyLine):
-                        new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                new_class_body.append(member)
-
-            # In strict mode we drop the original unittest.TestCase class
-            # entirely and instead emit top-level pytest functions below.
-            # Create top-level pytest functions for each test method when the
-            # class originally inherited from unittest.TestCase. These functions
-            # accept fixture parameters and contain a rewritten body where
-            # `self.<attr>` is replaced by the fixture name so pytest can inject
-            # fixtures directly. The original class and methods are retained so
-            # the module remains runnable by calling instance methods.
-            cls_original = cls_info
-
-            def _class_inherits_unittest_testcase_from_original(class_info: Any) -> bool:
-                node = getattr(class_info, "node", None)
-                if node is None:
-                    return False
-                for base in getattr(node, "bases", []) or []:
-                    bval = getattr(base, "value", base)
-                    if isinstance(bval, cst.Attribute):
-                        if (
-                            isinstance(bval.value, cst.Name)
-                            and bval.value.value == "unittest"
-                            and getattr(bval.attr, "value", "") == "TestCase"
-                        ):
-                            return True
-                    if isinstance(bval, cst.Name) and bval.value == "TestCase":
-                        return True
-                return False
-
-            # Emit top-level pytest functions for each test method and do
-            # not retain the original unittest class.
-            if _class_inherits_unittest_testcase_from_original(cls_original):
-                for member in stmt.body.body:
-                    if not isinstance(member, cst.FunctionDef):
-                        continue
-                    mname = member.name.value
-                    if not (mname.startswith("test") or member in cls_info.test_methods):
-                        continue
-
-                    # rewrite `self.attr` -> `attr` in the member body for the
-                    # top-level function variant
-                    class _SelfAttrRewriter(cst.CSTTransformer):
-                        def leave_Attribute(
-                            self, original: cst.Attribute, updated: cst.Attribute
-                        ) -> cst.BaseExpression:
-                            if (
-                                isinstance(original.value, cst.Name)
-                                and original.value.value == "self"
-                                and isinstance(original.attr, cst.Name)
-                            ):
-                                return cst.Name(original.attr.value)
-                            return updated
-
-                    new_body_block = member.body.visit(_SelfAttrRewriter())
-
-                    # build function params from fixture_names (strict mode)
-                    params_list = [cst.Param(name=cst.Name(fname)) for fname in fixture_names]
-                    params = cst.Parameters(params=params_list)
-
-                    # create top-level test function using the rewritten body
-                    top_fn = cst.FunctionDef(
-                        name=cst.Name(mname), params=params, body=cast(cst.BaseSuite, new_body_block), decorators=[]
-                    )
-                    new_body.append(top_fn)
-        else:
-            new_body.append(stmt)
-
-    new_module = module.with_changes(body=new_body)
-    return {"module": new_module}
+    stage_id = "stages.fixtures_stage"
+    bus = context.get("__event_bus__")
+    # Stage-4: delegate to BuildTopLevelTestsTask and emit per-task events
+    task = BuildTopLevelTestsTask()
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
+        res = task.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+        return cast(PipelineContext, {"module": module})
+    return cast(PipelineContext, res.delta.values)

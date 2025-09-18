@@ -362,6 +362,17 @@ splurge-unittest-to-pytest --diff --dry-run tests/
 ```
 ```
 
+## Observability
+
+The staged pipeline emits lifecycle events over a lightweight in-process event bus. Two built-in observers are available:
+
+- DiagnosticsObserver: when diagnostics are enabled (`SPLURGE_ENABLE_DIAGNOSTICS=1`), writes deterministic module snapshots per stage/task. Override root with `SPLURGE_DIAGNOSTICS_ROOT`.
+- LoggingObserver: enable structured pipeline logs by setting `SPLURGE_ENABLE_PIPELINE_LOGS=1`.
+
+Hooks are also available around stage/task execution (before/after and error hooks). Hooks receive copies of context/deltas to avoid accidental mutation and errors in hooks are isolated from the pipeline.
+
+See `docs/specs/spec-stages-contracts-and-observers-2025-09-18.md` for detailed contracts and guidelines.
+
 ## Diagnostics and Smoke Test Behavior
 
 Diagnostics are opt-in via the environment variable `SPLURGE_ENABLE_DIAGNOSTICS`.

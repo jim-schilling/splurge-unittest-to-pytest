@@ -21,6 +21,8 @@ from ..types import PipelineContext
 import libcst as cst
 
 DOMAINS = ["stages", "exceptions"]
+STAGE_ID = "stages.raises_stage"
+STAGE_VERSION = "1"
 
 # Associated domains for this module
 
@@ -449,52 +451,48 @@ class RaisesRewriter(cst.CSTTransformer):
 
 
 def raises_stage(context: PipelineContext) -> PipelineContext:
+    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .raises_stage_tasks import RewriteRaisesTask, NormalizeExceptionAttrTask
+
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
-        return {}
-    transformer = RaisesRewriter()
-    new_mod = module.visit(transformer)
-    # After rewriting unittest assertRaises -> pytest.raises we may still have
-    # attribute accesses like `cm.exception` that need to become `cm.value`.
-    # Collect any names bound by `with pytest.raises(...) as NAME` in the
-    # transformed module (these may have been introduced by this stage or
-    # pre-existed). Then run a targeted ExceptionAttrRewriter pass for each
-    # name to ensure NAME.exception -> NAME.value is applied everywhere.
-    try:
-        pytest_asnames: set[str] = set()
-        for node in new_mod.body:
-            # look for top-level With nodes; do a defensive traversal for nested ones
-            if isinstance(node, cst.With):
-                items = node.items or []
-                if not items:
-                    continue
-                first = items[0]
-                # item must be a Call to pytest.raises
-                call = first.item
-                if isinstance(call, cst.Call) and isinstance(call.func, cst.Attribute):
-                    func = call.func
-                    if (
-                        isinstance(func.value, cst.Name)
-                        and func.value.value == "pytest"
-                        and isinstance(func.attr, cst.Name)
-                        and func.attr.value == "raises"
-                    ):
-                        asname = first.asname
-                        if asname and isinstance(asname.name, cst.Name):
-                            pytest_asnames.add(asname.name.value)
-        # also include any names collected during the rewrite pass
-        pytest_asnames.update(getattr(transformer, "_exception_var_names", set()))
-        # apply ExceptionAttrRewriter for each collected name
-        for name in sorted(pytest_asnames):
-            if name:
-                new_mod = new_mod.visit(ExceptionAttrRewriter(name))
-    except Exception:
-        # be defensive: don't fail the entire stage on unexpected shapes
-        pass
+        return cast(PipelineContext, {})
+    stage_id = STAGE_ID
+    bus = context.get("__event_bus__")
 
-    # signal the import injector only if we actually created pytest.raises usage
-    return {"module": new_mod, "needs_pytest_import": bool(getattr(transformer, "made_changes", False))}
+    rewrite = RewriteRaisesTask()
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=rewrite.id))
+        res1 = rewrite.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=rewrite.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=rewrite.id, error=exc))
+        return cast(PipelineContext, {})
+
+    tmp = dict(context)
+    tmp.update(res1.delta.values)
+    norm = NormalizeExceptionAttrTask()
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=norm.id))
+        res2 = norm.execute(tmp, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=norm.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=norm.id, error=exc))
+        return cast(PipelineContext, {"module": res1.delta.values.get("module", module)})
+
+    # signal pytest import only if the first task created pytest.raises constructs
+    needs_pytest = bool(res1.delta.values.get("needs_pytest_import", False))
+    out = dict(res2.delta.values)
+    # Always include flag explicitly for tests; False means no pytest import needed
+    out["needs_pytest_import"] = needs_pytest
+    return cast(PipelineContext, out)
 
 
 def exceptioninfo_normalizer_stage(context: PipelineContext) -> PipelineContext:
@@ -508,7 +506,7 @@ def exceptioninfo_normalizer_stage(context: PipelineContext) -> PipelineContext:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
-        return {}
+        return cast(PipelineContext, {})
 
     class _WithCollector(cst.CSTVisitor):
         def __init__(self) -> None:
@@ -545,6 +543,6 @@ def exceptioninfo_normalizer_stage(context: PipelineContext) -> PipelineContext:
                 new_mod = new_mod.visit(ExceptionAttrRewriter(name))
     except Exception:
         # defensive: do not fail the pipeline on unexpected shapes
-        return {"module": module}
+        return cast(PipelineContext, {"module": module})
 
-    return {"module": new_mod}
+    return cast(PipelineContext, {"module": new_mod})

@@ -21,6 +21,8 @@ from ..types import PipelineContext
 import libcst as cst
 
 DOMAINS = ["stages", "assertions", "rewriter"]
+STAGE_ID = "stages.assertion_rewriter"
+STAGE_VERSION = "1"
 
 # Associated domains for this module
 # Moved to top of module after imports.
@@ -587,14 +589,20 @@ class AssertionRewriter(cst.CSTTransformer):
 
 
 def assertion_rewriter_stage(context: PipelineContext) -> PipelineContext:
-    module = context.get("module")
-    if module is None:
-        return {}
-    module = cast(cst.Module, module)
-    transformer = AssertionRewriter()
-    new_mod = module.visit(transformer)
-    return {
-        "module": new_mod,
-        "needs_pytest_import": getattr(transformer, "needs_pytest_import", False),
-        "needs_re_import": getattr(transformer, "needs_re_import", False),
-    }
+    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .assertion_rewriter_tasks import RewriteAssertionsTask
+
+    stage_id = STAGE_ID
+    bus = context.get("__event_bus__")
+    task = RewriteAssertionsTask()
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
+        res = task.execute(context, resources=None)
+        if isinstance(bus, EventBus):
+            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
+    except Exception as exc:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+        return cast(PipelineContext, {})
+    return cast(PipelineContext, res.delta.values)

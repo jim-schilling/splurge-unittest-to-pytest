@@ -59,6 +59,10 @@ splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 The CLI no longer accepts legacy compatibility toggles; it emits strict
 pytest-style output by default. See --help for remaining options.
 
+Observer/logging controls:
+- Set `SPLURGE_ENABLE_PIPELINE_LOGS=1` to enable structured pipeline logs via the internal `LoggingObserver`.
+- Diagnostics snapshots can be enabled by the manager; when enabled (`SPLURGE_ENABLE_DIAGNOSTICS=1`), snapshots are written to a diagnostics directory (see below).
+
 ## Migration note (breaking change)
 
 As of release 2025.2.0 this project no longer supports legacy compatibility
