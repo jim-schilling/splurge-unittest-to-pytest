@@ -82,10 +82,10 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], rem
 def fixtures_stage(context: PipelineContext) -> PipelineContext:
     module: Optional[cst.Module] = context.get("module")
     collector: Optional[CollectorOutput] = context.get("collector_output")
-    # fixture_specs and compat may be provided by earlier stages; they are
-    # not needed in this stage's current implementation but may be present
-    # in the context. We intentionally do not use them here to keep this
-    # stage focused on producing runnable classes and top-level wrappers.
+    # fixture_specs may be provided by earlier stages; they are not needed
+    # in this stage's current implementation but may be present in the
+    # context. We intentionally do not use them here to keep this stage
+    # focused on producing runnable classes and top-level wrappers.
 
     if module is None or collector is None:
         return {"module": module}
@@ -121,7 +121,8 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
 
     # This stage operates in strict pytest mode: drop unittest.TestCase
     # classes, remove setUp/tearDown methods, and emit top-level pytest
-    # functions that accept fixture parameters.
+    # functions that accept fixture parameters. The pipeline no longer
+    # emits compatibility variants that preserve TestCase class shapes.
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:

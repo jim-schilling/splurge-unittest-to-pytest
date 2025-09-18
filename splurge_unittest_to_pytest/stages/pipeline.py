@@ -70,7 +70,7 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     mgr.register(collect_stage)
 
     # The StageManager now accepts PipelineContext-typed callables and
-    # stages are registered directly. Backward-compat adapter wrappers
+    # stages are registered directly. Legacy adapter wrappers
     # have been removed as part of the strict-only migration.
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
@@ -83,7 +83,7 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     # Note: legacy transformer previously ran early here.
     # Per project decision to ignore legacy behavior and make the staged
     # pipeline authoritative, we no longer run the legacy transformer here.
-    # If backward-compat behavior is ever required, reintroduce this wrapper
+    # If legacy behavior is ever required, reintroduce this wrapper
     # behind an explicit flag.
 
     # core pipeline stages

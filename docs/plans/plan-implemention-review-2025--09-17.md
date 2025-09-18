@@ -17,9 +17,9 @@ Checklist (staged)
   - Tests: update or add unit test to assert CLI delegates to helpers and no duplicate parser exists.
   - Acceptance: `pytest` runs with no regression; any redundant `_parse_method_patterns` helper removed.
 
-- [x] Task-1.2: Decide canonical fixture strategy (strict vs compat) and document decision.
-  - Action: add short design doc in `docs/specs/spec-fixture-strategy-2025-09-17.md` describing strict-only vs compat behavior, and update `README.md`/`docs/README-DETAILS.md`.
-  - Files to edit after decision: `splurge_unittest_to_pytest/stages/fixtures_stage.py`, `splurge_unittest_to_pytest/stages/rewriter_stage.py` (either remove in-class rewriting or make it conditional on compat flag).
+- [x] Task-1.2: Decide canonical fixture strategy (strict-only) and document decision.
+  - Action: add short design doc in `docs/specs/spec-fixture-strategy-2025-09-17.md` describing strict-only behavior, and update `README.md`/`docs/README-DETAILS.md`.
+  - Files to edit after decision: `splurge_unittest_to_pytest/stages/fixtures_stage.py`, `splurge_unittest_to_pytest/stages/rewriter_stage.py` (either remove in-class rewriting or make it conditional on an explicit legacy flag).
   - Tests: add/adjust goldens under `tests/data` showing strict-mode outputs; add unit tests ensuring `fixtures_stage` drops classes when strict enabled.
   - Acceptance: updated docs explain behavior; tests/goldens updated.
 

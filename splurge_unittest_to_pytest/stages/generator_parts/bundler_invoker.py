@@ -37,7 +37,7 @@ def safe_bundle_named_locals(
     try:
         nodes, needs, mapping = bundle_named_locals(out_classes, existing_top_names)
         # Always return the full 3-tuple. The `full` flag is kept for
-        # backward compatibility but callers should expect a mapping
+        # legacy/backward compatibility but callers should expect a mapping
         # (possibly empty) as the third return value.
         if not mapping:
             mapping = {}

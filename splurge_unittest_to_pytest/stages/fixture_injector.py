@@ -164,9 +164,9 @@ def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
     # allow a mix of statement and small-statement/EmptyLine nodes in the new body
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
     # Insert fixture FunctionDef nodes at the calculated insertion index.
-    # Always emit strict/no-compat spacing: insert two EmptyLine sentinels
-    # before each top-level fixture so the module normalizer produces two
-    # blank lines between top-level defs.
+    # Always emit strict spacing: insert two EmptyLine sentinels before
+    # each top-level fixture so the module normalizer produces two blank
+    # lines between top-level defs.
     for offset, fn in enumerate(nodes):
         insert_pos = insert_idx + offset * 3
         # Insert two EmptyLine sentinels followed by the FunctionDef

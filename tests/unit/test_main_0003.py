@@ -233,7 +233,7 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
                 if isinstance(member, ast.FunctionDef) and member.name in ("setUp", "tearDown"):
                     if not has_attach_fixture:
                         pytest.fail(
-                            f"Found leftover unittest method '{member.name}' in class '{node.name}' without compatibility fixtures present"
+                            f"Found leftover unittest method '{member.name}' in class '{node.name}' without attach fixtures present"
                         )
 
 

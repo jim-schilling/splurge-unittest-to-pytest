@@ -1,8 +1,8 @@
-"""Compatibility wrapper that calls the package `print_diagnostics` module.
+"""Legacy wrapper that calls the package `print_diagnostics` module.
 
-This wrapper preserves the legacy `tools/print_diagnostics.py` entry point.
-It delegates to `splurge_unittest_to_pytest.print_diagnostics.main` so the
-helper can be executed either as a script or as a module:
+This wrapper preserves the historical `tools/print_diagnostics.py` entry
+point and delegates to `splurge_unittest_to_pytest.print_diagnostics.main`.
+It can be executed as a script or as a module:
 
     python tools/print_diagnostics.py
     python -m splurge_unittest_to_pytest.print_diagnostics
