@@ -47,7 +47,7 @@ from splurge_sql_generator.schema_parser import SchemaParser
 
 Historical note
 ---------------
-The compatibility-mode and engine selection options (for example, `--no-compat` and `engine=`) were removed in release 2025.1.0. This issue writeup is retained for historical context and documents behaviors observed prior to that change.
+The legacy compatibility mode and engine selection options (for example, the historical compatibility flag and engine=) were removed in release 2025.1.0. This issue writeup is retained for historical context and documents behaviors observed prior to that change.
 @pytest.fixture()
 def temp_dir():
     tmpdir = tempfile.mkdtemp()
@@ -60,18 +60,18 @@ def parser():
     return SchemaParser()
 ```
 
-4) Add autouse compatibility glue for `unittest.TestCase` methods
+4) Add autouse compatibility glue for unittest.TestCase methods
 
 If converted output still contains class-based test methods expecting `self.<attr>`, add this small autouse fixture to attach fixtures to the test instance:
 
-```python
-@pytest.fixture(autouse=True)
-def _attach_to_instance(request, parser, temp_dir):
-    inst = getattr(request, "instance", None)
-    if inst is not None:
-        setattr(inst, "parser", parser)
-        setattr(inst, "temp_dir", temp_dir)
-```
+    ```python
+    @pytest.fixture(autouse=True)
+    def _attach_to_instance(request, parser, temp_dir):
+        inst = getattr(request, "instance", None)
+        if inst is not None:
+            setattr(inst, "parser", parser)
+            setattr(inst, "temp_dir", temp_dir)
+    ```
 
 This keeps behavioral compatibility and avoids rewriting all methods to accept fixtures.
 
@@ -111,7 +111,7 @@ Converter improvement recommendations (follow-ups)
 -------------------------------------------------
 - Skip binary files and `__pycache__` during file discovery; detect and ignore non-UTF8 files gracefully and log a warning.
 - Ensure generated fixtures always `return` or `yield` values that tests expect; add template patterns for common fixture types (tempdir, tmp_path, db connection, etc.).
-- Add an optional `--compat` flag that emits the autouse attachment glue when converting `unittest.TestCase` classes to pytest to avoid manual edits.
+- Add an optional legacy compatibility flag that emits the autouse attachment glue when converting `unittest.TestCase` classes to pytest to avoid manual edits.
 - Add unit tests for the converter that cover:
   - fixtures-before-imports scenario
   - tempdir fixture rewrite correctness
@@ -150,12 +150,12 @@ Recent runs & evidence
     splurge-unittest-to-pytest --help
     ```
 
-    Observed `--compat` flag exists (default: on) that is supposed to emit an autouse fixture to attach fixtures to `unittest.TestCase` instances.
+    Observed legacy compatibility flag exists (historical behavior) that was supposed to emit an autouse fixture to attach fixtures to `unittest.TestCase` instances.
 
 - Conversion run used for this investigation:
 
     ```bash
-    splurge-unittest-to-pytest --output tmp --compat --backup backups tests/unit/test_schema_parser.py.bak.1757364222 --verbose
+    splurge-unittest-to-pytest --output tmp --backup backups tests/unit/test_schema_parser.py.bak.1757364222 --verbose
     ```
 
     Output: backup created `backups/test_schema_parser.py.bak.1757364222.bak`, converted file written to `tmp/test_schema_parser.py.bak.1757364222`.

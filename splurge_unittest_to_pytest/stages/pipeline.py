@@ -19,8 +19,9 @@ from typing import Any
 
 import libcst as cst
 from .collector import Collector
+from ..types import PipelineContext
 
-from .generator import generator as generator_stage
+from .generator import generator_stage
 from .fixture_injector import fixture_injector_stage
 from .rewriter import rewriter_stage
 from .import_injector import import_injector_stage
@@ -33,7 +34,11 @@ DOMAINS = ["stages", "pipeline"]
 # Associated domains for this module
 
 
-def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: Any | None = None) -> cst.Module:
+def run_pipeline(
+    module: cst.Module,
+    autocreate: bool = True,
+    pattern_config: Any | None = None,
+) -> cst.Module:
     """Run the conversion pipeline on a libcst.Module and return transformed Module.
 
     Args:
@@ -53,7 +58,7 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     """
     mgr = StageManager()
 
-    def collect_stage(context: dict[str, Any]) -> dict[str, Any]:
+    def collect_stage(context: PipelineContext) -> PipelineContext:
         visitor = Collector()
         module = context["module"]
         module.visit(visitor)
@@ -64,17 +69,25 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
             pass
         return {"collector_output": visitor.as_output()}
 
+    # Register the typed collect stage directly now that the manager
+    # accepts PipelineContext callables.
     mgr.register(collect_stage)
+
+    # The StageManager now accepts PipelineContext-typed callables and
+    # stages are registered directly. Legacy adapter wrappers
+    # have been removed as part of the strict-only migration.
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage
 
+    # Wrap other stages with thin adapters when necessary so the StageManager
+    # always receives callables matching Callable[[dict[str, Any]], dict[str, Any]].
     mgr.register(remove_unittest_artifacts_stage)
 
     # Note: legacy transformer previously ran early here.
     # Per project decision to ignore legacy behavior and make the staged
     # pipeline authoritative, we no longer run the legacy transformer here.
-    # If backward-compat behavior is ever required, reintroduce this wrapper
+    # If legacy behavior is ever required, reintroduce this wrapper
     # behind an explicit flag.
 
     # core pipeline stages
@@ -92,6 +105,12 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     # update test function signatures before injecting fixture FunctionDefs
     from .fixtures_stage import fixtures_stage
 
+    # Provide a thin helper to wrap typed PipelineContext stages so the
+    # StageManager continues to receive callables that accept an untyped
+    # dict[str, Any] and return dict[str, Any]. This keeps StageManager's
+    # public signature unchanged and confines typed usage inside stages.
+    # Register typed stages directly; StageManager now accepts
+    # PipelineContext-typed callables.
     mgr.register(fixtures_stage)
     mgr.register(fixture_injector_stage)
     # Run decorator and mock fixes before import injection so the injector can
@@ -120,10 +139,12 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     # Provide flags via initial context so stages can opt-in/out deterministically
     # Include an optional `pattern_config` so stages that care about method
     # name matching can consult the configured patterns.
-    initial_ctx: dict[str, Any] = {"autocreate": autocreate}
+    initial_ctx: PipelineContext = {"autocreate": autocreate}
     if pattern_config is not None:
         initial_ctx["pattern_config"] = pattern_config
+    # (No additional initial flags expected.)
 
+    # StageManager.run expects a PipelineContext; pass initial_ctx directly
     context = mgr.run(module, initial_context=initial_ctx)
     result = context.get("module")
     try:

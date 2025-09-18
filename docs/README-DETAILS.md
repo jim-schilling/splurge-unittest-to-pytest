@@ -142,8 +142,14 @@ pytest -k "test_convert"
 
 This repository recently completed a migration to remove legacy compatibility shims and to modernize the test surface. The following summarizes what changed and why:
 
-- Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native output by default.
-- Duplicate test-local autouse helpers were consolidated into a single test-only helper module: `tests/unit/helpers/autouse_helpers.py`. Tests import this module to avoid duplicating implementation details while keeping test-only utilities out of the package API.
+ Legacy compatibility/autouse helpers were removed from production code. The staged pipeline is the canonical converter and produces strict pytest-native (strict-only) output by default as of the 2025.2.0 release.
+ If you maintain tooling or CI that relied on older legacy compatibility flags, update your workflows to accept strict pytest-native output. Key migration guidance:
+
+ Files that relied on the legacy compatibility flag to preserve TestCase class structure will now be emitted as top-level pytest functions and fixtures. If you need to preserve class-style organization, wrap converted functions into classes manually or use grouping helpers in your test suite.
+ Update any automation that parsed textual output of converted files (for example golden-file checks) to accept the stricter pytest-native formatting: fixtures are emitted with two blank lines before top-level fixtures and `@pytest.fixture` decorated functions are inserted before tests.
+ Replace references to legacy compatibility flags (for example --compat) or compat=True/False in CI scripts and programmatic calls with direct use of the staged pipeline (`convert_string`, `convert_file`) which now implements strict behavior.
+
+ Run `pytest -n 7` locally after updating your tooling to ensure converted modules pass in your target environment.
 - The local `build/` directory (generated artifacts) was removed from the working tree and `build/` is ignored via `.gitignore` to prevent accidental commits of generated files.
 
 Verification performed locally during the migration:
@@ -305,6 +311,55 @@ splurge-unittest-to-pytest test_*.py
 
 # Recursive directory conversion
 splurge-unittest-to-pytest --recursive tests/
+
+## CLI flags: JSON & diff output
+
+The CLI supports structured JSON output and a dry-run unified-diff mode to inspect changes without writing files.
+
+- `--json` : Emit one JSON record per processed file to stdout (NDJSON). Useful for machine consumption.
+- `--json-file <path>` : Write NDJSON output to the given file path using UTF-8. The tool writes atomically and performs safety checks to avoid accidental writes to system locations. Supplying `--json-file` implies `--json`.
+- `--diff` : Show a unified diff (textual) for each changed file in dry-run mode instead of applying the change.
+
+NDJSON schema (one JSON object per line)
+
+Each line is a JSON object describing a processed file. Minimal schema example:
+
+{
+   "path": "path/to/file.py",
+   "changed": true,
+   "errors": [],
+   "summary": {
+      "asserts_converted": 3,
+      "lines_changed": 12,
+      "imports_added": ["pytest"]
+   }
+}
+
+Notes & behaviour
+
+- The `--json-file` writer uses an atomic, temporary-file backed writer and will refuse obviously dangerous targets (for example OS root directories and common Windows system locations) to avoid accidental overwrites.
+- NDJSON output is always UTF-8 encoded and newline-delimited; each line is a complete JSON object. When writing to a file the writer will perform an atomic replace so partial files are not left on interrupted runs.
+- The `--diff` output is produced using Python's `difflib.unified_diff` algorithm to produce familiar unified diffs for each file.
+
+Example
+
+Emit NDJSON to stdout:
+
+```bash
+splurge-unittest-to-pytest --json tests/ > report.ndjson
+```
+
+Write NDJSON to a file atomically:
+
+```bash
+splurge-unittest-to-pytest --json-file reports/run-20250918.ndjson tests/ --dry-run
+```
+
+Process files but show diffs only:
+
+```bash
+splurge-unittest-to-pytest --diff --dry-run tests/
+```
 ```
 
 ## Diagnostics and Smoke Test Behavior

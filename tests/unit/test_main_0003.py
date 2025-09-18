@@ -233,7 +233,7 @@ def test_converted_imports_before_fixtures_and_no_setup_teardown():
                 if isinstance(member, ast.FunctionDef) and member.name in ("setUp", "tearDown"):
                     if not has_attach_fixture:
                         pytest.fail(
-                            f"Found leftover unittest method '{member.name}' in class '{node.name}' without compatibility fixtures present"
+                            f"Found leftover unittest method '{member.name}' in class '{node.name}' without attach fixtures present"
                         )
 
 
@@ -283,7 +283,7 @@ def test_find_unittest_files_skips_unreadable(tmp_path: Path, monkeypatch) -> No
     f.write_text("import unittest\nclass Test(unittest.TestCase): pass")
     original_read = Path.read_text
 
-    def fake_read(self, encoding="utf-8"):
+    def fake_read(self, *, encoding="utf-8"):
         if self == f:
             raise UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
         return original_read(self, encoding=encoding)

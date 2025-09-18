@@ -68,7 +68,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Prefer | instead of Optional or Union.
 - Code concise, technical, Python that adheres to PEP 8 and PEP 585.
 - Code to modern Python standards targeting version 3.10 or later.
-- Use absolute import paths.
+- Use absolute import paths, where appropriate.
 - When possible, place imports at top of module.
 - Group and sort imports: standard libraries, then third-party libraries, then local libraries. Sort alphabetically within each group.
 - Use separate statements for multiple context managers instead of nesting them.
@@ -104,8 +104,10 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 
 ## Method Standards
 - Prefer parameters in method signatures and method calls to be listed on separate lines.
-- Prefer named keywords for default parameters.
-- Method signatures shall prefer use of keywords for more than 1 parameter.
+- For classmethods, property methods, and class instance method calls with 3 or more parameters, prefer named keywords for default parameters.
+- For standard methods and staticmethods calls with 2 or more parameters, prefer named keywords for default parameters.
+- For all other method signatures prefer use of keywords for more than 1 parameter.
+- If a method signature use keywords, then all default parameters should be keywords.
 - For method signatures with more than 2 parameters, place each parameter on a separate line:
   ```python
   def process_data(
@@ -119,7 +121,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
   result = process_data(
       input_file="data.json",
       output_format="ndjson",
-      validate_schema=True
+      validate_schema=Trues
   )
   ```
 - When updating a method or class signature, do not maintain backwards compatibility unless specifically told to do so.

@@ -96,7 +96,7 @@ These domain tags are used in the table below (semicolon-delimited). They are co
 | `test_converter_fixtures.py` | converter fixtures | converter; fixtures; regex | `test_converter_fixtures_regex_002.py` | `tests/unit/test_converter_fixtures.py` |
 | `test_converter_fixtures_deeper.py` | converter fixtures deeper | converter; fixtures; regex | `test_converter_fixtures_regex_003.py` | `tests/unit/test_converter_fixtures_deeper.py` |
 | `test_converter_golden.py` | converter golden | converter; goldens | `test_converter_goldens_001.py` | `tests/unit/test_converter_golden.py` |
-| `test_converter_golden_nocompat.py` | converter golden nocompat | converter; goldens | `test_converter_goldens_002.py` | `tests/unit/test_converter_golden_nocompat.py` |
+| `test_converter_golden_strict.py` | converter golden (strict) | converter; goldens | `test_converter_goldens_002.py` | `tests/unit/test_converter_golden_strict.py` |
 | `test_converter_goldens_strict.py` | converter goldens strict | converter; goldens | `test_converter_goldens_003.py` | `tests/unit/test_converter_goldens_strict.py` |
 | `test_converter_helpers.py` | converter helpers | converter | `test_converter_004.py` | `tests/unit/test_converter_helpers.py` |
 | `test_converter_helpers_and_imports.py` | converter helpers and imports | converter; imports | `test_converter_imports_001.py` | `tests/unit/test_converter_helpers_and_imports.py` |

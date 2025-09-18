@@ -7,9 +7,7 @@ import a stable, test-only API at `tests.unit.helpers.autouse_helpers`.
 from __future__ import annotations
 
 from typing import Iterable
-
 import libcst as cst
-
 from splurge_unittest_to_pytest.stages.fixture_injector import _find_insertion_index, _make_autouse_attach
 
 

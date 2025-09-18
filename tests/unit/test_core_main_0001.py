@@ -28,7 +28,7 @@ def test_convert_string_syntax_error():
 def test_convert_string_no_meaningful_changes(monkeypatch):
     src = "def foo():\n    return 1\n"
 
-    def fake_run_pipeline(tree, autocreate=True):
+    def fake_run_pipeline(tree, *, autocreate=True):
         return tree
 
     monkeypatch.setattr(mod, "run_pipeline", fake_run_pipeline)
@@ -55,14 +55,14 @@ def test_convert_file_write_permission_error(tmp_path, monkeypatch):
         lambda *a, **k: ConversionResult(original_code="a", converted_code="b", has_changes=True, errors=[]),
     )
     out = tmp_path / "out.py"
-    orig_write = Path.write_text
 
-    def fake_write(self, *args, **kwargs):
-        if self == out:
+    # Patch the atomic writer used by convert_file so we can simulate
+    # permission errors without relying on a Path.write_text preflight.
+    def fake_atomic_write(path, data, *, encoding=None):
+        if Path(path) == out:
             raise PermissionError("nope")
-        return orig_write(self, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "write_text", fake_write)
+    monkeypatch.setattr(mod, "atomic_write", fake_atomic_write)
     with pytest.raises(Exception) as excinfo:
         mod.convert_file(inp, output_path=out)
     assert excinfo.type in {mod.PermissionDeniedError, PermissionError}

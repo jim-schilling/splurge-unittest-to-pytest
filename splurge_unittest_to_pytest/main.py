@@ -22,13 +22,15 @@ License: MIT
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import libcst as cst
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
+from .io_helpers import atomic_write
 from .converter.helpers import has_meaningful_changes, normalize_method_name
+from .types import PipelineContext
 
 DOMAINS = ["main"]
 
@@ -110,9 +112,10 @@ def convert_string(
         try:
             from splurge_unittest_to_pytest.stages.raises_stage import exceptioninfo_normalizer_stage
 
-            # norm_ctx is a mapping used by pipeline stages; type it explicitly
-            # Use a dict[str, object] to match the stage signature
-            norm_ctx: dict[str, object] = {"module": converted_module}
+            # norm_ctx is a mapping used by pipeline stages; use the
+            # canonical PipelineContext type so mypy and callers agree on
+            # the expected shape.
+            norm_ctx: PipelineContext = {"module": converted_module}
             out = exceptioninfo_normalizer_stage(norm_ctx)
             # Be defensive: ensure we only assign a Module back to converted_module
             if isinstance(out, dict):
@@ -325,6 +328,7 @@ def convert_file(
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
+    normalize_pytest_alias: bool = False,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -392,7 +396,14 @@ def convert_file(
     if result.has_changes and not result.errors:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(result.converted_code, encoding=encoding)
+            # Use the project's atomic writer when available so tests can
+            # monkeypatch main.atomic_write for error simulation.
+            try:
+                atomic_write(output_path, result.converted_code, encoding=encoding)
+            except TypeError:
+                # Some older atomic_write signatures may not accept encoding kw;
+                # fall back to positional form.
+                atomic_write(output_path, result.converted_code)
         except PermissionError:
             raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionDeniedError
         except UnicodeEncodeError as e:
@@ -450,7 +461,9 @@ def is_unittest_file(file_path: str | Path) -> bool:
         raise EncodingError(f"Failed to decode file with UTF-8 encoding: {file_path}") from e
 
 
-def find_unittest_files(directory: str | Path) -> list[Path]:
+def find_unittest_files(
+    directory: str | Path, *, follow_symlinks: bool = True, respect_gitignore: bool = False
+) -> list[Path]:
     """Find all Python files that appear to contain unittest tests.
 
     Args:
@@ -464,19 +477,72 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
     if not directory.is_dir():
         return []
 
-    unittest_files = []
+    unittest_files: list[Path] = []
 
-    for file_path in directory.rglob("*"):
+    # Choose an iterator that respects follow_symlinks
+    if follow_symlinks:
+        iterator = directory.rglob("*")
+    else:
+        import os
+
+        def _iter_no_follow(d: Path):
+            for root, dirs, files in os.walk(str(d), followlinks=False):
+                for f in files:
+                    yield Path(root) / f
+
+        iterator = _iter_no_follow(directory)
+
+    # Prepare .gitignore handling if requested
+    gitignore_patterns: list[str] = []
+    spec = None
+    if respect_gitignore:
+        gitignore_path = directory / ".gitignore"
+        if gitignore_path.exists():
+            try:
+                text = gitignore_path.read_text(encoding="utf-8")
+                gitignore_patterns = [
+                    line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
+                ]
+                try:
+                    import pathspec
+
+                    # Attempt to fetch a GitWildMatchPattern factory if
+                    # available; otherwise fall back to passing the
+                    # patterns as-is. Use cast to silence mypy about the
+                    # dynamic type of the factory value.
+                    pattern_factory = getattr(pathspec.patterns, "GitWildMatchPattern", None)
+                    try:
+                        spec = pathspec.PathSpec.from_lines(cast(Any, pattern_factory), gitignore_patterns)
+                    except Exception:
+                        spec = None
+                except Exception:
+                    spec = None
+            except Exception:
+                gitignore_patterns = []
+
+    for file_path in iterator:
         # Skip __pycache__ directories early
         try:
             if "__pycache__" in file_path.parts:
                 continue
         except Exception:
-            # Defensive: if Path.parts access fails for some reason, skip this path
             continue
 
         if not file_path.is_file():
             continue
+
+        # Respect follow_symlinks: when disabled, skip symbolic links
+        # to avoid discovering linked files on platforms where os.walk
+        # may still list symlink files (followlinks controls directory
+        # traversal, not whether file symlinks appear in listings).
+        if not follow_symlinks:
+            try:
+                if file_path.is_symlink():
+                    continue
+            except Exception:
+                # If we cannot determine symlink status, be conservative
+                # and skip the entry rather than risk following it.
+                continue
 
         # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
         try:
@@ -494,6 +560,30 @@ def find_unittest_files(directory: str | Path) -> list[Path]:
 
         # Now safely check for unittest content; is_unittest_file may still raise specific errors
         try:
+            if respect_gitignore and gitignore_patterns:
+                try:
+                    rel = str(file_path.relative_to(directory)).replace("\\", "/")
+                except Exception:
+                    rel = file_path.name
+
+                ignored = False
+                if spec is not None:
+                    try:
+                        if hasattr(spec, "match_file") and spec.match_file(rel):
+                            ignored = True
+                        elif hasattr(spec, "match_files"):
+                            matched = set(spec.match_files([rel]))
+                            if rel in matched:
+                                ignored = True
+                    except Exception:
+                        ignored = False
+                else:
+                    if rel in gitignore_patterns or Path(rel).name in gitignore_patterns:
+                        ignored = True
+
+                if ignored:
+                    continue
+
             if is_unittest_file(file_path):
                 unittest_files.append(file_path)
         except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):

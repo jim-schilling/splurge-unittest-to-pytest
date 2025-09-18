@@ -15,6 +15,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, cast
+from ..types import PipelineContext
 import importlib
 import json
 import importlib.resources as pkg_resources
@@ -35,11 +36,15 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
         # store module AST to allow context-aware decisions in later leaves
         self._module = node
 
-    def leave_Decorator(self, original: cst.Decorator, updated: cst.Decorator) -> cst.Decorator:
+    def leave_Decorator(
+        self,
+        original: cst.Decorator,
+        updated: cst.Decorator,
+    ) -> cst.Decorator:
         expr = updated.decorator
 
         # Helper to build pytest.mark.<name> call
-        def _make_mark(name: str, args: list[cst.Arg] | None = None) -> cst.Call:
+        def _make_mark(name: str, *, args: list[cst.Arg] | None = None) -> cst.Call:
             mark_attr = cst.Attribute(
                 value=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("mark")), attr=cst.Name(name)
             )
@@ -72,13 +77,13 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                     args = []
                     if reason is not None:
                         args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
-                    return updated.with_changes(decorator=_make_mark("skip", args))
+                    return updated.with_changes(decorator=_make_mark("skip", args=args))
 
                 if name == "skipIf" and cond is not None:
                     args = [cst.Arg(value=cond)]
                     if reason is not None:
                         args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
-                    return updated.with_changes(decorator=_make_mark("skipif", args))
+                    return updated.with_changes(decorator=_make_mark("skipif", args=args))
 
                 if name == "skipUnless" and cond is not None:
                     # map skipUnless(cond, reason) -> pytest.mark.skipif(not cond, reason=...)
@@ -86,7 +91,7 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
                     args = [cst.Arg(value=not_cond)]
                     if reason is not None:
                         args.append(cst.Arg(keyword=cst.Name("reason"), value=reason))
-                    return updated.with_changes(decorator=_make_mark("skipif", args))
+                    return updated.with_changes(decorator=_make_mark("skipif", args=args))
         # Case: @unittest.expectedFailure (attribute, no call) or bare expectedFailure/name
         if (
             isinstance(expr, cst.Attribute)
@@ -94,13 +99,17 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
             and expr.value.value == "unittest"
             and expr.attr.value == "expectedFailure"
         ):
-            return updated.with_changes(decorator=_make_mark("xfail", []))
+            return updated.with_changes(decorator=_make_mark("xfail", args=[]))
         if isinstance(expr, cst.Name) and expr.value == "expectedFailure":
-            return updated.with_changes(decorator=_make_mark("xfail", []))
+            return updated.with_changes(decorator=_make_mark("xfail", args=[]))
 
         return updated
 
-    def leave_SimpleStatementLine(self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine) -> Any:
+    def leave_SimpleStatementLine(
+        self,
+        original: cst.SimpleStatementLine,
+        updated: cst.SimpleStatementLine,
+    ) -> Any:
         # Replace an entire top-level import line when it is
         # `from unittest.mock import ...` and contains problematic names.
         try:
@@ -246,7 +255,7 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
         return updated
 
 
-def decorator_and_mock_fixes_stage(context: dict[str, Any]) -> dict[str, Any]:
+def decorator_and_mock_fixes_stage(context: PipelineContext) -> PipelineContext:
     module = context.get("module")
     if not isinstance(module, cst.Module):
         return context

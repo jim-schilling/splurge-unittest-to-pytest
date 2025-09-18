@@ -68,7 +68,7 @@ def process_file(path: Path) -> bool:
     return changed
 
 
-def main(root: str | None = None) -> int:
+def main(*, root: str | None = None) -> int:
     r = Path(root) if root else Path("tests/consolidated")
     if not r.exists():
         print("root not found:", r)
@@ -89,4 +89,5 @@ def main(root: str | None = None) -> int:
 if __name__ == "__main__":
     import sys
 
-    sys.exit(main(None if len(sys.argv) == 1 else sys.argv[1]))
+    # call using keyword to preserve the keyword-only signature
+    sys.exit(main(root=None if len(sys.argv) == 1 else sys.argv[1]))

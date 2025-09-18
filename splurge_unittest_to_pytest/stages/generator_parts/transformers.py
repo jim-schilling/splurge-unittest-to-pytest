@@ -25,7 +25,11 @@ class ReplaceSelfWithName(cst.CSTTransformer):
     Only replaces simple attribute accesses where the attribute is a Name.
     """
 
-    def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+    def leave_Attribute(
+        self,
+        original: cst.Attribute,
+        updated: cst.Attribute,
+    ) -> cst.BaseExpression:
         # Walk the ORIGINAL node to determine whether this Attribute
         # expression is part of an attribute chain rooted at `self`.
         # We examine the original tree (not the updated one) so that
@@ -49,10 +53,17 @@ class ReplaceAttrWithLocal(cst.CSTTransformer):
     value is a Name matching a key will be replaced with the mapped local Name.
     """
 
-    def __init__(self, mapping: dict[str, str]) -> None:
+    def __init__(
+        self,
+        mapping: dict[str, str],
+    ) -> None:
         self._mapping = mapping
 
-    def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.BaseExpression:
+    def leave_Attribute(
+        self,
+        original: cst.Attribute,
+        updated: cst.Attribute,
+    ) -> cst.BaseExpression:
         value = updated.value
         if isinstance(value, cst.Name) and value.value in self._mapping:
             attr = updated.attr
@@ -69,7 +80,10 @@ class ReplaceSelf(cst.CSTTransformer):
     top-level fixtures.
     """
 
-    def __init__(self, replacement: str) -> None:
+    def __init__(
+        self,
+        replacement: str,
+    ) -> None:
         self._replacement = replacement
 
     def leave_Name(self, original: cst.Name, updated: cst.Name) -> cst.BaseExpression:
@@ -85,11 +99,19 @@ class ReplaceNameWithLocal(cst.CSTTransformer):
     cleanup code to reference generated locals.
     """
 
-    def __init__(self, original: str, replacement: str) -> None:
+    def __init__(
+        self,
+        original: str,
+        replacement: str,
+    ) -> None:
         self._original = original
         self._replacement = replacement
 
-    def leave_Name(self, original: cst.Name, updated: cst.Name) -> cst.BaseExpression:
+    def leave_Name(
+        self,
+        original: cst.Name,
+        updated: cst.Name,
+    ) -> cst.BaseExpression:
         if original.value == self._original:
             return cst.Name(self._replacement)
         return updated

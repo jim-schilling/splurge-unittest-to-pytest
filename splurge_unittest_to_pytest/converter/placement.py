@@ -20,7 +20,10 @@ DOMAINS = ["converter"]
 # Associated domains for this module
 
 
-def insert_fixtures_into_module(module_node: cst.Module, fixtures: dict[str, cst.FunctionDef]) -> cst.Module:
+def insert_fixtures_into_module(
+    module_node: cst.Module,
+    fixtures: dict[str, cst.FunctionDef],
+) -> cst.Module:
     """Insert fixture FunctionDef nodes into the module body after imports.
 
     Fixtures are inserted after the last import statement (Import or ImportFrom).

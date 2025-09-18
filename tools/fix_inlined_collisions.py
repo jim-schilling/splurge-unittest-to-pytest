@@ -61,7 +61,7 @@ def rename_collisions(root: Path) -> list[tuple[Path, Path]]:
     return renames
 
 
-def main(root: str | None = None) -> int:
+def main(*, root: str | None = None) -> int:
     r = Path(root) if root else Path("tmp/inlined_consolidated/tests")
     if not r.exists():
         print("root not found:", r)
@@ -79,4 +79,5 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", help="root to fix", default="tmp/inlined_consolidated/tests")
     args = ap.parse_args()
-    raise SystemExit(main(args.root))
+    # call using keyword to match keyword-only signature
+    raise SystemExit(main(root=args.root))

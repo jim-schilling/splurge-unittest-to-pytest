@@ -3,9 +3,11 @@
 These tests exercise the public behavior of ExceptionAttrRewriter and
 RaisesRewriter using LibCST to parse and transform small snippets. They
 avoid brittle exact formatting assertions and instead check for
-presence/absence of key substrings and transformer state changes."""
+presence/absence of key substrings and transformer state changes.
+"""
 
 from __future__ import annotations
+
 import libcst as cst
 from splurge_unittest_to_pytest.stages import raises_stage
 

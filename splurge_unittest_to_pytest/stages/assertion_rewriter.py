@@ -15,7 +15,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, Any, cast
+from typing import Sequence, Optional, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -32,7 +33,11 @@ class AssertionRewriter(cst.CSTTransformer):
         super().__init__()
         self.needs_pytest_import = False
 
-    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> cst.BaseSmallStatement | cst.Expr:
+    def leave_Expr(
+        self,
+        original_node: cst.Expr,
+        updated_node: cst.Expr,
+    ) -> cst.BaseSmallStatement | cst.Expr:
         # Only handle call expressions like self.assertX(...)
         if isinstance(updated_node.value, cst.Call):
             conv = self._convert_self_assertion_to_pytest(updated_node.value)
@@ -40,7 +45,11 @@ class AssertionRewriter(cst.CSTTransformer):
                 return conv
         return updated_node
 
-    def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
+    def leave_With(
+        self,
+        original_node: cst.With,
+        updated_node: cst.With,
+    ) -> cst.With:
         # detect with self.assertRaises(...) as cm:  -> with pytest.raises(...):
         if not updated_node.items:
             return updated_node
@@ -88,7 +97,11 @@ class AssertionRewriter(cst.CSTTransformer):
             return None
         return None
 
-    def _convert_assertion(self, method_name: str, args: Sequence[cst.Arg]) -> cst.BaseSmallStatement | None:
+    def _convert_assertion(
+        self,
+        method_name: str,
+        args: Sequence[cst.Arg],
+    ) -> cst.BaseSmallStatement | None:
         try:
             assertions_map = {
                 "assertEqual": self._assert_equal,
@@ -544,7 +557,11 @@ class AssertionRewriter(cst.CSTTransformer):
                 return method_name
         return None
 
-    def _create_pytest_raises_item(self, method_name: str, args: Sequence[cst.Arg]) -> cst.WithItem:
+    def _create_pytest_raises_item(
+        self,
+        method_name: str,
+        args: Sequence[cst.Arg],
+    ) -> cst.WithItem:
         # creation of a pytest.raises call implies we'll need pytest imported
         try:
             self.needs_pytest_import = True
@@ -569,7 +586,7 @@ class AssertionRewriter(cst.CSTTransformer):
         )
 
 
-def assertion_rewriter_stage(context: dict[str, Any]) -> dict[str, Any]:
+def assertion_rewriter_stage(context: PipelineContext) -> PipelineContext:
     module = context.get("module")
     if module is None:
         return {}

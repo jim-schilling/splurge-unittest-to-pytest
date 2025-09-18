@@ -15,7 +15,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Optional, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -142,7 +143,7 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
     return func
 
 
-def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
+def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
     """Insert generated fixture functions into ``module``.
 
     The stage will insert two empty-line sentinels before each top-level
@@ -153,28 +154,27 @@ def fixture_injector_stage(context: dict[str, Any]) -> dict[str, Any]:
 
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
-    nodes: list[cst.FunctionDef] = context.get("fixture_nodes") or []
-    # Compatibility mode has been removed; this stage now always emits
-    # strict pytest-style fixtures. Insert two EmptyLine sentinels before
-    # each top-level fixture to ensure canonical spacing after formatting.
+    nodes: list[cst.FunctionDef] = cast(list[cst.FunctionDef], context.get("fixture_nodes") or [])
+    # This stage emits strict pytest-style fixtures. Insert two EmptyLine
+    # sentinels before each top-level fixture to ensure canonical spacing
+    # after formatting.
     if module is None or not nodes:
         return {"module": module}
     insert_idx = _find_insertion_index(module)
     # allow a mix of statement and small-statement/EmptyLine nodes in the new body
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = list(module.body)
     # Insert fixture FunctionDef nodes at the calculated insertion index.
-    # Always emit strict/no-compat spacing: insert two EmptyLine sentinels
-    # before each top-level fixture so the module normalizer produces two
-    # blank lines between top-level defs.
+    # Always emit strict spacing: insert two EmptyLine sentinels before
+    # each top-level fixture so the module normalizer produces two blank
+    # lines between top-level defs.
     for offset, fn in enumerate(nodes):
         insert_pos = insert_idx + offset * 3
         # Insert two EmptyLine sentinels followed by the FunctionDef
         new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
         new_body.insert(insert_pos, cast(cst.BaseSmallStatement, cst.EmptyLine()))
         new_body.insert(insert_pos + 2, fn)
-    # Insert fixtures into module body. Autouse attach fixtures and class
-    # preserving behavior have been removed; generated fixtures are intended
-    # to be used directly by top-level test wrappers. Signal that pytest
+    # Insert fixtures into module body. Generated fixtures are intended to
+    # be used directly by top-level test wrappers. Signal that pytest
     # import is needed so ImportInjector will insert it.
     # Normalize spacing: ensure exactly two EmptyLine nodes before each
     # top-level FunctionDef or ClassDef. Collapse runs longer than two.

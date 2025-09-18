@@ -1,9 +1,11 @@
 import libcst as cst
 from libcst import MetadataWrapper
 from splurge_unittest_to_pytest.stages.collector import Collector
-from splurge_unittest_to_pytest.stages.generator import generator as generator_stage
+from splurge_unittest_to_pytest.stages.generator import generator_stage
 
-UNIT = """
+
+def _run_debug() -> None:
+    UNIT = """
 def init_api_data():
     pass
 
@@ -17,23 +19,32 @@ class TestInitAPI(unittest.TestCase):
         cleanup()
 """
 
-module = cst.parse_module(UNIT)
-wrapper = MetadataWrapper(module)
-collector = Collector()
-wrapper.visit(collector)
-out = collector.as_output()
-ctx = {"collector_output": out, "module": module, "autocreate": True}
-res = generator_stage(ctx)
-nodes = res.get("fixture_nodes", [])
-print("Nodes types/names:")
-for n in nodes:
-    t = type(n).__name__
-    if isinstance(n, cst.FunctionDef):
-        print("Function:", n.name.value)
-    elif isinstance(n, cst.ClassDef):
-        print("Class:", n.name.value)
-    else:
-        try:
-            print(t, repr(cst.Module(body=[n]).code))
-        except Exception as e:
-            print(t, str(e))
+    module = cst.parse_module(UNIT)
+    wrapper = MetadataWrapper(module)
+    collector = Collector()
+    wrapper.visit(collector)
+    out = collector.as_output()
+    ctx = {"collector_output": out, "module": module, "autocreate": True}
+    res = generator_stage(ctx)
+    nodes = res.get("fixture_nodes", [])
+    print("Nodes types/names:")
+    for n in nodes:
+        t = type(n).__name__
+        if isinstance(n, cst.FunctionDef):
+            print("Function:", n.name.value)
+        elif isinstance(n, cst.ClassDef):
+            print("Class:", n.name.value)
+        else:
+            try:
+                print(t, repr(cst.Module(body=[n]).code))
+            except Exception as e:
+                print(t, str(e))
+
+
+def main(*, argv: list[str] | None = None) -> int:
+    _run_debug()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(argv=None))

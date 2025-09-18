@@ -31,5 +31,9 @@ class FixtureSpecBuilder:
     deterministic unit tests.
     """
 
-    def build(self, name: str, body: str) -> FixtureSpec:
+    def build(
+        self,
+        name: str,
+        body: str,
+    ) -> FixtureSpec:
         return FixtureSpec(name=name, body=body)

@@ -297,7 +297,10 @@ def create_simple_fixture_with_guard(attr_name: str, value_expr: cst.BaseExpress
 
 
 def create_autocreated_file_fixture(
-    attr_name: str, content_fixture_name: str | None = None, filename: str | None = None
+    attr_name: str,
+    *,
+    content_fixture_name: str | None = None,
+    filename: str | None = None,
 ) -> cst.FunctionDef:
     """Create a fixture that generates a file under pytest's tmp_path using
     content from a sibling fixture (e.g., `sql_content`) when available.

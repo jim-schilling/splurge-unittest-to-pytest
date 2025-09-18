@@ -15,7 +15,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Optional, cast
+from ..types import PipelineContext
 
 import libcst as cst
 
@@ -26,7 +27,7 @@ DOMAINS = ["stages", "tidy"]
 # Associated domains for this module
 
 
-def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
+def tidy_stage(context: PipelineContext) -> PipelineContext:
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None
     if module is None:
@@ -61,11 +62,19 @@ def tidy_stage(context: dict[str, Any]) -> dict[str, Any]:
         def visit_ClassDef(self, node: cst.ClassDef) -> None:
             self._in_class = True
 
-        def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+        def leave_ClassDef(
+            self,
+            original_node: cst.ClassDef,
+            updated_node: cst.ClassDef,
+        ) -> cst.ClassDef:
             self._in_class = False
             return updated_node
 
-        def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        def leave_FunctionDef(
+            self,
+            original_node: cst.FunctionDef,
+            updated_node: cst.FunctionDef,
+        ) -> cst.FunctionDef:
             if not self._in_class:
                 return updated_node
             if not original_node.name.value.startswith("test"):

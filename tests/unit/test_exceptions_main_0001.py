@@ -27,7 +27,7 @@ class TestFileOperations:
         input_path = tmp_path / "input_file.py"
         output_path = tmp_path / "output_file.py"
         input_path.write_text(unittest_code)
-        result = convert_file(input_path, output_path)
+        result = convert_file(input_path, output_path=output_path)
         assert result.has_changes
         assert "assert True" in result.converted_code
         assert output_path.exists()

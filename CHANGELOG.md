@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2025.2.0] - 2025-09-17
+
+### Removed (breaking)
+- Legacy compatibility mode and all legacy compatibility flags removed. The
+  converter now emits strict pytest-native code by default and no longer
+  supports the historical compatibility engine. Consumers that relied on
+  the legacy compatibility flag or programmatic compatibility toggles must
+  update their workflows to accept strict output or implement custom adapters.
+
+### Changed
+- Project version bumped to `2025.2.0`.
+- Documentation and tests updated to reflect strict-only behavior. Fixtures are
+  emitted as canonical pytest fixtures and lifecycle methods (setUp/tearDown)
+  are converted to top-level fixtures and test function parameters.
+
+### Migration notes
+- If you relied on compatibility mode to retain unittest-style class layouts
+  (for example to preserve TestCase subclasses at runtime), update your
+  workflows to accept top-level pytest test functions. To preserve class-style
+  organization you can manually wrap converted functions into classes or use
+  test grouping helpers in your test suite.
+
+### Verification
+- Full test-suite run: local verification performed after changes (tests and
+  docs updates). Run `pytest -n 7` in your environment to confirm behavior for
+  your target Python version and optional dependencies.
+
+### Fixed
+- CLI backup handling: backups are now written with a stable content-hash
+  suffix (e.g., `.bak-<sha256:8>`) to avoid collisions and preserve history.
+- Discovery and .gitignore handling: `find_unittest_files` now supports
+  `--follow-symlinks/--no-follow-symlinks` and optionally respects `.gitignore`
+  via `pathspec` when present. The discovery logic includes fallbacks for
+  differing `pathspec` APIs and robust handling of unreadable files.
+  Focused unit tests were added to cover both `pathspec.match_file` and
+  `pathspec.match_files` variants.
+
+### Added
+- Unit tests for assertion conversion helpers: added `tests/unit/test_assertions_0001.py` to cover mapping transformations and edge cases in `splurge_unittest_to_pytest.converter.assertions`.
+- Expanded test coverage (Task-5.1): added tests for `atomic_write`, import-injector alias handling, and a concurrency smoke test (skipped on Windows). These live under `tests/unit/test_io_helpers_atomic_write_0001.py`, `tests/unit/test_import_injector_alias_0001.py`, and `tests/unit/test_parallel_smoke_0001.py`.
+
+
 ## [2025.1.1] - 2025-09-14
 
 ### Changed
@@ -36,54 +78,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025.1.0] - 2025-09-13
 
 ### Removed
-- Historical: compatibility mode (`compat` / `--no-compat` / `--compat`) and engine selection were removed in release 2025.1.0. The converter now supports the staged pipeline and emits strict pytest-native code.
 
 - Historical: legacy compatibility shim `splurge_unittest_to_pytest.stages.generator` removed in 2025.1.0 — callers should use `stages.generator` or the staged pipeline directly.
 
 ### Changed
-- Public API: `convert_string` and `convert_file` no longer accept `compat` or `engine` parameters. Use the staged pipeline via the public API instead.
+- Public API: `convert_string` and `convert_file` no longer accept compatibility or `engine` parameters. Use the staged pipeline via the public API instead.
 - Tests and documentation updated to remove references to compatibility toggles and to favor the staged pipeline conversion.
-
-### Removed
 - Test helpers: duplicate test-local autouse helper implementations were consolidated into a single test-only module (`tests/unit/helpers/autouse_helpers.py`) and removed from production code. This keeps test utilities out of the package public API.
 
 ### Repository cleanup
 - Removed local generated `build/` artifacts from the working tree and ensured `build/` is ignored in `.gitignore` to avoid committing generated files.
-
 ### Verification (local)
 - ruff format/check: passed (minor formatting changes)
 - mypy: no type errors reported for the package
 - pytest: unit tests passed locally (unit run: 859 passed, 1 skipped). Full-suite runs performed earlier reported 874 passed, 4 skipped. Coverage recorded during the run (~86% project coverage).
 
 ### Notes
-- The legacy transformer implementation and the legacy generator under `stages/generator.py` have been removed in favor of the smaller, well-tested `generator` and the staged pipeline. The converter now emits canonical per-attribute pytest fixtures by default.
 
 
 ## [2025.0.5] - 2025-09-13
 
-### Added
-- Historical: Strict/no-compat behavior was introduced before 2025.1.0. See the migration notes for how the staged pipeline now emits strict pytest-native code by default.
 
 ### Changed
--- CLI default and help: CLI now advertises strict/no-compat as the default output.
-- Fixture injection: no-compat (strict) output now inserts two blank lines before top-level `def`/fixture blocks to produce cleaner, canonical pytest-style modules. Compat behavior preserves the previous single-empty-line spacing.
+- CLI default and help: CLI now advertises strict output as the default.
 
 ### Fixed
-- CLI dry-run verbose reporting: when a file already imports `pytest`, dry-run verbose now reports "No changes needed" (avoids noisy diffs for already-converted files).
-- Fixture autouse placement: ensure the autouse `_attach_to_instance` fixture (compat mode) is inserted after injected fixtures so golden comparisons and emitted code are stable.
-- Added unit test `tests/unit/test_fixture_spacing.py` to assert compat vs no-compat spacing behavior.
+- Fixture autouse placement: historical compatibility behavior inserted the autouse `_attach_to_instance` fixture after injected fixtures so golden comparisons and emitted code remained stable.
+- Added unit test `tests/unit/test_fixture_spacing.py` to assert historical compatibility vs strict spacing behavior.
 
 ### Changed
-- Compat flag now propagates through the staged pipeline so all stages can make
-  decisions deterministically
-- Autouse attachment fixture is injected only when `compat=True`; no longer
-  injected when `compat=False`
-- Fixtures stage honors compat mode:
-  - In compat mode, classes and lifecycle methods are retained for backwards
-    compatibility and tests remain runnable; top-level wrappers also generated
-  - In strict mode, classes/lifecycle methods are dropped and test methods are
-    emitted as top-level pytest tests that accept fixtures
-- CLI help text updated to clearly explain `--compat/--no-compat` semantics
+- The compatibility flag previously propagated through the staged pipeline so
+  stages could make decisions deterministically.
+- The autouse attachment fixture was injected under legacy compatibility behavior; for strict output it is not injected.
+- Historical note: fixtures stage previously honored compatibility flags; under legacy compatibility, classes and lifecycle methods were retained; under strict output, classes/lifecycle methods are dropped and test methods are emitted as top-level pytest tests that accept fixtures.
+ - CLI help text was historically updated to explain compatibility flag semantics
 
 ### Fixed
 - Guard self-referential placeholder fixtures (e.g., `schema_file`) to avoid
@@ -215,6 +243,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Add an end-to-end integration test verifying converted modules are executable and
    autouse fixtures attach correctly.
 
-## Previous Versions
+## [2025.2.0] - 2025-09-17
+
+### Removed (breaking)
+  emits strict pytest-native code by default and no longer supports the
+  historical compatibility engine. Consumers that relied on `--compat` or
+  programmatic compatibility toggles must update their workflows to accept
+  strict output or implement custom adapters.
+
+### Changed
+  emitted as canonical pytest fixtures and lifecycle methods (setUp/tearDown)
+  are converted to top-level fixtures and test function parameters.
+
+### Tests
+
+- Hardened golden tests: replaced brittle exact-string equality checks with an AST-aware golden comparator. The test helper parses both generated and expected code using `libcst`, strips accidental Markdown code-fence lines, and falls back to a whitespace-normalized textual compare when structural equality is not detected. This reduces flakiness due to formatting-only differences and accidental markdown artifacts in `.expected` files.
+
+Files updated during this work:
+
+- `tests/support/golden_compare.py` (AST-aware helper)
+- `tests/data/goldens/golden_namedtuple_fixture.expected` (cleaned)
+- `tests/data/goldens/sample_06_converted.expected` (canonicalized)
+- Integration tests updated to use the helper: `tests/integration/test_sample06_conversion_0001.py`, `tests/integration/test_generator_imports_stages_0001.py`, `tests/integration/test_generator_goldens_0001.py`
+
+All integration tests were run locally and verified with no remaining golden-related failures.
+
+### Migration notes
+  (for example to preserve TestCase subclasses at runtime), update your
+  workflows to accept top-level pytest test functions. To preserve class-style
+  organization you can manually wrap converted functions into classes or use
+  test grouping helpers in your test suite.
+
+### Verification
+  docs updates). Run `pytest -n 7` in your environment to confirm behavior for
+  your target Python version and optional dependencies.
+
+
 
 No previous versions documented. This represents a major modernization and infrastructure update.

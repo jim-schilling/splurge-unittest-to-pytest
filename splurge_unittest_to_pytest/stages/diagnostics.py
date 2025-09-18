@@ -96,7 +96,11 @@ def create_diagnostics_dir() -> Optional[Path]:
         return None
 
 
-def write_snapshot(out_dir: Optional[Path], filename: str, module: Any) -> None:
+def write_snapshot(
+    out_dir: Optional[Path],
+    filename: str,
+    module: Any,
+) -> None:
     """Write a snapshot of ``module`` to ``out_dir/filename``.
 
     The function is defensive: it no-ops when ``out_dir`` is ``None`` or the

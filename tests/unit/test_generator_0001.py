@@ -30,7 +30,7 @@ def test_delete_by_name():
     assert isinstance(is_simple_cleanup_statement(st, "x"), bool)
 
 
-def make_spec(name: str, expr_src: str, yield_style: bool = False):
+def make_spec(name: str, expr_src: str, *, yield_style: bool = False):
     class S:
         pass
 

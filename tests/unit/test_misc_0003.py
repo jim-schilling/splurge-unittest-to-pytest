@@ -80,7 +80,7 @@ def test_import_and_call_public_symbols(module_name):
             name = _info.name if isinstance(_info, pkgutil.ModuleInfo) else _info[1]
             full = f"{PACKAGE}.{subpkg}.{name}"
 
-            def _make_test(modname=full):
+            def _make_test(*, modname=full):
                 def _test():
                     if modname in SKIP_MODULES:
                         pytest.skip(f"Skipping unsafe module {modname}")
@@ -97,7 +97,7 @@ def test_import_and_call_public_symbols(module_name):
 
                 return _test
 
-            globals()[f"test_smoke_{subpkg}_{name}"] = _make_test()
+            globals()[f"test_smoke_{subpkg}_{name}"] = _make_test(modname=full)
 
 
 def test_print_diagnostics_finds_run(tmp_path: Path) -> None:

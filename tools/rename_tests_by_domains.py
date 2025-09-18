@@ -125,27 +125,28 @@ def apply_renames(proposals: List[Tuple[Path, Path]]) -> None:
         os.replace(str(orig), str(prop))
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Rename test modules based on DOMAINS metadata")
     p.add_argument("--root", default="tests", help="Root tests directory to scan")
     p.add_argument("--apply", action="store_true", help="Apply the renames (default is dry-run)")
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
-def main() -> None:
-    args = parse_args()
+def main(*, argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     root = Path(args.root)
     if not root.exists():
         print(f"Test root not found: {root}")
-        raise SystemExit(1)
+        return 1
     proposals = build_proposals(root)
     if not args.apply:
         show_dry_run(proposals)
         print(f"\nProposals: {len(proposals)} (use --apply to perform)")
-        return
+        return 0
     # apply
     apply_renames(proposals)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main(argv=None))

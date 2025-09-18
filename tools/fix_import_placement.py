@@ -111,7 +111,8 @@ def rewrite_file(path: Path) -> bool:
     return True
 
 
-def main() -> int:
+def main(*, argv: list[str] | None = None) -> int:
+    # argv accepted for signature consistency with other tools; unused here
     fixed = 0
     for p in (ROOT / "tests").rglob("*.py"):
         try:
@@ -125,4 +126,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(argv=None))

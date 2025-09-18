@@ -159,7 +159,7 @@ def test_generator_core_custom_allocator_and_emitter():
             return base + "_X"
 
     class FakeEmitter:
-        def emit_fixture_node(self, name: str, body: str, returns: str | None = None):
+        def emit_fixture_node(self, name: str, body: str, *, returns: str | None = None):
             recorded["name"] = name
             recorded["body"] = body
             recorded["returns"] = returns

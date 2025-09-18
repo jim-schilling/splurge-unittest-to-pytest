@@ -16,6 +16,7 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
+from ..types import PipelineContext
 
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
@@ -36,7 +37,11 @@ DOMAINS = ["stages", "fixtures"]
 # runnable by default and uses an autouse attach fixture for pytest runs.
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], remove_first: bool) -> cst.FunctionDef:
+def _update_test_function(
+    fn: cst.FunctionDef,
+    fixture_names: Sequence[str],
+    remove_first: bool,
+) -> cst.FunctionDef:
     """Update a test method's parameters for pytest conversion.
 
     Args:
@@ -78,13 +83,13 @@ def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], rem
     return fn.with_changes(params=new_params)
 
 
-def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
+def fixtures_stage(context: PipelineContext) -> PipelineContext:
     module: Optional[cst.Module] = context.get("module")
     collector: Optional[CollectorOutput] = context.get("collector_output")
-    # fixture_specs and compat may be provided by earlier stages; they are
-    # not needed in this stage's current implementation but may be present
-    # in the context. We intentionally do not use them here to keep this
-    # stage focused on producing runnable classes and top-level wrappers.
+    # fixture_specs may be provided by earlier stages; they are not needed
+    # in this stage's current implementation but may be present in the
+    # context. We intentionally do not use them here to keep this stage
+    # focused on producing runnable classes and top-level wrappers.
 
     if module is None or collector is None:
         return {"module": module}
@@ -118,12 +123,10 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
     new_body: list[cst.BaseStatement | cst.BaseSmallStatement] = []
     classes = collector.classes
 
-    # The project has removed compatibility mode. This stage now always
-    # operates in strict pytest mode: drop unittest.TestCase classes, remove
-    # setUp/tearDown methods, and emit top-level pytest functions that
-    # accept fixture parameters. Autouse attach fixtures are no longer
-    # produced.
-    strict_pytest_mode = True
+    # This stage operates in strict pytest mode: drop unittest.TestCase
+    # classes, remove setUp/tearDown methods, and emit top-level pytest
+    # functions that accept fixture parameters. The pipeline no longer
+    # emits alternate variants that preserve TestCase class shapes.
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
@@ -142,12 +145,7 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                 # handle exact setup/teardown functions
                 if _is_setup_name(mname) or _is_teardown_name(mname):
                     # In strict mode, drop setUp/tearDown entirely
-                    if strict_pytest_mode:
-                        continue
-                    else:
-                        # Preserve in compat mode for back-compat runnability
-                        new_class_body.append(member)
-                        continue
+                    continue
 
                 # update test functions discovered by collector or named with test* prefix
                 if mname.startswith("test") or member in cls_info.test_methods:
@@ -179,22 +177,16 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                                 return True
                         return False
 
-                    # Keep the original first parameter (self/cls) so the
-                    # converted module remains runnable by default. The
-                    # autouse attach fixture will ensure pytest runs still
-                    # receive fixture values via request.getfixturevalue.
-                    # In strict mode, convert to plain functions (remove first param and add fixtures)
-                    updated_fn = _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
+                    # Convert TestCase methods into plain pytest functions
+                    _update_test_function(member, fixture_names, remove_first=True)
                     # Ensure one blank line between methods inside the class
                     if new_class_body:
                         last = new_class_body[-1]
                         # If the last appended element is not an EmptyLine, insert one
                         if not isinstance(last, cst.EmptyLine):
                             new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
-                    # Retain updated method only in compat mode; in strict mode we will
-                    # drop the class and rely on top-level functions.
-                    if not strict_pytest_mode:
-                        new_class_body.append(updated_fn)
+                    # In strict mode we will drop the class and rely on
+                    # top-level functions generated below.
                     continue
 
                 # otherwise retain the member unchanged
@@ -205,10 +197,8 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                         new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                 new_class_body.append(member)
 
-            # Emit class only in compat mode; strict mode drops the class entirely
-            if not strict_pytest_mode:
-                new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
-                new_body.append(new_class)
+            # In strict mode we drop the original unittest.TestCase class
+            # entirely and instead emit top-level pytest functions below.
             # Create top-level pytest functions for each test method when the
             # class originally inherited from unittest.TestCase. These functions
             # accept fixture parameters and contain a rewritten body where
@@ -234,8 +224,8 @@ def fixtures_stage(context: dict[str, Any]) -> dict[str, Any]:
                         return True
                 return False
 
-            # In strict mode we always emit top-level pytest functions for
-            # each test method and do not retain the original unittest class.
+            # Emit top-level pytest functions for each test method and do
+            # not retain the original unittest class.
             if _class_inherits_unittest_testcase_from_original(cls_original):
                 for member in stmt.body.body:
                     if not isinstance(member, cst.FunctionDef):

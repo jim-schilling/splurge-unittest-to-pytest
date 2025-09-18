@@ -1,0 +1,12 @@
+from typing import NamedTuple
+import pytest
+
+
+class Person(NamedTuple):
+    name: str
+    age: int
+
+
+@pytest.fixture
+def sample_person() -> Person:
+    return Person(name='Alice', age=30)

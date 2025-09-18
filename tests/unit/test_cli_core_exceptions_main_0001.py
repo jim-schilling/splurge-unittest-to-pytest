@@ -23,7 +23,7 @@ def test_verbose_dry_run_shows_all_diff_summary_branches(monkeypatch, tmp_path):
     converted = "import pytest\nclass X:\n    def test(self):\n        assert True\n"
     f.write_text(original)
 
-    def fake_convert_string(src, autocreate=True, pattern_config=None):
+    def fake_convert_string(src, *, autocreate=True, pattern_config=None):
         return ConversionResult(original_code=original, converted_code=converted, has_changes=True, errors=[])
 
     monkeypatch.setattr("splurge_unittest_to_pytest.main.convert_string", fake_convert_string, raising=False)

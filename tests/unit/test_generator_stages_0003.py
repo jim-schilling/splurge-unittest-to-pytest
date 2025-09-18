@@ -1,13 +1,13 @@
 from __future__ import annotations
+
 import libcst as cst
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
 from splurge_unittest_to_pytest.stages.collector import Collector
+from libcst import MetadataWrapper
 
 # consolidated fragments sometimes duplicated imports with different styles;
 # prefer the explicit `generator_stage` import and keep `generator` separate.
-from libcst import MetadataWrapper
-from splurge_unittest_to_pytest.stages.generator import generator
 
 
 def test_fixture_param_detects_temp_dir_name():
@@ -365,7 +365,7 @@ def test_temp_dirs_composite_generated():
     _ = res.get("needs_typing_names", [])
 
 
-def make_collector_out(setup_assignments, local_assignments=None, teardown_statements=None):
+def make_collector_out(setup_assignments, *, local_assignments=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("MyTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -394,7 +394,7 @@ def test_infers_filename_from_positional_literal():
         "sql_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("sql_file"))]),
         "sql_content": cst.SimpleString('"create"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "schema.sql" in code
@@ -410,7 +410,7 @@ def test_infers_filename_from_keyword_arg():
         "data_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("data_file"))]),
         "data_content": cst.SimpleString('"x"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "data.json" in code
@@ -426,7 +426,7 @@ def test_infers_filename_from_path_constructor():
         "file_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("file_file"))]),
         "file_content": cst.SimpleString('"ok"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "file.sql" in code
@@ -439,13 +439,13 @@ def test_no_autocreate_respected():
         "sql_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("sql_file"))]),
         "sql_content": cst.SimpleString('"create"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": False}
     code = render_fixture_nodes_from_stage(context)
     assert "schema.sql" not in code
 
 
-def make_collector_out__01(setup_assignments, local_map=None, teardown_statements=None):
+def make_collector_out__01(setup_assignments, *, local_map=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("LitTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -470,7 +470,7 @@ def test_infers_list_literal_homogeneous_strings():
             elements=[cst.Element(value=cst.SimpleString('"a"')), cst.Element(value=cst.SimpleString('"b"'))]
         )
     }
-    co = make_collector_out__01(setup)
+    co = make_collector_out__01(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))
@@ -483,7 +483,7 @@ def test_infers_tuple_literal_heterogeneous():
     setup = {
         "pair": cst.Tuple(elements=[cst.Element(value=cst.SimpleString('"x"')), cst.Element(value=cst.Integer("1"))])
     }
-    co = make_collector_out__01(setup)
+    co = make_collector_out__01(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))
@@ -494,7 +494,7 @@ def test_infers_tuple_literal_heterogeneous():
 
 def test_infers_set_literal():
     setup = {"s": cst.Set(elements=[cst.Element(value=cst.Integer("1")), cst.Element(value=cst.Integer("2"))])}
-    co = make_collector_out__01(setup)
+    co = make_collector_out__01(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))
@@ -559,7 +559,7 @@ def test_local_name_determinism() -> None:
     assert ("_x_value" in s or "_x_value_1" in s) or ("yield 1" in s and "x = None" in s)
 
 
-def make_collector_out__02(setup_assignments, local_map=None, teardown_statements=None):
+def make_collector_out__02(setup_assignments, *, local_map=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("NestedTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -576,7 +576,7 @@ def test_infers_nested_list_of_list():
     inner = cst.List(elements=[cst.Element(value=cst.SimpleString('"a"'))])
     outer = cst.List(elements=[cst.Element(value=inner)])
     setup = {"matrix": outer}
-    co = make_collector_out__02(setup)
+    co = make_collector_out__02(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))
@@ -676,7 +676,7 @@ def test_per_attribute_and_mkdtemp_preserved():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "temp_dir" in names
     assert "config_dir" in names
@@ -691,7 +691,7 @@ def test_per_attribute_fixture_when_not_dir_like():
         "main_config": cst.Dict(elements=[cst.DictElement(key=cst.SimpleString('"k"'), value=cst.SimpleString('"v"'))])
     }
     out = _make_collector_output_for_sample(attrs, [])
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "main_config" in names
     module = cst.Module(body=res["fixture_nodes"])
@@ -706,7 +706,7 @@ def test_literal_yield_and_teardown():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     found = False
     for n in nodes:
@@ -734,7 +734,7 @@ def test_non_literal_binds_local_and_cleanup_refs_local():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     for n in nodes:
         if n.name.value == "path":
@@ -758,7 +758,7 @@ def test_mkdir_preserved_in_fixture():
     ci.teardown_statements = []
     out = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     out.classes["TestMk"] = ci
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     for n in res["fixture_nodes"]:
         if isinstance(n, cst.FunctionDef) and n.name.value == "d":
             module = cst.Module(body=[n])
@@ -798,7 +798,7 @@ def test_typing_names_and_shutil_flag():
         )
     ]
     out = _make_collector_output__01(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = res.get("needs_typing_names", [])
     assert "Dict" in names or "Any" in names
     assert res.get("needs_shutil_import", False) is True
@@ -860,7 +860,7 @@ def test_generator_stage_minimal_integration():
         module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
     )
     ctx = {"collector_output": out, "module": module}
-    res = generator(ctx)
+    res = generator_stage(ctx)
     assert "fixture_specs" in res
     assert "fixture_nodes" in res
 
@@ -878,7 +878,7 @@ def test_multi_assigned_forces_binding_and_local_assignment():
     cleanup = cst.parse_statement("self.x = None")
     cls_info.teardown_statements = [cleanup]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "x" in specs
@@ -892,7 +892,7 @@ def test_literal_yield_without_module_collision_rewrites_cleanup_to_fixture_name
     cls_info.setup_assignments = {"a": [cst.Integer("5")]}
     cls_info.teardown_statements = [cst.parse_statement("self.a = None")]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     nodes = res.get("fixture_nodes")
     assert nodes, "expected fixture node for 'a'"
     rendered = cst.Module(body=[nodes[0]]).code
@@ -906,7 +906,7 @@ def test_module_collision_forces_binding_even_for_literal():
     cls_info.setup_assignments = {"a": [cst.Integer("7")]}
     cls_info.teardown_statements = [cst.parse_statement("self.a = None")]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "a" in specs
@@ -920,7 +920,7 @@ def test_name_collision_skips_fixture_node_creation_but_records_spec():
     cls_info.setup_assignments = {"a": [cst.Integer("9")]}
     cls_info.teardown_statements = []
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "a" in specs
     assert "a" in specs
