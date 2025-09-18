@@ -1,5 +1,5 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator import generator
+from splurge_unittest_to_pytest.stages.generator import generator_stage
 from splurge_unittest_to_pytest.stages import fixture_injector, assertion_rewriter, import_injector
 from splurge_unittest_to_pytest.stages.collector import Collector, CollectorOutput
 
@@ -15,7 +15,7 @@ def test_references_attribute_detects_in_if_call_and_subscript():
     out = CollectorOutput(
         module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
     )
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "v" in specs
     assert specs["v"].cleanup_statements, "teardown statements referencing attribute should be detected"
@@ -30,7 +30,7 @@ def test_delete_detection_and_rendered_fallback():
     out = CollectorOutput(
         module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
     )
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "y" in specs
     assert specs["y"].cleanup_statements, "del statements should be considered cleanup"
@@ -44,7 +44,7 @@ def test_non_literal_return_binds_to_local_and_returns_local():
     out = CollectorOutput(
         module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=False
     )
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "a" in specs
@@ -59,7 +59,7 @@ def test_pipeline_integration_basic_flow():
     collector = Collector()
     wrapper.visit(collector)
     out = collector.as_output()
-    gen_res = generator({"collector_output": out, "module": module})
+    gen_res = generator_stage({"collector_output": out, "module": module})
     fixture_nodes = gen_res.get("fixture_nodes") or []
     inj_res = fixture_injector.fixture_injector_stage(
         {"module": module, "fixture_nodes": fixture_nodes, "collector_output": out}

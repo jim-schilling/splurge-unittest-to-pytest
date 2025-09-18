@@ -21,7 +21,7 @@ import libcst as cst
 from .collector import Collector
 from ..types import PipelineContext
 
-from .generator import generator as generator_stage
+from .generator import generator_stage
 from .fixture_injector import fixture_injector_stage
 from .rewriter import rewriter_stage
 from .import_injector import import_injector_stage
@@ -69,13 +69,9 @@ def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: An
     # accepts PipelineContext callables.
     mgr.register(collect_stage)
 
-    # Generic wrapper to adapt any stage (typed or untyped) into the
-    # manager-expected Callable[[dict[str, Any]], dict[str, Any]]. We
-    # cast inputs/outputs conservatively inside the adapter so stages can
-    # be gradually migrated to PipelineContext without changing the
-    # manager's public API.
-    # Adapters removed — stages are registered directly as
-    # Callable[[PipelineContext], PipelineContext]
+    # The StageManager now accepts PipelineContext-typed callables and
+    # stages are registered directly. Backward-compat adapter wrappers
+    # have been removed as part of the strict-only migration.
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage

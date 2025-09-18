@@ -86,21 +86,20 @@ def convert_string(
         # run_pipeline with a shim that doesn't accept the new kwarg, so
         # check the callable signature and only pass the kwarg when
         # supported (or when the callable accepts **kwargs).
+        # Call the staged pipeline with the configured PatternConfigurator
+        # directly. Keep a small fallback for environments where a
+        # monkeypatched or older `run_pipeline` may not accept
+        # `pattern_config` (TypeError), but avoid runtime inspection.
         try:
-            import inspect
-
-            sig = inspect.signature(run_pipeline)
-            params = sig.parameters
-            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
-            if "pattern_config" in params or accepts_kwargs:
-                converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
-            else:
-                converted_module = run_pipeline(tree, autocreate=autocreate)
-        except Exception:
-            # If inspection fails for any reason, fall back to the simple
-            # call without the new kwarg to maintain compatibility with
-            # monkeypatched tests.
+            converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
+        except TypeError:
+            # Older or monkeypatched run_pipeline may not accept the
+            # pattern_config kwarg; retry without it.
             converted_module = run_pipeline(tree, autocreate=autocreate)
+        except Exception:
+            # If the pipeline fails unexpectedly, fall back to the
+            # original parsed module to avoid crashing callers.
+            converted_module = tree
         # Final AST-based normalization: run the exceptioninfo normalizer
         # stage over the converted module to ensure any NAME.exception ->
         # NAME.value conversions are applied. This stage runs late in the

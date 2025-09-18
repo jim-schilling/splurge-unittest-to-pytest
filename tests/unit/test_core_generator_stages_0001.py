@@ -4,7 +4,7 @@ from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassIn
 
 
 def test_generator_empty_context():
-    assert gen.generator({}) == {}
+    assert gen.generator_stage({}) == {}
 
 
 def test_is_literal_checks():
@@ -21,7 +21,7 @@ def test_generator_creates_fixture_for_dir_like(tmp_path):
     ci.setup_assignments = {"tmp_dir": [cst.Call(func=cst.Name("Path"), args=[cst.Arg(value=cst.SimpleString("'p'"))])]}
     ci.teardown_statements = []
     out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"TestX": ci})
-    res = gen.generator({"collector_output": out})
+    res = gen.generator_stage({"collector_output": out})
     assert isinstance(res, dict)
     assert "fixture_specs" in res and "fixture_nodes" in res
     assert "tmp_dir" in res["fixture_specs"]

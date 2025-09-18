@@ -627,7 +627,3 @@ def generator_stage(context: PipelineContext) -> PipelineContext:
     # piece. Cast to PipelineContext to satisfy staged pipeline typing until
     # GeneratorCore is fully typed.
     return cast(PipelineContext, core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing))
-
-
-# Backwards-compatible alias used by the pipeline and older callers
-generator = generator_stage

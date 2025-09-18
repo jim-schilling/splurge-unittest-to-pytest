@@ -1,6 +1,6 @@
 import libcst as cst
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
-from splurge_unittest_to_pytest.stages.generator import generator
+from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 module = cst.Module([])
 ci = ClassInfo(node=cst.ClassDef(name=cst.Name("TestDirs"), body=cst.IndentedBlock(body=[])))
@@ -29,7 +29,7 @@ teardown = [
 ]
 ci.teardown_statements = teardown
 out = CollectorOutput(module=module, module_docstring_index=None, imports=[], classes={"TestDirs": ci})
-res = generator({"collector_output": out})
+res = generator_stage({"collector_output": out, "module": module})
 print("keys:", list(res.keys()))
 fnodes = [n for n in res.get("fixture_nodes", []) if isinstance(n, cst.FunctionDef)]
 print("fixture count:", len(fnodes))

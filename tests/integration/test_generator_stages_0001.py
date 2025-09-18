@@ -1,7 +1,7 @@
 import libcst as cst
 from libcst import MetadataWrapper
 from splurge_unittest_to_pytest.stages.collector import ClassInfo, CollectorOutput, Collector
-from splurge_unittest_to_pytest.stages.generator import generator_stage, generator
+from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 
 def test_generator_stage_basic_fixture_and_shutil_detection():
@@ -34,7 +34,7 @@ def test_generator_creates_fixture_from_collector_and_handles_collision():
     wrapper.visit(coll)
     out = coll.as_output()
     ctx = {"collector_output": out, "module": module}
-    res = generator(ctx)
+    res = generator_stage(ctx)
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "a" in specs
@@ -51,7 +51,7 @@ def test_complex_cleanup_with_conditionals():
     coll = Collector()
     wrapper.visit(coll)
     out = coll.as_output()
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs", {})
     assert "x" in specs
     assert specs["x"].yield_style is True
@@ -64,7 +64,7 @@ def test_namedtuple_bundling_from_same_call():
     coll = Collector()
     wrapper.visit(coll)
     out = coll.as_output()
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     nodes = res.get("fixture_nodes", [])
     has_namedtuple = any((isinstance(n, cst.ClassDef) and n.name.value.endswith("Data") for n in nodes))
     has_fixture = any((isinstance(n, cst.FunctionDef) and n.name.value.endswith("_data") for n in nodes))
@@ -78,7 +78,7 @@ def test_yield_style_cleanup_rewrite():
     coll = Collector()
     wrapper.visit(coll)
     out = coll.as_output()
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res["fixture_specs"]
     assert "x" in specs
     spec = specs["x"]
@@ -92,7 +92,7 @@ def test_parameterized_fixture_replaces_self_attr_with_param():
     coll = Collector()
     wrapper.visit(coll)
     out = coll.as_output()
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     nodes = res.get("fixture_nodes", [])
     found = False
     for n in nodes:

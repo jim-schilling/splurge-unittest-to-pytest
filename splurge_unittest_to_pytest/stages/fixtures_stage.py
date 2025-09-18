@@ -122,7 +122,6 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     # This stage operates in strict pytest mode: drop unittest.TestCase
     # classes, remove setUp/tearDown methods, and emit top-level pytest
     # functions that accept fixture parameters.
-    strict_pytest_mode = True
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
@@ -174,7 +173,7 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
                         return False
 
                     # Convert TestCase methods into plain pytest functions
-                    _update_test_function(member, fixture_names, remove_first=strict_pytest_mode)
+                    _update_test_function(member, fixture_names, remove_first=True)
                     # Ensure one blank line between methods inside the class
                     if new_class_body:
                         last = new_class_body[-1]
@@ -193,10 +192,8 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
                         new_class_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, cst.EmptyLine()))
                 new_class_body.append(member)
 
-            # Emit class only in compat mode; strict mode drops the class entirely
-            if not strict_pytest_mode:
-                new_class = stmt.with_changes(body=stmt.body.with_changes(body=new_class_body))
-                new_body.append(new_class)
+            # In strict mode we drop the original unittest.TestCase class
+            # entirely and instead emit top-level pytest functions below.
             # Create top-level pytest functions for each test method when the
             # class originally inherited from unittest.TestCase. These functions
             # accept fixture parameters and contain a rewritten body where
@@ -222,8 +219,8 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
                         return True
                 return False
 
-            # In strict mode we always emit top-level pytest functions for
-            # each test method and do not retain the original unittest class.
+            # Emit top-level pytest functions for each test method and do
+            # not retain the original unittest class.
             if _class_inherits_unittest_testcase_from_original(cls_original):
                 for member in stmt.body.body:
                     if not isinstance(member, cst.FunctionDef):

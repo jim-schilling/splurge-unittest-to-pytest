@@ -7,7 +7,6 @@ from splurge_unittest_to_pytest.stages.collector import Collector
 # consolidated fragments sometimes duplicated imports with different styles;
 # prefer the explicit `generator_stage` import and keep `generator` separate.
 from libcst import MetadataWrapper
-from splurge_unittest_to_pytest.stages.generator import generator
 
 
 def test_fixture_param_detects_temp_dir_name():
@@ -676,7 +675,7 @@ def test_per_attribute_and_mkdtemp_preserved():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "temp_dir" in names
     assert "config_dir" in names
@@ -691,7 +690,7 @@ def test_per_attribute_fixture_when_not_dir_like():
         "main_config": cst.Dict(elements=[cst.DictElement(key=cst.SimpleString('"k"'), value=cst.SimpleString('"v"'))])
     }
     out = _make_collector_output_for_sample(attrs, [])
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = [n.name.value for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     assert "main_config" in names
     module = cst.Module(body=res["fixture_nodes"])
@@ -706,7 +705,7 @@ def test_literal_yield_and_teardown():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     found = False
     for n in nodes:
@@ -734,7 +733,7 @@ def test_non_literal_binds_local_and_cleanup_refs_local():
         )
     ]
     out = _make_collector_output_for_sample(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     nodes = [n for n in res["fixture_nodes"] if isinstance(n, cst.FunctionDef)]
     for n in nodes:
         if n.name.value == "path":
@@ -758,7 +757,7 @@ def test_mkdir_preserved_in_fixture():
     ci.teardown_statements = []
     out = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     out.classes["TestMk"] = ci
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     for n in res["fixture_nodes"]:
         if isinstance(n, cst.FunctionDef) and n.name.value == "d":
             module = cst.Module(body=[n])
@@ -798,7 +797,7 @@ def test_typing_names_and_shutil_flag():
         )
     ]
     out = _make_collector_output__01(attrs, teardown)
-    res = generator({"collector_output": out})
+    res = generator_stage({"collector_output": out})
     names = res.get("needs_typing_names", [])
     assert "Dict" in names or "Any" in names
     assert res.get("needs_shutil_import", False) is True
@@ -860,7 +859,7 @@ def test_generator_stage_minimal_integration():
         module=module, module_docstring_index=None, imports=[], classes={"C": cls_info}, has_unittest_usage=True
     )
     ctx = {"collector_output": out, "module": module}
-    res = generator(ctx)
+    res = generator_stage(ctx)
     assert "fixture_specs" in res
     assert "fixture_nodes" in res
 
@@ -878,7 +877,7 @@ def test_multi_assigned_forces_binding_and_local_assignment():
     cleanup = cst.parse_statement("self.x = None")
     cls_info.teardown_statements = [cleanup]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "x" in specs
@@ -892,7 +891,7 @@ def test_literal_yield_without_module_collision_rewrites_cleanup_to_fixture_name
     cls_info.setup_assignments = {"a": [cst.Integer("5")]}
     cls_info.teardown_statements = [cst.parse_statement("self.a = None")]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     nodes = res.get("fixture_nodes")
     assert nodes, "expected fixture node for 'a'"
     rendered = cst.Module(body=[nodes[0]]).code
@@ -906,7 +905,7 @@ def test_module_collision_forces_binding_even_for_literal():
     cls_info.setup_assignments = {"a": [cst.Integer("7")]}
     cls_info.teardown_statements = [cst.parse_statement("self.a = None")]
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     nodes = res.get("fixture_nodes")
     assert "a" in specs
@@ -920,7 +919,7 @@ def test_name_collision_skips_fixture_node_creation_but_records_spec():
     cls_info.setup_assignments = {"a": [cst.Integer("9")]}
     cls_info.teardown_statements = []
     out = _make_collector_output__02(module, cls_info)
-    res = generator({"collector_output": out, "module": module})
+    res = generator_stage({"collector_output": out, "module": module})
     specs = res.get("fixture_specs")
     assert "a" in specs
     assert "a" in specs
