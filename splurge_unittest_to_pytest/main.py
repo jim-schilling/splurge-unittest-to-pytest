@@ -531,6 +531,19 @@ def find_unittest_files(
         if not file_path.is_file():
             continue
 
+        # Respect follow_symlinks: when disabled, skip symbolic links
+        # to avoid discovering linked files on platforms where os.walk
+        # may still list symlink files (followlinks controls directory
+        # traversal, not whether file symlinks appear in listings).
+        if not follow_symlinks:
+            try:
+                if file_path.is_symlink():
+                    continue
+            except Exception:
+                # If we cannot determine symlink status, be conservative
+                # and skip the entry rather than risk following it.
+                continue
+
         # Quick check: try reading a small chunk as UTF-8 to detect binary/unreadable files.
         try:
             with file_path.open("r", encoding="utf-8") as fh:

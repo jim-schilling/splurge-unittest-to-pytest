@@ -44,8 +44,11 @@ def atomic_write(
     """
     # Create parent dir if missing
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    tmp = path.with_name(path.name + ".tmp")
+    # Use a unique temporary filename to avoid clashes and races when
+    # multiple writers operate in the same directory (tests may run
+    # concurrently on CI). Keep tmp file in same directory to allow
+    # atomic replace/rename on the same filesystem.
+    tmp = path.with_name(f"{path.name}.tmp-{uuid4().hex}")
     if isinstance(data, str):
         if encoding is None:
             raise ValueError("encoding must be provided when writing text")
@@ -142,7 +145,20 @@ def safe_file_writer(path: Path, *, encoding: str = "utf-8") -> TextWriterProtoc
 
     # Reject root-like targets (e.g., C:\ or /)
     try:
-        if resolved.parent == resolved:
+        # On Windows, root drives resolve to paths whose parent == self
+        # On UNIX, top-level files like '/foo' have parent == Path('/') which
+        # is not equal to resolved, so additionally reject targets whose
+        # parent is the filesystem root to avoid writing directly under '/'.
+        try:
+            parent = resolved.parent
+        except Exception:
+            parent = None
+
+        if parent is None:
+            raise ValueError(f"Refusing to write to uncertain path: {path}")
+
+        # Reject if path is the filesystem root or direct child of root
+        if parent == resolved or parent == parent.parent and str(parent) in ("/", "\\"):
             raise ValueError(f"Refusing to write to root path: {resolved}")
     except Exception:
         # If we cannot determine parent reliably, be conservative and reject
