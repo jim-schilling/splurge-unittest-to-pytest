@@ -4,15 +4,12 @@
 [![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-[![Tests](https://img.shields.io/badge/tests-139%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
-[![Code Coverage](https://img.shields.io/badge/coverage-82%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Tests](https://img.shields.io/badge/tests-1096%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Coverage](https://img.shields.io/badge/coverage-86%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+
 [![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
 
-[![Quick checks](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml/badge.svg?query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
-[![Coverage workflow](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml/badge.svg?query=workflow%3A%22Coverage+%28main+branch+only%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
-[![Quick status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/ci.yml?label=quick&style=flat-square&query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
-[![Coverage status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/coverage.yml?label=coverage&style=flat-square)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
 
 A small library and CLI tool to convert unittest-style tests into strict pytest-style tests while preserving formatting and comments using libcst.
 
@@ -176,8 +173,10 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 [![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-[![Tests](https://img.shields.io/badge/tests-139%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
-[![Code Coverage](https://img.shields.io/badge/coverage-82%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Tests](https://img.shields.io/badge/tests-1096%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+<!-- Test count updated from reports/junit.xml on 2025-09-18 (1102 total, 6 skipped → 1096 passed) -->
+[![Code Coverage](https://img.shields.io/badge/coverage-86%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+<!-- Coverage updated automatically from reports/coverage.xml on 2025-09-18 -->
 [![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
 
