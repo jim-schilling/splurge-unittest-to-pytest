@@ -110,7 +110,7 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
     multiple=True,
     help="Test method patterns (comma-separated or multiple flags)",
 )
-# Compatibility mode removed: CLI always emits strict pytest-style output.
+# Legacy compatibility toggles removed: CLI emits strict pytest-style output by default.
 @click.option(
     "--autocreate/--no-autocreate",
     default=True,
@@ -286,7 +286,7 @@ def main(
                     # construct a PatternConfigurator for the pipeline.
                     result = convert_file(
                         file_path,
-                        output_path,
+                        output_path=output_path,
                         encoding=encoding,
                         autocreate=autocreate,
                         setup_patterns=setup_patterns or None,

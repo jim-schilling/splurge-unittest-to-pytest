@@ -173,11 +173,11 @@ def find_test_files() -> List[Path]:
     return [p for p in TESTS.rglob("*.py") if "__pycache__" not in p.parts]
 
 
-def main() -> int:
+def main(*, argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--apply", action="store_true")
     p.add_argument("--limit", type=int, default=0)
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     files = find_test_files()
     changed = 0
@@ -196,4 +196,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # call using keyword to match keyword-only signature
+    raise SystemExit(main(argv=None))

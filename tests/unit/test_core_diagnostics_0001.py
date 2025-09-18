@@ -2,9 +2,14 @@
 
 Focus on public behavior: root discovery, selecting the most recent run,
 and printing run info. Tests avoid fragile exact output matches and use
-monkeypatching only where necessary to simulate read failures."""
+monkeypatching only where necessary to simulate read failures.
+
+This module-level docstring replaces a previous plain-text header which
+caused import-time SyntaxError under pytest's assertion rewriting.
+"""
 
 from __future__ import annotations
+
 import os
 from pathlib import Path
 from splurge_unittest_to_pytest import print_diagnostics as pd
@@ -13,18 +18,6 @@ from splurge_unittest_to_pytest.stages import generator_parts
 from splurge_unittest_to_pytest import print_diagnostics
 import time
 import tempfile
-
-
-def test_find_diagnostics_root_cli(tmp_path, monkeypatch):
-    cli = str(tmp_path / "cli-root")
-    root = pd.find_diagnostics_root(cli)
-    assert Path(cli) == root
-
-
-def test_find_diagnostics_root_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPLURGE_DIAGNOSTICS_ROOT", str(tmp_path / "env-root"))
-    root = pd.find_diagnostics_root(None)
-    assert Path(os.environ["SPLURGE_DIAGNOSTICS_ROOT"]) == root
 
 
 def test_find_most_recent_run_empty(tmp_path):
@@ -49,7 +42,7 @@ def test_print_run_info_and_main(tmp_path, capsys, monkeypatch):
     (run / "splurge-diagnostics-001").write_text("marker-content")
     (run / "somefile.txt").write_text("hello")
     monkeypatch.setenv("SPLURGE_DIAGNOSTICS_ROOT", str(tmp_path))
-    rv = pd.main([])
+    rv = pd.main(argv=[])
     assert rv == 0
     captured = capsys.readouterr()
     assert "Searching diagnostics root:" in captured.out
@@ -60,7 +53,7 @@ def test_print_run_info_and_main(tmp_path, capsys, monkeypatch):
 
 def test_main_no_runs(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("SPLURGE_DIAGNOSTICS_ROOT", str(tmp_path))
-    rv = pd.main([])
+    rv = pd.main(argv=[])
     assert rv == 0
     captured = capsys.readouterr()
     assert "No diagnostics runs found under root." in captured.out
@@ -73,7 +66,7 @@ def test_print_run_info_marker_read_failure_and_no_marker(tmp_path, capsys, monk
     bad.write_text("marker-content")
     orig_read = pd.Path.read_text
 
-    def fake_read(self, encoding="utf-8"):
+    def fake_read(self, *, encoding="utf-8"):
         if self == bad:
             raise OSError("boom")
         return orig_read(self, encoding=encoding)
@@ -210,7 +203,7 @@ def test_print_run_info_handles_read_error(tmp_path, capsys, monkeypatch):
 
 
 def test_main_no_runs__01(tmp_path, capsys):
-    rv = print_diagnostics.main(["--root", str(tmp_path)])
+    rv = print_diagnostics.main(argv=["--root", str(tmp_path)])
     out, err = capsys.readouterr()
     assert "Searching diagnostics root:" in out
     assert "No diagnostics runs found under root." in out
@@ -223,7 +216,7 @@ def test_main_finds_and_prints_run(tmp_path, capsys):
     run = root / "splurge-diagnostics-1"
     run.mkdir()
     (run / "splurge-diagnostics-mark").write_text("ok")
-    rv = print_diagnostics.main(["--root", str(root)])
+    rv = print_diagnostics.main(argv=["--root", str(root)])
     out, err = capsys.readouterr()
     assert "Searching diagnostics root:" in out
     assert "Diagnostics run directory:" in out

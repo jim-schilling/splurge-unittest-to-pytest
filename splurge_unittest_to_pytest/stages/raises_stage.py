@@ -34,7 +34,10 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
     accesses accordingly while respecting lexical shadowing.
     """
 
-    def __init__(self, target_name: str) -> None:
+    def __init__(
+        self,
+        target_name: str,
+    ) -> None:
         super().__init__()
         self._target = target_name
         # lexical scope stack for shadowing checks
@@ -55,7 +58,10 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
         except Exception:
             return False
 
-    def visit_FunctionDef(self, node: cst.FunctionDef) -> Any:
+    def visit_FunctionDef(
+        self,
+        node: cst.FunctionDef,
+    ) -> Any:
         self._scope_stack.append(set())
         try:
             params = node.params
@@ -72,7 +78,11 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
             pass
         return node
 
-    def leave_FunctionDef(self, original: cst.FunctionDef, updated: cst.FunctionDef) -> cst.FunctionDef:
+    def leave_FunctionDef(
+        self,
+        original: cst.FunctionDef,
+        updated: cst.FunctionDef,
+    ) -> cst.FunctionDef:
         try:
             if self._scope_stack:
                 self._scope_stack.pop()
@@ -80,7 +90,10 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
             pass
         return updated
 
-    def visit_Lambda(self, node: cst.Lambda) -> Any:
+    def visit_Lambda(
+        self,
+        node: cst.Lambda,
+    ) -> Any:
         self._scope_stack.append(set())
         try:
             params = node.params
@@ -91,7 +104,11 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
             pass
         return node
 
-    def leave_Lambda(self, original: cst.Lambda, updated: cst.Lambda) -> cst.Lambda:
+    def leave_Lambda(
+        self,
+        original: cst.Lambda,
+        updated: cst.Lambda,
+    ) -> cst.Lambda:
         try:
             if self._scope_stack:
                 self._scope_stack.pop()
@@ -99,7 +116,11 @@ class ExceptionAttrRewriter(cst.CSTTransformer):
             pass
         return updated
 
-    def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.Attribute:
+    def leave_Attribute(
+        self,
+        original: cst.Attribute,
+        updated: cst.Attribute,
+    ) -> cst.Attribute:
         try:
             if isinstance(updated.value, cst.Name) and updated.value.value == self._target:
                 # do not rewrite if the name is shadowed in the current scope
@@ -154,7 +175,11 @@ class RaisesRewriter(cst.CSTTransformer):
             # be defensive: do not fail traversal on unexpected node shapes
             return None
 
-    def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
+    def leave_With(
+        self,
+        original_node: cst.With,
+        updated_node: cst.With,
+    ) -> cst.With:
         # handle with self.assertRaises(...) as cm: or without 'as'
         if not updated_node.items:
             return updated_node
@@ -200,7 +225,11 @@ class RaisesRewriter(cst.CSTTransformer):
 
         return updated_node.with_changes(items=new_items)
 
-    def leave_Attribute(self, original: cst.Attribute, updated: cst.Attribute) -> cst.Attribute:
+    def leave_Attribute(
+        self,
+        original: cst.Attribute,
+        updated: cst.Attribute,
+    ) -> cst.Attribute:
         # Globally rewrite NAME.exception -> NAME.value for any NAME recorded
         try:
             if isinstance(updated.value, cst.Name):
@@ -249,7 +278,11 @@ class RaisesRewriter(cst.CSTTransformer):
             pass
         return node
 
-    def leave_FunctionDef(self, original: cst.FunctionDef, updated: cst.FunctionDef) -> cst.FunctionDef:
+    def leave_FunctionDef(
+        self,
+        original: cst.FunctionDef,
+        updated: cst.FunctionDef,
+    ) -> cst.FunctionDef:
         # leaving a function pops the lexical scope
         try:
             if self._scope_stack:
@@ -270,7 +303,11 @@ class RaisesRewriter(cst.CSTTransformer):
             pass
         return node
 
-    def leave_Lambda(self, original: cst.Lambda, updated: cst.Lambda) -> cst.Lambda:
+    def leave_Lambda(
+        self,
+        original: cst.Lambda,
+        updated: cst.Lambda,
+    ) -> cst.Lambda:
         try:
             if self._scope_stack:
                 self._scope_stack.pop()
@@ -299,7 +336,11 @@ class RaisesRewriter(cst.CSTTransformer):
             pass
         return node
 
-    def leave_ListComp(self, original: cst.ListComp, updated: cst.ListComp) -> cst.ListComp:
+    def leave_ListComp(
+        self,
+        original: cst.ListComp,
+        updated: cst.ListComp,
+    ) -> cst.ListComp:
         try:
             if self._scope_stack:
                 self._scope_stack.pop()
@@ -309,11 +350,19 @@ class RaisesRewriter(cst.CSTTransformer):
 
     # Use Any return to accommodate libcst typed-visitor signature differences
     # across versions while keeping runtime behavior unchanged.
-    def leave_Expr(self, original_node: cst.Expr, updated_node: cst.Expr) -> Any:
+    def leave_Expr(
+        self,
+        original_node: cst.Expr,
+        updated_node: cst.Expr,
+    ) -> Any:
         # non-functional expressions: nothing to do here
         return updated_node
 
-    def leave_SimpleStatementLine(self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine) -> Any:
+    def leave_SimpleStatementLine(
+        self,
+        original: cst.SimpleStatementLine,
+        updated: cst.SimpleStatementLine,
+    ) -> Any:
         # handle functional form: self.assertRaises(E, func, *args) occurring as
         # a bare statement line. Replace the entire SimpleStatementLine with a
         # With compound statement via FlattenSentinel so codegen remains valid.

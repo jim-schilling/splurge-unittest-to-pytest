@@ -3,9 +3,11 @@
 These tests focus on public helper behavior: return annotations for
 simple literals, binding behavior for complex values, cleanup name
 replacement, guard emission for self-referential placeholders, and
-autocreated file fixture shape."""
+autocreated file fixture shape.
+"""
 
 from __future__ import annotations
+
 from splurge_unittest_to_pytest.converter.method_patterns import (
     normalize_method_name,
     is_setup_method,

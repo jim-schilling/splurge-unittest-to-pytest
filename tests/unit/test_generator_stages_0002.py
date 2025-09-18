@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 import libcst as cst
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
 from splurge_unittest_to_pytest.stages.collector import Collector
+from libcst import MetadataWrapper
 
 # consolidated fragments sometimes duplicated imports with different styles;
 # prefer the explicit `generator_stage` import and keep `generator` separate.
-from libcst import MetadataWrapper
 
 
 def test_fixture_param_detects_temp_dir_name():
@@ -364,7 +365,7 @@ def test_temp_dirs_composite_generated():
     _ = res.get("needs_typing_names", [])
 
 
-def make_collector_out(setup_assignments, local_assignments=None, teardown_statements=None):
+def make_collector_out(setup_assignments, *, local_assignments=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("MyTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -393,7 +394,7 @@ def test_infers_filename_from_positional_literal():
         "sql_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("sql_file"))]),
         "sql_content": cst.SimpleString('"create"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "schema.sql" in code
@@ -409,7 +410,7 @@ def test_infers_filename_from_keyword_arg():
         "data_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("data_file"))]),
         "data_content": cst.SimpleString('"x"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "data.json" in code
@@ -425,7 +426,7 @@ def test_infers_filename_from_path_constructor():
         "file_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("file_file"))]),
         "file_content": cst.SimpleString('"ok"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
     code = render_fixture_nodes_from_stage(context)
     assert "file.sql" in code
@@ -438,13 +439,13 @@ def test_no_autocreate_respected():
         "sql_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("sql_file"))]),
         "sql_content": cst.SimpleString('"create"'),
     }
-    co = make_collector_out(setup, local_map)
+    co = make_collector_out(setup, local_assignments=local_map)
     context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": False}
     code = render_fixture_nodes_from_stage(context)
     assert "schema.sql" not in code
 
 
-def make_collector_out__01(setup_assignments, local_map=None, teardown_statements=None):
+def make_collector_out__01(setup_assignments, *, local_map=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("LitTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -469,7 +470,7 @@ def test_infers_list_literal_homogeneous_strings():
             elements=[cst.Element(value=cst.SimpleString('"a"')), cst.Element(value=cst.SimpleString('"b"'))]
         )
     }
-    co = make_collector_out__01(setup)
+    co = make_collector_out__01(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))
@@ -558,7 +559,7 @@ def test_local_name_determinism() -> None:
     assert ("_x_value" in s or "_x_value_1" in s) or ("yield 1" in s and "x = None" in s)
 
 
-def make_collector_out__02(setup_assignments, local_map=None, teardown_statements=None):
+def make_collector_out__02(setup_assignments, *, local_map=None, teardown_statements=None):
     co = CollectorOutput(module=cst.Module([]), module_docstring_index=None, imports=[])
     class_node = cst.ClassDef(
         name=cst.Name("NestedTest"), body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
@@ -575,7 +576,7 @@ def test_infers_nested_list_of_list():
     inner = cst.List(elements=[cst.Element(value=cst.SimpleString('"a"'))])
     outer = cst.List(elements=[cst.Element(value=inner)])
     setup = {"matrix": outer}
-    co = make_collector_out__02(setup)
+    co = make_collector_out__02(setup_assignments=setup)
     ctx = {"collector_output": co, "module": cst.Module([])}
     res = generator_stage(ctx)
     names = set(res.get("needs_typing_names", []))

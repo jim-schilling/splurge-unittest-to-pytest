@@ -34,7 +34,10 @@ def rewriter_stage(context: PipelineContext) -> PipelineContext:
         return {"module": module}
 
     class Rewriter(cst.CSTTransformer):
-        def __init__(self, classes_map: dict[str, Any]) -> None:
+        def __init__(
+            self,
+            classes_map: dict[str, Any],
+        ) -> None:
             super().__init__()
             self._current_class: str | None = None
             self._classes_map = classes_map
@@ -42,11 +45,19 @@ def rewriter_stage(context: PipelineContext) -> PipelineContext:
         def visit_ClassDef(self, node: cst.ClassDef) -> None:
             self._current_class = node.name.value
 
-        def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+        def leave_ClassDef(
+            self,
+            original_node: cst.ClassDef,
+            updated_node: cst.ClassDef,
+        ) -> cst.ClassDef:
             self._current_class = None
             return updated_node
 
-        def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        def leave_FunctionDef(
+            self,
+            original_node: cst.FunctionDef,
+            updated_node: cst.FunctionDef,
+        ) -> cst.FunctionDef:
             # only rewrite methods inside classes
             if self._current_class is None:
                 return updated_node

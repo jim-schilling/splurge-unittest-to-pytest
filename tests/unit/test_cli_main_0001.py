@@ -24,7 +24,7 @@ def test_dry_run_calls_convert_string_and_reports(monkeypatch, tmp_path):
     f.write_text("print(1)")
     called = {}
 
-    def fake_convert_string(src, autocreate=True, pattern_config=None):
+    def fake_convert_string(src, *, autocreate=True, pattern_config=None):
         called["src"] = src
         return ConversionResult(original_code=src, converted_code=src, has_changes=False, errors=[])
 

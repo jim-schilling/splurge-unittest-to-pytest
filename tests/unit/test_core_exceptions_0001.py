@@ -2,9 +2,14 @@
 
 These tests exercise the exception classes and their inheritance so callers
 can rely on catching broad or narrow categories. Tests avoid fragile exact
-string matches and instead assert membership and isinstance relationships."""
+string matches and instead assert membership and isinstance relationships.
+
+This top-level docstring replaces a plain-text header that caused import
+errors under pytest's assertion rewriter.
+"""
 
 from __future__ import annotations
+
 import pytest
 from splurge_unittest_to_pytest import exceptions
 

@@ -174,7 +174,7 @@ def apply_renames(proposed: Dict[Path, Path], apply: bool, update_imports: bool)
             print(f"  {'M' if changed else ' '} {p}")
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(*, argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Normalize and rename test files safely.")
     ap.add_argument("--apply", action="store_true", help="Perform renames; default is dry-run")
     ap.add_argument(
@@ -201,4 +201,5 @@ def main(argv: List[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # call using keyword to match keyword-only signature
+    raise SystemExit(main(argv=None))

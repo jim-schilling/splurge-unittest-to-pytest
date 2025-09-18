@@ -283,7 +283,7 @@ def test_find_unittest_files_skips_unreadable(tmp_path: Path, monkeypatch) -> No
     f.write_text("import unittest\nclass Test(unittest.TestCase): pass")
     original_read = Path.read_text
 
-    def fake_read(self, encoding="utf-8"):
+    def fake_read(self, *, encoding="utf-8"):
         if self == f:
             raise UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
         return original_read(self, encoding=encoding)

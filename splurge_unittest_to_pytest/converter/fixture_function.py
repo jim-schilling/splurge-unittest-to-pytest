@@ -18,7 +18,11 @@ DOMAINS = ["converter", "fixtures"]
 # Associated domains for this module
 
 
-def create_fixture_function(attr_name: str, body: cst.IndentedBlock, decorator: cst.Decorator) -> cst.FunctionDef:
+def create_fixture_function(
+    attr_name: str,
+    body: cst.IndentedBlock,
+    decorator: cst.Decorator,
+) -> cst.FunctionDef:
     """Return a FunctionDef for a fixture with the provided body and decorator."""
     return cst.FunctionDef(
         name=cst.Name(attr_name),

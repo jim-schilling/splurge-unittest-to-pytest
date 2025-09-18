@@ -67,7 +67,7 @@ def print_run_info(run_dir: Path) -> None:
         print("  ", p.name)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(*, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="splurge-print-diagnostics")
     parser.add_argument("--root", help="Diagnostics root directory to search")
     args = parser.parse_args(argv)
@@ -83,4 +83,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # call using keyword to match keyword-only signature
+    raise SystemExit(main(argv=None))

@@ -25,7 +25,8 @@ DOMAINS = ["generator", "bundles"]
 
 
 def bundle_named_locals(
-    out_classes: Dict[str, Any], existing_top_names: Set[str]
+    out_classes: Dict[str, Any],
+    existing_top_names: Set[str],
 ) -> Tuple[List[cst.BaseStatement], Set[str], Dict[str, str]]:
     """Group related local assignments into a bundled NamedTuple fixture.
 
@@ -84,7 +85,9 @@ def bundle_named_locals(
                 continue
 
             # derive container and fixture names from class name
-            def _derive_names(class_name: str) -> Tuple[str, str]:
+            def _derive_names(
+                class_name: str,
+            ) -> Tuple[str, str]:
                 base = class_name
                 if base.startswith("Test") and len(base) > 4:
                     base = base[4:]

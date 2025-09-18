@@ -33,7 +33,10 @@ StageCallable = Callable[[PipelineContext], PipelineContext]
 
 
 class StageManager:
-    def __init__(self, stages: list[StageCallable] | None = None) -> None:
+    def __init__(
+        self,
+        stages: list[StageCallable] | None = None,
+    ) -> None:
         self.stages: list[StageCallable] = stages or []
         # If diagnostics are enabled, create a temporary directory for this
         # run and place a timestamped marker file in the system temp dir so
@@ -76,7 +79,11 @@ class StageManager:
         """
         self.stages.append(stage)
 
-    def run(self, module: cst.Module, initial_context: PipelineContext | None = None) -> PipelineContext:
+    def run(
+        self,
+        module: cst.Module,
+        initial_context: PipelineContext | None = None,
+    ) -> PipelineContext:
         """Run registered stages over `module`.
 
         Args:

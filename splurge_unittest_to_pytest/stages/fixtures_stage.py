@@ -37,7 +37,11 @@ DOMAINS = ["stages", "fixtures"]
 # runnable by default and uses an autouse attach fixture for pytest runs.
 
 
-def _update_test_function(fn: cst.FunctionDef, fixture_names: Sequence[str], remove_first: bool) -> cst.FunctionDef:
+def _update_test_function(
+    fn: cst.FunctionDef,
+    fixture_names: Sequence[str],
+    remove_first: bool,
+) -> cst.FunctionDef:
     """Update a test method's parameters for pytest conversion.
 
     Args:
@@ -122,7 +126,7 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     # This stage operates in strict pytest mode: drop unittest.TestCase
     # classes, remove setUp/tearDown methods, and emit top-level pytest
     # functions that accept fixture parameters. The pipeline no longer
-    # emits compatibility variants that preserve TestCase class shapes.
+    # emits alternate variants that preserve TestCase class shapes.
 
     for stmt in module.body:
         if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:

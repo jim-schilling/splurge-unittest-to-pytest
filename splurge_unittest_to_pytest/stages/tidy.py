@@ -62,11 +62,19 @@ def tidy_stage(context: PipelineContext) -> PipelineContext:
         def visit_ClassDef(self, node: cst.ClassDef) -> None:
             self._in_class = True
 
-        def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+        def leave_ClassDef(
+            self,
+            original_node: cst.ClassDef,
+            updated_node: cst.ClassDef,
+        ) -> cst.ClassDef:
             self._in_class = False
             return updated_node
 
-        def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        def leave_FunctionDef(
+            self,
+            original_node: cst.FunctionDef,
+            updated_node: cst.FunctionDef,
+        ) -> cst.FunctionDef:
             if not self._in_class:
                 return updated_node
             if not original_node.name.value.startswith("test"):

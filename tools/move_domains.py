@@ -108,12 +108,12 @@ def find_files() -> List[Path]:
     return list(PKG.rglob("*.py"))
 
 
-def main() -> int:
+def main(*, argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--apply", action="store_true", help="Write changes")
     p.add_argument("--show", type=str, default="", help="Preview a single file's proposed content")
     p.add_argument("--limit", type=int, default=0, help="Limit number of files to process")
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     if args.show:
         path = Path(args.show)
@@ -145,4 +145,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(argv=None))

@@ -37,13 +37,13 @@ def test_build_basic_fixture_decorator():
     assert "@pytest.fixture" in code
 
 
-def test_build_fixture_decorator_rejects_kwargs():
-    try:
-        _ = build_pytest_fixture_decorator(scope="module", autouse=True)
-        raised = False
-    except TypeError:
-        raised = True
-    assert raised, "build_pytest_fixture_decorator should not accept kwargs"
+def test_build_fixture_decorator_accepts_kwargs():
+    dec = build_pytest_fixture_decorator(scope="module", autouse=True)
+    code = cst.Module(
+        body=[cst.SimpleStatementLine(body=[cst.Expr(value=cast(cst.BaseExpression, dec.decorator))])]
+    ).code
+    # libcst may render spacing around '=' and order kwargs; check tokens instead
+    assert "pytest.fixture" in code and "autouse" in code and "module" in code
 
 
 def test_build_pytest_fixture_decorator_renders_pytest_fixture():

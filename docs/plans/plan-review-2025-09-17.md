@@ -31,7 +31,7 @@ Recommendations
 - Simplification
   1) Remove or unify `_parse_method_patterns` in CLI; use only `converter.helpers.parse_method_patterns`.
   2) Decide on fixture strategy: If strict mode is the canonical path (drop classes and emit top-level tests), remove in-class signature rewriting from `rewriter_stage` or run it only when strict mode is disabled. Document the model clearly.
-  3) Centralize “strict vs compat” policy behind a single constant or CLI flag (even if compat is deprecated) and wire it through context; prune dead code paths.
+  3) Centralize policy around the canonical strict-only behavior and document any historical compatibility adapters as legacy; prune dead code paths related to legacy compatibility.
 
 - Runtime hardening and reliability
   4) Adopt atomic writes in `convert_file`: write to `.<name>.tmp` then `replace()`; fsync as needed.

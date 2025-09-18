@@ -29,7 +29,12 @@ class NodeEmitter:
     values.
     """
 
-    def emit_fixture_node(self, name: str, body: str, returns: str | None = None) -> cst.FunctionDef:
+    def emit_fixture_node(
+        self,
+        name: str,
+        body: str,
+        returns: str | None = None,
+    ) -> cst.FunctionDef:
         # Normalize input and parse each statement with a safe fallback.
         stmts: List[cst.BaseStatement] = []
         for line in self._normalize_body(body):
@@ -75,10 +80,18 @@ class NodeEmitter:
         except Exception:
             return cst.SimpleStatementLine(body=[cst.Pass()])
 
-    def emit_fixture(self, name: str, body: str) -> cst.FunctionDef:
+    def emit_fixture(
+        self,
+        name: str,
+        body: str,
+    ) -> cst.FunctionDef:
         return self.emit_fixture_node(name, body)
 
-    def emit_composite_dirs_node(self, base_name: str, mapping: dict[str, str]) -> cst.FunctionDef:
+    def emit_composite_dirs_node(
+        self,
+        base_name: str,
+        mapping: dict[str, str],
+    ) -> cst.FunctionDef:
         assigns: list[cst.BaseStatement] = []
         for k, expr_src in mapping.items():
             try:

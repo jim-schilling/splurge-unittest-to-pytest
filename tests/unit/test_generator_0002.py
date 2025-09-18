@@ -12,7 +12,7 @@ def test_finalize_collects_typing_and_yield():
     core = GeneratorCore()
 
     class FakeSpec:
-        def __init__(self, name, value_expr, yield_style=False):
+        def __init__(self, name, value_expr, *, yield_style=False):
             self.name = name
             self.value_expr = value_expr
             self.yield_style = yield_style

@@ -66,7 +66,7 @@ def is_simple_cleanup_statement(s: Any, attr: str) -> bool:
                     return True
                 if isinstance(target, cst.Name) and target.value == attr:
                     return True
-        # Detect Delete by class name for backward-compatibility with varying libcst
+        # Detect Delete by class name to handle differing libcst representations
         cls = getattr(expr, "__class__", None)
         # libcst may expose Delete/Del depending on version; accept both names
         if cls is not None and getattr(cls, "__name__", None) in ("Delete", "Del"):

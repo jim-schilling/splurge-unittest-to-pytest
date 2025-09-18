@@ -26,17 +26,29 @@ DOMAINS = ["converter", "naming"]
 
 
 class NameReplacer(cst.CSTTransformer):
-    def __init__(self, attr_name: str, value_name: str) -> None:
+    def __init__(
+        self,
+        attr_name: str,
+        value_name: str,
+    ) -> None:
         super().__init__()
         self.attr_name = attr_name
         self.value_name = value_name
 
-    def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+    def leave_Name(
+        self,
+        original_node: cst.Name,
+        updated_node: cst.Name,
+    ) -> cst.Name:
         if original_node.value == self.attr_name:
             return cst.Name(self.value_name)
         return updated_node
 
-    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.BaseExpression:
+    def leave_Attribute(
+        self,
+        original_node: cst.Attribute,
+        updated_node: cst.Attribute,
+    ) -> cst.BaseExpression:
         # If attribute like self.attr_name or cls.attr_name => replace with value_name
         if (
             isinstance(updated_node.value, cst.Name)
@@ -48,7 +60,9 @@ class NameReplacer(cst.CSTTransformer):
 
 
 def replace_names_in_statements(
-    statements: Iterable[cst.BaseStatement], attr_name: str, value_name: str
+    statements: Iterable[cst.BaseStatement],
+    attr_name: str,
+    value_name: str,
 ) -> list[cst.BaseStatement]:
     replacer = NameReplacer(attr_name, value_name)
     return [cast(cst.BaseStatement, stmt.visit(replacer)) for stmt in statements]

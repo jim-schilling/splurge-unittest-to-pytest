@@ -56,15 +56,16 @@ CLI usage:
 splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 ```
 
-The CLI no longer accepts compatibility toggles; it emits strict pytest-style
-output by default. See `--help` for remaining options.
+The CLI no longer accepts legacy compatibility toggles; it emits strict
+pytest-style output by default. See --help for remaining options.
 
 ## Migration note (breaking change)
 
-As of release 2025.2.0 this project no longer supports a "compat" compatibility
+As of release 2025.2.0 this project no longer supports legacy compatibility
 mode. The converter emits strict pytest-style output only. If you previously
-relied on the compat mode to preserve `unittest.TestCase` classes or to
-generate autouse-attachment glue, you must update converted code manually.
+relied on the legacy compatibility behavior to preserve unittest.TestCase
+classes or to generate autouse-attachment glue, you must update converted
+code manually.
 
 Example — before (unittest-style class):
 
@@ -146,7 +147,9 @@ Verification (local run):
 - mypy: no type errors across the package
 - pytest (unit suite): all unit tests passed locally (unit run: 859 passed, 1 skipped; full suite runs earlier reported 874 passed, 4 skipped). Coverage summary printed during the run (project coverage ~86%).
 
-If you depend on older compat flags or behavior, update your workflow to use the staged pipeline and strict/no-compat semantics — the converter intentionally emits modern pytest patterns.
+If you depend on older legacy compatibility flags or behavior, update your
+workflow to use the staged pipeline and strict-only semantics — the converter
+intentionally emits modern pytest patterns.
 
 ## Contributing
 

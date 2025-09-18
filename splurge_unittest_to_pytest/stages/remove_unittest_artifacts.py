@@ -29,7 +29,11 @@ def remove_unittest_artifacts_stage(context: PipelineContext) -> PipelineContext
         return {"module": module}
 
     class Cleaner(cst.CSTTransformer):
-        def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+        def leave_Module(
+            self,
+            original_node: cst.Module,
+            updated_node: cst.Module,
+        ) -> cst.Module:
             # Remove any top-level import of the unittest module or
             # from unittest import ... statements. We assume the rest of the
             # pipeline converts unittest usages to pytest equivalents.
@@ -134,7 +138,11 @@ def remove_unittest_artifacts_stage(context: PipelineContext) -> PipelineContext
 
             return updated_node.with_changes(body=final_body)
 
-        def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+        def leave_ClassDef(
+            self,
+            original_node: cst.ClassDef,
+            updated_node: cst.ClassDef,
+        ) -> cst.ClassDef:
             # filter out bases that are unittest.TestCase or bare TestCase
             if not updated_node.bases:
                 return updated_node

@@ -188,7 +188,7 @@ def inline_group(frags: List[Path], out_path: Path) -> Tuple[bool, str]:
     return True, "ok"
 
 
-def main(backup: str | None = None, out: str | None = None, fallback_on_failure: bool = False) -> int:
+def main(*, backup: str | None = None, out: str | None = None, fallback_on_failure: bool = False) -> int:
     b = Path(backup) if backup else ROOT_BACKUP
     o = Path(out) if out else OUT_ROOT
     if not b.exists():
@@ -278,4 +278,5 @@ if __name__ == "__main__":
         "--fallback-on-failure", help="write loader fallback and continue on inlining failures", action="store_true"
     )
     args = ap.parse_args()
-    raise SystemExit(main(args.backup, args.out, fallback_on_failure=args.fallback_on_failure))
+    # call using keywords to preserve the new keyword-only signature
+    raise SystemExit(main(backup=args.backup, out=args.out, fallback_on_failure=args.fallback_on_failure))

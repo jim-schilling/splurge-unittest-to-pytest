@@ -113,12 +113,12 @@ def fix_file(path: Path) -> bool:
     return True
 
 
-def main():
+def main(*, argv: list[str] | None = None) -> int:
     import argparse
 
     p = argparse.ArgumentParser()
     p.add_argument("root", nargs="?", default="tests", help="root folder to scan")
-    args = p.parse_args()
+    args = p.parse_args(argv)
     root = Path(args.root)
     fixed = 0
     for f in find_py_files(root):
@@ -128,7 +128,8 @@ def main():
         except Exception as e:
             print(f"error processing {f}: {e}")
     print(f"done: fixed={fixed}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main(argv=None))

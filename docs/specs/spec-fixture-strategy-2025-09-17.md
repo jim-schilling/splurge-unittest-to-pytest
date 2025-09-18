@@ -2,7 +2,7 @@
 Title: Fixture strategy and policy — splurge-unittest-to-pytest (2025-09-17)
 
 Summary
-- Canonical policy: strict pytest-style output only. Compatibility ("compat") mode is deprecated and removed — the converter will emit idiomatic pytest code that flattens test classes into top-level test functions, converts unittest patterns to pytest-native constructs, and removes `unittest.TestCase` inheritance.
+-- Canonical policy: strict pytest-style output only. Legacy compatibility mode is deprecated and removed — the converter will emit idiomatic pytest code that flattens test classes into top-level test functions, converts unittest patterns to pytest-native constructs, and removes `unittest.TestCase` inheritance.
 
 Goals
 - Provide a clear, testable specification for the strict-only transformation so implementers and users know exact behaviour and acceptance criteria.
@@ -46,7 +46,7 @@ Acceptance criteria (for converted output)
 Deprecation and removal plan (compat mode)
 - Immediately (this release)
   - Document the policy change in `README.md` and `CHANGELOG.md` (breaking change). Add a migration note describing how to update tests if desired.
-  - Remove any CLI flags or config options that previously toggled compatibility mode (for example `--compat` or `--compat-mode`).
+  - Remove any CLI flags or config options that previously toggled legacy compatibility (for example legacy compatibility flags or `--compat-mode`).
 
 - Code removal (developer tasks)
   - Remove/clean code paths labeled `compat`, `compatibility`, or guarded by a `compat_mode` flag in the codebase (likely in `stages/rewriter_stage.py`, `stages/fixtures_stage.py`, and related pipeline wiring).

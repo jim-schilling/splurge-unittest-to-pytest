@@ -22,22 +22,29 @@ DOMAINS = ["converter"]
 # Associated domains for this module
 
 
-def build_pytest_fixture_decorator(kwargs: Mapping[str, Any] | None = None) -> cst.Decorator:
+def build_pytest_fixture_decorator(kwargs: Mapping[str, Any] | None = None, **explicit_kwargs: Any) -> cst.Decorator:
     """Return a `@pytest.fixture` Decorator node.
 
     When `kwargs` is None or empty, produce the canonical attribute form
     `@pytest.fixture`. When kwargs are present, produce a Call node such as
     `@pytest.fixture(autouse=True)`.
     """
-    if not kwargs:
+    # Merge mapping and explicit kwargs; explicit keyword arguments take precedence.
+    merged_kwargs: dict[str, Any] = {}
+    if kwargs:
+        merged_kwargs.update(kwargs)
+    if explicit_kwargs:
+        merged_kwargs.update(explicit_kwargs)
+
+    if not merged_kwargs:
         return cst.Decorator(decorator=cst.Attribute(value=cst.Name("pytest"), attr=cst.Name("fixture")))
 
     # Build cst.Arg list from kwargs mapping. Accept simple Python primitives
     # (True/False/str/int) or libcst expression nodes. Keywords are emitted
     # in deterministic sorted order for stable output.
     args: list[cst.Arg] = []
-    for key in sorted(kwargs.keys()):
-        val = kwargs[key]
+    for key in sorted(merged_kwargs.keys()):
+        val = merged_kwargs[key]
         if isinstance(val, cst.BaseExpression):
             value_node = val
         else:

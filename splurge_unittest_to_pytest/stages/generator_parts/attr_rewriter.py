@@ -29,7 +29,11 @@ class AttrRewriter(cst.CSTTransformer):
     :class:`libcst.Name` node with the provided local identifier.
     """
 
-    def __init__(self, target_attr: str, local: str) -> None:
+    def __init__(
+        self,
+        target_attr: str,
+        local: str,
+    ) -> None:
         self.target_attr = target_attr
         self.local = local
 
@@ -41,7 +45,9 @@ class AttrRewriter(cst.CSTTransformer):
 
 
 def replace_in_node(
-    node: cst.CSTNode, target_attr: str, local: str
+    node: cst.CSTNode,
+    target_attr: str,
+    local: str,
 ) -> cst.CSTNode | cst.RemovalSentinel | cst.FlattenSentinel[cst.CSTNode]:
     """Apply AttrRewriter to ``node`` and return the rewritten node.
 

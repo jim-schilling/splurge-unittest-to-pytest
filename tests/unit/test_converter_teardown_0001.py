@@ -1,6 +1,7 @@
 """Tests for `converter.cleanup.extract_relevant_cleanup` covering multiple statement shapes."""
 
 from __future__ import annotations
+
 import libcst as cst
 from splurge_unittest_to_pytest.converter.cleanup import extract_relevant_cleanup
 from splurge_unittest_to_pytest.converter.cleanup_checks import references_attribute

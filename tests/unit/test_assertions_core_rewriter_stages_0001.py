@@ -3,9 +3,11 @@
 These tests exercise a representative subset of conversions (equality,
 truthiness, membership, almost-equal -> pytest.approx, regex -> re.search,
 and assertRaises context manager). They assert on generated source and
-returned flags and avoid brittle exact formatting checks."""
+returned flags and avoid brittle exact formatting checks.
+"""
 
 from __future__ import annotations
+
 import libcst as cst
 from splurge_unittest_to_pytest.stages import assertion_rewriter
 from libcst import matchers as m

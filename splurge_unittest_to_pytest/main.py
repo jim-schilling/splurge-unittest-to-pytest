@@ -29,6 +29,7 @@ import libcst as cst
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
 from .converter.helpers import has_meaningful_changes, normalize_method_name
+from .io_helpers import atomic_write, detect_encoding
 
 DOMAINS = ["main"]
 
@@ -55,6 +56,7 @@ class ConversionResult:
 
 def convert_string(
     source_code: str,
+    *,
     autocreate: bool = True,
     pattern_config: Any | None = None,
 ) -> ConversionResult:
@@ -320,6 +322,7 @@ class PatternConfigurator:
 
 def convert_file(
     input_path: str | Path,
+    *,
     output_path: str | Path | None = None,
     encoding: str = "utf-8",
     autocreate: bool = True,
@@ -393,11 +396,29 @@ def convert_file(
     if result.has_changes and not result.errors:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(result.converted_code, encoding=encoding)
-        except PermissionError:
-            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from PermissionDeniedError
-        except UnicodeEncodeError as e:
-            raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
+            write_encoding = encoding
+            if isinstance(write_encoding, str) and write_encoding == "auto":
+                write_encoding = detect_encoding(input_path)
+
+            # Use atomic_write to ensure the final placement is atomic. Call
+            # the atomic helper directly rather than performing a preflight
+            # Path.write_text. Tests that need to simulate write failures
+            # should patch the atomic_write helper.
+            try:
+                atomic_write(output_path, result.converted_code, encoding=write_encoding)
+            except PermissionError as e:
+                # Permission errors from the atomic writer map to our
+                # domain-specific PermissionDeniedError.
+                raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from e
+            except UnicodeEncodeError as e:
+                raise EncodingError(f"Failed to encode file with encoding '{encoding}': {output_path}") from e
+        except PermissionDeniedError:
+            # Re-raise our domain-specific PermissionDeniedError
+            raise
+        except Exception as e:
+            # Any other unexpected errors during write should be surfaced as
+            # PermissionDeniedError for callers that expect a simple API.
+            raise PermissionDeniedError(f"Permission denied writing to: {output_path}") from e
 
     return result
 

@@ -17,4 +17,5 @@ from splurge_unittest_to_pytest.print_diagnostics import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    # pass as keyword to match the package entrypoint's keyword-only signature
+    raise SystemExit(main(argv=sys.argv[1:]))

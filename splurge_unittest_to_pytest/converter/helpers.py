@@ -39,12 +39,23 @@ class SelfReferenceRemover(cst.CSTTransformer):
     """
 
     def __init__(self, param_names: set[str] | None = None) -> None:
+        """Initialize the remover.
+
+        Accept a positional optional `param_names` for backward compatibility.
+        """
         self.param_names = param_names or {"self", "cls"}
 
-    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.Attribute | cst.Name:
+    def leave_Attribute(
+        self,
+        original_node: cst.Attribute,
+        updated_node: cst.Attribute,
+    ) -> cst.Attribute | cst.Name:
         if isinstance(updated_node.value, cst.Name) and updated_node.value.value in self.param_names:
             return updated_node.attr
-        return updated_node
+        # If we didn't perform a transformation, return the original node to
+        # preserve the original formatting/whitespace rather than the updated
+        # node which may have been modified by other visitors.
+        return original_node
 
 
 def normalize_method_name(name: str) -> str:

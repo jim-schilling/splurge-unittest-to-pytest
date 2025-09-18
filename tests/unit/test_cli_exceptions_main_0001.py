@@ -8,7 +8,7 @@ def test_dry_run_verbose_shows_diff_and_summary(monkeypatch, tmp_path):
     f = tmp_path / "t.py"
     f.write_text("class A:\n    pass\n")
 
-    def fake_convert_string(src, autocreate=True, pattern_config=None):
+    def fake_convert_string(src, *, autocreate=True, pattern_config=None):
         return ConversionResult(original_code=src, converted_code="import pytest\n" + src, has_changes=True, errors=[])
 
     monkeypatch.setattr("splurge_unittest_to_pytest.main.convert_string", fake_convert_string, raising=False)
@@ -61,7 +61,7 @@ def test_dry_run_parse_error_is_handled(monkeypatch, tmp_path):
     f = tmp_path / "t4.py"
     f.write_text("x")
 
-    def fake_convert_string(src, autocreate=True, pattern_config=None):
+    def fake_convert_string(src, *, autocreate=True, pattern_config=None):
         raise ParseError("bad parse")
 
     monkeypatch.setattr("splurge_unittest_to_pytest.main.convert_string", fake_convert_string, raising=False)

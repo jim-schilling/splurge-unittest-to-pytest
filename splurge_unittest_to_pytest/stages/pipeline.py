@@ -34,7 +34,11 @@ DOMAINS = ["stages", "pipeline"]
 # Associated domains for this module
 
 
-def run_pipeline(module: cst.Module, autocreate: bool = True, pattern_config: Any | None = None) -> cst.Module:
+def run_pipeline(
+    module: cst.Module,
+    autocreate: bool = True,
+    pattern_config: Any | None = None,
+) -> cst.Module:
     """Run the conversion pipeline on a libcst.Module and return transformed Module.
 
     Args:
