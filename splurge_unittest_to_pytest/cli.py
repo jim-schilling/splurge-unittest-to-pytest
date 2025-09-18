@@ -36,6 +36,7 @@ from .exceptions import (
 from .main import convert_file, find_unittest_files, ConversionResult, PatternConfigurator
 from .io_helpers import hash_suffix_for_path
 from .converter.helpers import parse_method_patterns
+from .reporting import record_for_result, unified_diff_text
 
 DOMAINS = ["cli"]
 
@@ -122,6 +123,20 @@ if os.environ.get("SPLURGE_ENABLE_DIAGNOSTICS"):
     multiple=True,
     help="Test method patterns (comma-separated or multiple flags)",
 )
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    help="Emit NDJSON per-file results (machine-readable)",
+)
+@click.option(
+    "--diff",
+    "show_diff",
+    is_flag=True,
+    default=False,
+    help="Show unified diffs for changed files in dry-run mode",
+)
 # Legacy compatibility toggles removed: CLI emits strict pytest-style output by default.
 @click.option(
     "--autocreate/--no-autocreate",
@@ -142,6 +157,8 @@ def main(
     autocreate: bool,
     follow_symlinks: bool,
     respect_gitignore: bool,
+    show_diff: bool,
+    json_output: bool,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
@@ -303,18 +320,33 @@ def main(
                         # dry-run conversion can respect CLI-provided patterns.
                         result = convert_string(source_code, autocreate=autocreate, pattern_config=pc)
 
-                    if result.has_changes:
-                        click.echo(f"Would convert: {file_path}")
-                        if verbose:
-                            click.echo("Changes would be made:")
-                            _show_diff_summary(result.original_code, result.converted_code)
+                    # Machine-friendly output: when --json is requested, always
+                    # emit a per-file NDJSON record describing the result. This
+                    # makes the output streamable for tooling even when no
+                    # changes are required.
+                    if json_output:
+                        click.echo(record_for_result(file_path, result, include_diff=show_diff))
                     else:
-                        if verbose:
-                            click.echo(f"No changes needed: {file_path}")
+                        # Human-friendly output
+                        if result.has_changes:
+                            click.echo(f"Would convert: {file_path}")
+                            if verbose:
+                                click.echo("Changes would be made:")
+                                _show_diff_summary(result.original_code, result.converted_code)
+                            if show_diff:
+                                # Print a unified diff for human consumption
+                                click.echo(
+                                    unified_diff_text(result.original_code, result.converted_code, path=file_path)
+                                )
+                        else:
+                            if verbose:
+                                click.echo(f"No changes needed: {file_path}")
 
+                    # Errors and counters
                     if result.errors:
-                        for error in result.errors:
-                            click.echo(f"Error in {file_path}: {error}", err=True)
+                        if not json_output:
+                            for error in result.errors:
+                                click.echo(f"Error in {file_path}: {error}", err=True)
                         error_count += 1
                     elif result.has_changes:
                         converted_count += 1
