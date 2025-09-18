@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Unit tests for assertion conversion helpers: added `tests/unit/test_assertions_0001.py` to cover mapping transformations and edge cases in `splurge_unittest_to_pytest.converter.assertions`.
+- Expanded test coverage (Task-5.1): added tests for `atomic_write`, import-injector alias handling, and a concurrency smoke test (skipped on Windows). These live under `tests/unit/test_io_helpers_atomic_write_0001.py`, `tests/unit/test_import_injector_alias_0001.py`, and `tests/unit/test_parallel_smoke_0001.py`.
 
 
 ## [2025.1.1] - 2025-09-14

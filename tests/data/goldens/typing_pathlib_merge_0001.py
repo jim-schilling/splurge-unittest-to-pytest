@@ -1,4 +1,2 @@
-
-
 class A:
     pass
