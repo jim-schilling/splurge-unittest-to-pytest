@@ -1,0 +1,13 @@
+import pytest
+from typing import NamedTuple, Any
+
+
+class _XData(NamedTuple):
+    foo: Any
+    bar: Any
+
+
+@pytest.fixture
+def x_data() -> _XData:
+    foo, bar = make(a)
+    yield _XData(foo, bar)

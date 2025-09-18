@@ -246,30 +246,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025.2.0] - 2025-09-17
 
 ### Removed (breaking)
-- Legacy compatibility mode and all `compat` flags removed. The converter now
   emits strict pytest-native code by default and no longer supports the
   historical compatibility engine. Consumers that relied on `--compat` or
   programmatic compatibility toggles must update their workflows to accept
   strict output or implement custom adapters.
 
 ### Changed
-- Project version bumped to `2025.2.0`.
-- Documentation and tests updated to reflect strict-only behavior. Fixtures are
   emitted as canonical pytest fixtures and lifecycle methods (setUp/tearDown)
   are converted to top-level fixtures and test function parameters.
 
+### Tests
+
+- Hardened golden tests: replaced brittle exact-string equality checks with an AST-aware golden comparator. The test helper parses both generated and expected code using `libcst`, strips accidental Markdown code-fence lines, and falls back to a whitespace-normalized textual compare when structural equality is not detected. This reduces flakiness due to formatting-only differences and accidental markdown artifacts in `.expected` files.
+
+Files updated during this work:
+
+- `tests/support/golden_compare.py` (AST-aware helper)
+- `tests/data/goldens/golden_namedtuple_fixture.expected` (cleaned)
+- `tests/data/goldens/sample_06_converted.expected` (canonicalized)
+- Integration tests updated to use the helper: `tests/integration/test_sample06_conversion_0001.py`, `tests/integration/test_generator_imports_stages_0001.py`, `tests/integration/test_generator_goldens_0001.py`
+
+All integration tests were run locally and verified with no remaining golden-related failures.
+
 ### Migration notes
-- If you relied on compatibility mode to retain unittest-style class layouts
   (for example to preserve TestCase subclasses at runtime), update your
   workflows to accept top-level pytest test functions. To preserve class-style
   organization you can manually wrap converted functions into classes or use
   test grouping helpers in your test suite.
 
 ### Verification
-- Full test-suite run: local verification performed after changes (tests and
   docs updates). Run `pytest -n 7` in your environment to confirm behavior for
   your target Python version and optional dependencies.
 
-## Previous Versions
+
 
 No previous versions documented. This represents a major modernization and infrastructure update.
