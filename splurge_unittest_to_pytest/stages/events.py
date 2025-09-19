@@ -92,6 +92,40 @@ class TaskErrored:
     error: Exception
 
 
+# Step-level events
+@dataclass(frozen=True)
+class StepStarted:
+    run_id: str
+    stage_id: str
+    task_id: str
+    step_id: str
+
+
+@dataclass(frozen=True)
+class StepCompleted:
+    run_id: str
+    stage_id: str
+    task_id: str
+    step_id: str
+
+
+@dataclass(frozen=True)
+class StepSkipped:
+    run_id: str
+    stage_id: str
+    task_id: str
+    step_id: str
+
+
+@dataclass(frozen=True)
+class StepErrored:
+    run_id: str
+    stage_id: str
+    task_id: str
+    step_id: str
+    error: Exception
+
+
 Event = Any
 Observer = Callable[[Event], None]
 
@@ -262,6 +296,10 @@ __all__ = [
     "TaskCompleted",
     "TaskSkipped",
     "TaskErrored",
+    "StepStarted",
+    "StepCompleted",
+    "StepSkipped",
+    "StepErrored",
 ]
 
 
@@ -296,6 +334,12 @@ class HookRegistry:
 
     def after_task(self, stage_name: str, task_name: str, result: dict[str, Any]) -> None:
         self._trigger("after_task", stage_name, task_name, result)
+
+    def before_step(self, task_name: str, step_name: str, context: dict[str, Any]) -> None:
+        self._trigger("before_step", task_name, step_name, context)
+
+    def after_step(self, task_name: str, step_name: str, result: dict[str, Any]) -> None:
+        self._trigger("after_step", task_name, step_name, result)
 
     def on_error(self, where: str, exc: Exception, context: dict[str, Any]) -> None:
         self._trigger("on_error", where, exc, context)

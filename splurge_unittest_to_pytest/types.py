@@ -50,6 +50,8 @@ class PipelineContext(TypedDict, total=False):
     postvalidator_error: Any
     # Pipeline flag to request normalization of fixture names (strip leading underscores)
     normalize_names: bool
+    # Internal stage identifier for step/task event binding
+    __stage_id__: str
 
 
 __all__ = ["PipelineContext"]
@@ -168,3 +170,37 @@ class Resources(Protocol):
 
 
 __all__.append("Resources")
+
+
+# --------------------
+# Step contracts
+# --------------------
+
+# Stable identifier for steps
+StepId = str
+
+
+@dataclass(frozen=True)
+class StepResult:
+    """Result of executing a single Step."""
+
+    delta: ContextDelta
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    errors: list[Exception] = field(default_factory=list)
+    skipped: bool = False
+
+
+class Step(Protocol):
+    """Step protocol: most granular, pure context transformation unit."""
+
+    id: StepId
+    name: str
+
+    def execute(self, context: Mapping[str, Any], resources: Any) -> StepResult: ...
+
+
+__all__ += [
+    "StepId",
+    "StepResult",
+    "Step",
+]

@@ -50,7 +50,7 @@ def update_readme(readme_path: Path, percent: float) -> bool:
 
     def _repl(m: re.Match) -> str:
         # Preserve the rest of the URL; ensure we use percent-encoding for safety
-        rest = m.group('rest') or ''
+        rest = m.group("rest") or ""
         # Use %25 in the badge URL to be URL-safe
         return f"{m.group(1)}{m.group('url')}{pct_int}%25{rest})"
 

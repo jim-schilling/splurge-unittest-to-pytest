@@ -43,6 +43,8 @@ def generator_stage(context: PipelineContext) -> PipelineContext:
     if out is None:
         return {}
     stage_id = "stages.generator"
+    context = cast(PipelineContext, dict(context))
+    context["__stage_id__"] = stage_id
     bus = context.get("__event_bus__")
     # Stage-4: delegate work to tasks and emit per-task events
     build_task = BuildFixtureSpecsTask()

@@ -383,6 +383,47 @@ Hooks are also available around stage/task execution (before/after and error hoo
 
 See `docs/specs/spec-stages-contracts-and-observers-2025-09-18.md` for detailed contracts and guidelines.
 
+## Steps (Option A) — Developer Notes (2025.3.2)
+
+The pipeline now supports a finer-grained unit of work called a Step. Steps are pure, deterministic context transformers that return changes via `ContextDelta` and emit lifecycle events. They are executed within Tasks via a small helper.
+
+Key pieces:
+
+- Types (`splurge_unittest_to_pytest/types.py`):
+  - `Step` protocol and `StepResult` (parallel to `Task`/`TaskResult`).
+  - `PipelineContext` includes an internal `__stage_id__` used to bind events to stages.
+- Events & hooks (`splurge_unittest_to_pytest/stages/events.py`):
+  - `StepStarted`, `StepCompleted`, `StepSkipped`, `StepErrored`.
+  - HookRegistry: `before_step(task_name, step_name, context)` and `after_step(task_name, step_name, result)`.
+- Execution helper (`splurge_unittest_to_pytest/stages/steps.py`):
+  - `run_steps(stage_id, task_id, task_name, steps, context, resources) -> TaskResult` merges per-step deltas and publishes step events.
+
+Usage pattern:
+
+```python
+@dataclass
+class _MyStep:
+    id: str = "steps.example.do_thing"
+    name: str = "do_thing"
+    def execute(self, ctx: Mapping[str, Any], resources: Any) -> StepResult:
+        # compute delta
+        return StepResult(delta=ContextDelta(values={"key": "value"}))
+
+def my_task_execute(context: Mapping[str, Any], resources: Any) -> TaskResult:
+    stage_id = cast(str, context.get("__stage_id__", "stages.my_stage"))
+    return run_steps(stage_id, "tasks.my_task", "my_task", [_MyStep()], context, resources)
+```
+
+Adoption status:
+
+- Import injector tasks: decomposed into a single core Step per Task.
+- Generator `BuildFixtureSpecsTask`: wrapped as a Step.
+- Additional tasks can be decomposed incrementally following the same pattern.
+
+Migration path to Option B:
+
+- By keeping Steps pure and Tasks as thin coordinators over an ordered list of Steps, migrating to a manager-driven Step orchestration later is straightforward without changing Step implementations.
+
 ## Diagnostics and Smoke Test Behavior
 
 Diagnostics are opt-in via the environment variable `SPLURGE_ENABLE_DIAGNOSTICS`.
