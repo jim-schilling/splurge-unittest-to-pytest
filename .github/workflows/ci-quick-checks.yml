@@ -7,8 +7,34 @@ on:
     branches: [ main, update-2025.0.1 ]
 
 jobs:
+  pr-trigger-check:
+    name: PR trigger check
+    runs-on: ubuntu-latest
+    outputs:
+      allow_ci: ${{ steps.check.outputs.allow_ci }}
+    steps:
+      - name: Determine whether to run CI
+        id: check
+        run: |
+          echo "actor=${GITHUB_ACTOR}"
+          # default to true
+          allow=true
+          # If the run was triggered by the GitHub Actions bot, skip CI
+          if [ "${GITHUB_ACTOR}" = "github-actions[bot]" ] || [ "${GITHUB_ACTOR}" = "github-actions" ]; then
+            allow=false
+          fi
+          # If the latest commit message starts with chore(ci), skip CI
+          last_msg=$(git log -1 --pretty=%B || true)
+          if echo "$last_msg" | grep -q "^chore(ci)"; then
+            allow=false
+          fi
+          echo "allow_ci=$allow"
+          echo "::set-output name=allow_ci::$allow"
+
   quick:
     name: Quick checks (lint, type)
+    needs: [pr-trigger-check]
+    if: needs.pr-trigger-check.outputs.allow_ci == 'true'
     runs-on: ubuntu-latest
 
     steps:
