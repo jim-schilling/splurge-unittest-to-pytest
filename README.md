@@ -6,7 +6,7 @@
 
 [![Tests](https://img.shields.io/badge/tests-1096%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
 <!-- Test count updated from reports/junit.xml on 2025-09-18 (1102 total, 6 skipped → 1096 passed) -->
-[![Code Coverage](https://img.shields.io/badge/coverage-86%-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
 <!-- Coverage updated automatically from reports/coverage.xml on 2025-09-18 -->
 [![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
