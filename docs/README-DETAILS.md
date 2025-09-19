@@ -369,6 +369,16 @@ The staged pipeline emits lifecycle events over a lightweight in-process event b
 - DiagnosticsObserver: when diagnostics are enabled (`SPLURGE_ENABLE_DIAGNOSTICS=1`), writes deterministic module snapshots per stage/task. Override root with `SPLURGE_DIAGNOSTICS_ROOT`.
 - LoggingObserver: enable structured pipeline logs by setting `SPLURGE_ENABLE_PIPELINE_LOGS=1`.
 
+### New CLI flags for 2025.3.1
+
+- `--enable-diagnostics` / `--no-enable-diagnostics` (CLI flag)
+   - Opt-in flag that toggles writing per-run diagnostics snapshots. When enabled the pipeline writes a timestamped diagnostics directory under the system temporary directory; set `SPLURGE_DIAGNOSTICS_ROOT` to override the root location (useful for CI/workspace collection).
+
+- `--enable-pipeline-logs` / `--no-enable-pipeline-logs` (CLI flag)
+   - Enables structured, in-process pipeline logs that mirror stage/task lifecycle events. This is helpful when debugging why a particular transformation was applied and provides a compact trace of stage/task start, completion, and errors. The flag is a convenience alias for setting `SPLURGE_ENABLE_PIPELINE_LOGS=1` in the environment for the duration of the run.
+
+Both flags are intentionally opt-in to avoid writing extra artifacts or logs during normal conversion runs. They are exposed both as CLI flags and as environment variables (see `SPLURGE_ENABLE_DIAGNOSTICS` and `SPLURGE_ENABLE_PIPELINE_LOGS`).
+
 Hooks are also available around stage/task execution (before/after and error hooks). Hooks receive copies of context/deltas to avoid accidental mutation and errors in hooks are isolated from the pipeline.
 
 See `docs/specs/spec-stages-contracts-and-observers-2025-09-18.md` for detailed contracts and guidelines.
@@ -388,6 +398,38 @@ converter library itself. To avoid test failures caused by executing example
 code that imports optional dependencies the smoke test only parses/compiles the
 converted output rather than executing it. This keeps CI robust while still
 validating the conversion output is syntactically correct.
+
+## Bundler grouping and normalization (2025.3.1)
+
+The generator includes a namedtuple-style bundler which groups multiple
+top-level local assignments that originate from a single Call expression into
+one composite fixture. To avoid spurious grouping differences that arise only
+from formatting changes (for example multi-line wrapping vs single-line
+Calls), the bundler now normalizes rendered Call text when producing grouping
+keys:
+
+- Collapse runs of whitespace to a single space
+- Remove spaces immediately after opening parentheses and before closing
+  parentheses
+- Remove spaces before commas
+
+This normalization helps ensure semantically-identical Calls like:
+
+   foo(a, b, c)
+
+and
+
+   foo(
+      a,
+      b,
+      c,
+   )
+
+are grouped together by the bundler. When a Call cannot be reliably rendered
+(for example due to incomplete AST shapes), the bundler falls back to a
+stable signature-like key composed of callee text and argument count. Unit
+tests were added to lock this behavior and prevent regressions in future
+changes (see `tests/unit/test_generator_stages_0003.py`).
 
 ### Diagnostics root override
 

@@ -38,6 +38,7 @@ def run_pipeline(
     module: cst.Module,
     autocreate: bool = True,
     pattern_config: Any | None = None,
+    normalize_names: bool = False,
 ) -> cst.Module:
     """Run the conversion pipeline on a libcst.Module and return transformed Module.
 
@@ -59,7 +60,8 @@ def run_pipeline(
     mgr = StageManager()
 
     def collect_stage(context: PipelineContext) -> PipelineContext:
-        visitor = Collector()
+        # Pass through normalize_names flag so Collector can honor CLI preference
+        visitor = Collector(normalize_names=bool(context.get("normalize_names", False)))
         module = context["module"]
         module.visit(visitor)
         # If diagnostics are enabled the manager can write an initial snapshot
@@ -69,16 +71,29 @@ def run_pipeline(
             pass
         return {"collector_output": visitor.as_output()}
 
-    # Register the typed collect stage directly now that the manager
-    # accepts PipelineContext callables.
-    mgr.register(collect_stage)
+    # The collect stage is registered after early normalization so that
+    # synthetic ClassDef nodes produced by normalize_functiontestcase_stage
+    # are visible to the Collector.
 
     # The StageManager accepts PipelineContext-typed callables; register stages directly.
+
+    # Normalize module-level FunctionTestCase(...) call-sites into synthetic
+    # TestCase-like ClassDef nodes so downstream stages can operate on a
+    # single canonical representation. Run this BEFORE removing unittest
+    # artifacts so alias imports like `from unittest import FunctionTestCase as FTC`
+    # are still visible to the normalizer.
+    from .normalize_functiontestcase import normalize_functiontestcase_stage
+
+    mgr.register(normalize_functiontestcase_stage)
 
     # remove leftover unittest imports and TestCase inheritance early in the pipeline
     from .remove_unittest_artifacts import remove_unittest_artifacts_stage
 
     mgr.register(remove_unittest_artifacts_stage)
+
+    # Register the typed collect stage directly now that the manager
+    # accepts PipelineContext callables.
+    mgr.register(collect_stage)
 
     # The staged pipeline is authoritative; legacy transformer paths were removed.
 
@@ -129,6 +144,8 @@ def run_pipeline(
     initial_ctx: PipelineContext = {"autocreate": autocreate}
     if pattern_config is not None:
         initial_ctx["pattern_config"] = pattern_config
+    # propagate normalize_names flag into pipeline context so stages can consult
+    initial_ctx["normalize_names"] = bool(normalize_names)
     # (No additional initial flags expected.)
 
     # StageManager.run expects a PipelineContext; pass initial_ctx directly

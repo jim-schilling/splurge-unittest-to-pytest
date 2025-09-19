@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2025.3.1] - 2025-09-19
+
+### Added
+- Unit tests to lock bundling behavior when Call expressions are semantically identical but formatted differently:
+  - `tests/unit/test_generator_stages_0003.py` now includes tests that assert differently-formatted but semantically-identical Calls are grouped by the bundler fallback key and that an unrenderable-call fallback groups by callee+argcount.
+
+### Changed
+- Generator bundler normalization: when producing grouping keys for Call expressions the bundler now normalizes rendered Call text by collapsing whitespace and removing spaces around common punctuation (parentheses and commas). This reduces spurious grouping differences caused by formatting-only variations.
+- Small, local typing and runtime-safety improvements in fixture/injector stages to make libcst node handling explicit and to avoid subtle union-type mismatches under `mypy`.
+
+### Fixed
+- Addressed mypy type-check failures surfaced during the feature work by tightening a few local annotations and adding minimal casts where libcst node unions are expected:
+  - `stages/import_injector_tasks.py`: defensive handling when `ImportFrom.names` may be an `ImportStar` sentinel rather than an iterable.
+  - `stages/fixture_injector_tasks.py`: avoid reusing variable names with different structural types and ensure Module.body updates accept the union of BaseStatement/BaseSmallStatement.
+  - `stages/fixtures_stage.py`: cast IndentedBlock bodies to the expected Sequence of BaseStatement where necessary.
+
+### Docs
+- Documented diagnostics and pipeline-logging flags and added notes about the bundler normalization and tests in `README.md` and `docs/README-DETAILS.md`.
+
+### Verification
+- Unit test coverage: full test-suite run after changes: 1111 passed, 5 skipped, 1 xfailed (local Windows, Python 3.12).
+- Static typing: `mypy` clean (no reported errors) for the package after the fixes.
+
+### Notes
+- All changes are intentionally low-risk and localized. The bundler grouping key change only affects how grouping-keys are computed (normalization) and preserves the existing fallback semantics (callee+argcount) for cases where a Call cannot be rendered reliably.
+
+
 ## [2025.3.0] - 2025-09-18
 
 ### Added

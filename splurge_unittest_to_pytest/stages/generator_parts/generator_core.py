@@ -16,7 +16,6 @@ from typing import Any, Mapping
 
 from .name_allocator import NameAllocator
 from .annotation_inferer import AnnotationInferer, type_name_for_literal
-from .literals import is_literal
 from .fixture_spec_builder import FixtureSpecBuilder
 from .cleanup_rewriter import CleanupRewriter
 from .node_emitter import NodeEmitter
@@ -116,32 +115,17 @@ class GeneratorCore:
         `stages/generator.py` and centralizes annotation/typing decisions so
         the generator can delegate to a small, testable core.
         """
+        # Start typing needs from any bundler-provided requirements. Do not
+        # eagerly add names like 'Any' or 'Generator' here; only include names
+        # that will actually be used in annotations (collected below). This
+        # avoids propagating noisy typing imports when the generator does not
+        # produce return annotations that reference those names.
         typing_needed: set[str] = set(bundler_typing or [])
-        any_yield = False
-
-        # Determine simple typing needs based on literal container shapes
-        for spec in specs.values():
-            v = getattr(spec, "value_expr", None)
-            if isinstance(v, cst.List):
-                typing_needed.add("List")
-            elif isinstance(v, cst.Tuple):
-                typing_needed.add("Tuple")
-            elif isinstance(v, cst.Set):
-                typing_needed.add("Set")
-            elif isinstance(v, cst.Dict):
-                typing_needed.add("Dict")
-            else:
-                if v is not None and not is_literal(v):
-                    typing_needed.add("Any")
-            if getattr(spec, "yield_style", False):
-                any_yield = True
-
-        if any_yield:
-            typing_needed.add("Generator")
 
         # Attach return annotations to generated fixture functions when we
         # can infer a specific typing annotation and the fixture accepts no
-        # parameters.
+        # parameters. Collect any typing names that the annotation inferer
+        # reports so we can request the appropriate typing imports.
         annotated_nodes: list[cst.BaseStatement] = []
         for n in fixture_nodes:
             if isinstance(n, cst.FunctionDef):
@@ -153,13 +137,46 @@ class GeneratorCore:
                         if ann_node is not None:
                             annotated = n.with_changes(returns=cst.Annotation(annotation=ann_node))
                             annotated_nodes.append(annotated)
+                            # Only add typing names that will actually appear in
+                            # annotations (extra_names) rather than heuristically
+                            # inferring broad needs.
                             typing_needed.update(extra_names)
                             continue
             annotated_nodes.append(n)
 
         final_nodes = list(prepend_nodes) + annotated_nodes
 
+        # Collect typing names from fixture specs even if there are no
+        # emitted fixture nodes. This ensures that simple literal-derived
+        # typing needs (List, Dict, Any, etc.) are requested when the
+        # generator produced specs that reference container literals.
+        for s in specs.values():
+            val = getattr(s, "value_expr", None)
+            if val is not None:
+                # For container comprehensions (ListComp, SetComp, etc.) the
+                # literal-based inferer won't return a typing node. Heuristically
+                # request 'List' for list comprehensions so downstream import
+                # injector will provide typing imports when fixtures return
+                # comprehension results.
+                try:
+                    clsname = getattr(val.__class__, "__name__", "")
+                except Exception:
+                    clsname = ""
+                if clsname.endswith("Comp"):
+                    typing_needed.add("List")
+                else:
+                    _, extra = type_name_for_literal(val)
+                    typing_needed.update(extra)
+
         result: dict[str, object] = {"fixture_specs": specs, "fixture_nodes": final_nodes}
+        # If any spec is yield-style, the fixtures will be generators and the
+        # typing Generator name should be requested so callers (and tests)
+        # can inspect the finalize result and request appropriate imports.
+        any_yield = any(getattr(s, "yield_style", False) for s in specs.values())
+        if any_yield:
+            typing_needed.add("Generator")
+        # Always include the needs_typing_names key when typing names were
+        # identified or when callers may expect the key to exist.
         if typing_needed:
             result["needs_typing_names"] = sorted(typing_needed)
         needs_shutil = any(getattr(s, "_needs_shutil", False) for s in specs.values())

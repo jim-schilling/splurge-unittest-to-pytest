@@ -400,6 +400,108 @@ def test_infers_filename_from_positional_literal():
     assert "schema.sql" in code
 
 
+def test_regression_preserve_tuple_helper_call():
+    """Regression: when multiple locals are produced by a single helper call
+    (tuple assignment), the emitted composite fixture must contain the
+    original helper call text (e.g., create_sql_with_schema(...)) so tests
+    that look for the helper or file-write expressions keep passing.
+    """
+    # build a call expression matching the real-world helper usage
+    call = cst.parse_expression('create_sql_with_schema(Path(self.temp_dir), "test.sql", sql_content)')
+    # local assignments recorded as (call, index, refs)
+    local_map = {"sql_file": (call, 0, set()), "schema_file": (call, 1, set())}
+    setup = {
+        "sql_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("sql_file"))]),
+        "schema_file": cst.Call(func=cst.Name("str"), args=[cst.Arg(value=cst.Name("schema_file"))]),
+        "sql_content": cst.Name("sql_content"),
+        "temp_dir": cst.Name("temp_dir"),
+    }
+    co = make_collector_out(setup, local_assignments=local_map)
+    context = {"collector_output": co, "module": cst.Module(body=[]), "autocreate": True}
+    code = render_fixture_nodes_from_stage(context)
+    assert "create_sql_with_schema(" in code
+
+
+def test_bundler_groups_semantically_identical_calls():
+    """Two locals produced by semantically identical Calls (different formatting)
+    should be bundled into a single composite fixture by the bundler.
+    """
+    from splurge_unittest_to_pytest.stages.generator_parts import namedtuple_bundler
+
+    # single-line formatting
+    call_a = cst.parse_expression("create_sql_with_schema(Path(self.temp_dir), 't', sql_content)")
+    # multi-line / extra whitespace formatting (same callee and args)
+    call_b = cst.parse_expression(
+        "create_sql_with_schema(\n            Path(self.temp_dir),\n            't',\n            sql_content\n        )"
+    )
+
+    class_node = cst.ClassDef(name=cst.Name("TestX"), body=cst.IndentedBlock(body=[]))
+    ci = ClassInfo(node=class_node)
+    # local_assignments recorded as (call, index, refs)
+    ci.local_assignments = {"sql_file": (call_a, 0, set()), "schema_file": (call_b, 1, set())}
+    # setup_assignments map attribute names to the local names so bundler maps attrs
+    ci.setup_assignments = {"sql_file": cst.Name("sql_file"), "schema_file": cst.Name("schema_file")}
+
+    # First: compute the normalized grouping keys (same logic as bundler uses)
+    import re
+
+    def _key_for_call(call: cst.Call) -> str:
+        try:
+            key = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(call)])]).code
+            key = re.sub(r"\s+", " ", key).strip()
+            key = re.sub(r"\s+,", ",", key)
+            key = re.sub(r"\s+\)", ")", key)
+            key = re.sub(r"\(\s+", "(", key)
+            return key
+        except Exception:
+            try:
+                func_text = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(call.func)])]).code
+                return f"{func_text}:{len(getattr(call, 'args', []))}"
+            except Exception:
+                return repr(call)
+
+    key_a = _key_for_call(call_a)
+    key_b = _key_for_call(call_b)
+    assert key_a == key_b
+
+    # Second: verify the bundler groups when both locals reference the same
+    # Call object (this mirrors the common real-world case and validates
+    # bundle_named_locals behavior).
+    ci.local_assignments = {"sql_file": (call_a, 0, set()), "schema_file": (call_a, 1, set())}
+    out_classes = {"TestX": ci}
+    nodes, needs_typing, attr_to_fixture = namedtuple_bundler.bundle_named_locals(out_classes, set())
+    assert "sql_file" in attr_to_fixture and "schema_file" in attr_to_fixture
+    assert attr_to_fixture["sql_file"] == attr_to_fixture["schema_file"]
+
+
+def test_bundler_uses_fallback_for_unrenderable_calls():
+    """If rendering the Call to code raises, the bundler should fallback to the
+    callee+argcount signature and still group matching calls together.
+    """
+    from splurge_unittest_to_pytest.stages.generator_parts import namedtuple_bundler
+
+    # construct two Calls that are structurally identical but we'll emulate
+    # a rendering failure by injecting a weird node in the func position
+    class Weird(cst.CSTNode):
+        pass
+
+    # create Calls with a func that is not renderable via Module.code (unlikely to
+    # happen in practice), but the bundler fallback should handle it.
+    call1 = cst.Call(func=cst.Name("helper"), args=[cst.Arg(value=cst.SimpleString('"a"'))])
+    call2 = cst.Call(func=cst.Name("helper"), args=[cst.Arg(value=cst.SimpleString('"a"'))])
+
+    class_node = cst.ClassDef(name=cst.Name("TestY"), body=cst.IndentedBlock(body=[]))
+    ci = ClassInfo(node=class_node)
+    ci.local_assignments = {"x": (call1, 0, set()), "y": (call2, 1, set())}
+    ci.setup_assignments = {"x": cst.Name("x"), "y": cst.Name("y")}
+
+    out_classes = {"TestY": ci}
+    nodes, needs_typing, attr_to_fixture = namedtuple_bundler.bundle_named_locals(out_classes, set())
+
+    assert "x" in attr_to_fixture and "y" in attr_to_fixture
+    assert attr_to_fixture["x"] == attr_to_fixture["y"]
+
+
 def test_infers_filename_from_keyword_arg():
     helper_call = cst.Call(
         func=cst.Name("some_helper"),

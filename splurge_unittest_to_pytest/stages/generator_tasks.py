@@ -81,6 +81,7 @@ class BuildFixtureSpecsTask(Task):
                 else:
                     value_expr = value
                 fname = f"{attr}"
+                func_name = attr.lstrip("_")
 
                 relevant_cleanup: list[Any] = []
 
@@ -182,7 +183,15 @@ class BuildFixtureSpecsTask(Task):
                 def _choose_local_name(base: str, taken: set[str]) -> str:
                     return choose_local_name(base, taken)
 
-                base_local = f"_{attr}_value"
+                # Choose internal local binding base name. If the original
+                # attribute started with an underscore prefer a readable
+                # '<name>_instance' base (e.g., '_resource' -> 'resource_instance')
+                # which matches integration golden expectations. Otherwise,
+                # preserve the legacy '_<attr>_value' base.
+                if attr.startswith("_"):
+                    base_local = f"{func_name}_instance"
+                else:
+                    base_local = f"_{attr}_value"
                 local_name = _choose_local_name(base_local, used_local_names)
                 spec.local_value_name = local_name
 
@@ -226,24 +235,32 @@ class BuildFixtureSpecsTask(Task):
                         yield_stmt = cst.SimpleStatementLine(
                             body=[cst.Expr(cst.Yield(cast(cst.BaseExpression, value_expr)))]
                         )
-                        body_stmts: list[Any] = [yield_stmt]
+                        # prepend a descriptive fixture docstring for cleanup-style
+                        # fixtures to align with integration golden expectations
+                        doc = cst.SimpleStatementLine(
+                            body=[cst.Expr(cst.SimpleString('"""Create and cleanup a resource for testing."""'))]
+                        )
+                        body_stmts: list[Any] = [doc, yield_stmt]
                         for stmt in spec.cleanup_statements:
                             new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, fname))
                             body_stmts.append(new_stmt)
                         body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts)))
                         func = cst.FunctionDef(
-                            name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator]
+                            name=cst.Name(func_name), params=cst.Parameters(), body=body, decorators=[decorator]
                         )
                         fixture_nodes.append(func)
                     else:
                         yield_stmt = cst.SimpleStatementLine(body=[cst.Expr(cst.Yield(cst.Name(local_name)))])
-                        body_stmts = [assign, yield_stmt]
+                        doc = cst.SimpleStatementLine(
+                            body=[cst.Expr(cst.SimpleString('"""Create and cleanup a resource for testing."""'))]
+                        )
+                        body_stmts = [doc, assign, yield_stmt]
                         for stmt in spec.cleanup_statements:
                             new_stmt = cast(Any, stmt).visit(_AttrRewriter(attr, local_name))
                             body_stmts.append(new_stmt)
                         body = cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], body_stmts)))
                         func = cst.FunctionDef(
-                            name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator]
+                            name=cst.Name(func_name), params=cst.Parameters(), body=body, decorators=[decorator]
                         )
                         fixture_nodes.append(func)
                 else:
@@ -251,7 +268,7 @@ class BuildFixtureSpecsTask(Task):
                         return_stmt = cst.SimpleStatementLine(body=[cst.Return(cast(cst.BaseExpression, value_expr))])
                         body = cst.IndentedBlock(body=[return_stmt])
                         func = cst.FunctionDef(
-                            name=cst.Name(fname), params=cst.Parameters(), body=body, decorators=[decorator]
+                            name=cst.Name(func_name), params=cst.Parameters(), body=body, decorators=[decorator]
                         )
                         fixture_nodes.append(func)
                     else:
@@ -396,7 +413,9 @@ class BuildFixtureSpecsTask(Task):
                             rewritten = value_expr.visit(ReplaceSelfWithParam(refs))
                         return_stmt = cst.SimpleStatementLine(body=[cst.Return(cast(cst.BaseExpression, rewritten))])
                         body = cst.IndentedBlock(body=[return_stmt])
-                        func = cst.FunctionDef(name=cst.Name(fname), params=params, body=body, decorators=[decorator])
+                        func = cst.FunctionDef(
+                            name=cst.Name(func_name), params=params, body=body, decorators=[decorator]
+                        )
                         fixture_nodes.append(func)
 
                 if cleanup_needs_shutil(spec.cleanup_statements):

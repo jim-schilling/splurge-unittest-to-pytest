@@ -1,0 +1,16 @@
+import pytest
+from mylibrary import createResource, deleteResource
+
+
+@pytest.fixture
+def resource():
+    """Create and cleanup a resource for testing."""
+    resource_instance = createResource()
+    yield resource_instance
+    deleteResource(resource_instance)
+
+
+def test_something(resource):
+    """Test that something is created properly."""
+    something = makeSomething()
+    assert something is not None

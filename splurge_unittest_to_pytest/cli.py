@@ -99,6 +99,17 @@ def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
     help="Show detailed output",
 )
 @click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable per-stage debug logging (pre/post).",
+)
+@click.option(
+    "--debug-log",
+    type=click.Path(path_type=Path),
+    help="Write debug logs to the given file (UTF-8). When omitted, debug logs go to stdout.",
+)
+@click.option(
     "--backup",
     "-b",
     type=click.Path(path_type=Path),
@@ -150,18 +161,24 @@ def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
     default=False,
     help="Show unified diffs for changed files in dry-run mode",
 )
-@click.option(
-    "--normalize-pytest-alias",
-    "normalize_pytest_alias",
-    is_flag=True,
-    default=False,
-    help="Detect aliased pytest imports (e.g. `import pytest as pt`) and optionally normalize usages back to `pytest` when safe.",
-)
+# (normalization flag removed from CLI)
 # Legacy compatibility toggles removed: CLI emits strict pytest-style output by default.
 @click.option(
     "--autocreate/--no-autocreate",
     default=True,
     help="Enable or disable autocreation of tmp_path-backed file fixtures when a sibling '<prefix>_content' is present (default: --autocreate)",
+)
+@click.option(
+    "--fast-discovery",
+    is_flag=True,
+    default=False,
+    help="Use fast textual discovery heuristics only (skip AST probe).",
+)
+@click.option(
+    "--normalize-names",
+    is_flag=True,
+    default=False,
+    help="Normalize fixture names by stripping a leading underscore (default: honor raw names).",
 )
 def main(
     paths: tuple[Path, ...],
@@ -180,7 +197,10 @@ def main(
     show_diff: bool,
     json_output: bool,
     json_file: Path | None,
-    normalize_pytest_alias: bool,
+    fast_discovery: bool,
+    normalize_names: bool,
+    debug: bool,
+    debug_log: Path | None,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
@@ -212,6 +232,18 @@ def main(
         click.echo("Error: No paths provided", err=True)
         sys.exit(1)
 
+    # Configure per-stage debug logging when requested via CLI.
+    if debug:
+        # Expose an env var so the internal StageLogger wiring can detect it.
+        os.environ["SPLURGE_DEBUG_STAGES"] = "1"
+        # Configure basic logging. If debug_log is provided, write to file.
+        import logging
+
+        if debug_log:
+            logging.basicConfig(filename=str(debug_log), level=logging.DEBUG, encoding="utf-8")
+        else:
+            logging.basicConfig(level=logging.DEBUG)
+
     # Collect all files to process
     files_to_convert: list[Path] = []
 
@@ -226,7 +258,10 @@ def main(
                 # the old positional API for compatibility.
                 try:
                     unittest_files = find_unittest_files(
-                        path, follow_symlinks=follow_symlinks, respect_gitignore=respect_gitignore
+                        path,
+                        follow_symlinks=follow_symlinks,
+                        respect_gitignore=respect_gitignore,
+                        fast_discovery=fast_discovery,
                     )
                 except TypeError:
                     # Fallback: call without the new kwargs
@@ -393,39 +428,17 @@ def main(
                     try:
                         # Pass explicit pattern lists into convert_file so it can
                         # construct a PatternConfigurator for the pipeline.
-                        # Call convert_file. Some tests monkeypatch convert_file
-                        # with a shim that doesn't accept the new
-                        # `normalize_pytest_alias` kwarg. Attempt the modern call
-                        # signature first and fall back to the legacy call on
-                        # TypeError caused by unexpected keyword args.
-                        try:
-                            result = convert_file(
-                                file_path,
-                                output_path=output_path,
-                                encoding=encoding,
-                                autocreate=autocreate,
-                                setup_patterns=setup_patterns or None,
-                                teardown_patterns=teardown_patterns or None,
-                                test_patterns=test_patterns or None,
-                                normalize_pytest_alias=normalize_pytest_alias,
-                            )
-                        except TypeError as e:
-                            # If convert_file doesn't accept the new kwarg, retry
-                            # using the legacy signature to preserve test
-                            # compatibility.
-                            msg = str(e)
-                            if "normalize_pytest_alias" in msg or "unexpected" in msg:
-                                result = convert_file(
-                                    file_path,
-                                    output_path=output_path,
-                                    encoding=encoding,
-                                    autocreate=autocreate,
-                                    setup_patterns=setup_patterns or None,
-                                    teardown_patterns=teardown_patterns or None,
-                                    test_patterns=test_patterns or None,
-                                )
-                            else:
-                                raise
+                        # Call convert_file; some tests may monkeypatch convert_file
+                        # with alternate signatures so keep the invocation simple.
+                        result = convert_file(
+                            file_path,
+                            output_path=output_path,
+                            encoding=encoding,
+                            autocreate=autocreate,
+                            setup_patterns=setup_patterns or None,
+                            teardown_patterns=teardown_patterns or None,
+                            test_patterns=test_patterns or None,
+                        )
 
                         if result.has_changes:
                             click.echo(f"Converted: {file_path}")

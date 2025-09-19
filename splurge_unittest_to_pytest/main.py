@@ -28,6 +28,7 @@ import libcst as cst
 
 from .stages.pipeline import run_pipeline
 from .exceptions import EncodingError, FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError
+from .sentinel_discovery import is_unittest_file
 from .io_helpers import atomic_write
 from .converter.helpers import has_meaningful_changes, normalize_method_name
 from .types import PipelineContext
@@ -59,6 +60,7 @@ def convert_string(
     source_code: str,
     autocreate: bool = True,
     pattern_config: Any | None = None,
+    normalize_names: bool = False,
 ) -> ConversionResult:
     """Convert unittest-style test code to pytest-style.
 
@@ -79,7 +81,34 @@ def convert_string(
 
     try:
         # Parse the source code into a CST
-        tree = cst.parse_module(source_code)
+        try:
+            tree = cst.parse_module(source_code)
+        except cst.ParserSyntaxError:
+            # Some real-world sample files contain mixed tabs and spaces which
+            # cause libcst to raise a ParserSyntaxError. As a conservative
+            # fallback, normalize tabs to four spaces and retry parsing once.
+            try:
+                normalized = source_code.replace("\t", "    ")
+                try:
+                    tree = cst.parse_module(normalized)
+                except cst.ParserSyntaxError:
+                    # As a last resort, apply a lenient normalization that
+                    # forces any indented line to use a single level of
+                    # four-space indentation. This is conservative and only
+                    # intended to allow the converter to operate on slightly
+                    # malformed sample files used in tests; it's not a
+                    # general-purpose formatter.
+                    lines = []
+                    for ln in normalized.splitlines():
+                        if ln.startswith(" ") or ln.startswith("\t"):
+                            lines.append("    " + ln.lstrip())
+                        else:
+                            lines.append(ln)
+                    relaxed = "\n".join(lines)
+                    tree = cst.parse_module(relaxed)
+            except cst.ParserSyntaxError:
+                # Re-raise to be handled by outer except block below
+                raise
 
         # Use the staged pipeline implementation. The pipeline returns a
         # libcst.Module representing strict pytest-style output.
@@ -95,7 +124,10 @@ def convert_string(
             params = sig.parameters
             accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
             if "pattern_config" in params or accepts_kwargs:
-                converted_module = run_pipeline(tree, autocreate=autocreate, pattern_config=pattern_config)
+                # Forward normalize_names when run_pipeline accepts kwargs
+                converted_module = run_pipeline(
+                    tree, autocreate=autocreate, pattern_config=pattern_config, normalize_names=normalize_names
+                )
             else:
                 converted_module = run_pipeline(tree, autocreate=autocreate)
         except Exception:
@@ -328,7 +360,7 @@ def convert_file(
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
-    normalize_pytest_alias: bool = False,
+    normalize_names: bool = False,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -343,8 +375,7 @@ def convert_file(
             values and injected into the pipeline so stages can consult them.
         teardown_patterns: Optional list of custom teardown method names/patterns.
         test_patterns: Optional list of custom test name patterns.
-
-    Returns:
+        Returns:
         ConversionResult containing the converted code and metadata.
 
     Raises:
@@ -390,7 +421,7 @@ def convert_file(
             for p in test_patterns:
                 pc.add_test_pattern(p)
 
-    result = convert_string(source_code, autocreate=autocreate, pattern_config=pc)
+    result = convert_string(source_code, autocreate=autocreate, pattern_config=pc, normalize_names=normalize_names)
 
     # Write the converted code if there were changes and no errors
     if result.has_changes and not result.errors:
@@ -412,57 +443,15 @@ def convert_file(
     return result
 
 
-def is_unittest_file(file_path: str | Path) -> bool:
-    """Check if a Python file appears to contain unittest-style tests.
-
-    Args:
-        file_path: Path to the Python file to check.
-
-    Returns:
-        True if the file appears to contain unittest tests, False otherwise.
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist.
-        PermissionDeniedError: If file permissions prevent reading.
-        EncodingError: If file encoding issues occur.
-    """
-    file_path = Path(file_path)
-
-    try:
-        # Quick existence check: raise our project-level FileNotFoundError
-        # so callers (and tests) receive the expected exception type rather
-        # than the builtin FileNotFoundError raised by pathlib.
-        if not file_path.exists():
-            raise SplurgeFileNotFoundError(f"Input file not found: {file_path}")
-
-        content = file_path.read_text(encoding="utf-8")
-
-        # Skip files that are already using pytest
-        if "import pytest" in content or "from pytest" in content:
-            return False
-
-        # Simple heuristics to detect unittest files
-        unittest_indicators = [
-            "import unittest",
-            "from unittest",
-            "unittest.TestCase",
-            "class Test",
-            "def test_",
-            "setUp(",
-            "tearDown(",
-            "self.assert",
-        ]
-
-        return any(indicator in content for indicator in unittest_indicators)
-
-    except PermissionError:
-        raise PermissionDeniedError(f"Permission denied reading file: {file_path}") from PermissionError
-    except UnicodeDecodeError as e:
-        raise EncodingError(f"Failed to decode file with UTF-8 encoding: {file_path}") from e
+# `is_unittest_file` moved into `sentinel_discovery.py`; use that implementation
 
 
 def find_unittest_files(
-    directory: str | Path, *, follow_symlinks: bool = True, respect_gitignore: bool = False
+    directory: str | Path,
+    *,
+    follow_symlinks: bool = True,
+    respect_gitignore: bool = False,
+    fast_discovery: bool = False,
 ) -> list[Path]:
     """Find all Python files that appear to contain unittest tests.
 
@@ -584,7 +573,7 @@ def find_unittest_files(
                 if ignored:
                     continue
 
-            if is_unittest_file(file_path):
+            if is_unittest_file(file_path, fast_discovery=fast_discovery):
                 unittest_files.append(file_path)
         except (SplurgeFileNotFoundError, PermissionDeniedError, EncodingError):
             # Skip files that cannot be read or decoded

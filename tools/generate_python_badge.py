@@ -8,6 +8,7 @@ classifiers and requires-python) and updates a shields.io style badge in
 Usage:
   python tools/generate_python_badge.py --pyproject pyproject.toml --readme README.md
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,7 +48,9 @@ def update_readme(readme: Path, versions: list[str]) -> bool:
     if not versions:
         return False
     label = "%20%7C%20".join(versions)
-    badge = f"[![Python Versions](https://img.shields.io/badge/python-{label}-blue.svg)](https://www.python.org/downloads/)"
+    badge = (
+        f"[![Python Versions](https://img.shields.io/badge/python-{label}-blue.svg)](https://www.python.org/downloads/)"
+    )
     text = readme.read_text(encoding="utf-8")
     if BADGE_PY_RE.search(text):
         new_text = BADGE_PY_RE.sub(badge, text)
