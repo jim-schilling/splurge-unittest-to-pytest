@@ -63,7 +63,12 @@ class BuildTopLevelTestsTask(Task):
         for stmt in module.body:
             if isinstance(stmt, cst.ClassDef) and stmt.name.value in classes:
                 cls_info = classes[stmt.name.value]
-                fixture_names = list(cls_info.setup_assignments.keys())
+                # Use normalized fixture parameter names (strip leading
+                # underscores) so test function signatures match created
+                # fixture function names which are generated without
+                # leading underscores.
+                raw_fixture_names = list(cls_info.setup_assignments.keys())
+                fixture_names = [n.lstrip("_") for n in raw_fixture_names]
 
                 for member in stmt.body.body:
                     if not isinstance(member, cst.FunctionDef):

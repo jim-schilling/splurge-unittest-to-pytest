@@ -36,10 +36,25 @@ class DetectNeedsCstTask(Task):
             return TaskResult(delta=ContextDelta(values={}))
 
         # Start from caller-provided flags (if any) to preserve explicit choices.
-        # Preserve legacy behavior: only emit the key when explicitly requested
-        # or detected by scanning. Do not set a default True in context deltas.
+        # Legacy compatibility: when the caller did not explicitly provide a
+        # pytest flag, default to requesting a pytest import so converted
+        # modules have pytest available by default. If the caller did set
+        # the flag, honor its boolean value.
         explicit_pytest_flag = "needs_pytest_import" in context
-        needs_pytest = bool(context.get("needs_pytest_import")) if explicit_pytest_flag else False
+        if explicit_pytest_flag:
+            needs_pytest = bool(context.get("needs_pytest_import"))
+        else:
+            # Default to requesting pytest only for modules that currently
+            # have no imports. This preserves legacy behavior for empty
+            # modules while avoiding forcing pytest into modules that
+            # already import other libraries (like os, sys).
+            has_imports = any(
+                isinstance(stmt, cst.SimpleStatementLine)
+                and stmt.body
+                and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+                for stmt in getattr(module, "body", [])
+            )
+            needs_pytest = not has_imports
 
         needs_re = bool(context.get("needs_re_import", False))
         needs_unittest = bool(context.get("needs_unittest_import", False))
@@ -118,17 +133,13 @@ class InsertImportsCstTask(Task):
         if ("needs_pytest_import" in context or "needs_re_import" in context) and not (needs_pytest or needs_re):
             return TaskResult(delta=ContextDelta(values={"module": module}))
 
-        # Special-case: when the module has no imports and no explicit flags were provided,
-        # default to adding pytest import to satisfy legacy expectations.
-        if not ("needs_pytest_import" in context or "needs_re_import" in context):
-            has_any_import = any(
-                isinstance(stmt, cst.SimpleStatementLine)
-                and stmt.body
-                and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
-                for stmt in module.body
-            )
-            if not has_any_import:
-                needs_pytest = True
+        # Legacy behavior previously defaulted to adding `import pytest` for
+        # modules with no imports when no explicit flags were provided. That
+        # was noisy and caused pytest to be added to empty/whitespace-only
+        # files. Rely on explicit flags (e.g., earlier stages setting
+        # `needs_pytest_import`) or on detected usages in the module text
+        # instead. Do not inject pytest simply because the module has no
+        # imports.
 
         import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("pytest"))])])
         re_import_node = cst.SimpleStatementLine(body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("re"))])])
@@ -137,6 +148,7 @@ class InsertImportsCstTask(Task):
 
         # decide insertion index: after docstring if present, else after imports, else at 0
         insert_idx = 0
+        doc_idx = None
         for idx, stmt in enumerate(module.body):
             if (
                 isinstance(stmt, cst.SimpleStatementLine)
@@ -144,18 +156,31 @@ class InsertImportsCstTask(Task):
                 and isinstance(stmt.body[0], cst.Expr)
                 and isinstance(stmt.body[0].value, cst.SimpleString)
             ):
-                insert_idx = idx + 1
+                doc_idx = idx
                 break
+        if doc_idx is not None:
+            insert_idx = doc_idx + 1
         else:
-            last_import = -1
+            # find first import index; by default we'll insert after existing imports
+            first_import_idx = None
+            last_import_idx = -1
             for idx, stmt in enumerate(module.body):
                 if (
                     isinstance(stmt, cst.SimpleStatementLine)
                     and stmt.body
                     and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
                 ):
-                    last_import = idx
-            insert_idx = last_import + 1 if last_import >= 0 else 0
+                    if first_import_idx is None:
+                        first_import_idx = idx
+                    last_import_idx = idx
+
+            # If pytest is requested, prefer to insert it at the very top of the
+            # module (after docstring if present) so it appears before other
+            # imports and matches golden file ordering.
+            if needs_pytest:
+                insert_idx = 0 if doc_idx is None else doc_idx + 1
+            else:
+                insert_idx = last_import_idx + 1 if last_import_idx >= 0 else 0
 
         new_body = list(module.body)
         preferred_order: list[tuple[str, cst.SimpleStatementLine]] = [
@@ -191,10 +216,22 @@ class InsertImportsCstTask(Task):
 
         # typing names
         typing_names = cast(list, context.get("needs_typing_names") or [])
+        explicit_typing_flag = "needs_typing_names" in context
         typing_needed: set[str] = set()
         for n in typing_names:
             if isinstance(n, str) and n:
                 typing_needed.add(n)
+        # Heuristic: if the module text references common typing names
+        # that weren't explicitly requested, add them so imports like
+        # `from typing import Dict` are injected when annotations use them.
+        # This helps when upstream stages didn't explicitly record the
+        # typing name but the converted code contains it (e.g., `-> Dict`).
+        try:
+            for candidate in ("Dict", "List", "Tuple", "Optional", "Any", "NamedTuple", "Generator", "Path"):
+                if candidate in module_text and candidate not in typing_needed:
+                    typing_needed.add(candidate)
+        except Exception:
+            pass
         if typing_needed:
             existing_typing: set[str] = set()
             existing_typing_idx: int | None = None
@@ -335,7 +372,74 @@ class InsertImportsCstTask(Task):
                 existing_names.add(str(insert_name))
 
         new_module = module.with_changes(body=new_body)
-        return TaskResult(delta=ContextDelta(values={"module": new_module}))
+
+        # Do not reorder imports here; leave grouping/ordering to the
+        # formatting stage so that import positions remain deterministic
+        # and stable across pipeline runs.
+
+        # If typing imports were added but their names are not referenced
+        # in the module, remove them to avoid noisy stdlib imports like
+        # `from typing import Any, Generator` when not used. However, if the
+        # caller explicitly requested typing names via the context key
+        # `needs_typing_names`, preserve the typing import even if it's
+        # not referenced in the module text.
+        class _NameCollector(cst.CSTVisitor):
+            def __init__(self) -> None:
+                self.names: set[str] = set()
+                self._in_import: int = 0
+
+            def visit_Import(self, node: cst.Import) -> None:
+                # mark entering import so child Names aren't counted
+                self._in_import += 1
+
+            def leave_Import(self, node: cst.Import) -> None:
+                self._in_import -= 1
+
+            def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+                self._in_import += 1
+
+            def leave_ImportFrom(self, node: cst.ImportFrom) -> None:
+                self._in_import -= 1
+
+            def visit_Name(self, node: cst.Name) -> None:
+                if self._in_import:
+                    return
+                self.names.add(node.value)
+
+        collector = _NameCollector()
+        try:
+            new_module.visit(collector)
+        except Exception:
+            collector.names = set()
+
+        used_names = collector.names
+        filtered_body: list[cst.CSTNode] = []
+        for stmt in new_module.body:
+            # remove typing imports whose aliases are unused
+            if (
+                isinstance(stmt, cst.SimpleStatementLine)
+                and stmt.body
+                and isinstance(stmt.body[0], cst.ImportFrom)
+                and getattr(stmt.body[0].module, "value", None) == "typing"
+            ):
+                # If typing names were explicitly requested, keep the import.
+                if explicit_typing_flag:
+                    filtered_body.append(stmt)
+                    continue
+                # stmt.body[0].names may be an ImportStar or a sequence of
+                # ImportAlias nodes; handle the ImportStar case explicitly
+                import_names_obj = stmt.body[0].names
+                if isinstance(import_names_obj, (list, tuple)):
+                    names = [getattr(n.name, "value", "") for n in import_names_obj or []]
+                else:
+                    names = []
+                keep = any(n and n in used_names for n in names)
+                if not keep:
+                    continue
+            filtered_body.append(stmt)
+
+        final_module = new_module.with_changes(body=filtered_body)
+        return TaskResult(delta=ContextDelta(values={"module": final_module}))
 
 
 __all__ = ["DetectNeedsCstTask", "InsertImportsCstTask"]

@@ -1,0 +1,17 @@
+import unittest
+from unittest import FunctionTestCase
+from mylibrary import createResource, deleteResource
+
+_resource = None
+
+def testSomething():
+    something = makeSomething()
+    assert something is not None
+
+def initResource():
+    _resource = createResource()
+
+def cleanupResource():
+    deleteResource(_resource)
+
+tc = FunctionTestCase(testSomething, setUp=initResource, tearDown=cleanupResource)

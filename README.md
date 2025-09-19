@@ -124,6 +124,10 @@ Options:
   --json-file PATH                Write NDJSON per-file results to the given file (UTF-8). Implies --json.
   --diff                          Show unified diffs for changed files in dry-run mode
   --autocreate / --no-autocreate  Enable or disable autocreation of tmp_path-backed file fixtures when a sibling '<prefix>_content' is present (default: --autocreate)
+  --enable-diagnostics / --no-enable-diagnostics
+                                  Opt-in to writing per-run diagnostics snapshots (default: disabled). When enabled the tool writes a run-specific diagnostics directory under the system temporary directory; override root with `SPLURGE_DIAGNOSTICS_ROOT`.
+  --enable-pipeline-logs / --no-enable-pipeline-logs
+                                  Enable structured in-process pipeline logging (default: disabled). When enabled the staged pipeline emits lifecycle events and the tool prints compact structured logs helpful for debugging.
   --help                          Show this message and exit.
 
 Notes:
@@ -140,6 +144,9 @@ Notes:
 ```bash
 # Dry-run: show what would be converted under the current directory (recursive)
 splurge-unittest-to-pytest -n -r .
+
+# Enable per-run diagnostics and pipeline logs for a verbose debug run
+splurge-unittest-to-pytest -n -r --enable-diagnostics --enable-pipeline-logs .
 
 # Example using companion-tool style flags (note: these flags belong to splurge_test_namer; shown here as a usage pattern)
 python -m splurge_test_namer.cli --test-root tests --import-root my_package --repo-root /path/to/repo --dry-run

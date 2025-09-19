@@ -85,15 +85,14 @@ def normalize_class_body(indented: cst.IndentedBlock) -> cst.IndentedBlock:
 
 
 def normalize_module(module: cst.Module) -> cst.Module:
-    """Normalize module-level spacing and import grouping.
+    """Normalize a module's imports and spacing.
 
-    The function performs several normalization steps:
-
-    - Deduplicate imports and group them (stdlib, thirdparty, local).
+    Behavior:
+    - Deduplicate imports and group them in the order: stdlib, thirdparty, local.
     - Ensure exactly two blank lines after the import block when imports are
-      present.
+        present.
     - Collapse runs of :class:`cst.EmptyLine` between top-level definitions to
-      two where appropriate.
+        two where appropriate.
     - Normalize class bodies using :func:`normalize_class_body`.
 
     Args:
@@ -102,6 +101,7 @@ def normalize_module(module: cst.Module) -> cst.Module:
     Returns:
         A new :class:`cst.Module` with spacing and import grouping normalized.
     """
+
     body = list(module.body)
 
     # Extract docstring if present
@@ -141,7 +141,7 @@ def normalize_module(module: cst.Module) -> cst.Module:
             seen.add(name)
         deduped.append(s)
 
-    # Classify imports simply
+    # Classify imports simply into stdlib, thirdparty, and local groups.
     stdlib: list[Any] = []
     thirdparty: list[Any] = []
     local: list[Any] = []
@@ -152,9 +152,7 @@ def normalize_module(module: cst.Module) -> cst.Module:
             name = _node_to_str(name_node)
         else:
             name = _node_to_str(getattr(head2, "module", None))
-        if "pytest" in name:
-            thirdparty.append(s)
-        elif "splurge" in name:
+        if "splurge" in name:
             local.append(s)
         else:
             stdlib.append(s)
@@ -164,7 +162,8 @@ def normalize_module(module: cst.Module) -> cst.Module:
         new_body.append(cast(cst.BaseSmallStatement | cst.BaseStatement, docstring_node))
 
     first_group = True
-    for group in (stdlib, thirdparty, local):
+    groups = (stdlib, thirdparty, local)
+    for group in groups:
         if not group:
             continue
         if not first_group:
@@ -249,6 +248,3 @@ def normalize_module(module: cst.Module) -> cst.Module:
         i += 1
 
     return module.with_changes(body=normalized)
-
-
-# Associated domains for this module

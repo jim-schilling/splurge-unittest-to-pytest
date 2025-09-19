@@ -1,0 +1,15 @@
+import unittest
+from mylibrary import createResource, deleteResource
+
+
+class TestSomething(unittest.TestCase):
+    
+    def setUp(self) -> None:
+        self._resource = createResource()
+    
+    def tearDown(self) -> None:
+        deleteResource(self._resource)
+    
+    def test_something(self) -> None:
+        something = makeSomething()
+        assert something is not None

@@ -58,8 +58,28 @@ def bundle_named_locals(
                 continue
             try:
                 key = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(assigned_call)])]).code
+                # normalize whitespace so semantically identical calls with
+                # different formatting still group together. Collapse runs of
+                # whitespace, and remove stray spaces around punctuation that
+                # libcst might include for pretty printing across different
+                # formatting styles (e.g., spaces before closing parens).
+                import re
+
+                key = re.sub(r"\s+", " ", key).strip()
+                # remove spaces before commas and before closing parens
+                key = re.sub(r"\s+,", ",", key)
+                key = re.sub(r"\s+\)", ")", key)
+                # remove spaces after opening parens
+                key = re.sub(r"\(\s+", "(", key)
             except Exception:
-                key = repr(assigned_call)
+                # fallback: attempt a simple signature-like key using the
+                # callee text and number of args which is cheaper and more
+                # robust than a full repr for grouping purposes
+                try:
+                    func_text = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(assigned_call.func)])]).code
+                    key = f"{func_text}:{len(getattr(assigned_call, 'args', []))}"
+                except Exception:
+                    key = repr(assigned_call)
             call_groups.setdefault(key, []).append((local_name, idx, assigned_call))
 
         for group in call_groups.values():

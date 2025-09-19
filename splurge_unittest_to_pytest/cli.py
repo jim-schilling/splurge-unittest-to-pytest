@@ -99,6 +99,17 @@ def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
     help="Show detailed output",
 )
 @click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable per-stage debug logging (pre/post).",
+)
+@click.option(
+    "--debug-log",
+    type=click.Path(path_type=Path),
+    help="Write debug logs to the given file (UTF-8). When omitted, debug logs go to stdout.",
+)
+@click.option(
     "--backup",
     "-b",
     type=click.Path(path_type=Path),
@@ -157,6 +168,18 @@ def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
     default=True,
     help="Enable or disable autocreation of tmp_path-backed file fixtures when a sibling '<prefix>_content' is present (default: --autocreate)",
 )
+@click.option(
+    "--fast-discovery",
+    is_flag=True,
+    default=False,
+    help="Use fast textual discovery heuristics only (skip AST probe).",
+)
+@click.option(
+    "--normalize-names",
+    is_flag=True,
+    default=False,
+    help="Normalize fixture names by stripping a leading underscore (default: honor raw names).",
+)
 def main(
     paths: tuple[Path, ...],
     output: Path | None,
@@ -174,7 +197,10 @@ def main(
     show_diff: bool,
     json_output: bool,
     json_file: Path | None,
-    
+    fast_discovery: bool,
+    normalize_names: bool,
+    debug: bool,
+    debug_log: Path | None,
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
@@ -206,6 +232,18 @@ def main(
         click.echo("Error: No paths provided", err=True)
         sys.exit(1)
 
+    # Configure per-stage debug logging when requested via CLI.
+    if debug:
+        # Expose an env var so the internal StageLogger wiring can detect it.
+        os.environ["SPLURGE_DEBUG_STAGES"] = "1"
+        # Configure basic logging. If debug_log is provided, write to file.
+        import logging
+
+        if debug_log:
+            logging.basicConfig(filename=str(debug_log), level=logging.DEBUG, encoding="utf-8")
+        else:
+            logging.basicConfig(level=logging.DEBUG)
+
     # Collect all files to process
     files_to_convert: list[Path] = []
 
@@ -220,7 +258,10 @@ def main(
                 # the old positional API for compatibility.
                 try:
                     unittest_files = find_unittest_files(
-                        path, follow_symlinks=follow_symlinks, respect_gitignore=respect_gitignore
+                        path,
+                        follow_symlinks=follow_symlinks,
+                        respect_gitignore=respect_gitignore,
+                        fast_discovery=fast_discovery,
                     )
                 except TypeError:
                     # Fallback: call without the new kwargs

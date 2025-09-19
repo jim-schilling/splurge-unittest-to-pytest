@@ -167,6 +167,65 @@ class LoggingObserver:
             pass
 
 
+class StageLogger:
+    """Observer that emits lightweight pre/post stage debug messages.
+
+    Records per-stage start times and logs a debug message on completion
+    including the duration and a small context summary. This observer is
+    intentionally conservative: it logs only names, indices, duration (ms),
+    and a brief context key-count to avoid dumping large ASTs or secrets.
+    """
+
+    def __init__(self) -> None:
+        import logging
+
+        self._log = logging.getLogger("splurge.pipeline.stage")
+        self._times: dict[tuple[str, str], float] = {}
+
+    def __call__(self, event: Event) -> None:
+        try:
+            import time
+
+            name = type(event).__name__
+            if name == "StageStarted":
+                run_id = getattr(event, "run_id", "")
+                stage_id = getattr(event, "stage_id", "")
+                self._times[(run_id, stage_id)] = time.perf_counter()
+                self._log.debug(
+                    "stage.pre %s idx=%s id=%s",
+                    getattr(event, "stage_name", "<stage>"),
+                    getattr(event, "index", 0),
+                    stage_id,
+                )
+            elif name == "StageCompleted":
+                run_id = getattr(event, "run_id", "")
+                stage_id = getattr(event, "stage_id", "")
+                start = self._times.pop((run_id, stage_id), None)
+                duration_ms = None
+                if start is not None:
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                # small context summary
+                module = getattr(event, "module", None)
+                ctx_keys = 0
+                try:
+                    # module may be a libcst.Module or None; avoid expensive ops
+                    if isinstance(module, dict):
+                        ctx_keys = len(module.keys())
+                except Exception:
+                    ctx_keys = 0
+                self._log.debug(
+                    "stage.post %s idx=%s id=%s duration_ms=%s ctx_keys=%s",
+                    getattr(event, "stage_name", "<stage>"),
+                    getattr(event, "index", 0),
+                    stage_id,
+                    duration_ms,
+                    ctx_keys,
+                )
+        except Exception:
+            # Never allow observer exceptions to bubble
+            pass
+
+
 def logging_enabled() -> bool:
     """Return True when pipeline logging is enabled via environment var.
 
@@ -174,6 +233,17 @@ def logging_enabled() -> bool:
     """
 
     val = os.environ.get("SPLURGE_ENABLE_PIPELINE_LOGS", "0")
+    return val in ("1", "true", "True", "yes", "on")
+
+
+def logging_enabled_stages() -> bool:
+    """Return True when per-stage debug logging is explicitly enabled.
+
+    Controlled by the environment variable SPLURGE_DEBUG_STAGES. Truthy
+    values: "1", "true", "True", "yes", "on".
+    """
+
+    val = os.environ.get("SPLURGE_DEBUG_STAGES", "0")
     return val in ("1", "true", "True", "yes", "on")
 
 

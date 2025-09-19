@@ -48,6 +48,8 @@ class PipelineContext(TypedDict, total=False):
     needs_typing_names: Any
     fixture_nodes: Any
     postvalidator_error: Any
+    # Pipeline flag to request normalization of fixture names (strip leading underscores)
+    normalize_names: bool
 
 
 __all__ = ["PipelineContext"]

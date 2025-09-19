@@ -10,6 +10,7 @@ Usage:
 
 This script is intentionally minimal and avoids external dependencies.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,7 +20,9 @@ from pathlib import Path
 from typing import Optional
 
 
-BADGE_RE = re.compile(r"(!\[Code Coverage\]\()(?P<url>https://img.shields.io/badge/coverage-)[0-9]+%25(?P<rest>[-A-Za-z0-9%_./?=&]*)\)")
+BADGE_RE = re.compile(
+    r"(!\[Code Coverage\]\()(?P<url>https://img.shields.io/badge/coverage-)[0-9]+%25(?P<rest>[-A-Za-z0-9%_./?=&]*)\)"
+)
 
 
 def parse_coverage_percent(xml_path: Path) -> Optional[float]:

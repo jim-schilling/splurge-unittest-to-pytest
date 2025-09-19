@@ -35,6 +35,7 @@ from .events import (
     logging_enabled,
     HookRegistry,
 )
+from .events import StageLogger, logging_enabled_stages
 
 DOMAINS = ["stages", "manager"]
 
@@ -73,6 +74,11 @@ class StageManager:
                 self._event_bus.subscribe(PipelineCompleted, log_obs)
                 self._event_bus.subscribe(StageStarted, log_obs)
                 self._event_bus.subscribe(StageCompleted, log_obs)
+            # Per-stage debug logger (optional, controlled by env var or run-time flag)
+            if logging_enabled_stages():
+                stage_logger = StageLogger()
+                self._event_bus.subscribe(StageStarted, stage_logger)
+                self._event_bus.subscribe(StageCompleted, stage_logger)
         except Exception:
             pass
 

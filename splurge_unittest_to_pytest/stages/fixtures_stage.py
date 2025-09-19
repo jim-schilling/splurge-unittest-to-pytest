@@ -124,6 +124,40 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     bus = context.get("__event_bus__")
     # Stage-4: delegate to BuildTopLevelTestsTask and emit per-task events
     task = BuildTopLevelTestsTask()
+    # If a PatternConfigurator requests certain setup method names be
+    # treated as patterns to remove, strip those methods from ClassDef
+    # nodes so the BuildTopLevelTestsTask does not re-emit them.
+    try:
+        if pattern_config is not None:
+            # pattern_config exposes '_is_setup_method' to test membership
+            def _strip_pattern_methods(mod: cst.Module) -> cst.Module:
+                class _Stripper(cst.CSTTransformer):
+                    def leave_ClassDef(self, original: cst.ClassDef, updated: cst.ClassDef) -> cst.ClassDef:
+                        try:
+                            new_body = [
+                                m
+                                for m in original.body.body
+                                if not (
+                                    isinstance(m, cst.FunctionDef)
+                                    and getattr(pattern_config, "_is_setup_method")(m.name.value)
+                                )
+                            ]
+                            # new_body may contain BaseSmallStatement values;
+                            # cast to Sequence[BaseStatement] for IndentedBlock
+                            return updated.with_changes(
+                                body=cst.IndentedBlock(body=list(cast(Sequence[cst.BaseStatement], new_body)))
+                            )
+                        except Exception:
+                            return updated
+
+                return mod.visit(_Stripper())
+
+            try:
+                module = _strip_pattern_methods(module)
+            except Exception:
+                pass
+    except Exception:
+        pass
     try:
         if isinstance(bus, EventBus):
             bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
