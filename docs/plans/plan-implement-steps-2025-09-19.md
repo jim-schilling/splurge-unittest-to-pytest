@@ -44,9 +44,9 @@ Introduce Steps as the most granular, pure unit under Tasks, enabling decomposit
   - Add `before_step/after_step` methods to `HookRegistry`.
   - Implement `run_steps` helper with delta folding, events, and hooks.
 - Checklist
-  - [ ] Compile and run unit tests.
-  - [ ] Verify no lints introduced.
-  - [ ] Behind env flag: optional suppression of Step events when diagnostics off.
+  - [x] Compile and run unit tests.
+  - [x] Verify no lints introduced.
+  - [x] Behind env flag: optional suppression of Step events when diagnostics off.
 
 ### Phase 2 — Pilot: import_injector_tasks
 
@@ -64,9 +64,9 @@ Introduce Steps as the most granular, pure unit under Tasks, enabling decomposit
     - `prune_unused_typing_step`
   - Replace internal imperative bodies with `run_steps` composition.
 - Checklist
-  - [ ] Add unit tests for each Step (happy path + edge cases).
-  - [ ] Ensure per-task events still fire; confirm additional per-step events.
-  - [ ] Golden corpus: no diffs.
+  - [x] Add unit tests for each Step (happy path + edge cases).
+  - [x] Ensure per-task events still fire; confirm additional per-step events.
+  - [x] Golden corpus: no diffs.
 
 ### Phase 3 — Pilot: generator_tasks.BuildFixtureSpecsTask
 
@@ -80,9 +80,9 @@ Introduce Steps as the most granular, pure unit under Tasks, enabling decomposit
   - `mark_needs_shutil_step`
   - `add_bundling_wrappers_step`
 - Checklist
-  - [ ] Step unit tests for representative inputs.
-  - [ ] Task-level tests for ordering and delta folding.
-  - [ ] Golden corpus: no diffs.
+  - [x] Step unit tests for representative inputs.
+  - [x] Task-level tests for ordering and delta folding.
+  - [x] Golden corpus: no diffs.
 
 ### Phase 4 — Extend to additional Tasks
 
@@ -110,24 +110,24 @@ Introduce Steps as the most granular, pure unit under Tasks, enabling decomposit
 ## Detailed task list (prioritized)
 
 1. Foundations
-   - [ ] Implement Step types/results in `types.py`.
-   - [ ] Implement Step events in `stages/events.py`.
-   - [ ] Add HookRegistry methods for steps.
-   - [ ] Create `run_steps` helper and tests.
+   - [x] Implement Step types/results in `types.py`.
+   - [x] Implement Step events in `stages/events.py`.
+   - [x] Add HookRegistry methods for steps.
+   - [x] Create `run_steps` helper and tests.
 2. Pilot A: import injector
-   - [ ] Refactor `DetectNeedsCstTask` to Steps + tests.
-   - [ ] Refactor `InsertImportsCstTask` to Steps + tests.
+   - [x] Refactor `DetectNeedsCstTask` to Steps + tests.
+   - [x] Refactor `InsertImportsCstTask` to Steps + tests.
 3. Pilot B: generator
-   - [ ] Refactor `BuildFixtureSpecsTask` to Steps + tests.
-   - [ ] Refactor `FinalizeGeneratorTask` (if useful) to small Steps or keep as-is.
+   - [x] Refactor `BuildFixtureSpecsTask` to Steps + tests.
+   - [x] Refactor `FinalizeGeneratorTask` to small Step + tests.
 4. Broader rollout
    - [ ] Convert fixtures and fixture injector tasks.
    - [ ] Convert rewriter tasks.
    - [ ] Convert decorator/mock fixes tasks.
    - [ ] Convert tidy tasks.
 5. Hardening
-   - [ ] Docs/specs for Steps.
-   - [ ] Observability tuning and env gating.
+   - [x] Docs/specs for Steps.
+   - [x] Observability tuning and env gating.
 
 ## Risk management
 

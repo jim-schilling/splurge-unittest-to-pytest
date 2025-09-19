@@ -5,6 +5,7 @@ from typing import Any, Mapping, Sequence
 from ..types import Step, StepResult, TaskResult, ContextDelta
 from .events import EventBus, StepStarted, StepCompleted, StepErrored
 from .events import HookRegistry
+from . import diagnostics as _diagnostics
 
 
 def run_steps(
@@ -26,12 +27,18 @@ def run_steps(
     hooks = working.get("__hooks__")
     if not isinstance(stage_id, str) or not stage_id:
         stage_id = "stages.unknown"
+    # Suppress step events unless diagnostics are enabled globally
+    emit_step_events = False
+    try:
+        emit_step_events = bool(_diagnostics.diagnostics_enabled())
+    except Exception:
+        emit_step_events = False
     agg: dict[str, Any] = {}
     errors: list[Exception] = []
     diagnostics: dict[str, Any] = {}
     for step in steps:
         try:
-            if isinstance(bus, EventBus):
+            if emit_step_events and isinstance(bus, EventBus):
                 bus.publish(StepStarted(run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id))
             if isinstance(hooks, HookRegistry):
                 try:
@@ -51,11 +58,11 @@ def run_steps(
                     hooks.after_step(task_name, step.name, dict(res.delta.values))
                 except Exception:
                     pass
-            if isinstance(bus, EventBus):
+            if emit_step_events and isinstance(bus, EventBus):
                 bus.publish(StepCompleted(run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id))
         except Exception as exc:
             errors.append(exc)
-            if isinstance(bus, EventBus):
+            if emit_step_events and isinstance(bus, EventBus):
                 try:
                     bus.publish(StepErrored(run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id, error=exc))
                 except Exception:

@@ -491,13 +491,25 @@ class FinalizeGeneratorTask(Task):
     name: str = "finalize_generator"
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
-        prepend_nodes = cast(list, context.get("gen_prepend_nodes") or [])
-        fixture_nodes = cast(list, context.get("gen_fixture_nodes") or [])
-        specs = cast(dict, context.get("gen_specs") or {})
-        bundler_typing = context.get("gen_bundler_typing")
-        core = GeneratorCore()
-        result = core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing)
-        return TaskResult(delta=ContextDelta(values=dict(result)))
+        @dataclass
+        class _FinalizeStep:
+            id: str = "steps.generator.finalize.core"
+            name: str = "finalize_core"
+
+            def execute(self, ctx: Mapping[str, Any], resources: Any) -> StepResult:  # type: ignore[override]
+                prepend_nodes = cast(list, ctx.get("gen_prepend_nodes") or [])
+                fixture_nodes = cast(list, ctx.get("gen_fixture_nodes") or [])
+                specs = cast(dict, ctx.get("gen_specs") or {})
+                bundler_typing = ctx.get("gen_bundler_typing")
+                core = GeneratorCore()
+                result = core.finalize(prepend_nodes, fixture_nodes, specs, bundler_typing)
+                return StepResult(delta=ContextDelta(values=dict(result)))
+
+        stage_id = cast(str, context.get("__stage_id__", "stages.generator"))
+        task_id = self.id
+        task_name = self.name
+        steps = [_FinalizeStep()]
+        return run_steps(stage_id, task_id, task_name, steps, context, resources)
 
 
 __all__ = ["BuildFixtureSpecsTask", "FinalizeGeneratorTask"]
