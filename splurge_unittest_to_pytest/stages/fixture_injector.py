@@ -21,7 +21,6 @@ from ..types import PipelineContext
 import libcst as cst
 from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 from .fixture_injector_tasks import InsertFixtureNodesTask
-from .fixture_injector_tasks import _find_insertion_index as _task_find_insertion_index
 
 DOMAINS = ["stages", "fixtures"]
 
@@ -107,11 +106,42 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
 
 
 def _find_insertion_index(module: cst.Module) -> int:
-    """Compatibility wrapper for tests importing from this module.
+    """Find deterministic insertion index for fixture nodes.
 
-    Delegates to the task helper to keep a single source of truth.
+    Prefer an existing `import pytest` line; otherwise place after a
+    module docstring and existing imports.
     """
-    return _task_find_insertion_index(module)
+    for idx, stmt in enumerate(module.body):
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            expr = stmt.body[0]
+            if isinstance(expr, cst.Import):
+                for name in expr.names:
+                    if getattr(name.name, "value", None) == "pytest":
+                        return idx + 1
+
+    start_idx = 0
+    if module.body:
+        first = module.body[0]
+        if (
+            isinstance(first, cst.SimpleStatementLine)
+            and first.body
+            and isinstance(first.body[0], cst.Expr)
+            and isinstance(first.body[0].value, cst.SimpleString)
+        ):
+            start_idx = 1
+
+    insert_idx = start_idx
+    for idx in range(start_idx, len(module.body)):
+        stmt = module.body[idx]
+        if (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and stmt.body
+            and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+        ):
+            insert_idx = idx + 1
+            continue
+        break
+    return insert_idx
 
 
 def fixture_injector_stage(context: PipelineContext) -> PipelineContext:

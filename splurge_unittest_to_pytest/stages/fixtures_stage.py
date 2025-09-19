@@ -161,7 +161,12 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     try:
         if isinstance(bus, EventBus):
             bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
-        res = task.execute(context, resources=None)
+        # Ensure the task receives the possibly-modified module (for example
+        # when pattern_config requested method stripping). Create a working
+        # context that preserves other keys but updates 'module'.
+        working_ctx = dict(context)
+        working_ctx["module"] = module
+        res = task.execute(working_ctx, resources=None)
         if isinstance(bus, EventBus):
             bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
     except Exception as exc:
