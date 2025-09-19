@@ -7,7 +7,29 @@ on:
     branches: [ main ]
 
 jobs:
+  pr-trigger-check:
+    name: PR trigger check
+    runs-on: ubuntu-latest
+    outputs:
+      allow_ci: ${{ steps.check.outputs.allow_ci }}
+    steps:
+      - name: Determine whether to run CI
+        id: check
+        run: |
+          echo "actor=${GITHUB_ACTOR}"
+          allow=true
+          if [ "${GITHUB_ACTOR}" = "github-actions[bot]" ] || [ "${GITHUB_ACTOR}" = "github-actions" ]; then
+            allow=false
+          fi
+          last_msg=$(git log -1 --pretty=%B || true)
+          if echo "$last_msg" | grep -q "^chore(ci)"; then
+            allow=false
+          fi
+          echo "::set-output name=allow_ci::$allow"
+
   tests-with-diagnostics:
+    needs: [pr-trigger-check]
+    if: needs.pr-trigger-check.outputs.allow_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
