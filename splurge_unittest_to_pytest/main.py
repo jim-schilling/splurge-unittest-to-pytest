@@ -328,7 +328,6 @@ def convert_file(
     setup_patterns: list[str] | None = None,
     teardown_patterns: list[str] | None = None,
     test_patterns: list[str] | None = None,
-    normalize_pytest_alias: bool = False,
 ) -> ConversionResult:
     """Convert a unittest test file to pytest style.
 
@@ -343,8 +342,7 @@ def convert_file(
             values and injected into the pipeline so stages can consult them.
         teardown_patterns: Optional list of custom teardown method names/patterns.
         test_patterns: Optional list of custom test name patterns.
-
-    Returns:
+        Returns:
         ConversionResult containing the converted code and metadata.
 
     Raises:

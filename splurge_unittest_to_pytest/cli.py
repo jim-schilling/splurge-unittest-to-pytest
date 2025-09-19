@@ -150,13 +150,7 @@ def convert_string(src: str, *, autocreate: bool = True, pattern_config=None):
     default=False,
     help="Show unified diffs for changed files in dry-run mode",
 )
-@click.option(
-    "--normalize-pytest-alias",
-    "normalize_pytest_alias",
-    is_flag=True,
-    default=False,
-    help="Detect aliased pytest imports (e.g. `import pytest as pt`) and optionally normalize usages back to `pytest` when safe.",
-)
+# (normalization flag removed from CLI)
 # Legacy compatibility toggles removed: CLI emits strict pytest-style output by default.
 @click.option(
     "--autocreate/--no-autocreate",
@@ -180,7 +174,7 @@ def main(
     show_diff: bool,
     json_output: bool,
     json_file: Path | None,
-    normalize_pytest_alias: bool,
+    
 ) -> None:
     """Convert unittest-style tests to pytest-style tests.
 
@@ -393,39 +387,17 @@ def main(
                     try:
                         # Pass explicit pattern lists into convert_file so it can
                         # construct a PatternConfigurator for the pipeline.
-                        # Call convert_file. Some tests monkeypatch convert_file
-                        # with a shim that doesn't accept the new
-                        # `normalize_pytest_alias` kwarg. Attempt the modern call
-                        # signature first and fall back to the legacy call on
-                        # TypeError caused by unexpected keyword args.
-                        try:
-                            result = convert_file(
-                                file_path,
-                                output_path=output_path,
-                                encoding=encoding,
-                                autocreate=autocreate,
-                                setup_patterns=setup_patterns or None,
-                                teardown_patterns=teardown_patterns or None,
-                                test_patterns=test_patterns or None,
-                                normalize_pytest_alias=normalize_pytest_alias,
-                            )
-                        except TypeError as e:
-                            # If convert_file doesn't accept the new kwarg, retry
-                            # using the legacy signature to preserve test
-                            # compatibility.
-                            msg = str(e)
-                            if "normalize_pytest_alias" in msg or "unexpected" in msg:
-                                result = convert_file(
-                                    file_path,
-                                    output_path=output_path,
-                                    encoding=encoding,
-                                    autocreate=autocreate,
-                                    setup_patterns=setup_patterns or None,
-                                    teardown_patterns=teardown_patterns or None,
-                                    test_patterns=test_patterns or None,
-                                )
-                            else:
-                                raise
+                        # Call convert_file; some tests may monkeypatch convert_file
+                        # with alternate signatures so keep the invocation simple.
+                        result = convert_file(
+                            file_path,
+                            output_path=output_path,
+                            encoding=encoding,
+                            autocreate=autocreate,
+                            setup_patterns=setup_patterns or None,
+                            teardown_patterns=teardown_patterns or None,
+                            test_patterns=test_patterns or None,
+                        )
 
                         if result.has_changes:
                             click.echo(f"Converted: {file_path}")

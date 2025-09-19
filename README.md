@@ -5,183 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 [![Tests](https://img.shields.io/badge/tests-1096%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
-[![Code Coverage](https://img.shields.io/badge/coverage-86%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
-
-[![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
-
-
-A small library and CLI tool to convert unittest-style tests into strict pytest-style tests while preserving formatting and comments using libcst.
-
-Full developer documentation is available in `docs/README-DETAILS.md`.
-
-## Quick Links
-
-- Project: https://github.com/jim-schilling/splurge-unittest-to-pytest
-- PyPI: https://pypi.org/project/splurge-unittest-to-pytest/
-
-## Installation
-
-Install from PyPI:
-
-```bash
-pip install splurge-unittest-to-pytest
-```
-
-For development, clone and install editable dependencies:
-
-```bash
-git clone https://github.com/jim-schilling/splurge-unittest-to-pytest
-cd splurge-unittest-to-pytest
-pip install -e ".[dev]"
-```
-
-## Usage
-
-Basic programmatic usage:
-
-```python
-from splurge_unittest_to_pytest import convert_string, convert_file
-
-result = convert_string(unittest_source_code)
-print(result.converted_code)
-```
-
-CLI usage:
-
-```bash
-splurge-unittest-to-pytest [OPTIONS] [PATHS]...
-```
-
-The CLI no longer accepts legacy compatibility toggles; it emits strict
-pytest-style output by default. See --help for remaining options.
-
-Observer/logging controls:
-- Set `SPLURGE_ENABLE_PIPELINE_LOGS=1` to enable structured pipeline logs via the internal `LoggingObserver`.
-- Diagnostics snapshots can be enabled by the manager; when enabled (`SPLURGE_ENABLE_DIAGNOSTICS=1`), snapshots are written to a diagnostics directory (see below).
-
-## Migration note (breaking change)
-
-As of release 2025.2.0 this project no longer supports legacy compatibility
-mode. The converter emits strict pytest-style output only. If you previously
-relied on the legacy compatibility behavior to preserve unittest.TestCase
-classes or to generate autouse-attachment glue, you must update converted
-code manually.
-
-Example — before (unittest-style class):
-
-```python
-import unittest
-
-class TestCalc(unittest.TestCase):
-  def setUp(self):
-    self.calc = Calculator()
-
-  def test_add(self):
-    self.assertEqual(self.calc.add(2, 3), 5)
-```
-
-After conversion (strict pytest-style):
-
-```python
-import pytest
-
-@pytest.fixture
-def calc():
-  return Calculator()
-
-def test_add(calc):
-  assert calc.add(2, 3) == 5
-```
-
-If you need to preserve class structure, convert using the CLI with `--dry-run`
-to inspect changes, then apply manual edits (class preservation is no longer
-automated by the converter).
-
-## Supported conversions (high level)
-
-- Assertion conversions (a few examples):
-  - `self.assertEqual(a, b)` → `assert a == b`
-  - `self.assertTrue(x)` → `assert x`
-  - `self.assertIsNone(x)` → `assert x is None`
-  - `self.assertRaises(Exception)` → `with pytest.raises(Exception):`
-
-- Class and fixture conversions:
-  - Remove `unittest.TestCase` inheritance where applicable
-  - Convert `setUp`/`tearDown` into pytest fixtures (yield pattern for teardown)
-
-- Import management: remove `unittest` imports and add pytest imports when required
-
-See `docs/README-DETAILS.md` for a complete list of conversions and examples.
-
-## Developer guide
-
-Run tests and checks locally:
-
-```bash
-# Run tests
-pytest
-
-# Run tests with coverage
-pytest --cov=splurge_unittest_to_pytest --cov-report=term-missing
-
-# Lint and format
-ruff check . && ruff format .
-
-# Type check
-mypy splurge_unittest_to_pytest/
-```
-
-Key developer notes:
-- Internal helper utilities live in `splurge_unittest_to_pytest.converter.helpers`.
-- The converter uses libcst to perform safe, formatting-preserving transformations.
-
-## Recent updates (2025-09-13 → 2025-09-14)
-
-- Removed legacy compatibility/autouse helpers from the public runtime API. The converter now uses the staged pipeline as the canonical engine and emits strict pytest-native code by default. See the changelog for details.
-- Tests: duplicated, test-local autouse helpers were consolidated into a single test-only helper module at `tests/unit/helpers/autouse_helpers.py`. This keeps tests DRY while avoiding exposing test utilities in production code.
-- Repository cleanup: local `build/` artifacts were removed from the working tree and `build/` is ignored via `.gitignore` to avoid committing generated files.
-
-Verification (local run):
-
-- ruff: format + check passed (few files reformatted during the change)
-- mypy: no type errors across the package
-- pytest (unit suite): all unit tests passed locally (unit run: 859 passed, 1 skipped; full suite runs earlier reported 874 passed, 4 skipped). Coverage summary printed during the run (project coverage ~86%).
-
-If you depend on older legacy compatibility flags or behavior, update your
-workflow to use the staged pipeline and strict-only semantics — the converter
-intentionally emits modern pytest patterns.
-
-## Contributing
-
-1. Fork the repository and create a feature branch.
-2. Add or update tests in `tests/unit/`.
-3. Run the test suite and linters locally.
-4. Open a pull request describing the change.
-
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## Acknowledgments
-
-- Built with libcst for robust code transformations.
-- Inspired by existing unittest→pytest conversion tools and projects.
-# Splurge unittest-to-pytest
-
-[![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
-[![PyPI Version](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-[![Tests](https://img.shields.io/badge/tests-1096%20passed-brightgreen.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
 <!-- Test count updated from reports/junit.xml on 2025-09-18 (1102 total, 6 skipped → 1096 passed) -->
-[![Code Coverage](https://img.shields.io/badge/coverage-86%25-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
+[![Code Coverage](https://img.shields.io/badge/coverage-86%-green.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest)
 <!-- Coverage updated automatically from reports/coverage.xml on 2025-09-18 -->
 [![Code Quality](https://img.shields.io/badge/code%20quality-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org/)
 
-[![Quick checks](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml/badge.svg?query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
-[![Coverage](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml/badge.svg?query=workflow%3A%22Coverage+%28main+branch+only%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
 [![Quick status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/ci.yml?label=quick&style=flat-square&query=workflow%3A%22Quick+checks+%28lint%2C+type%2C+tests%29%22)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml)
 [![Coverage status](https://img.shields.io/github/actions/workflow/status/jim-schilling/splurge-unittest-to-pytest/coverage.yml?label=coverage&style=flat-square)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/coverage.yml)
 
@@ -271,61 +100,63 @@ you can edit the converted assertions to use `== None` / `!= None` instead.
 
 ## CLI Options
 
-```
+The command-line tool is provided via the `splurge-unittest-to-pytest` console script (or `python -m splurge_unittest_to_pytest.cli`). Below are the supported options and their meanings.
+
 Usage: splurge-unittest-to-pytest [OPTIONS] [PATHS]...
 
   Convert unittest-style tests to pytest-style tests.
 
 Options:
-  --version                Show the version and exit.
-  -o, --output-dir PATH    Output directory for converted files (default: overwrite in place)
-  -n, --dry-run           Show what would be converted without making changes
-  -r, --recursive         Recursively find unittest files in directories
-  --encoding TEXT         Text encoding for reading/writing files (default: utf-8)
-  -v, --verbose           Show detailed output
-  --help                  Show this message and exit.
-```
+  --version                       Show the version and exit.
+  -o, --output PATH               Output directory for converted files (default: overwrite in place)
+  -n, --dry-run                   Show what would be converted without making changes
+  -r, --recursive                 Recursively find unittest files in directories
+  --encoding TEXT                 Text encoding for reading/writing files (default: utf-8)
+  -v, --verbose                   Show detailed output
+  -b, --backup PATH               Create backup files in specified directory with .bak extension
+  --follow-symlinks / --no-follow-symlinks
+                                  Whether to follow symlinked files when discovering test files (default: follow)
+  --respect-gitignore             Respect .gitignore patterns when discovering files (default: disabled)
+  --setup-methods TEXT            Setup method patterns (comma-separated or multiple flags). Examples: --setup-methods 'setUp,beforeAll' --setup-methods teardown
+  --teardown-methods TEXT         Teardown method patterns (comma-separated or multiple flags)
+  --test-methods TEXT             Test method patterns (comma-separated or multiple flags)
+  --json                          Emit NDJSON per-file results (machine-readable)
+  --json-file PATH                Write NDJSON per-file results to the given file (UTF-8). Implies --json.
+  --diff                          Show unified diffs for changed files in dry-run mode
+  --autocreate / --no-autocreate  Enable or disable autocreation of tmp_path-backed file fixtures when a sibling '<prefix>_content' is present (default: --autocreate)
+  --help                          Show this message and exit.
 
-## Modern Test Infrastructure
+Notes:
+- Pass one or more FILE or DIRECTORY paths as positional arguments. If a directory is supplied, use `--recursive` to discover test files.
+- When `--output` is omitted the tool overwrites files in place. When provided, converted files are written to the given directory keeping original filenames.
+- `--backup` (with a directory path) causes the tool to copy each input file to the backup directory before modifying it (only when not running `--dry-run`). Backups are named like `filename.bak-<hash>` to avoid collisions.
+- `--json`/`--json-file` produce NDJSON (newline-delimited JSON) records per-file which is useful for machine processing.
+-- Note: normalization of aliased pytest imports is not implemented by the converter; this behavior is planned for a future release.
 
-Version 2025.0.0 introduces significant improvements to the test infrastructure:
+## CLI Usage Examples
 
-### Enhanced Testing Features
-
-
-### Internal helpers (note)
-
-A small set of internal helper utilities used by the converter has been
-consolidated into a single module: `splurge_unittest_to_pytest.converter.helpers`.
-This module is intended for internal reuse across the package. External users
-should prefer the public API (`convert_string`, `convert_file`, and the CLI).
-
-If you previously imported helpers from `splurge_unittest_to_pytest.converter.utils`
-or `splurge_unittest_to_pytest.converter.core`, update your imports to:
-
-```python
-from splurge_unittest_to_pytest.converter.helpers import normalize_method_name
-```
-
-Note: `converter.core` has been removed to reduce indirection; importing
-internal modules is not part of the stable public API and may change without
-notice. See `docs/plan-simplification-2025-09-12.md` for the migration plan and
-rationale.
-### Performance Improvements
-
-- **Fast execution**: All 47 tests complete in under 60 seconds
-### Development Workflow
+1) Dry-run example (show what would change). This example uses flags common to related tooling that follow similar UX (`--test-root`, `--import-root`, `--repo-root` are used by companion tools such as `splurge_test_namer`):
 
 ```bash
-# Run tests with coverage and parallel execution
-pytest -n auto --cov=splurge_unittest_to_pytest --cov-report=term-missing
+# Dry-run: show what would be converted under the current directory (recursive)
+splurge-unittest-to-pytest -n -r .
 
-# Lint and format in one command
-ruff check . && ruff format .
-
-# Type check
-mypy splurge_unittest_to_pytest/
+# Example using companion-tool style flags (note: these flags belong to splurge_test_namer; shown here as a usage pattern)
+python -m splurge_test_namer.cli --test-root tests --import-root my_package --repo-root /path/to/repo --dry-run
 ```
+
+2) Apply changes with backups and force semantics (example shows an `apply` style run using `--force --apply` as seen in companion tools). For this project the equivalent is to run without `--dry-run` and optionally supply `--backup` to preserve originals:
+
+```bash
+# Convert files in-place, create backups in ./backups, verbose output
+splurge-unittest-to-pytest -r --backup ./backups -v PATH/TO/TESTS
+
+# Companion-tool example (apply/force example from splurge_test_namer metadata)
+python -m splurge_test_namer.cli --test-root tests --apply --force --backup /path/to/backups
+```
+
+If you want the exact `splurge-unittest-to-pytest` equivalents for `--apply`/`--force` semantics: run the command without `-n/--dry-run` to perform the conversion (there is no separate `--apply` flag in this CLI). Use `--backup` to preserve originals and `-v/--verbose` for extra information.
+
 
 ## Library API
 
@@ -418,9 +249,10 @@ mypy splurge_unittest_to_pytest/
 - **pytest**: Testing framework with modern fixtures and plugins
 - **pytest-mock**: Enhanced mocking capabilities for pytest
 - **pytest-cov**: Code coverage reporting
+- **pytest-xdist**: Parallel test runs
 - **ruff**: Unified linting, formatting, and security validation
 - **mypy**: Static type checking
-- **libcst**: AST-based code transformation library
+- **libcst**: Concrete Syntax Tree (CST)-based code transformation library
 
 ## Contributing
 
@@ -470,3 +302,45 @@ Or run the module directly without installing:
 ```bash
 python -m splurge_unittest_to_pytest.print_diagnostics
 ```
+
+## Try it: NDJSON output and parsing
+
+You can emit per-file NDJSON records using `--json` or write them to a file with `--json-file`. NDJSON is newline-delimited JSON (one JSON object per line), which is convenient for streaming and machine processing.
+
+```bash
+# Write NDJSON results to a file
+splurge-unittest-to-pytest -r --json-file results.ndjson PATH/TO/TESTS
+```
+
+Small Python example to parse `results.ndjson` and summarize results:
+
+```python
+import json
+
+counts = {"converted": 0, "errors": 0, "unchanged": 0}
+with open("results.ndjson", "r", encoding="utf-8") as fh:
+  for line in fh:
+    rec = json.loads(line)
+    if rec.get("has_changes"):
+      counts["converted"] += 1
+    elif rec.get("errors"):
+      counts["errors"] += 1
+    else:
+      counts["unchanged"] += 1
+
+print(counts)
+```
+
+## Example: custom method patterns
+
+If your codebase uses non-standard setup/test method names, you can pass additional patterns on the CLI. The flags accept comma-separated lists or may be supplied multiple times.
+
+```bash
+# Single flag with comma-separated patterns
+splurge-unittest-to-pytest -n --setup-methods "setUp,before_all" --test-methods "should_,test_" tests/
+
+# Multiple flags (equivalent)
+splurge-unittest-to-pytest -n --setup-methods setUp --setup-methods before_all --test-methods should_ --test-methods test_ tests/
+```
+
+These patterns are used to detect methods that should be considered setup/teardown/test methods during conversion. Patterns may be simple prefixes or full names depending on your project's conventions.
