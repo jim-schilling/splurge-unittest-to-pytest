@@ -2,8 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [2025.3.2] - 2025-09-19
+
+### Added
+- Step foundations (Option A):
+  - New `Step` protocol and `StepResult` in `types.py`.
+  - Step lifecycle events: `StepStarted`, `StepCompleted`, `StepSkipped`, `StepErrored`.
+  - HookRegistry additions: `before_step` and `after_step`.
+  - `run_steps` helper (`stages/steps.py`) to execute ordered Steps within a Task and fold `ContextDelta`s.
+
+### Changed
+- Refactored tasks to compose Steps via `run_steps`:
+  - `stages/import_injector_tasks.py`: implemented `_DetectNeedsStep` and `_InsertImportsStep` under `DetectNeedsCstTask` and `InsertImportsCstTask` respectively.
+  - `stages/generator_tasks.py`: wrapped `BuildFixtureSpecsTask` logic in `_BuildSpecsStep` executed via `run_steps`.
+- Stages now propagate a stable stage identifier to tasks/steps via `context["__stage_id__"]` in `stages/import_injector.py` and `stages/generator.py` so step events include stage metadata.
+
+### Fixed
+- Removed duplicated/dead code in `stages/generator_tasks.py` after the Step refactor; consolidated logic into a single authoritative implementation.
+- mypy cleanup: added `__stage_id__` to `PipelineContext` and tightened annotations/casts in `generator_tasks` to satisfy static typing.
+
+### Docs
+- Research and plan for Steps:
+  - `docs/research/research-steps-2025-09-19.md` (analysis, options, recommendation).
+  - `docs/plans/plan-implement-steps-2025-09-19.md` (phased implementation plan and checklist).
+- Developer notes added to `docs/README-DETAILS.md` describing the Step concept, events/hooks, and usage via `run_steps`.
+
+### Verification
+- Static typing: `mypy splurge_unittest_to_pytest` reports no issues.
+- Linting: no new linter errors on edited files.
 
 ## [2025.3.1] - 2025-09-19
 

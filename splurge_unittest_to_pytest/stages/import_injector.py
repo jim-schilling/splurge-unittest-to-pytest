@@ -45,6 +45,9 @@ def import_injector_stage(context: PipelineContext) -> PipelineContext:
 
     # Stage-2 pilot: run two small CstTasks to determine needs and insert imports.
     stage_id = "stages.import_injector"
+    # ensure stage id is visible to tasks/steps
+    context = cast(PipelineContext, dict(context))
+    context["__stage_id__"] = stage_id
     bus = context.get("__event_bus__")
     hooks: Any = context.get("__hooks__")
 
