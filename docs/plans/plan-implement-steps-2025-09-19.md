@@ -187,7 +187,7 @@ Rollout & Quality gates (extended)
 
    - fixtures_stage
      - [x] Confirm `stages/fixtures_stage_tasks.py` already exposes Steps (`CollectClassesStep`, `BuildTopLevelFnsStep`).
-     - [ ] Add unit tests (if missing) that assert task-level delta folding and idempotency.
+     - [x] Add unit tests (if missing) that assert task-level delta folding and idempotency.
      - [ ] Split large Steps into smaller focused Steps where helpful.
 
    - fixture_injector
@@ -240,6 +240,7 @@ Use the checklist below when opening migration PRs. Keep PRs small and focused w
 - [ ] Include unit tests for each new Step (happy path + 1-2 edge cases)
 - [ ] Add at least one integration test that runs the Task via `run_steps` and asserts expected TaskResult.delta keys (import flags, module changes, etc.)
 - [ ] Run `ruff --fix` and `mypy` locally and fix issues before PR
+- [x] Run `ruff --fix` and `mypy` locally and fix issues before PR
 - [ ] Run `pytest` for affected tests (and ideally the full suite locally if change impacts generator/rewriter logic)
 - [ ] Add a brief CHANGELOG entry describing the migration (example):
   - "Migrate <stage> Task to Step pipeline: introduce Parse/Transform/Emit Steps and execute via run_steps; preserve behavioral parity and add focused unit tests."
