@@ -6,12 +6,12 @@ from splurge_unittest_to_pytest.stages.steps_import_injector import InsertImport
 
 
 def test_typing_merge_handles_as_aliases():
-    src = textwrap.dedent('''
+    src = textwrap.dedent("""
     from typing import Optional as Opt
 
     def f(x: Opt[int]) -> List[int]:
         pass
-    ''')
+    """)
     mod = cst.parse_module(src)
     ctx = {"module": mod, "needs_typing_names": ["List"]}
     res = InsertImportsStep().execute(ctx, {})
@@ -23,12 +23,12 @@ def test_typing_merge_handles_as_aliases():
 
 
 def test_typing_merge_skips_duplicates():
-    src = textwrap.dedent('''
+    src = textwrap.dedent("""
     from typing import List, Optional
 
     def f() -> List[int]:
         pass
-    ''')
+    """)
     mod = cst.parse_module(src)
     ctx = {"module": mod, "needs_typing_names": ["List"]}
     res = InsertImportsStep().execute(ctx, {})
@@ -40,12 +40,12 @@ def test_typing_merge_skips_duplicates():
 
 
 def test_typing_merge_preserves_comment_on_new_name():
-    src = textwrap.dedent('''
+    src = textwrap.dedent("""
     from typing import Optional  # optional
 
     def f(x: Optional[int]) -> Any:
         pass
-    ''')
+    """)
     mod = cst.parse_module(src)
     ctx = {"module": mod, "needs_typing_names": ["Any"]}
     res = InsertImportsStep().execute(ctx, {})

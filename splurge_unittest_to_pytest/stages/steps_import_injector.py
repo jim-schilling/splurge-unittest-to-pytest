@@ -21,32 +21,55 @@ def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: s
     This helper preserves the original SimpleStatementLine (so comments and trailing whitespace remain)
     and preserves parentheses tokens from the original ImportFrom when present.
     """
+    # Validate canonical target
+    if existing_idx < 0 or existing_idx >= len(mod.body):
+        return mod
     orig_stmt = mod.body[existing_idx]
     orig_first = orig_stmt.body[0] if isinstance(orig_stmt, cst.SimpleStatementLine) and orig_stmt.body else None
     if not isinstance(orig_first, cst.ImportFrom) or getattr(orig_first.module, "value", None) != "typing":
         return mod
-    # collect alias nodes from all typing ImportFrom statements, preserving their nodes so any
-    # comma/whitespace/comment metadata attached to aliases is retained
-    collected_aliases: list[cst.ImportAlias] = []
-    seen: set[str] = set()
-    paren_source: cst.ImportFrom | None = None
-    for stmt in mod.body:
+
+    # Find all typing import statement indices so we can consolidate them
+    typing_indices: list[int] = []
+    for idx, stmt in enumerate(mod.body):
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
             first = stmt.body[0]
             if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
+                typing_indices.append(idx)
+
+    # If there is only the canonical typing import, behave as before but still collect aliases
+    if not typing_indices:
+        return mod
+
+    # collect alias nodes from all typing ImportFrom statements, preserving their nodes so any
+    # comma/whitespace/comment metadata attached to aliases is retained. Prefer the
+    # paren-containing ImportFrom as the canonical location (so closing-paren comments
+    # are preserved) if one exists.
+    collected_aliases: list[cst.ImportAlias] = []
+    seen: set[str] = set()
+    paren_source: cst.ImportFrom | None = None
+    paren_index: int | None = None
+    for idx in typing_indices:
+        stmt = mod.body[idx]
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.ImportFrom):
                 # prefer the first ImportFrom that contains parentheses as the source of lpar/rpar
                 if paren_source is None and getattr(first, "lpar", None) is not None:
                     paren_source = first
+                    paren_index = idx
                 for alias in getattr(first, "names") or []:
                     an = getattr(alias, "name", None)
                     if isinstance(an, cst.Name) and an.value not in seen:
                         collected_aliases.append(alias)
                         seen.add(an.value)
+
     # append any requested add_names not already present
     for n in sorted(add_names):
         if n not in seen:
             collected_aliases.append(cst.ImportAlias(name=cst.Name(n)))
             seen.add(n)
+
     new_importfrom = cst.ImportFrom(module=cst.Name("typing"), names=collected_aliases)
     # if any original ImportFrom used parentheses, reuse its lpar/rpar to preserve formatting
     if paren_source is not None:
@@ -54,12 +77,90 @@ def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: s
             new_importfrom = new_importfrom.with_changes(lpar=paren_source.lpar, rpar=paren_source.rpar)
         except Exception:
             pass
+
+    # Build new statement by replacing the canonical statement (existing_idx)
+    # Choose canonical index: prefer paren-containing import, else fall back to provided existing_idx
+    canonical_idx = paren_index if paren_index is not None else existing_idx
+    if canonical_idx is None:
+        canonical_idx = typing_indices[0]
+
     try:
+        orig_stmt = mod.body[canonical_idx]
         new_stmt = orig_stmt.with_changes(body=[new_importfrom])
     except Exception:
         new_stmt = cst.SimpleStatementLine(body=[new_importfrom])
+
+    # Replace canonical and remove other typing import statements
     new_body = list(mod.body)
-    new_body[existing_idx] = new_stmt
+    # set canonical
+    new_body[canonical_idx] = new_stmt
+
+    # Gather comments from other typing import statements so we don't lose them.
+    preserved_comments: list[str] = []
+    remove_indices = [i for i in typing_indices if i != canonical_idx]
+    for i in sorted(remove_indices):
+        try:
+            stmt = mod.body[i]
+            # Render the single-statement module to get its textual source
+            try:
+                src = cst.Module(body=[stmt]).code
+            except Exception:
+                src = ""
+            for line in src.splitlines():
+                if "#" in line:
+                    comment = line[line.index("#") :].strip()
+                    if comment and comment not in preserved_comments:
+                        preserved_comments.append(comment)
+        except Exception:
+            continue
+
+    # Remove other typing import statements (do deletions in reverse to keep indices valid)
+    for i in sorted(remove_indices, reverse=True):
+        try:
+            del new_body[i]
+        except Exception:
+            pass
+
+    # After deletions, the original canonical_idx may have shifted left by the
+    # number of removed indices that were before it. Compute the adjusted
+    # canonical index so we attach preserved comments to the correct statement.
+    shift = sum(1 for i in remove_indices if i < canonical_idx)
+    canonical_idx_after = canonical_idx - shift
+
+    # Attach preserved comments as leading_lines on the canonical merged import so
+    # we don't change the module body element types (keeps mypy happy).
+    try:
+        # Ensure the adjusted index is within bounds. Use an Optional typed local
+        # variable so we don't assign None to a variable mypy expects to be a
+        # statement node.
+        target_stmt: cst.SimpleStatementLine | cst.BaseCompoundStatement | None
+        if canonical_idx_after < 0 or canonical_idx_after >= len(new_body):
+            target_stmt = None
+        else:
+            target_stmt = new_body[canonical_idx_after]
+        if isinstance(target_stmt, cst.SimpleStatementLine) and preserved_comments:
+            # Build new leading_lines: preserved comments followed by existing leading_lines
+            existing_leading = list(getattr(target_stmt, "leading_lines", []) or [])
+            new_leading: list[cst.EmptyLine] = []
+            for comment in preserved_comments:
+                try:
+                    new_leading.append(cst.EmptyLine(comment=cst.Comment(comment)))
+                except Exception:
+                    continue
+            new_leading.extend(existing_leading)
+            try:
+                # target_stmt is narrowed to SimpleStatementLine above, but mypy may
+                # still need a helpful cast here for the with_changes call.
+                new_stmt_with_comments = cast(cst.SimpleStatementLine, target_stmt).with_changes(
+                    leading_lines=new_leading
+                )
+                new_body[canonical_idx_after] = new_stmt_with_comments
+            except Exception:
+                # If we can't attach leading lines for any reason, leave stmt as-is
+                pass
+    except Exception:
+        pass
+
     return mod.with_changes(body=new_body)
 
 
@@ -265,7 +366,10 @@ class InsertImportsStep(Step):
                 if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
                     first = stmt.body[0]
                     if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
-                        existing_typing_idx = idx
+                        # Prefer the first encountered typing import as the canonical location
+                        # so that any statement-level comments on earlier imports are preserved.
+                        if existing_typing_idx is None:
+                            existing_typing_idx = idx
                         for alias in getattr(first, "names") or []:
                             an = getattr(alias, "name", None)
                             if isinstance(an, cst.Name):
@@ -389,6 +493,23 @@ class InsertImportsStep(Step):
                 existing_names.add(str(insert_name))
 
         new_module = mod.with_changes(body=new_body)
+
+        # Consolidate multiple existing `from typing import` statements into one,
+        # even if we didn't add new typing names. This keeps the module tidy and
+        # avoids duplicate typing import blocks.
+        try:
+            typing_idxs: list[int] = []
+            for idx, stmt in enumerate(new_module.body):
+                if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+                    first = stmt.body[0]
+                    if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
+                        typing_idxs.append(idx)
+            if len(typing_idxs) > 1:
+                # merge into the first occurrence
+                new_module = _merge_typing_into_existing(new_module, typing_idxs[0], set())
+        except Exception:
+            # best-effort: if consolidation fails, continue with the current module
+            pass
 
         class _NameCollector(cst.CSTVisitor):
             def __init__(self) -> None:
