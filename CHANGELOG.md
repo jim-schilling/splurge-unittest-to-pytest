@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2025.3.3] - 2025-09-19
+
+### Added
+- Integration tests for assertion transformation steps:
+  - `tests/unit/test_steps_integration_assertion_flags_0001.py` verifies import flag setting for almost-equal and regex assertions.
+  - `tests/unit/test_steps_integration_assertion_rewriter_0001.py` verifies end-to-end transformation of assertions via the new Steps and runner. 
+- Unit tests for the `assertion_rewriter` Steps:
+  - `tests/unit/test_steps_assertion_parse_0001.py` for `ParseAssertionsStep`
+  - `tests/unit/test_steps_assertion_transform_0001.py` for `TransformAssertionsStep`
+  - `tests/unit/test_steps_assertion_emit_0001.py` for `EmitAssertionsStep`
+- Test helpers in `tests/unit/helpers/step_test_helpers.py` to facilitate Step unit tests and context management.
+
+### Changed
+- `assertion_rewriter` Task refactored to use the new Steps and `run_steps` runner:
+  - `stages/rewriter_tasks.py`: `AssertionRewriterTask` now defines `steps` and invokes `run_steps` in its `execute` method.
+  - Removed legacy assertion transformation logic from `AssertionRewriterTask`. 
+- Updated `docs/README-DETAILS.md` with a section on Steps and the `assertion_rewriter` migration.
+- Updated `docs/plans/plan-step-contract-2025-09-19.md` and `docs/specs/spec-assertion-rewriter-steps-2025-09-19.md` to reflect the implemented Step contract and the specific Steps for assertion rewriting.
+
+### Fixed
+- Minor mypy typing issues in `stages/rewriter_tasks.py` resolved to ensure static typing is clean.
+
+### Verification
+- Full test suite run: 1111 passed, 5 skipped, 1 xfailed (local Windows, Python 3.12).
+- Static typing: `mypy splurge_unittest_to_pytest` reports no issues.
+- Linting: no new linter errors on edited files.
+
 ## [2025.3.2] - 2025-09-19
 
 ### Added
