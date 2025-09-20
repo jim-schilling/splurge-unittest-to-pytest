@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta
-
+from ..types import ContextDelta, Task, TaskResult
 
 DOMAINS = ["stages", "validation", "tasks"]
 

@@ -10,16 +10,15 @@ These tasks are internal to the stage and preserve existing behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, cast, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta
+from ..types import ContextDelta, Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step
 from .steps import run_steps
-
 
 DOMAINS = ["stages", "imports", "tasks"]
 

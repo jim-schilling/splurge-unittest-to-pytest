@@ -8,26 +8,26 @@ final pipeline context mapping expected by downstream stages.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, cast, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, cast
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta, StepResult
-from .steps import run_steps
-from .generator_parts.module_level_names import collect_module_level_names
-from .generator_parts.bundler_invoker import safe_bundle_named_locals
-from .generator_parts.references_attr import references_attribute
-from .generator_parts.literals import is_literal
-from .generator_parts.filename_inferer import infer_filename_for_local
-from .generator_parts.self_attr_finder import collect_self_attrs
-from .generator_parts.name_allocator import choose_local_name
-from .generator_parts.attr_rewriter import AttrRewriter
-from .generator_parts.replace_self_param import ReplaceSelfWithParam
-from .generator_parts.cleanup_checks import is_simple_cleanup_statement
-from .generator_parts.generator_core import GeneratorCore
+from ..types import ContextDelta, StepResult, Task, TaskResult
 from .collector import CollectorOutput
-from .generator_types import FixtureSpec
+from .generator_parts.attr_rewriter import AttrRewriter
+from .generator_parts.bundler_invoker import safe_bundle_named_locals
+from .generator_parts.cleanup_checks import is_simple_cleanup_statement
+from .generator_parts.filename_inferer import infer_filename_for_local
+from .generator_parts.generator_core import GeneratorCore
+from .generator_parts.literals import is_literal
+from .generator_parts.module_level_names import collect_module_level_names
+from .generator_parts.name_allocator import choose_local_name
+from .generator_parts.references_attr import references_attribute
+from .generator_parts.replace_self_param import ReplaceSelfWithParam
+from .generator_parts.self_attr_finder import collect_self_attrs
 from .generator_parts.shutil_detector import cleanup_needs_shutil
+from .generator_types import FixtureSpec
+from .steps import run_steps
 
 if TYPE_CHECKING:
     from ..types import Step

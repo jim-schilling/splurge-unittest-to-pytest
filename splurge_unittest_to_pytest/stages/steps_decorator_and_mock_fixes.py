@@ -5,7 +5,7 @@ from typing import Any, Mapping
 
 import libcst as cst
 
-from ..types import Step, StepResult, ContextDelta
+from ..types import ContextDelta, Step, StepResult
 from .decorator_and_mock_fixes import DecoratorAndMockTransformer
 
 DOMAINS = ["stages", "mocks", "steps"]

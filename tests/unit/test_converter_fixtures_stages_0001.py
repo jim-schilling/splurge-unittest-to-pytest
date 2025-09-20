@@ -1,4 +1,5 @@
 import libcst as cst
+
 from splurge_unittest_to_pytest.converter.simple_fixture import create_simple_fixture
 from splurge_unittest_to_pytest.stages.fixture_injector import _find_insertion_index, fixture_injector_stage
 

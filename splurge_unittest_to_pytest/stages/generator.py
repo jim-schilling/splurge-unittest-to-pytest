@@ -16,13 +16,15 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, Optional, cast
-from ..types import PipelineContext
-from .generator_tasks import BuildFixtureSpecsTask, FinalizeGeneratorTask
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
+
 from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+from splurge_unittest_to_pytest.stages.generator_parts.literals import is_literal
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
+from .generator_tasks import BuildFixtureSpecsTask, FinalizeGeneratorTask
 
 DOMAINS = ["stages", "generator"]
 STAGE_ID = "stages.generator"

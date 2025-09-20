@@ -4,8 +4,8 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.stages.steps import run_steps
 from splurge_unittest_to_pytest.stages.steps_tidy import (
-    NormalizeSpacingStep,
     EnsureSelfParamStep,
+    NormalizeSpacingStep,
 )
 
 

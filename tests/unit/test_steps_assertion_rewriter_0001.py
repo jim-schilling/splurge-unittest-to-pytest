@@ -1,8 +1,8 @@
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.assertion_rewriter_tasks import RewriteAssertionsTask
-from splurge_unittest_to_pytest.stages.steps_assertion_rewriter import RunAssertionRewriterStep
 from splurge_unittest_to_pytest.stages.steps import run_steps
+from splurge_unittest_to_pytest.stages.steps_assertion_rewriter import RunAssertionRewriterStep
 
 
 def _module(src: str) -> cst.Module:

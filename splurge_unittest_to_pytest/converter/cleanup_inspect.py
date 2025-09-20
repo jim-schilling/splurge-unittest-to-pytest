@@ -12,7 +12,6 @@ License: MIT
 
 from __future__ import annotations
 
-
 import libcst as cst
 
 from .cleanup_checks import references_attribute

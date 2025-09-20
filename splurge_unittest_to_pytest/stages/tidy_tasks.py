@@ -8,15 +8,13 @@ Tasks:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, cast, Sequence, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
 
 from ..types import Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step
 from .steps import run_steps
-
 
 DOMAINS = ["stages", "tidy", "tasks"]
 

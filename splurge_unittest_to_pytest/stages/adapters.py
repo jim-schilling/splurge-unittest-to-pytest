@@ -7,9 +7,9 @@ Publics:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
-from ..types import Task, TaskResult, ContextDelta, Stage, StageResult
+from ..types import ContextDelta, Stage, StageResult, Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step

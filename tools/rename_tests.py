@@ -21,7 +21,6 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-
 DEFAULT_MAP = {
     # Example: if you want to include default normalization entries, add here.
 }

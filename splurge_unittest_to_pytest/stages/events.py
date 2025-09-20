@@ -15,13 +15,13 @@ Design notes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, DefaultDict
-from collections import defaultdict
-from pathlib import Path
 import os
-from . import diagnostics
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, DefaultDict
 
+from . import diagnostics
 
 DOMAINS = ["stages", "events", "pipeline"]
 

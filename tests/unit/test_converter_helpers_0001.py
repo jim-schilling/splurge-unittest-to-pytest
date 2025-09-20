@@ -1,6 +1,7 @@
 import libcst as cst
-from splurge_unittest_to_pytest.converter.call_utils import is_self_call
+
 from splurge_unittest_to_pytest.converter import helpers
+from splurge_unittest_to_pytest.converter.call_utils import is_self_call
 
 
 def test_is_self_call_positive():

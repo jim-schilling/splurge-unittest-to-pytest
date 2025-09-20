@@ -2,7 +2,7 @@ import textwrap
 
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.steps_import_injector import InsertImportsStep, DetectNeedsStep
+from splurge_unittest_to_pytest.stages.steps_import_injector import DetectNeedsStep, InsertImportsStep
 
 
 def test_merge_typing_imports_preserves_existing_and_adds_missing():

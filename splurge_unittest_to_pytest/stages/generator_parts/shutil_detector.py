@@ -11,7 +11,7 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Any
+from typing import Any, Sequence
 
 import libcst as cst
 

@@ -1,11 +1,11 @@
 import pathlib
+
 import libcst as cst
 from libcst import MetadataWrapper
 
 from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
-
 
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data"
 

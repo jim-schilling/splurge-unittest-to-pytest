@@ -1,7 +1,7 @@
 import libcst as cst
 
+from splurge_unittest_to_pytest.stages.events import EventBus, RecordingObserver, TaskCompleted, TaskStarted
 from splurge_unittest_to_pytest.stages.import_injector_tasks import DetectNeedsCstTask, InsertImportsCstTask
-from splurge_unittest_to_pytest.stages.events import EventBus, RecordingObserver, TaskStarted, TaskCompleted
 from tests.support.task_harness import TaskTestHarness
 
 

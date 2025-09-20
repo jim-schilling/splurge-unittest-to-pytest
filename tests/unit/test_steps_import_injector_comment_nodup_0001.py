@@ -3,8 +3,8 @@ import textwrap
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.steps_import_injector import (
-    _merge_typing_into_existing,
     _find_typing_indices,
+    _merge_typing_into_existing,
 )
 
 

@@ -1,8 +1,8 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.steps_fixtures_stage import CollectClassesStep, BuildTopLevelFnsStep
 from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.steps import run_steps
+from splurge_unittest_to_pytest.stages.steps_fixtures_stage import BuildTopLevelFnsStep, CollectClassesStep
 
 
 def test_collect_and_build_top_level_functions_simple():

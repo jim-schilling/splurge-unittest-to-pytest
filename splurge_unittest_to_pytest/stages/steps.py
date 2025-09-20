@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from ..types import Step, StepResult, TaskResult, ContextDelta
-from .events import EventBus, StepStarted, StepCompleted, StepErrored
-from .events import TaskStarted, TaskCompleted, TaskErrored, HookRegistry
+from ..types import ContextDelta, Step, StepResult, TaskResult
 from . import diagnostics as _diagnostics
+from .events import (
+    EventBus,
+    HookRegistry,
+    StepCompleted,
+    StepErrored,
+    StepStarted,
+    TaskCompleted,
+    TaskErrored,
+    TaskStarted,
+)
 
 
 def run_steps(

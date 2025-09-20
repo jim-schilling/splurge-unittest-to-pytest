@@ -14,9 +14,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
-from typing import Protocol, Iterable, Optional, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, TypedDict
 
 DOMAINS = ["types", "pipeline"]
 

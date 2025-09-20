@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from splurge_unittest_to_pytest.main import convert_file
 
 INPUT_DIR = Path("tests/data")

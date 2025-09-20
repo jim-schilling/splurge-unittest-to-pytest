@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from splurge_unittest_to_pytest.main import convert_string
 from tests.support.golden_compare import assert_code_equal
 

@@ -20,7 +20,7 @@ License: MIT
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, cast, Sequence, Any
+from typing import Any, Optional, Sequence, cast
 
 import libcst as cst
 from libcst import matchers as m

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from ..types import Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step
 from .steps import run_steps
-
 from .steps_rewriter import RewriteMethodParamsStep
 
 

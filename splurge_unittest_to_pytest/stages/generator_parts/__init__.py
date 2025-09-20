@@ -9,12 +9,12 @@ Copyright (c) 2025 Jim Schilling
 License: MIT
 """
 
-from .name_allocator import NameAllocator
 from .annotation_inferer import AnnotationInferer
-from .fixture_spec_builder import FixtureSpecBuilder
 from .cleanup_rewriter import CleanupRewriter
-from .node_emitter import NodeEmitter
+from .fixture_spec_builder import FixtureSpecBuilder
 from .generator_core import GeneratorCore
+from .name_allocator import NameAllocator
+from .node_emitter import NodeEmitter
 
 __all__ = [
     "NameAllocator",

@@ -16,12 +16,13 @@ License: MIT
 from __future__ import annotations
 
 from typing import Optional, cast
-from ..types import PipelineContext
-from .steps import run_steps
 
 import libcst as cst
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
 from .fixture_injector_tasks import InsertFixtureNodesTask
+from .steps import run_steps
 from .steps_fixture_injector import (
     FindInsertionIndexStep,
     InsertNodesStep,

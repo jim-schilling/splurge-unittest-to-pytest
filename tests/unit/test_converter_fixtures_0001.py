@@ -8,17 +8,17 @@ autocreated file fixture shape.
 
 from __future__ import annotations
 
+import libcst as cst
+import pytest
+
+from splurge_unittest_to_pytest.converter import fixture_builders, fixtures
 from splurge_unittest_to_pytest.converter.method_patterns import (
-    normalize_method_name,
     is_setup_method,
     is_teardown_method,
     is_test_method,
+    normalize_method_name,
 )
-import libcst as cst
-from splurge_unittest_to_pytest.converter import fixtures
-import pytest
-from splurge_unittest_to_pytest.converter import fixture_builders
-from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
+from tests.unit.helpers.autouse_helpers import insert_attach_fixture_into_module, make_autouse_attach
 
 
 def test_normalize_camel_to_snake():

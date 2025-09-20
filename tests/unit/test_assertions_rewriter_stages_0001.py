@@ -1,7 +1,8 @@
 import libcst as cst
-from libcst import matchers as m
-from splurge_unittest_to_pytest.stages.assertion_rewriter import AssertionRewriter, assertion_rewriter_stage
 import pytest
+from libcst import matchers as m
+
+from splurge_unittest_to_pytest.stages.assertion_rewriter import AssertionRewriter, assertion_rewriter_stage
 
 
 def _apply(expr_src: str) -> str:

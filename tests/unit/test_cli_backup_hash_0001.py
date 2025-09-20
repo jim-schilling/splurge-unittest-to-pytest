@@ -1,5 +1,7 @@
-from click.testing import CliRunner
 import re
+
+from click.testing import CliRunner
+
 from splurge_unittest_to_pytest.cli import main as cli_main
 
 

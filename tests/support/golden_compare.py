@@ -1,5 +1,6 @@
-import libcst as cst
 from typing import Tuple
+
+import libcst as cst
 
 
 def _parse_module(code: str) -> cst.Module:

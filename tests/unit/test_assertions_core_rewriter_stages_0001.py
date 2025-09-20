@@ -9,8 +9,9 @@ returned flags and avoid brittle exact formatting checks.
 from __future__ import annotations
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages import assertion_rewriter
 from libcst import matchers as m
+
+from splurge_unittest_to_pytest.stages import assertion_rewriter
 
 
 def transform(code: str):

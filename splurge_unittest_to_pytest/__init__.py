@@ -22,7 +22,7 @@ from splurge_unittest_to_pytest.exceptions import (
     PermissionDeniedError,
     SplurgeError,
 )
-from splurge_unittest_to_pytest.main import convert_file, convert_string, ConversionResult
+from splurge_unittest_to_pytest.main import ConversionResult, convert_file, convert_string
 
 DOMAINS = ["core"]
 

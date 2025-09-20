@@ -16,10 +16,11 @@ License: MIT
 from __future__ import annotations
 
 from typing import Optional, cast
-from ..types import PipelineContext
 
 import libcst as cst
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
 from .rewriter_tasks import RewriteTestMethodParamsTask
 
 DOMAINS = ["stages", "rewriter"]

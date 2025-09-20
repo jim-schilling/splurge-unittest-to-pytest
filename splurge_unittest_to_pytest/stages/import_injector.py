@@ -18,12 +18,13 @@ License: MIT
 from __future__ import annotations
 
 from typing import Optional, cast
-from ..types import PipelineContext
-from .steps import run_steps
-from .steps_import_injector import DetectNeedsStep, InsertImportsStep
-from .events import EventBus, TaskErrored
 
 import libcst as cst
+
+from ..types import PipelineContext
+from .events import EventBus, TaskErrored
+from .steps import run_steps
+from .steps_import_injector import DetectNeedsStep, InsertImportsStep
 
 DOMAINS = ["stages", "imports"]
 STAGE_ID = "stages.import_injector"

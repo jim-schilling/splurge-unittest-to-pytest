@@ -16,7 +16,6 @@ License: MIT
 
 from __future__ import annotations
 
-
 import libcst as cst
 
 from .helpers import SelfReferenceRemover

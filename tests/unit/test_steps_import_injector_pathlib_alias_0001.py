@@ -2,7 +2,7 @@ import textwrap
 
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.steps_import_injector import InsertImportsStep, DetectNeedsStep
+from splurge_unittest_to_pytest.stages.steps_import_injector import DetectNeedsStep, InsertImportsStep
 
 
 def test_detects_pathlib_alias_and_does_not_duplicate():

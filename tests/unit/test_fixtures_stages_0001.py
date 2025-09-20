@@ -1,12 +1,14 @@
+from typing import cast
+
 import libcst as cst
 from libcst import parse_module
-from typing import cast
+
+from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 from splurge_unittest_to_pytest.stages.fixture_injector import (
     _find_insertion_index,
     _make_autouse_attach,
     fixture_injector_stage,
 )
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput
 
 
 def test_find_insertion_index_after_pytest_import():

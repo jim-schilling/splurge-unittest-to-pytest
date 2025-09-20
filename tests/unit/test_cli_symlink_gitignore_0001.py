@@ -1,5 +1,7 @@
 from pathlib import Path
+
 import pytest
+
 from splurge_unittest_to_pytest.main import find_unittest_files
 
 

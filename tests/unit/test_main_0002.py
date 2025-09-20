@@ -1,15 +1,15 @@
 """Test the new configurable method pattern API."""
 
-from splurge_unittest_to_pytest.main import convert_string
-import textwrap
-import splurge_unittest_to_pytest.main as main
-from splurge_unittest_to_pytest.main import PatternConfigurator
 import ast
+import textwrap
 from pathlib import Path
-import pytest
-from splurge_unittest_to_pytest.main import find_unittest_files
+
 import libcst as cst
+import pytest
+
+import splurge_unittest_to_pytest.main as main
 from splurge_unittest_to_pytest.converter import SelfReferenceRemover
+from splurge_unittest_to_pytest.main import PatternConfigurator, convert_string, find_unittest_files
 
 
 def test_msg_keyword_removed_from_assert_equal() -> None:

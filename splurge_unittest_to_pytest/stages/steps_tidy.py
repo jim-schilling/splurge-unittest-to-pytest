@@ -5,7 +5,7 @@ from typing import Any, Mapping, cast
 
 import libcst as cst
 
-from ..types import Step, StepResult, ContextDelta
+from ..types import ContextDelta, Step, StepResult
 from .formatting import normalize_module
 
 DOMAINS = ["stages", "tidy", "steps"]

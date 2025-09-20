@@ -11,10 +11,10 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 import libcst as cst
-
-from ..types import StepResult, ContextDelta
-from .assertion_rewriter import AssertionRewriter
 from libcst import CSTVisitor
+
+from ..types import ContextDelta, StepResult
+from .assertion_rewriter import AssertionRewriter
 
 
 class _FindSelfAssertVisitor(CSTVisitor):
@@ -65,7 +65,8 @@ class ParseAssertionsStep:
             mod.visit(visitor)
         except Exception:
             # conservative: if parsing failed, return an error in StepResult
-            from ..types import StepResult as _SR, ContextDelta as _CD
+            from ..types import ContextDelta as _CD
+            from ..types import StepResult as _SR
 
             return _SR(delta=_CD(values={}), errors=[RuntimeError("parse failed")])
         # Serialize calls as simple identifiers (method names) for now

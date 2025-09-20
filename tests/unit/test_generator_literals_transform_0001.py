@@ -1,8 +1,11 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import type_name_for_literal
-from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import AnnotationInferer
-from splurge_unittest_to_pytest.stages.generator_parts.node_emitter import NodeEmitter
+
+from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import (
+    AnnotationInferer,
+    type_name_for_literal,
+)
 from splurge_unittest_to_pytest.stages.generator_parts.generator_core import GeneratorCore
+from splurge_unittest_to_pytest.stages.generator_parts.node_emitter import NodeEmitter
 
 
 def parse(src: str):

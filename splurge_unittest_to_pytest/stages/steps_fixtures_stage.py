@@ -5,7 +5,7 @@ from typing import Any, Mapping, Optional, cast
 
 import libcst as cst
 
-from ..types import Step, StepResult, ContextDelta
+from ..types import ContextDelta, Step, StepResult
 
 DOMAINS = ["stages", "fixtures", "steps"]
 

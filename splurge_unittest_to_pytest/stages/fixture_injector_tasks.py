@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-import logging
 import libcst as cst
-from ..types import Task, TaskResult, ContextDelta, Step
 
+from ..types import ContextDelta, Step, Task, TaskResult
 from .steps import run_steps
 from .steps_fixture_injector import (
     FindInsertionIndexStep,

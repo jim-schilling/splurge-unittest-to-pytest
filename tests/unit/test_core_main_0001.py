@@ -1,7 +1,9 @@
 import pathlib
-from splurge_unittest_to_pytest import main
 from pathlib import Path
+
 import pytest
+
+from splurge_unittest_to_pytest import main
 from splurge_unittest_to_pytest import main as mod
 
 

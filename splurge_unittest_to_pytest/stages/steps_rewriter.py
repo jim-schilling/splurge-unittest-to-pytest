@@ -5,8 +5,9 @@ from typing import Any, Mapping
 
 import libcst as cst
 
-from ..types import Step, StepResult, ContextDelta
 from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param
+
+from ..types import ContextDelta, Step, StepResult
 
 
 @dataclass

@@ -1,8 +1,8 @@
 import pathlib
+
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.fixture_injector import fixture_injector_stage
-
 
 SAMPLES_DIR = pathlib.Path(__file__).resolve().parent.parent / "unittest_pytest_samples"
 

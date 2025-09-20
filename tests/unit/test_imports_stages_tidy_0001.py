@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import libcst as cst
 from typing import cast
+
+import libcst as cst
+
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
 
 

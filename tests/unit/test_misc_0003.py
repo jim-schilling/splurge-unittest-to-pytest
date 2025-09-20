@@ -1,13 +1,15 @@
-import libcst as cst
-from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
 import importlib
 import inspect
 import pkgutil
-import types
-import pytest
 import subprocess
 import sys
+import types
 from pathlib import Path
+
+import libcst as cst
+import pytest
+
+from tests.unit.helpers.autouse_helpers import insert_attach_fixture_into_module, make_autouse_attach
 from tools.rename_tests_by_domains import build_proposals
 
 

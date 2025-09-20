@@ -1,10 +1,10 @@
 import pathlib
+
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.collector import Collector
 from splurge_unittest_to_pytest.stages.steps import run_steps
-from splurge_unittest_to_pytest.stages.steps_fixtures_stage import CollectClassesStep, BuildTopLevelFnsStep
-
+from splurge_unittest_to_pytest.stages.steps_fixtures_stage import BuildTopLevelFnsStep, CollectClassesStep
 
 SAMPLES_DIR = pathlib.Path(__file__).resolve().parent.parent / "unittest_pytest_samples"
 

@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta
+from ..types import ContextDelta, Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step
 from .steps import run_steps
 from .steps_decorator_and_mock_fixes import ApplyDecoratorAndMockFixesStep
-
 
 DOMAINS = ["stages", "mocks", "tasks"]
 

@@ -1,6 +1,6 @@
 import libcst as cst
-from splurge_unittest_to_pytest.converter import method_params
-from splurge_unittest_to_pytest.converter import helpers
+
+from splurge_unittest_to_pytest.converter import helpers, method_params
 
 
 def make_func(src: str) -> cst.FunctionDef:

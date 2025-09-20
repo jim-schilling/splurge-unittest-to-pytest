@@ -1,8 +1,9 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import AnnotationInferer
+
 from splurge_unittest_to_pytest.converter.call_utils import is_self_call
-from splurge_unittest_to_pytest.stages.manager import StageManager
 from splurge_unittest_to_pytest.stages import diagnostics
+from splurge_unittest_to_pytest.stages.generator_parts.annotation_inferer import AnnotationInferer
+from splurge_unittest_to_pytest.stages.manager import StageManager
 
 
 def test_annotation_inferer():

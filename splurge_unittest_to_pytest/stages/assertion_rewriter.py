@@ -15,10 +15,11 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, cast
-from ..types import PipelineContext
+from typing import Optional, Sequence, cast
 
 import libcst as cst
+
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "assertions", "rewriter"]
 STAGE_ID = "stages.assertion_rewriter"
@@ -589,8 +590,8 @@ class AssertionRewriter(cst.CSTTransformer):
 
 
 def assertion_rewriter_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
     from .assertion_rewriter_tasks import RewriteAssertionsTask
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
 
     stage_id = STAGE_ID
     bus = context.get("__event_bus__")

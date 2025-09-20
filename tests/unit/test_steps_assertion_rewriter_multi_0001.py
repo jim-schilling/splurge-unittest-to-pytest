@@ -1,13 +1,13 @@
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.assertion_rewriter_tasks import RewriteAssertionsTask
+from splurge_unittest_to_pytest.stages.steps import run_steps
 from splurge_unittest_to_pytest.stages.steps_assertion_rewriter import (
+    EmitAssertionsStep,
     ParseAssertionsStep,
     TransformComparisonAssertionsStep,
     TransformRaisesAssertionsStep,
-    EmitAssertionsStep,
 )
-from splurge_unittest_to_pytest.stages.steps import run_steps
 
 
 def _module(src: str) -> cst.Module:
@@ -67,7 +67,7 @@ def test_rewriter_step_errors_stop():
         name = "error"
 
         def execute(self, context, resources):
-            from splurge_unittest_to_pytest.types import StepResult, ContextDelta
+            from splurge_unittest_to_pytest.types import ContextDelta, StepResult
 
             return StepResult(delta=ContextDelta(values={}), errors=[RuntimeError("boom")])
 
@@ -77,7 +77,7 @@ def test_rewriter_step_errors_stop():
         name = "mut"
 
         def execute(self, context, resources):
-            from splurge_unittest_to_pytest.types import StepResult, ContextDelta
+            from splurge_unittest_to_pytest.types import ContextDelta, StepResult
 
             return StepResult(delta=ContextDelta(values={"mutated": True}))
 

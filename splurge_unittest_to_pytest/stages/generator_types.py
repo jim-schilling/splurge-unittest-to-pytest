@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any, Optional
 
 import libcst as cst
-
 
 DOMAINS = ["stages", "generator", "types"]
 

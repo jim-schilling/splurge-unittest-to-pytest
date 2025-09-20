@@ -1,6 +1,6 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.tidy_tasks import NormalizeSpacingTask, EnsureSelfParamTask
+from splurge_unittest_to_pytest.stages.tidy_tasks import EnsureSelfParamTask, NormalizeSpacingTask
 from tests.support.task_harness import TaskTestHarness
 
 

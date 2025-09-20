@@ -14,7 +14,7 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Optional, cast, Any
+from typing import Any, Optional, cast
 
 import libcst as cst
 

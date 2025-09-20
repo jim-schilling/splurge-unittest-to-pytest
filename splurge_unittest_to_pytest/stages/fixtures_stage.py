@@ -16,17 +16,19 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
-from ..types import PipelineContext
-from .fixtures_stage_tasks import BuildTopLevelTestsTask
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+
 from splurge_unittest_to_pytest.converter.method_params import (
+    first_param_name,
     is_classmethod,
     is_staticmethod,
-    first_param_name,
 )
+from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
+from .fixtures_stage_tasks import BuildTopLevelTestsTask
 
 DOMAINS = ["stages", "fixtures"]
 STAGE_ID = "stages.fixtures_stage"

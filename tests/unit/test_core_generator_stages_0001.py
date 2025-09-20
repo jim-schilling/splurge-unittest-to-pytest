@@ -1,6 +1,7 @@
 import libcst as cst
+
 from splurge_unittest_to_pytest.stages import generator as gen
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
+from splurge_unittest_to_pytest.stages.collector import ClassInfo, CollectorOutput
 
 
 def test_generator_empty_context():

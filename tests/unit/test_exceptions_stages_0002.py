@@ -1,6 +1,8 @@
 import textwrap
+
 import libcst as cst
-from splurge_unittest_to_pytest.stages.raises_stage import RaisesRewriter, ExceptionAttrRewriter
+
+from splurge_unittest_to_pytest.stages.raises_stage import ExceptionAttrRewriter, RaisesRewriter
 
 
 def test_raisesrewriter_made_changes_and_asname_preserved():

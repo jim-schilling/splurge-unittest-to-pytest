@@ -1,6 +1,8 @@
-import libcst as cst
-from splurge_unittest_to_pytest.converter.class_checks import is_unittest_testcase_base
 from typing import cast
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.converter.class_checks import is_unittest_testcase_base
 from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
 from splurge_unittest_to_pytest.converter.placement import insert_fixtures_into_module
 from splurge_unittest_to_pytest.converter.setup_parser import parse_setup_assignments

@@ -1,5 +1,6 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
+
+from splurge_unittest_to_pytest.stages.collector import ClassInfo, CollectorOutput
 from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 

@@ -1,11 +1,13 @@
 """Tests for the unittest to pytest converter."""
 
-import pytest
-from pathlib import Path
-from splurge_unittest_to_pytest import convert_string
 import re
-from splurge_unittest_to_pytest.stages.generator_parts import GeneratorCore
+from pathlib import Path
+
 import libcst as cst
+import pytest
+
+from splurge_unittest_to_pytest import convert_string
+from splurge_unittest_to_pytest.stages.generator_parts import GeneratorCore
 
 
 class TestBasicAssertions:

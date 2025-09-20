@@ -1,5 +1,6 @@
-import libcst as cst
 from pathlib import Path
+
+import libcst as cst
 
 from splurge_unittest_to_pytest.main import convert_string
 

@@ -1,5 +1,7 @@
+from typing import Sequence, cast
+
 import libcst as cst
-from typing import cast, Sequence
+
 from splurge_unittest_to_pytest.stages.tidy import tidy_stage
 
 

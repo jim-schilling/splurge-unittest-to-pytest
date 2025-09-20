@@ -1,15 +1,17 @@
 import libcst as cst
+
 from splurge_unittest_to_pytest.converter.assertions import (
-    _assert_is_instance,
-    _assert_not_is_instance,
-    _assert_in,
-    _assert_not_in,
     _assert_greater,
+    _assert_greater_equal,
+    _assert_in,
+    _assert_is_instance,
+    _assert_less,
+    _assert_less_equal,
+    _assert_not_in,
+    _assert_not_is_instance,
 )
-from splurge_unittest_to_pytest.converter.fixtures import create_fixture_with_cleanup
+from splurge_unittest_to_pytest.converter.fixtures import create_fixture_for_attribute, create_fixture_with_cleanup
 from splurge_unittest_to_pytest.stages.pipeline import run_pipeline
-from splurge_unittest_to_pytest.converter.assertions import _assert_greater_equal, _assert_less, _assert_less_equal
-from splurge_unittest_to_pytest.converter.fixtures import create_fixture_for_attribute
 
 
 def _arg(expr: str) -> cst.Arg:
@@ -45,7 +47,7 @@ def test_assert_in_not_in_and_comparison():
 
 
 def test_create_fixture_with_cleanup_yield_and_cleanup():
-    from libcst import SimpleStatementLine, Expr
+    from libcst import Expr, SimpleStatementLine
 
     val = cst.parse_expression("'value'")
     cleanup = [SimpleStatementLine(body=[Expr(value=cst.parse_expression("print('ok')"))])]

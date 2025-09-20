@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import libcst as cst
+
 from splurge_unittest_to_pytest.converter.cleanup import extract_relevant_cleanup
 from splurge_unittest_to_pytest.converter.cleanup_checks import references_attribute
 from splurge_unittest_to_pytest.converter.cleanup_inspect import simple_stmt_references_attribute

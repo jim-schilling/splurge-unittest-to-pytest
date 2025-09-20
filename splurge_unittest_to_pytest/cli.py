@@ -18,24 +18,26 @@ Copyright (c) 2025 Jim Schilling
 License: MIT
 """
 
+import logging
+import os
 import sys
 from pathlib import Path
 
 import click
-import logging
-import os
 
 from . import __version__
+from .converter.helpers import parse_method_patterns
 from .exceptions import (
     EncodingError,
-    FileNotFoundError as SplurgeFileNotFoundError,
     ParseError,
     PermissionDeniedError,
     SplurgeError,
 )
-from .main import convert_file, find_unittest_files, ConversionResult, PatternConfigurator
+from .exceptions import (
+    FileNotFoundError as SplurgeFileNotFoundError,
+)
 from .io_helpers import hash_suffix_for_path, safe_file_writer
-from .converter.helpers import parse_method_patterns
+from .main import ConversionResult, PatternConfigurator, convert_file, find_unittest_files
 from .reporting import record_for_result, unified_diff_text
 
 DOMAINS = ["cli"]

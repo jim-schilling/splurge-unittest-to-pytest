@@ -1,11 +1,11 @@
 import libcst as cst
 
+from splurge_unittest_to_pytest.stages.steps import run_steps
 from splurge_unittest_to_pytest.stages.steps_fixture_injector import (
     FindInsertionIndexStep,
     InsertNodesStep,
     NormalizeAndPostprocessStep,
 )
-from splurge_unittest_to_pytest.stages.steps import run_steps
 
 
 def test_insert_empty_lines_with_fixture():

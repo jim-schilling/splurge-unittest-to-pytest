@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Mapping, Any
+from typing import Any, Mapping
 
 import libcst as cst
 
 from splurge_unittest_to_pytest.stages.steps import run_steps
-from splurge_unittest_to_pytest.types import Step, StepResult, ContextDelta, TaskResult
+from splurge_unittest_to_pytest.types import ContextDelta, Step, StepResult, TaskResult
 
 
 @dataclass

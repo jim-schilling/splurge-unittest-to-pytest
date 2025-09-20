@@ -1,8 +1,9 @@
 import libcst as cst
 from libcst import parse_module
-from splurge_unittest_to_pytest.stages.pipeline import run_pipeline
+
 from splurge_unittest_to_pytest.converter.fixtures import parse_setup_assignments
 from splurge_unittest_to_pytest.converter.method_patterns import is_setup_method, is_teardown_method, is_test_method
+from splurge_unittest_to_pytest.stages.pipeline import run_pipeline
 
 
 def test_pattern_matching_helpers():

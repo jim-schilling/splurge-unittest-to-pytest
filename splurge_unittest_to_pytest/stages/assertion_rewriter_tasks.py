@@ -6,26 +6,25 @@ Provides a single task that applies AssertionRewriter and returns flags.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta
+from ..types import ContextDelta, Task, TaskResult
 
 if TYPE_CHECKING:
     from ..types import Step
 from .assertion_rewriter import AssertionRewriter
 from .steps_assertion_rewriter import (
+    EmitAssertionsStep,
     ParseAssertionsStep,
-    TransformComparisonAssertionsStep,
-    TransformRaisesAssertionsStep,
     TransformAlmostEqualAssertionsStep,
+    TransformComparisonAssertionsStep,
+    TransformIsInstanceAssertionsStep,
+    TransformRaisesAssertionsStep,
     TransformRegexAssertionsStep,
     TransformTruthinessAssertionsStep,
-    TransformIsInstanceAssertionsStep,
-    EmitAssertionsStep,
 )
-
 
 DOMAINS = ["stages", "assertions", "tasks"]
 

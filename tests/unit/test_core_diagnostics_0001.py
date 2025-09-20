@@ -11,13 +11,15 @@ caused import-time SyntaxError under pytest's assertion rewriting.
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from splurge_unittest_to_pytest import print_diagnostics as pd
-import libcst as cst
-from splurge_unittest_to_pytest.stages import generator_parts
-from splurge_unittest_to_pytest import print_diagnostics
-import time
 import tempfile
+import time
+from pathlib import Path
+
+import libcst as cst
+
+from splurge_unittest_to_pytest import print_diagnostics
+from splurge_unittest_to_pytest import print_diagnostics as pd
+from splurge_unittest_to_pytest.stages import generator_parts
 
 
 def test_find_most_recent_run_empty(tmp_path):

@@ -19,8 +19,8 @@ from typing import Iterable
 
 import libcst as cst
 
-from .value_checks import is_simple_fixture_value
 from .fixture_builder import replace_attr_references_in_statements
+from .value_checks import is_simple_fixture_value
 
 DOMAINS = ["converter", "fixtures"]
 

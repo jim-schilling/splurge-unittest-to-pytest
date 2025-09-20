@@ -13,7 +13,7 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Callable
+from typing import Callable, Sequence
 
 import libcst as cst
 

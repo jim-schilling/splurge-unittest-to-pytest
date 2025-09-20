@@ -18,15 +18,15 @@ from __future__ import annotations
 from typing import Any
 
 import libcst as cst
-from .collector import Collector
-from ..types import PipelineContext
 
-from .generator import generator_stage
+from ..types import PipelineContext
+from .collector import Collector
 from .fixture_injector import fixture_injector_stage
-from .rewriter import rewriter_stage
+from .generator import generator_stage
 from .import_injector import import_injector_stage
 from .manager import StageManager
 from .postvalidator import postvalidator_stage
+from .rewriter import rewriter_stage
 from .tidy import tidy_stage
 
 DOMAINS = ["stages", "pipeline"]

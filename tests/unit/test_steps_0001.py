@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from splurge_unittest_to_pytest.stages.steps import run_steps
-from splurge_unittest_to_pytest.types import StepResult, ContextDelta
+from splurge_unittest_to_pytest.types import ContextDelta, StepResult
 
 
 @dataclass

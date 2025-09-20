@@ -7,16 +7,14 @@ Tasks:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 
 import libcst as cst
 
-from ..types import Task, TaskResult, ContextDelta, Step
+from ..types import ContextDelta, Step, Task, TaskResult
 from .collector import CollectorOutput
-
 from .steps import run_steps
-from .steps_fixtures_stage import CollectClassesStep, BuildTopLevelFnsStep
-
+from .steps_fixtures_stage import BuildTopLevelFnsStep, CollectClassesStep
 
 DOMAINS = ["stages", "fixtures", "tasks"]
 

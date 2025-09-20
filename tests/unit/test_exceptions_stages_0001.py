@@ -1,7 +1,8 @@
-import libcst as cst
-from splurge_unittest_to_pytest.stages.raises_stage import RaisesRewriter
 from typing import cast
-from splurge_unittest_to_pytest.stages.raises_stage import ExceptionAttrRewriter, raises_stage
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.stages.raises_stage import ExceptionAttrRewriter, RaisesRewriter, raises_stage
 
 
 def test_rewrites_cm_exception_to_value_when_as_used():

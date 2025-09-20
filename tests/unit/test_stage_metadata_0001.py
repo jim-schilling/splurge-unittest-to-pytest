@@ -1,8 +1,8 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.manager import StageManager
+from splurge_unittest_to_pytest.stages.events import RecordingObserver, StageCompleted, StageStarted
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
-from splurge_unittest_to_pytest.stages.events import RecordingObserver, StageStarted, StageCompleted
+from splurge_unittest_to_pytest.stages.manager import StageManager
 
 
 def test_stage_started_completed_include_version(monkeypatch):
