@@ -70,7 +70,9 @@ def run_steps(
                 if emit_step_events and isinstance(bus, EventBus):
                     try:
                         bus.publish(
-                            StepErrored(run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id, error=res.errors[0])
+                            StepErrored(
+                                run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id, error=res.errors[0]
+                            )
                         )
                     except Exception:
                         pass

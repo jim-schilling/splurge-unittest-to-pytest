@@ -15,6 +15,7 @@ from ..types import Task, TaskResult, ContextDelta
 if TYPE_CHECKING:
     from ..types import Step
 from .assertion_rewriter import AssertionRewriter
+from .steps_assertion_rewriter import RunAssertionRewriterStep
 
 
 DOMAINS = ["stages", "assertions", "tasks"]
@@ -24,7 +25,10 @@ DOMAINS = ["stages", "assertions", "tasks"]
 class RewriteAssertionsTask(Task):
     id: str = "tasks.assertions.rewrite_assertions"
     name: str = "rewrite_assertions"
-    steps: Sequence["Step"] = ()
+    # Expose the pilot Step so tooling can introspect the task. The original
+    # execute() method below remains unchanged and serves as the behavioral
+    # fallback until we switch to `run_steps` in tests/CI.
+    steps: Sequence["Step"] = (RunAssertionRewriterStep(),)
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         mod = context.get("module")
