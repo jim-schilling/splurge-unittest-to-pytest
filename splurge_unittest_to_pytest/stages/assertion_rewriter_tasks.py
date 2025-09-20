@@ -19,7 +19,10 @@ from .steps_assertion_rewriter import (
     ParseAssertionsStep,
     TransformComparisonAssertionsStep,
     TransformRaisesAssertionsStep,
-    TransformComplexAssertionsStep,
+    TransformAlmostEqualAssertionsStep,
+    TransformRegexAssertionsStep,
+    TransformTruthinessAssertionsStep,
+    TransformIsInstanceAssertionsStep,
     EmitAssertionsStep,
 )
 
@@ -42,7 +45,10 @@ class RewriteAssertionsTask(Task):
         ParseAssertionsStep(),
         TransformComparisonAssertionsStep(),
         TransformRaisesAssertionsStep(),
-        TransformComplexAssertionsStep(),
+        TransformAlmostEqualAssertionsStep(),
+        TransformRegexAssertionsStep(),
+        TransformTruthinessAssertionsStep(),
+        TransformIsInstanceAssertionsStep(),
         EmitAssertionsStep(),
     )
 

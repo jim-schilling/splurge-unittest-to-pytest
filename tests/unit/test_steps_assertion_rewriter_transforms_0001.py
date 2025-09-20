@@ -44,6 +44,7 @@ def test_example():
     res = step.execute({"module": mod}, resources=None)
     mod_after = res.delta.values.get("module")
 
-    # The placeholder raises step is currently a no-op; ensure module preserved
+    # The raises-focused step should convert `self.assertRaises` contexts into
+    # `pytest.raises` contexts and set the pytest import flag.
     assert isinstance(mod_after, cst.Module)
-    assert mod_after.code == mod.code
+    assert "pytest.raises" in mod_after.code
