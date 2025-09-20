@@ -15,6 +15,54 @@ def _get_module(context: Mapping[str, Any]) -> cst.Module | None:
     return mod if isinstance(mod, cst.Module) else None
 
 
+def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: set[str]) -> cst.Module:
+    """Return a new module with typing names merged into the existing typing ImportFrom at existing_idx.
+
+    This helper preserves the original SimpleStatementLine (so comments and trailing whitespace remain)
+    and preserves parentheses tokens from the original ImportFrom when present.
+    """
+    orig_stmt = mod.body[existing_idx]
+    orig_first = orig_stmt.body[0] if isinstance(orig_stmt, cst.SimpleStatementLine) and orig_stmt.body else None
+    if not isinstance(orig_first, cst.ImportFrom) or getattr(orig_first.module, "value", None) != "typing":
+        return mod
+    # collect alias nodes from all typing ImportFrom statements, preserving their nodes so any
+    # comma/whitespace/comment metadata attached to aliases is retained
+    collected_aliases: list[cst.ImportAlias] = []
+    seen: set[str] = set()
+    paren_source: cst.ImportFrom | None = None
+    for stmt in mod.body:
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
+                # prefer the first ImportFrom that contains parentheses as the source of lpar/rpar
+                if paren_source is None and getattr(first, "lpar", None) is not None:
+                    paren_source = first
+                for alias in getattr(first, "names") or []:
+                    an = getattr(alias, "name", None)
+                    if isinstance(an, cst.Name) and an.value not in seen:
+                        collected_aliases.append(alias)
+                        seen.add(an.value)
+    # append any requested add_names not already present
+    for n in sorted(add_names):
+        if n not in seen:
+            collected_aliases.append(cst.ImportAlias(name=cst.Name(n)))
+            seen.add(n)
+    new_importfrom = cst.ImportFrom(module=cst.Name("typing"), names=collected_aliases)
+    # if any original ImportFrom used parentheses, reuse its lpar/rpar to preserve formatting
+    if paren_source is not None:
+        try:
+            new_importfrom = new_importfrom.with_changes(lpar=paren_source.lpar, rpar=paren_source.rpar)
+        except Exception:
+            pass
+    try:
+        new_stmt = orig_stmt.with_changes(body=[new_importfrom])
+    except Exception:
+        new_stmt = cst.SimpleStatementLine(body=[new_importfrom])
+    new_body = list(mod.body)
+    new_body[existing_idx] = new_stmt
+    return mod.with_changes(body=new_body)
+
+
 @dataclass
 class DetectNeedsStep(Step):
     id: str = "steps.import_injector.detect_needs.core"
@@ -184,9 +232,29 @@ class InsertImportsStep(Step):
         for n in typing_names:
             if isinstance(n, str) and n:
                 typing_needed.add(n)
+        # Do not request typing imports for names the user defines at top-level
+        defined_top_names: set[str] = set()
+        try:
+            for stmt in mod.body:
+                # class and function definitions
+                if isinstance(stmt, cst.ClassDef):
+                    defined_top_names.add(stmt.name.value)
+                if isinstance(stmt, cst.FunctionDef):
+                    defined_top_names.add(stmt.name.value)
+                # simple assignments (x = ...)
+                if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+                    first = stmt.body[0]
+                    if isinstance(first, cst.Assign):
+                        for target in first.targets or []:
+                            target_node = target.target
+                            if isinstance(target_node, cst.Name):
+                                defined_top_names.add(target_node.value)
+        except Exception:
+            defined_top_names = set()
+
         try:
             for candidate in ("Dict", "List", "Tuple", "Optional", "Any", "NamedTuple", "Generator", "Path"):
-                if candidate in module_text and candidate not in typing_needed:
+                if candidate in module_text and candidate not in typing_needed and candidate not in defined_top_names:
                     typing_needed.add(candidate)
         except Exception:
             pass
@@ -222,22 +290,14 @@ class InsertImportsStep(Step):
             if missing:
                 missing_list = sorted(missing)
                 if existing_typing_idx is not None:
-                    combined = sorted(existing_typing.union(missing))
-                    typing_import_node = cst.SimpleStatementLine(
-                        body=[
-                            cst.ImportFrom(
-                                module=cst.Name("typing"),
-                                names=[cst.ImportAlias(name=cst.Name(n)) for n in combined],
-                            )
-                        ]
-                    )
-                    new_body2 = list(mod.body)
-                    new_body2[existing_typing_idx] = typing_import_node
+                    # Use helper to merge typing names while preserving alias nodes/comments/parentheses
+                    merged_mod = _merge_typing_into_existing(mod, existing_typing_idx, set(missing))
+                    new_body2 = list(merged_mod.body)
                     insert_offset2 = 0
                     for node in to_insert:
                         new_body2.insert(insert_idx + insert_offset2, node)
                         insert_offset2 += 1
-                    new_module2 = mod.with_changes(body=new_body2)
+                    new_module2 = merged_mod.with_changes(body=new_body2)
                     return StepResult(delta=ContextDelta(values={"module": new_module2}))
                 else:
                     typing_import_node = cst.SimpleStatementLine(
