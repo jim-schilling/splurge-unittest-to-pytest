@@ -17,10 +17,16 @@ from __future__ import annotations
 
 from typing import Optional, cast
 from ..types import PipelineContext
+from .steps import run_steps
 
 import libcst as cst
 from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 from .fixture_injector_tasks import InsertFixtureNodesTask
+from .steps_fixture_injector import (
+    FindInsertionIndexStep,
+    InsertNodesStep,
+    NormalizeAndPostprocessStep,
+)
 
 DOMAINS = ["stages", "fixtures"]
 
@@ -153,14 +159,28 @@ def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
     stage_id = "stages.fixture_injector"
     bus = context.get("__event_bus__")
     task = InsertFixtureNodesTask()
+    # Execute underlying Steps for this task via run_steps which folds
+    # deltas back into a TaskResult. Keep event bus notifications for
+    # compatibility with monitoring and hooks.
     try:
         if isinstance(bus, EventBus):
             bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
-        res = task.execute(context, resources=None)
+        steps = [FindInsertionIndexStep(), InsertNodesStep(), NormalizeAndPostprocessStep()]
+        result = run_steps(stage_id, task.id, task.name, steps, dict(context, __stage_id__=stage_id), resources=None)
+        if result.errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=result.errors[0]))
+                except Exception:
+                    pass
+            return cast(PipelineContext, {"module": module})
         if isinstance(bus, EventBus):
             bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
-    except Exception as exc:
+        return cast(PipelineContext, result.delta.values)
+    except Exception:
         if isinstance(bus, EventBus):
-            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+            try:
+                bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=Exception("stage error")))
+            except Exception:
+                pass
         return cast(PipelineContext, {"module": module})
-    return cast(PipelineContext, res.delta.values)

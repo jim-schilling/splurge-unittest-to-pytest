@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import logging
 import libcst as cst
@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 class InsertFixtureNodesTask(Task):
     id: str = "tasks.fixture_injector.insert_fixture_nodes"
     name: str = "insert_fixture_nodes"
+    # Expose underlying Steps used by this Task (default empty sequence).
+    # Steps are still populated lazily when the task runs to avoid import
+    # cycles and work during dataclass construction.
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         # Early validation: ensure module and nodes are present
@@ -31,11 +35,12 @@ class InsertFixtureNodesTask(Task):
             return TaskResult(delta=ContextDelta(values={"module": module}))
 
         # Prepare steps. run_steps will fold deltas back into a TaskResult
-        steps: list[Step] = [
-            FindInsertionIndexStep(),
-            InsertNodesStep(),
-            NormalizeAndPostprocessStep(),
-        ]
+        # populate steps lazily (empty sequence indicates uninitialized)
+        if not self.steps:
+            try:
+                self.steps = [FindInsertionIndexStep(), InsertNodesStep(), NormalizeAndPostprocessStep()]
+            except Exception:
+                self.steps = []
 
         # Seed context with fixture_nodes so steps can access it
         working = dict(context)
@@ -44,7 +49,7 @@ class InsertFixtureNodesTask(Task):
             stage_id=working.get("__stage_id__", "stages.fixture_injector"),
             task_id=self.id,
             task_name=self.name,
-            steps=steps,
+            steps=self.steps or [],
             context=working,
             resources=resources,
         )

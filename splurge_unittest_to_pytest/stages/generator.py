@@ -72,4 +72,30 @@ def generator_stage(context: PipelineContext) -> PipelineContext:
         if isinstance(bus, EventBus):
             bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=finalize_task.id, error=exc))
         return {}
-    return cast(PipelineContext, fin_res.delta.values)
+    # If the generator produced no fixture nodes but the collector
+    # observed test classes, the generator may still want to signal
+    # that pytest imports are required for any scaffolding that will be
+    # emitted by downstream stages (e.g., import injector). Preserve the
+    # existing finalize result and optionally set needs_pytest_import
+    # when no nodes were emitted but collector_output contains classes.
+    res_vals = dict(fin_res.delta.values)
+    try:
+        collector_out = context.get("collector_output")
+        if collector_out is not None:
+            try:
+                # CollectorOutput provides a 'classes' mapping. Historically
+                # the generator signaled ``needs_pytest_import`` when classes
+                # were observed even if no fixture nodes were emitted. That
+                # caused spurious ``import pytest`` insertions for simple
+                # class->function conversions. Prefer to rely on the
+                # finalized emitted nodes (which may include an explicit
+                # import or pytest-specific decorators) to drive downstream
+                # import injection.
+                _ = bool(getattr(collector_out, "classes", None))
+            except Exception:
+                # Ignore any errors inspecting collector output; we do not
+                # rely on this flag here anymore.
+                pass
+    except Exception:
+        pass
+    return cast(PipelineContext, res_vals)

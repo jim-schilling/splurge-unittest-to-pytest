@@ -145,7 +145,12 @@ class NormalizeAndPostprocessStep(Step):
             # best-effort
             pass
 
-        return StepResult(delta=ContextDelta(values={"module": new_module, "needs_pytest_import": True}))
+        # Only signal that pytest is needed when we actually inserted
+        # or normalized fixture nodes. If no fixture nodes were provided
+        # then this step should be a no-op with respect to pytest imports.
+        if nodes:
+            return StepResult(delta=ContextDelta(values={"module": new_module, "needs_pytest_import": True}))
+        return StepResult(delta=ContextDelta(values={"module": new_module}))
 
 
 __all__ = [

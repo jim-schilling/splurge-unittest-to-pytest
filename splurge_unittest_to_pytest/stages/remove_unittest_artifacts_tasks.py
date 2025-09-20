@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, cast
+from typing import Any, Mapping, Sequence, cast, TYPE_CHECKING
 
 import libcst as cst
 
 from ..types import Task, TaskResult, ContextDelta
+
+if TYPE_CHECKING:
+    from ..types import Step
 
 
 DOMAINS = ["stages", "helpers", "tasks"]
@@ -17,6 +20,7 @@ DOMAINS = ["stages", "helpers", "tasks"]
 class RemoveUnittestArtifactsTask(Task):
     id: str = "tasks.helpers.remove_unittest_artifacts"
     name: str = "remove_unittest_artifacts"
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         module: cst.Module | None = context.get("module")

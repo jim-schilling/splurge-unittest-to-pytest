@@ -8,10 +8,13 @@ Tasks:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, cast, Sequence, TYPE_CHECKING
 
 
 from ..types import Task, TaskResult
+
+if TYPE_CHECKING:
+    from ..types import Step
 from .steps import run_steps
 
 
@@ -22,6 +25,7 @@ DOMAINS = ["stages", "tidy", "tasks"]
 class NormalizeSpacingTask(Task):
     id: str = "tasks.tidy.normalize_spacing"
     name: str = "normalize_spacing"
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         from .steps_tidy import NormalizeSpacingStep
@@ -37,6 +41,7 @@ class NormalizeSpacingTask(Task):
 class EnsureSelfParamTask(Task):
     id: str = "tasks.tidy.ensure_self_param"
     name: str = "ensure_self_param"
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         from .steps_tidy import EnsureSelfParamStep

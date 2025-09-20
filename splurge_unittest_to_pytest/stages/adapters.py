@@ -7,9 +7,12 @@ Publics:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence, TYPE_CHECKING
 
 from ..types import Task, TaskResult, ContextDelta, Stage, StageResult
+
+if TYPE_CHECKING:
+    from ..types import Step
 
 
 DOMAINS = ["stages", "adapters", "pipeline"]
@@ -23,6 +26,8 @@ class _TaskAdapter(Task):
     id: str
     name: str
     _fn: StageCallable
+    # Provide a default empty sequence for steps to satisfy the Task protocol
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         try:

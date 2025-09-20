@@ -4,7 +4,7 @@ from typing import Any, Mapping, Sequence
 
 from ..types import Step, StepResult, TaskResult, ContextDelta
 from .events import EventBus, StepStarted, StepCompleted, StepErrored
-from .events import HookRegistry
+from .events import TaskStarted, TaskCompleted, TaskErrored, HookRegistry
 from . import diagnostics as _diagnostics
 
 
@@ -27,6 +27,20 @@ def run_steps(
     hooks = working.get("__hooks__")
     if not isinstance(stage_id, str) or not stage_id:
         stage_id = "stages.unknown"
+    # Publish a TaskStarted event and trigger before_task hooks. This
+    # preserves the previous Task-level lifecycle semantics when stages
+    # were executing Task objects instead of calling run_steps directly.
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task_id))
+    except Exception:
+        pass
+    if isinstance(hooks, HookRegistry):
+        try:
+            hooks.before_task(stage_id, task_name, dict(working))
+        except Exception:
+            pass
+
     # Suppress step events unless diagnostics are enabled globally
     emit_step_events = False
     try:
@@ -68,6 +82,29 @@ def run_steps(
                 except Exception:
                     pass
             break
+    # Publish TaskCompleted/TaskErrored and trigger after_task hooks
+    try:
+        if errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task_id, error=errors[0]))
+                except Exception:
+                    pass
+        else:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task_id))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    if isinstance(hooks, HookRegistry):
+        try:
+            hooks.after_task(stage_id, task_name, dict(agg))
+        except Exception:
+            pass
+
     return TaskResult(delta=ContextDelta(values=agg), diagnostics=diagnostics, errors=errors)
 
 

@@ -7,7 +7,7 @@ Tasks:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import libcst as cst
 
@@ -25,6 +25,10 @@ DOMAINS = ["stages", "fixtures", "tasks"]
 class BuildTopLevelTestsTask(Task):
     id: str = "tasks.fixtures_stage.build_top_level_tests"
     name: str = "build_top_level_tests"
+    if TYPE_CHECKING:  # pragma: no cover - typing only
+        from ..types import Step  # type: ignore
+
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         module: Optional[cst.Module] = context.get("module")

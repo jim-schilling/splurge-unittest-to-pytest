@@ -8,11 +8,14 @@ Tasks:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import libcst as cst
 
 from ..types import Task, TaskResult, ContextDelta
+
+if TYPE_CHECKING:
+    from ..types import Step
 from .raises_stage import RaisesRewriter, ExceptionAttrRewriter
 
 
@@ -23,6 +26,7 @@ DOMAINS = ["stages", "raises", "tasks"]
 class RewriteRaisesTask(Task):
     id: str = "tasks.raises.rewrite_raises"
     name: str = "rewrite_raises"
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         mod = context.get("module")
@@ -45,6 +49,7 @@ class RewriteRaisesTask(Task):
 class NormalizeExceptionAttrTask(Task):
     id: str = "tasks.raises.normalize_exception_attr"
     name: str = "normalize_exception_attr"
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         maybe_module = context.get("module")

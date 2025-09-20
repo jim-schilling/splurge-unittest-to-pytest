@@ -17,10 +17,11 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Optional, Any, cast
+from typing import Optional, cast
 from ..types import PipelineContext
-from .import_injector_tasks import DetectNeedsCstTask, InsertImportsCstTask
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+from .steps import run_steps
+from .steps_import_injector import DetectNeedsStep, InsertImportsStep
+from .events import EventBus, TaskErrored
 
 import libcst as cst
 
@@ -43,60 +44,56 @@ def import_injector_stage(context: PipelineContext) -> PipelineContext:
     if module is None:
         return cast(PipelineContext, {})
 
-    # Stage-2 pilot: run two small CstTasks to determine needs and insert imports.
+    # Stage-2 pilot: run two Steps to determine needs and insert imports.
     stage_id = "stages.import_injector"
-    # ensure stage id is visible to tasks/steps
-    context = cast(PipelineContext, dict(context))
-    context["__stage_id__"] = stage_id
-    bus = context.get("__event_bus__")
-    hooks: Any = context.get("__hooks__")
+    # ensure stage id is visible to steps
+    working = cast(PipelineContext, dict(context))
+    working["__stage_id__"] = stage_id
+    bus = working.get("__event_bus__")
 
-    needs_task = DetectNeedsCstTask()
+    # Execute DetectNeedsStep then InsertImportsStep via run_steps which folds
+    # deltas and preserves the event/hook lifecycle for steps.
     try:
-        if isinstance(bus, EventBus):
-            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=needs_task.id))
-        if hooks is not None:
-            try:
-                hooks.before_task(stage_id, needs_task.name, dict(context))
-            except Exception:
-                pass
-        needs_result = needs_task.execute(context, resources=None)
-        if hooks is not None:
-            try:
-                hooks.after_task(stage_id, needs_task.name, dict(needs_result.delta.values))
-            except Exception:
-                pass
-        if isinstance(bus, EventBus):
-            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=needs_task.id))
-    except Exception as exc:
-        if isinstance(bus, EventBus):
-            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=needs_task.id, error=exc))
+        # Run DetectNeedsStep first to determine which imports are required.
+        detect_task_id = "tasks.import_injector.detect_needs"
+        detect_task_name = "detect_needs"
+        detect_result = run_steps(
+            stage_id, detect_task_id, detect_task_name, [DetectNeedsStep()], working, resources=None
+        )
+        if detect_result.errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(
+                        TaskErrored(run_id="", stage_id=stage_id, task_id=detect_task_id, error=detect_result.errors[0])
+                    )
+                except Exception:
+                    pass
+            return cast(PipelineContext, {"module": module})
+
+        # Merge detect deltas into working context for the insert step
+        # mypy: cast the mapping to PipelineContext so TypedDict.update() is
+        # satisfied without changing PipelineContext semantics at runtime.
+        working.update(cast(PipelineContext, dict(detect_result.delta.values)))
+
+        # Run InsertImportsStep to ensure required imports exist
+        insert_task_id = "tasks.import_injector.insert_imports"
+        insert_task_name = "insert_imports"
+        insert_result = run_steps(
+            stage_id, insert_task_id, insert_task_name, [InsertImportsStep()], working, resources=None
+        )
+        if insert_result.errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(
+                        TaskErrored(run_id="", stage_id=stage_id, task_id=insert_task_id, error=insert_result.errors[0])
+                    )
+                except Exception:
+                    pass
+            return cast(PipelineContext, {"module": module})
+
+        # Merge and return final deltas
+        final_vals = dict(detect_result.delta.values)
+        final_vals.update(insert_result.delta.values)
+        return cast(PipelineContext, final_vals)
+    except Exception:
         return cast(PipelineContext, {"module": module})
-
-    # merge deltas into a temp mapping for the insert task
-    tmp_ctx = dict(context)
-    tmp_ctx.update(needs_result.delta.values)
-
-    insert_task = InsertImportsCstTask()
-    try:
-        if isinstance(bus, EventBus):
-            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=insert_task.id))
-        if hooks is not None:
-            try:
-                hooks.before_task(stage_id, insert_task.name, dict(tmp_ctx))
-            except Exception:
-                pass
-        insert_result = insert_task.execute(tmp_ctx, resources=None)
-        if hooks is not None:
-            try:
-                hooks.after_task(stage_id, insert_task.name, dict(insert_result.delta.values))
-            except Exception:
-                pass
-        if isinstance(bus, EventBus):
-            bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=insert_task.id))
-    except Exception as exc:
-        if isinstance(bus, EventBus):
-            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=insert_task.id, error=exc))
-        return cast(PipelineContext, {"module": module})
-
-    return cast(PipelineContext, insert_result.delta.values)

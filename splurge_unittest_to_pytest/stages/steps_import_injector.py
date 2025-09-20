@@ -221,13 +221,20 @@ class DetectNeedsStep(Step):
         if explicit_pytest_flag:
             needs_pytest = bool(ctx.get("needs_pytest_import"))
         else:
-            has_imports = any(
-                isinstance(stmt, cst.SimpleStatementLine)
-                and stmt.body
-                and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
-                for stmt in getattr(mod, "body", [])
-            )
-            needs_pytest = not has_imports
+            # For empty or whitespace-only modules we should not assume
+            # a pytest import is required; only default to adding pytest
+            # when the module has content and no imports are present.
+            module_text = getattr(mod, "code", "")
+            if not module_text.strip():
+                needs_pytest = False
+            else:
+                has_imports = any(
+                    isinstance(stmt, cst.SimpleStatementLine)
+                    and stmt.body
+                    and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+                    for stmt in getattr(mod, "body", [])
+                )
+                needs_pytest = not has_imports
 
         needs_re = bool(ctx.get("needs_re_import", False))
         needs_unittest = bool(ctx.get("needs_unittest_import", False))

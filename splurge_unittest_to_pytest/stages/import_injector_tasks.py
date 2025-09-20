@@ -10,11 +10,14 @@ These tasks are internal to the stage and preserve existing behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, cast, Sequence, TYPE_CHECKING
 
 import libcst as cst
 
 from ..types import Task, TaskResult, ContextDelta
+
+if TYPE_CHECKING:
+    from ..types import Step
 from .steps import run_steps
 
 
@@ -30,6 +33,8 @@ def _get_module(context: Mapping[str, Any]) -> cst.Module | None:
 class DetectNeedsCstTask(Task):
     id: str = "tasks.import_injector.detect_needs"
     name: str = "detect_needs"
+    # Expose underlying Step(s) for tooling: this Task delegates to DetectNeedsStep
+    steps: Sequence["Step"] = ()  # filled at runtime to avoid import cycles
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         module = _get_module(context)
@@ -37,6 +42,13 @@ class DetectNeedsCstTask(Task):
             return TaskResult(delta=ContextDelta(values={}))
 
         from .steps_import_injector import DetectNeedsStep
+
+        # populate steps attribute lazily (empty sequence indicates uninitialized)
+        if not self.steps:
+            try:
+                self.steps = [DetectNeedsStep()]
+            except Exception:
+                self.steps = []
 
         stage_id = cast(str, context.get("__stage_id__", "stages.import_injector"))
         task_id = self.id
@@ -49,6 +61,8 @@ class DetectNeedsCstTask(Task):
 class InsertImportsCstTask(Task):
     id: str = "tasks.import_injector.insert_imports"
     name: str = "insert_imports"
+    # Expose underlying Step(s) for tooling: this Task delegates to InsertImportsStep
+    steps: Sequence["Step"] = ()  # filled at runtime to avoid import cycles
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         module = _get_module(context)
@@ -56,6 +70,13 @@ class InsertImportsCstTask(Task):
             return TaskResult(delta=ContextDelta(values={}))
 
         from .steps_import_injector import InsertImportsStep
+
+        # populate steps attribute lazily (empty sequence indicates uninitialized)
+        if not self.steps:
+            try:
+                self.steps = [InsertImportsStep()]
+            except Exception:
+                self.steps = []
 
         stage_id = cast(str, context.get("__stage_id__", "stages.import_injector"))
         task_id = self.id

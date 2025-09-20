@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 
 import libcst as cst
 
@@ -17,6 +17,12 @@ DOMAINS = ["stages", "validation", "tasks"]
 class ValidateModuleTask(Task):
     id: str = "tasks.validation.validate_module"
     name: str = "validate_module"
+    # Expose steps per Task protocol; this task performs work directly so
+    # it exposes an empty sequence of steps for introspection.
+    if TYPE_CHECKING:  # pragma: no cover - typing only
+        from ..types import Step  # type: ignore
+
+    steps: Sequence["Step"] = ()
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult:  # type: ignore[override]
         maybe_module: Any = context.get("module")
