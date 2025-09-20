@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import libcst as cst
-from splurge_unittest_to_pytest.stages.manager import StageManager
-from splurge_unittest_to_pytest.stages.collector import Collector
-from pathlib import Path
 import shutil
+from pathlib import Path
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.stages.collector import Collector
+from splurge_unittest_to_pytest.stages.manager import StageManager
 
 SAMPLE = "\nclass MyTests(unittest.TestCase):\n    def setUp(self) -> None:\n        self.x = 1\n\n    def tearDown(self) -> None:\n        self.x = None\n\n    def test_one(self) -> None:\n        assert self.x == 1\n"
 

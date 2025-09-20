@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import libcst as cst
+
 from splurge_unittest_to_pytest.stages.collector import Collector
 
 SAMPLE = "\nclass MyTests(unittest.TestCase):\n    def setUp(self) -> None:\n        self.resource = open('file.txt')\n        self.count = 42\n\n    def tearDown(self) -> None:\n        if self.resource is not None:\n            self.resource.close()\n\n    def test_one(self) -> None:\n        assert self.count == 42\n"

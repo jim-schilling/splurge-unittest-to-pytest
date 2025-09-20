@@ -7,8 +7,8 @@ filename pattern. It shows diffs for review and updates the golden files.
 
 from __future__ import annotations
 
-import pathlib
 import difflib
+import pathlib
 from typing import List
 
 from splurge_unittest_to_pytest.main import convert_string

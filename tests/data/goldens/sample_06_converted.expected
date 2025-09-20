@@ -1,3 +1,4 @@
+import pytest
 import sys
 import os
 
@@ -26,4 +27,5 @@ def test_conditional_skip():
         skipTest("os.fork not available")
     # Test that requires fork would go here
     assert hasattr(os, 'fork')
+
 

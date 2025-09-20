@@ -1,7 +1,7 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.manager import StageManager
 from splurge_unittest_to_pytest.stages.import_injector import import_injector_stage
+from splurge_unittest_to_pytest.stages.manager import StageManager
 
 
 def test_hooks_ordering_and_error_isolation():

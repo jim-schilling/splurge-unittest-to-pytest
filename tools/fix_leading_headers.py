@@ -11,7 +11,6 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-
 CODE_START_RE = re.compile(r'^(#|from\b|import\b|def\b|class\b|@|\'\'\'|"""|#!)')
 
 

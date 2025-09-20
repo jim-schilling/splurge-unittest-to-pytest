@@ -14,8 +14,9 @@ License: MIT
 
 from __future__ import annotations
 
-import libcst as cst
 from typing import Any, Mapping
+
+import libcst as cst
 
 DOMAINS = ["converter"]
 

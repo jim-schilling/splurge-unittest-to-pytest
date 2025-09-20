@@ -14,13 +14,14 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, cast
-from ..types import PipelineContext
 import importlib
-import json
 import importlib.resources as pkg_resources
+import json
+from typing import Any, cast
 
 import libcst as cst
+
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "mocks"]
 STAGE_ID = "stages.decorator_and_mock_fixes"
@@ -267,8 +268,8 @@ class DecoratorAndMockTransformer(cst.CSTTransformer):
 
 
 def decorator_and_mock_fixes_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
     from .decorator_and_mock_fixes_tasks import ApplyDecoratorAndMockFixesTask
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
 
     stage_id = STAGE_ID
     bus = context.get("__event_bus__")

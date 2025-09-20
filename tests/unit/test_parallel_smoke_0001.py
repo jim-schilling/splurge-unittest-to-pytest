@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-import threading
 import os
+import threading
+from pathlib import Path
+
 import pytest
 
 from splurge_unittest_to_pytest.io_helpers import atomic_write

@@ -6,9 +6,11 @@ for illustrative purposes; these helpers are implementation details and may
 change between releases. Prefer the public `convert_string` API for conversions.
 """
 
-import libcst as cst
-from splurge_unittest_to_pytest.main import PatternConfigurator
 from typing import Any, cast
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.main import PatternConfigurator
 
 
 def main() -> None:

@@ -15,10 +15,11 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, Any, cast
-from ..types import PipelineContext
+from typing import Any, Optional, Sequence, cast
 
 import libcst as cst
+
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "exceptions"]
 STAGE_ID = "stages.raises_stage"
@@ -451,8 +452,8 @@ class RaisesRewriter(cst.CSTTransformer):
 
 
 def raises_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
-    from .raises_stage_tasks import RewriteRaisesTask, NormalizeExceptionAttrTask
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
+    from .raises_stage_tasks import NormalizeExceptionAttrTask, RewriteRaisesTask
 
     maybe_module = context.get("module")
     module: Optional[cst.Module] = maybe_module if isinstance(maybe_module, cst.Module) else None

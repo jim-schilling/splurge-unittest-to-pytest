@@ -16,12 +16,18 @@ License: MIT
 from __future__ import annotations
 
 from typing import Optional, cast
-from ..types import PipelineContext
 
 import libcst as cst
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
 from .fixture_injector_tasks import InsertFixtureNodesTask
-from .fixture_injector_tasks import _find_insertion_index as _task_find_insertion_index
+from .steps import run_steps
+from .steps_fixture_injector import (
+    FindInsertionIndexStep,
+    InsertNodesStep,
+    NormalizeAndPostprocessStep,
+)
 
 DOMAINS = ["stages", "fixtures"]
 
@@ -107,11 +113,42 @@ def _make_autouse_attach(fixture_names: list[str]) -> cst.FunctionDef:
 
 
 def _find_insertion_index(module: cst.Module) -> int:
-    """Compatibility wrapper for tests importing from this module.
+    """Find deterministic insertion index for fixture nodes.
 
-    Delegates to the task helper to keep a single source of truth.
+    Prefer an existing `import pytest` line; otherwise place after a
+    module docstring and existing imports.
     """
-    return _task_find_insertion_index(module)
+    for idx, stmt in enumerate(module.body):
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            expr = stmt.body[0]
+            if isinstance(expr, cst.Import):
+                for name in expr.names:
+                    if getattr(name.name, "value", None) == "pytest":
+                        return idx + 1
+
+    start_idx = 0
+    if module.body:
+        first = module.body[0]
+        if (
+            isinstance(first, cst.SimpleStatementLine)
+            and first.body
+            and isinstance(first.body[0], cst.Expr)
+            and isinstance(first.body[0].value, cst.SimpleString)
+        ):
+            start_idx = 1
+
+    insert_idx = start_idx
+    for idx in range(start_idx, len(module.body)):
+        stmt = module.body[idx]
+        if (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and stmt.body
+            and isinstance(stmt.body[0], (cst.Import, cst.ImportFrom))
+        ):
+            insert_idx = idx + 1
+            continue
+        break
+    return insert_idx
 
 
 def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
@@ -123,14 +160,28 @@ def fixture_injector_stage(context: PipelineContext) -> PipelineContext:
     stage_id = "stages.fixture_injector"
     bus = context.get("__event_bus__")
     task = InsertFixtureNodesTask()
+    # Execute underlying Steps for this task via run_steps which folds
+    # deltas back into a TaskResult. Keep event bus notifications for
+    # compatibility with monitoring and hooks.
     try:
         if isinstance(bus, EventBus):
             bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
-        res = task.execute(context, resources=None)
+        steps = [FindInsertionIndexStep(), InsertNodesStep(), NormalizeAndPostprocessStep()]
+        result = run_steps(stage_id, task.id, task.name, steps, dict(context, __stage_id__=stage_id), resources=None)
+        if result.errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=result.errors[0]))
+                except Exception:
+                    pass
+            return cast(PipelineContext, {"module": module})
         if isinstance(bus, EventBus):
             bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
-    except Exception as exc:
+        return cast(PipelineContext, result.delta.values)
+    except Exception:
         if isinstance(bus, EventBus):
-            bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=exc))
+            try:
+                bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task.id, error=Exception("stage error")))
+            except Exception:
+                pass
         return cast(PipelineContext, {"module": module})
-    return cast(PipelineContext, res.delta.values)

@@ -1,8 +1,9 @@
 import libcst as cst
-from splurge_unittest_to_pytest.converter.method_params import should_remove_first_param, remove_method_self_references
-from splurge_unittest_to_pytest.converter.params import append_fixture_params
+
 from splurge_unittest_to_pytest.converter import method_params
 from splurge_unittest_to_pytest.converter import params as conv_params
+from splurge_unittest_to_pytest.converter.method_params import remove_method_self_references, should_remove_first_param
+from splurge_unittest_to_pytest.converter.params import append_fixture_params
 
 
 def _parse_func(src: str) -> cst.FunctionDef:

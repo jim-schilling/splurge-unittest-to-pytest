@@ -15,8 +15,8 @@ import argparse
 import os
 import sys
 import tempfile
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 DOMAINS = ["diagnostics"]
 

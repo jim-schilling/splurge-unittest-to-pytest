@@ -398,6 +398,112 @@ Key pieces:
 - Execution helper (`splurge_unittest_to_pytest/stages/steps.py`):
   - `run_steps(stage_id, task_id, task_name, steps, context, resources) -> TaskResult` merges per-step deltas and publishes step events.
 
+### Step contract (developer guidance)
+
+Steps are the smaller unit of work inside the staged pipeline. They are intended to be
+small, focused, and deterministic transformers that operate on a read/write
+dictionary-style `PipelineContext` and return a `StepResult` containing a
+`ContextDelta` (the changes to apply) and an optional list of errors. The
+runner merges each `ContextDelta` into the running context and stops the
+pipeline if any Step returns non-empty `errors`.
+
+Key rules and expectations
+- A Step MUST not mutate the incoming `context` object in-place. Instead it
+   should read values from `context` and return modifications via
+   `StepResult(delta=ContextDelta(values={...}))`.
+- Steps SHOULD be idempotent and referentially transparent where possible: given
+   the same input `context` they should return the same `StepResult`.
+- Steps MUST return `StepResult.errors` when they cannot safely continue; the
+   `run_steps(...)` helper will mark the Task as errored and stop further Steps.
+- Steps that introduce a need for external imports (for example `pytest` or
+   `re`) should signal that via boolean flags in the delta: e.g.
+   `{"needs_pytest_import": True}`. The runner ORs these flags across Steps so
+   multiple Steps can independently request the same import.
+- Prefer focused steps that only convert a small family of assertions or a
+   single concern (regex assertions, almost-equal assertions, raises/with
+   contexts, etc.). This helps with testing and incremental rollouts.
+
+Data shapes (short)
+- Pipeline context: Mapping[str, Any] — common keys include `module` (a
+   `libcst.Module`) and feature flags created by Steps.
+- ContextDelta: dataclass wrapping a dict-like `.values` payload that will be
+   merged into the running context.
+- StepResult: dataclass with `.delta: ContextDelta`, `.errors: list[Exception]`
+   (optional), and other metadata (for example `.skipped` in some runners).
+
+Lifecycle & events
+- The runner publishes `StepStarted`, `StepCompleted`, `StepSkipped`, and
+   `StepErrored` events (see `splurge_unittest_to_pytest/stages/events.py`) for
+   each Step. Hooks may subscribe to these events for diagnostics or metrics.
+- Hooks receive copies of the context/delta to avoid accidental cross-Step
+   mutation.
+
+Minimal Step example
+
+Below is a small example that demonstrates the minimal shape of a Step that
+converts `assertTrue` / `assertFalse` calls into `assert` expressions. This
+example mirrors the structure used in the pilot Steps under
+`splurge_unittest_to_pytest/stages/steps_assertion_rewriter.py`.
+
+```py
+from typing import Any, Mapping, Sequence
+import libcst as cst
+
+from splurge_unittest_to_pytest.types import StepResult, ContextDelta
+
+
+class TransformTruthinessAssertionsStep:
+      id = "steps.assertions.transform_truthiness"
+      name = "transform_assertions_truthiness"
+
+      def execute(self, context: Mapping[str, Any], resources: Any) -> StepResult:
+            mod = context.get("module")
+            if not isinstance(mod, cst.Module):
+                  return StepResult(delta=ContextDelta(values={}))
+
+            # Focused rewriter - delegate logic to the shared AssertionRewriter
+            class TruthinessRewriter(AssertionRewriter):
+                  def _convert_assertion(self, method_name: str, args: Sequence[cst.Arg]):
+                        if method_name in ("assertTrue", "assertFalse"):
+                              return super()._convert_assertion(method_name, args)
+                        return None
+
+            transformer = TruthinessRewriter()
+            new_mod = mod.visit(transformer)
+            return StepResult(delta=ContextDelta(values={"module": new_mod, "assertions_transformed_truthiness": True}))
+```
+
+Testing guidance
+- Unit test each Step in isolation by providing a small `libcst.Module` as the
+   `context["module"]` and asserting the returned `delta.values["module"]` is
+   the expected transformed module. The tests in `tests/unit/` show multiple
+   examples of focused Step tests.
+- Also add an end-to-end Task-level test that runs `run_steps(...)` with the
+   pipeline Steps to ensure merged deltas are equivalent to the monolithic
+   transformer output (or to the compatibility wrapper when that is used).
+
+When to add a new Step
+- Add a new Step when a transformation can be scoped to a small family of
+   behaviors: it improves testability, limits blast radius, and makes it easy
+   to opt-in/opt-out specific conversions.
+- If conversions are tightly-coupled in the original transformer (for
+   example ordering matters inside a single pass), consider implementing a
+   focused Step that reproduces the original pass or keep a compatibility
+   wrapper Step until you can safely split responsibilities.
+
+Migration notes for maintainers
+- The pilot introduced focused Steps for assertion rewriting (Parse,
+   Comparison, Raises, AlmostEqual, Regex, Truthiness, IsInstance, Emit). Unit
+   tests were added for the focused Steps and a compatibility wrapper
+   (`TransformComplexAssertionsStep`) is available to preserve the original
+   monolithic behavior for tooling that expects it.
+- Steps should OR import flags like `needs_pytest_import`/`needs_re_import` so
+   downstream import management sees a combined view of required imports across
+   Steps.
+
+See `splurge_unittest_to_pytest/stages/steps_assertion_rewriter.py` for more
+concrete examples and the full pilot implementation.
+
 Usage pattern:
 
 ```python

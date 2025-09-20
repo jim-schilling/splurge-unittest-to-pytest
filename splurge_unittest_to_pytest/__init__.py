@@ -9,7 +9,7 @@ Copyright (c) 2025 Jim Schilling
 License: MIT
 """
 
-__version__ = "2025.3.2"
+__version__ = "2025.3.3"
 __author__ = "Jim Schilling"
 
 from splurge_unittest_to_pytest.exceptions import (
@@ -22,7 +22,7 @@ from splurge_unittest_to_pytest.exceptions import (
     PermissionDeniedError,
     SplurgeError,
 )
-from splurge_unittest_to_pytest.main import convert_file, convert_string, ConversionResult
+from splurge_unittest_to_pytest.main import ConversionResult, convert_file, convert_string
 
 DOMAINS = ["core"]
 

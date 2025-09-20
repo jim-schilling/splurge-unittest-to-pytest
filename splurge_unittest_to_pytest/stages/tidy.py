@@ -15,9 +15,9 @@ License: MIT
 
 from __future__ import annotations
 
-from ..types import PipelineContext
 from typing import cast
 
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "tidy"]
 STAGE_ID = "stages.tidy"
@@ -27,8 +27,8 @@ STAGE_VERSION = "1"
 
 
 def tidy_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
-    from .tidy_tasks import NormalizeSpacingTask, EnsureSelfParamTask
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
+    from .tidy_tasks import EnsureSelfParamTask, NormalizeSpacingTask
 
     stage_id = STAGE_ID
     bus = context.get("__event_bus__")

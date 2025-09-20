@@ -1,6 +1,8 @@
-import libcst as cst
-from splurge_unittest_to_pytest.stages.postvalidator import postvalidator_stage
 from types import SimpleNamespace
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.stages.postvalidator import postvalidator_stage
 
 
 def test_postvalidator_accepts_valid_module() -> None:

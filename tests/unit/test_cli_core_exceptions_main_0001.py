@@ -1,10 +1,12 @@
 import importlib
 import logging
+
 from click.testing import CliRunner
+
 from splurge_unittest_to_pytest import cli as cli_module
 from splurge_unittest_to_pytest.cli import main as cli_main
-from splurge_unittest_to_pytest.main import ConversionResult
 from splurge_unittest_to_pytest.exceptions import SplurgeError
+from splurge_unittest_to_pytest.main import ConversionResult
 
 
 def test_reload_sets_diagnostics_logger(monkeypatch):

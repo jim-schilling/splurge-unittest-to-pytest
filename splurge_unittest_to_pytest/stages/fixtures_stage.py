@@ -16,17 +16,19 @@ License: MIT
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
-from ..types import PipelineContext
-from .fixtures_stage_tasks import BuildTopLevelTestsTask
-from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
 
 import libcst as cst
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+
 from splurge_unittest_to_pytest.converter.method_params import (
+    first_param_name,
     is_classmethod,
     is_staticmethod,
-    first_param_name,
 )
+from splurge_unittest_to_pytest.stages.collector import CollectorOutput
+
+from ..types import PipelineContext
+from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
+from .fixtures_stage_tasks import BuildTopLevelTestsTask
 
 DOMAINS = ["stages", "fixtures"]
 STAGE_ID = "stages.fixtures_stage"
@@ -161,7 +163,12 @@ def fixtures_stage(context: PipelineContext) -> PipelineContext:
     try:
         if isinstance(bus, EventBus):
             bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task.id))
-        res = task.execute(context, resources=None)
+        # Ensure the task receives the possibly-modified module (for example
+        # when pattern_config requested method stripping). Create a working
+        # context that preserves other keys but updates 'module'.
+        working_ctx = dict(context)
+        working_ctx["module"] = module
+        res = task.execute(working_ctx, resources=None)
         if isinstance(bus, EventBus):
             bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task.id))
     except Exception as exc:

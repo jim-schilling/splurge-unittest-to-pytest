@@ -1,10 +1,11 @@
 """Test the flexible parameter handling for different method types."""
 
-import libcst as cst
 from typing import cast
+
+import libcst as cst
+
+from splurge_unittest_to_pytest.stages.collector import ClassInfo, Collector, CollectorOutput
 from splurge_unittest_to_pytest.stages.rewriter import rewriter_stage
-from splurge_unittest_to_pytest.stages.collector import Collector
-from splurge_unittest_to_pytest.stages.collector import CollectorOutput, ClassInfo
 
 
 class TestFlexibleParameterHandling:

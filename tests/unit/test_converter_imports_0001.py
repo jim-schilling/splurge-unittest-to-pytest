@@ -1,8 +1,9 @@
 import libcst as cst
-from splurge_unittest_to_pytest.converter.imports import add_pytest_import, has_pytest_import
-from splurge_unittest_to_pytest.converter import imports as conv_imports
+
 from splurge_unittest_to_pytest.converter import import_helpers as ih
 from splurge_unittest_to_pytest.converter import imports
+from splurge_unittest_to_pytest.converter import imports as conv_imports
+from splurge_unittest_to_pytest.converter.imports import add_pytest_import, has_pytest_import
 
 
 def test_add_pytest_import_inserts_after_docstring():
@@ -28,8 +29,9 @@ def test_remove_unittest_importfrom_removes():
 
 def test_remove_unittest_import_keeps_other():
     import libcst as cst
-    from splurge_unittest_to_pytest.converter import imports as conv_imports
+
     from splurge_unittest_to_pytest.converter import import_helpers as ih
+    from splurge_unittest_to_pytest.converter import imports as conv_imports
 
     def test_remove_unittest_importfrom_removes():
         stmt = cst.parse_statement("from unittest import TestCase")

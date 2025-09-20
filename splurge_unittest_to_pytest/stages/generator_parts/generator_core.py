@@ -14,12 +14,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .name_allocator import NameAllocator
-from .annotation_inferer import AnnotationInferer, type_name_for_literal
-from .fixture_spec_builder import FixtureSpecBuilder
-from .cleanup_rewriter import CleanupRewriter
-from .node_emitter import NodeEmitter
 import libcst as cst
+
+from .annotation_inferer import AnnotationInferer, type_name_for_literal
+from .cleanup_rewriter import CleanupRewriter
+from .fixture_spec_builder import FixtureSpecBuilder
+from .name_allocator import NameAllocator
+from .node_emitter import NodeEmitter
 
 DOMAINS = ["generator"]
 

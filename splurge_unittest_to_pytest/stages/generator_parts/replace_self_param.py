@@ -14,8 +14,9 @@ License: MIT
 
 from __future__ import annotations
 
-import libcst as cst
 from typing import Set
+
+import libcst as cst
 
 DOMAINS = ["generator"]
 

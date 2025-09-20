@@ -1,0 +1,11 @@
+import pytest
+
+
+@pytest.fixture(params=[1, 2])
+def class_resource(request):
+    return request.param
+
+
+class TestClassLevel:
+    def test_param(self, class_resource):
+        assert class_resource in (1, 2)

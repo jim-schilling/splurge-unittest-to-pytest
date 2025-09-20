@@ -1,13 +1,13 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.stages.events import (
-    EventBus,
-    RecordingObserver,
-    PipelineStarted,
-    PipelineCompleted,
-    DiagnosticsObserver,
-)
 from splurge_unittest_to_pytest.stages.adapters import CallableStage
+from splurge_unittest_to_pytest.stages.events import (
+    DiagnosticsObserver,
+    EventBus,
+    PipelineCompleted,
+    PipelineStarted,
+    RecordingObserver,
+)
 
 
 def test_event_bus_records_start_and_completion():

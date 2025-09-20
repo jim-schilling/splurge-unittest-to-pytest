@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from ..types import Step, StepResult, TaskResult, ContextDelta
-from .events import EventBus, StepStarted, StepCompleted, StepErrored
-from .events import HookRegistry
+from ..types import ContextDelta, Step, StepResult, TaskResult
 from . import diagnostics as _diagnostics
+from .events import (
+    EventBus,
+    HookRegistry,
+    StepCompleted,
+    StepErrored,
+    StepStarted,
+    TaskCompleted,
+    TaskErrored,
+    TaskStarted,
+)
 
 
 def run_steps(
@@ -27,6 +35,20 @@ def run_steps(
     hooks = working.get("__hooks__")
     if not isinstance(stage_id, str) or not stage_id:
         stage_id = "stages.unknown"
+    # Publish a TaskStarted event and trigger before_task hooks. This
+    # preserves the previous Task-level lifecycle semantics when stages
+    # were executing Task objects instead of calling run_steps directly.
+    try:
+        if isinstance(bus, EventBus):
+            bus.publish(TaskStarted(run_id="", stage_id=stage_id, task_id=task_id))
+    except Exception:
+        pass
+    if isinstance(hooks, HookRegistry):
+        try:
+            hooks.before_task(stage_id, task_name, dict(working))
+        except Exception:
+            pass
+
     # Suppress step events unless diagnostics are enabled globally
     emit_step_events = False
     try:
@@ -46,6 +68,25 @@ def run_steps(
                 except Exception:
                     pass
             res: StepResult = step.execute(working, resources)
+            # If a Step reports errors via StepResult.errors, treat that as an
+            # error condition: publish StepErrored, record the error(s), and
+            # stop further processing. Do not fold the step's delta into the
+            # working context in this case.
+            if res.errors:
+                for e in res.errors:
+                    errors.append(e)
+                if emit_step_events and isinstance(bus, EventBus):
+                    try:
+                        bus.publish(
+                            StepErrored(
+                                run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id, error=res.errors[0]
+                            )
+                        )
+                    except Exception:
+                        pass
+                # Do not call hooks.after_step for errored steps; stop processing
+                break
+
             delta_vals = dict(res.delta.values)
             working.update(delta_vals)
             for k, v in delta_vals.items():
@@ -68,6 +109,29 @@ def run_steps(
                 except Exception:
                     pass
             break
+    # Publish TaskCompleted/TaskErrored and trigger after_task hooks
+    try:
+        if errors:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskErrored(run_id="", stage_id=stage_id, task_id=task_id, error=errors[0]))
+                except Exception:
+                    pass
+        else:
+            if isinstance(bus, EventBus):
+                try:
+                    bus.publish(TaskCompleted(run_id="", stage_id=stage_id, task_id=task_id))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    if isinstance(hooks, HookRegistry):
+        try:
+            hooks.after_task(stage_id, task_name, dict(agg))
+        except Exception:
+            pass
+
     return TaskResult(delta=ContextDelta(values=agg), diagnostics=diagnostics, errors=errors)
 
 

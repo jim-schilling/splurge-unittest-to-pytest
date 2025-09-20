@@ -16,12 +16,12 @@ License: MIT
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
-import logging
+from typing import Any, Optional
 
 DOMAINS = ["stages", "diagnostics"]
 

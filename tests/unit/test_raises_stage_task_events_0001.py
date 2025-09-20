@@ -1,7 +1,7 @@
 import libcst as cst
 
+from splurge_unittest_to_pytest.stages.events import EventBus, RecordingObserver, TaskCompleted, TaskStarted
 from splurge_unittest_to_pytest.stages.raises_stage import raises_stage
-from splurge_unittest_to_pytest.stages.events import EventBus, RecordingObserver, TaskStarted, TaskCompleted
 
 
 def test_raises_stage_emits_task_events():

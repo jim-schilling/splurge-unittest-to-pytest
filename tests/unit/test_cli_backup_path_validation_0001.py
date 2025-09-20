@@ -1,6 +1,8 @@
-from click.testing import CliRunner
-from pathlib import Path
 import os
+from pathlib import Path
+
+from click.testing import CliRunner
+
 from splurge_unittest_to_pytest.cli import main as cli_main
 
 

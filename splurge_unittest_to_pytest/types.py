@@ -14,9 +14,8 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
-from typing import Protocol, Iterable, Optional, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, TypedDict
 
 DOMAINS = ["types", "pipeline"]
 
@@ -131,6 +130,12 @@ class Task(Protocol):
 
     id: TaskId
     name: str
+
+    # A Task may be composed of one or more Steps. Expose the underlying
+    # Step instances (or an empty sequence) for tooling and runtime
+    # introspection. Implementations may provide an explicit list or an
+    # empty sequence when they perform their work directly.
+    steps: Sequence["Step"]
 
     def execute(self, context: Mapping[str, Any], resources: Any) -> TaskResult: ...
 

@@ -9,11 +9,12 @@ License: MIT
 
 from __future__ import annotations
 
+import os
 from hashlib import sha256
 from pathlib import Path
-from .types import TextWriterProtocol
-import os
 from uuid import uuid4
+
+from .types import TextWriterProtocol
 
 DOMAIN = ["io", "helpers"]
 

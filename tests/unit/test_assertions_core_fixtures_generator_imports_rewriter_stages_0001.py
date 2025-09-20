@@ -1,7 +1,8 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator import generator_stage
-from splurge_unittest_to_pytest.stages import fixture_injector, assertion_rewriter, import_injector
+
+from splurge_unittest_to_pytest.stages import assertion_rewriter, fixture_injector, import_injector
 from splurge_unittest_to_pytest.stages.collector import Collector, CollectorOutput
+from splurge_unittest_to_pytest.stages.generator import generator_stage
 
 
 def test_references_attribute_detects_in_if_call_and_subscript():

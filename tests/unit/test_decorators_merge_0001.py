@@ -1,5 +1,7 @@
-import libcst as cst
 from typing import cast
+
+import libcst as cst
+
 from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
 
 

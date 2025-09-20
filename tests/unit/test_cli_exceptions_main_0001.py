@@ -1,7 +1,8 @@
 from click.testing import CliRunner
+
 from splurge_unittest_to_pytest.cli import main as cli_main
-from splurge_unittest_to_pytest.main import ConversionResult
 from splurge_unittest_to_pytest.exceptions import ParseError
+from splurge_unittest_to_pytest.main import ConversionResult
 
 
 def test_dry_run_verbose_shows_diff_and_summary(monkeypatch, tmp_path):

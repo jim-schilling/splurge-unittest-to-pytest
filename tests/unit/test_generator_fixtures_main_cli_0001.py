@@ -1,8 +1,9 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator import _is_literal
-from splurge_unittest_to_pytest.stages.fixtures_stage import _update_test_function
-from splurge_unittest_to_pytest.main import PatternConfigurator
+
 from splurge_unittest_to_pytest import cli
+from splurge_unittest_to_pytest.main import PatternConfigurator
+from splurge_unittest_to_pytest.stages.fixtures_stage import _update_test_function
+from splurge_unittest_to_pytest.stages.generator import _is_literal
 
 
 def test_is_literal_simple():

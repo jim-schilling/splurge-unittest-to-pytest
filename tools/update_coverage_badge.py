@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import argparse
 import re
-from xml.etree import ElementTree as ET
 from pathlib import Path
 from typing import Optional
-
+from xml.etree import ElementTree as ET
 
 # Match existing coverage badge links. Accept both literal '%' and URL-encoded '%25'.
 BADGE_RE = re.compile(

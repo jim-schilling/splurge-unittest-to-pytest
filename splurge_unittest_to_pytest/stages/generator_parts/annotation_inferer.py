@@ -12,7 +12,7 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Tuple, Set
+from typing import Set, Tuple
 
 import libcst as cst
 

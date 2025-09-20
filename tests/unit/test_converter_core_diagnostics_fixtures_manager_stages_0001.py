@@ -1,8 +1,9 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.manager import StageManager
-from splurge_unittest_to_pytest.converter.simple_fixture import create_simple_fixture
+
 from splurge_unittest_to_pytest.converter.decorators import build_pytest_fixture_decorator
+from splurge_unittest_to_pytest.converter.simple_fixture import create_simple_fixture
 from splurge_unittest_to_pytest.stages import diagnostics
+from splurge_unittest_to_pytest.stages.manager import StageManager
 
 
 def test_stage_manager_register_and_run():

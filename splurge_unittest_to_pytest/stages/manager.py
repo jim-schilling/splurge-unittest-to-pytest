@@ -16,26 +16,27 @@ License: MIT
 
 from __future__ import annotations
 
-from typing import Callable, Any, cast
 import uuid
+from pathlib import Path
+from typing import Any, Callable, cast
 
 import libcst as cst
-from pathlib import Path
-from . import diagnostics
 
 from ..types import PipelineContext
+from . import diagnostics
 from .events import (
-    EventBus,
-    PipelineStarted,
-    PipelineCompleted,
-    StageStarted,
-    StageCompleted,
     DiagnosticsObserver,
-    LoggingObserver,
-    logging_enabled,
+    EventBus,
     HookRegistry,
+    LoggingObserver,
+    PipelineCompleted,
+    PipelineStarted,
+    StageCompleted,
+    StageLogger,
+    StageStarted,
+    logging_enabled,
+    logging_enabled_stages,
 )
-from .events import StageLogger, logging_enabled_stages
 
 DOMAINS = ["stages", "manager"]
 

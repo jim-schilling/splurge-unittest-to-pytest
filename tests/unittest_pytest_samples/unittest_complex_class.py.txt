@@ -1,0 +1,16 @@
+import unittest
+from mylib import makeResource, freeResource
+
+
+class TestComplex(unittest.TestCase):
+    def setUp(self) -> None:
+        self.res = makeResource()
+
+    def tearDown(self) -> None:
+        freeResource(self.res)
+
+    def test_one(self) -> None:
+        assert self.res is not None
+
+    def test_two(self) -> None:
+        assert True

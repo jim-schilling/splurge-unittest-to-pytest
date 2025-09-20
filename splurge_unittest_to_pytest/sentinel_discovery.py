@@ -6,7 +6,8 @@ CLI and file discovery utilities can reuse the same logic.
 
 from pathlib import Path
 
-from .exceptions import FileNotFoundError as SplurgeFileNotFoundError, PermissionDeniedError, EncodingError
+from .exceptions import EncodingError, PermissionDeniedError
+from .exceptions import FileNotFoundError as SplurgeFileNotFoundError
 
 DOMAINS = ["discovery"]
 

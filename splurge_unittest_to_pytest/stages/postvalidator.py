@@ -13,9 +13,9 @@ License: MIT
 
 from __future__ import annotations
 
-from ..types import PipelineContext
 from typing import cast
 
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "validation"]
 STAGE_ID = "stages.postvalidator"
@@ -25,7 +25,7 @@ STAGE_VERSION = "1"
 
 
 def postvalidator_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
     from .postvalidator_tasks import ValidateModuleTask
 
     stage_id = STAGE_ID

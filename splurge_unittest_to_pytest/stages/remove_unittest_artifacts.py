@@ -13,9 +13,9 @@ License: MIT
 
 from __future__ import annotations
 
-from ..types import PipelineContext
 from typing import cast
 
+from ..types import PipelineContext
 
 DOMAINS = ["stages", "helpers"]
 STAGE_ID = "stages.remove_unittest_artifacts"
@@ -25,7 +25,7 @@ STAGE_VERSION = "1"
 
 
 def remove_unittest_artifacts_stage(context: PipelineContext) -> PipelineContext:
-    from .events import EventBus, TaskStarted, TaskCompleted, TaskErrored
+    from .events import EventBus, TaskCompleted, TaskErrored, TaskStarted
     from .remove_unittest_artifacts_tasks import RemoveUnittestArtifactsTask
 
     stage_id = STAGE_ID

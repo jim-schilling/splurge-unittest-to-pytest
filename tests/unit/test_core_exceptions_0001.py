@@ -11,6 +11,7 @@ errors under pytest's assertion rewriter.
 from __future__ import annotations
 
 import pytest
+
 from splurge_unittest_to_pytest import exceptions
 
 

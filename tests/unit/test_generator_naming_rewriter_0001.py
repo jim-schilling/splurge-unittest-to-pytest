@@ -1,5 +1,6 @@
 import libcst as cst
-from splurge_unittest_to_pytest.stages.generator_parts import filename_inferer, attr_rewriter, replace_self_param
+
+from splurge_unittest_to_pytest.stages.generator_parts import attr_rewriter, filename_inferer, replace_self_param
 
 
 class Dummy:

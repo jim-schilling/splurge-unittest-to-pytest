@@ -1,8 +1,9 @@
 import libcst as cst
+
 from splurge_unittest_to_pytest.converter.assertion_dispatch import convert_assertion
 from splurge_unittest_to_pytest.converter.assertions import _assert_equal, _assert_is_none
 from splurge_unittest_to_pytest.converter.fixtures import create_simple_fixture
-from tests.unit.helpers.autouse_helpers import make_autouse_attach, insert_attach_fixture_into_module
+from tests.unit.helpers.autouse_helpers import insert_attach_fixture_into_module, make_autouse_attach
 
 
 def _arg_from_expr(src: str) -> cst.Arg:

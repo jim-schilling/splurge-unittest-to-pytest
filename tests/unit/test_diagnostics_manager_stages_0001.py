@@ -1,6 +1,8 @@
 import tempfile
-import libcst as cst
 from pathlib import Path
+
+import libcst as cst
+
 import splurge_unittest_to_pytest.stages.diagnostics as diag
 from splurge_unittest_to_pytest.stages.manager import StageManager
 

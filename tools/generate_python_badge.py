@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import argparse
 import re
-from pathlib import Path
 import tomllib
-
+from pathlib import Path
 
 BADGE_PY_RE = re.compile(r"(!\[Python Versions\]\()(https://img.shields.io/badge/python-)[^\)]+\)")
 
