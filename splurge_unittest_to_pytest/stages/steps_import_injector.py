@@ -388,14 +388,19 @@ class InsertImportsStep(Step):
         defined_top_names: set[str] = set()
         try:
             for stmt in mod.body:
-                # class and function definitions
+                # Class and Function defs may appear directly or wrapped inside
+                # a SimpleStatementLine. Handle both shapes.
                 if isinstance(stmt, cst.ClassDef):
                     defined_top_names.add(stmt.name.value)
-                if isinstance(stmt, cst.FunctionDef):
+                elif isinstance(stmt, cst.FunctionDef):
                     defined_top_names.add(stmt.name.value)
-                # simple assignments (x = ...)
-                if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+                elif isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
                     first = stmt.body[0]
+                    if isinstance(first, cst.ClassDef):
+                        defined_top_names.add(first.name.value)
+                    if isinstance(first, cst.FunctionDef):
+                        defined_top_names.add(first.name.value)
+                    # simple assignments (x = ...)
                     if isinstance(first, cst.Assign):
                         for target in first.targets or []:
                             target_node = target.target

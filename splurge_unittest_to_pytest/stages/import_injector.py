@@ -70,9 +70,17 @@ def import_injector_stage(context: PipelineContext) -> PipelineContext:
                     pass
             return cast(PipelineContext, {"module": module})
 
-        # Merge detect deltas into working context for the insert step
-        # mypy: cast the mapping to PipelineContext so TypedDict.update() is
-        # satisfied without changing PipelineContext semantics at runtime.
+        # Merge detect deltas into working context for the insert step.
+        #
+        # mypy notes: `PipelineContext` is a TypedDict which enforces key
+        # constraints at type-check time. `detect_result.delta.values` is a
+        # plain dict[str, Any] at runtime; passing that directly to
+        # `TypedDict.update()` triggers a mypy complaint about the argument
+        # type. We coerce to `PipelineContext` with `cast()` here to satisfy
+        # static checking while preserving the exact runtime behavior (the
+        # value is still a plain dict and update() operates normally). This
+        # is a harmless, intentional type-only coercion to keep the code
+        # both type-safe and practical.
         working.update(cast(PipelineContext, dict(detect_result.delta.values)))
 
         # Run InsertImportsStep to ensure required imports exist
