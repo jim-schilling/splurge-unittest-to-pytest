@@ -15,6 +15,73 @@ def _get_module(context: Mapping[str, Any]) -> cst.Module | None:
     return mod if isinstance(mod, cst.Module) else None
 
 
+def _find_typing_indices(mod: cst.Module) -> list[int]:
+    """Return indices of top-level `from typing import` SimpleStatementLine nodes."""
+    idxs: list[int] = []
+    for idx, stmt in enumerate(mod.body):
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
+                idxs.append(idx)
+    return idxs
+
+
+def _collect_aliases_and_paren(
+    mod: cst.Module, typing_indices: list[int]
+) -> tuple[list[cst.ImportAlias], set[str], cst.ImportFrom | None, int | None]:
+    """Collect unique ImportAlias nodes across typing ImportFroms and prefer a paren source.
+
+    Returns (collected_aliases, seen_names, paren_source, paren_index).
+    """
+    collected_aliases: list[cst.ImportAlias] = []
+    seen: set[str] = set()
+    paren_source: cst.ImportFrom | None = None
+    paren_index: int | None = None
+    for idx in typing_indices:
+        stmt = mod.body[idx]
+        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
+            first = stmt.body[0]
+            if isinstance(first, cst.ImportFrom):
+                if paren_source is None and getattr(first, "lpar", None) is not None:
+                    paren_source = first
+                    paren_index = idx
+                for alias in getattr(first, "names") or []:
+                    an = getattr(alias, "name", None)
+                    if isinstance(an, cst.Name) and an.value not in seen:
+                        collected_aliases.append(alias)
+                        seen.add(an.value)
+    return collected_aliases, seen, paren_source, paren_index
+
+
+def _render_stmt_comments(stmt: cst.CSTNode) -> list[str]:
+    """Render a single-statement module for a statement and extract comment text per line."""
+    comments: list[str] = []
+    try:
+        rendered_stmt = cast(cst.SimpleStatementLine | cst.BaseCompoundStatement, stmt)
+        src = cst.Module(body=[rendered_stmt]).code
+    except Exception:
+        src = ""
+    for line in src.splitlines():
+        if "#" in line:
+            comment = line[line.index("#") :].strip()
+            if comment:
+                comments.append(comment)
+    return comments
+
+
+def _collect_preserved_comments(mod: cst.Module, remove_indices: list[int]) -> list[str]:
+    preserved_comments: list[str] = []
+    for i in sorted(remove_indices):
+        try:
+            stmt = mod.body[i]
+            for comment in _render_stmt_comments(stmt):
+                if comment not in preserved_comments:
+                    preserved_comments.append(comment)
+        except Exception:
+            continue
+    return preserved_comments
+
+
 def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: set[str]) -> cst.Module:
     """Return a new module with typing names merged into the existing typing ImportFrom at existing_idx.
 
@@ -30,39 +97,15 @@ def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: s
         return mod
 
     # Find all typing import statement indices so we can consolidate them
-    typing_indices: list[int] = []
-    for idx, stmt in enumerate(mod.body):
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-            first = stmt.body[0]
-            if isinstance(first, cst.ImportFrom) and getattr(first.module, "value", None) == "typing":
-                typing_indices.append(idx)
+    typing_indices = _find_typing_indices(mod)
 
     # If there is only the canonical typing import, behave as before but still collect aliases
     if not typing_indices:
         return mod
 
-    # collect alias nodes from all typing ImportFrom statements, preserving their nodes so any
-    # comma/whitespace/comment metadata attached to aliases is retained. Prefer the
-    # paren-containing ImportFrom as the canonical location (so closing-paren comments
-    # are preserved) if one exists.
-    collected_aliases: list[cst.ImportAlias] = []
-    seen: set[str] = set()
-    paren_source: cst.ImportFrom | None = None
-    paren_index: int | None = None
-    for idx in typing_indices:
-        stmt = mod.body[idx]
-        if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
-            first = stmt.body[0]
-            if isinstance(first, cst.ImportFrom):
-                # prefer the first ImportFrom that contains parentheses as the source of lpar/rpar
-                if paren_source is None and getattr(first, "lpar", None) is not None:
-                    paren_source = first
-                    paren_index = idx
-                for alias in getattr(first, "names") or []:
-                    an = getattr(alias, "name", None)
-                    if isinstance(an, cst.Name) and an.value not in seen:
-                        collected_aliases.append(alias)
-                        seen.add(an.value)
+    # collect alias nodes from all typing ImportFrom statements, preserving their nodes
+    # and prefer a paren-containing ImportFrom for formatting.
+    collected_aliases, seen, paren_source, paren_index = _collect_aliases_and_paren(mod, typing_indices)
 
     # append any requested add_names not already present
     for n in sorted(add_names):
@@ -96,23 +139,24 @@ def _merge_typing_into_existing(mod: cst.Module, existing_idx: int, add_names: s
     new_body[canonical_idx] = new_stmt
 
     # Gather comments from other typing import statements so we don't lose them.
-    preserved_comments: list[str] = []
     remove_indices = [i for i in typing_indices if i != canonical_idx]
-    for i in sorted(remove_indices):
-        try:
-            stmt = mod.body[i]
-            # Render the single-statement module to get its textual source
-            try:
-                src = cst.Module(body=[stmt]).code
-            except Exception:
-                src = ""
-            for line in src.splitlines():
-                if "#" in line:
-                    comment = line[line.index("#") :].strip()
-                    if comment and comment not in preserved_comments:
-                        preserved_comments.append(comment)
-        except Exception:
-            continue
+    preserved_comments = _collect_preserved_comments(mod, remove_indices)
+
+    # Filter out any preserved comments that are already present on the canonical
+    # merged statement to avoid duplicating the same comment both inline and as
+    # a leading line.
+    try:
+        # Inspect the canonical statement's comments before we remove the
+        # other typing import statements. At this point new_body[canonical_idx]
+        # holds the merged statement we set above, so render its comments and
+        # filter out any preserved comments that are already present there to
+        # avoid duplication.
+        if 0 <= canonical_idx < len(new_body):
+            existing_comments_on_canonical = _render_stmt_comments(new_body[canonical_idx])
+            preserved_comments = [c for c in preserved_comments if c not in existing_comments_on_canonical]
+    except Exception:
+        # best-effort: if inspection fails, keep preserved_comments as-is
+        pass
 
     # Remove other typing import statements (do deletions in reverse to keep indices valid)
     for i in sorted(remove_indices, reverse=True):
