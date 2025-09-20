@@ -60,6 +60,23 @@ def run_steps(
                 except Exception:
                     pass
             res: StepResult = step.execute(working, resources)
+            # If a Step reports errors via StepResult.errors, treat that as an
+            # error condition: publish StepErrored, record the error(s), and
+            # stop further processing. Do not fold the step's delta into the
+            # working context in this case.
+            if res.errors:
+                for e in res.errors:
+                    errors.append(e)
+                if emit_step_events and isinstance(bus, EventBus):
+                    try:
+                        bus.publish(
+                            StepErrored(run_id="", stage_id=stage_id, task_id=task_id, step_id=step.id, error=res.errors[0])
+                        )
+                    except Exception:
+                        pass
+                # Do not call hooks.after_step for errored steps; stop processing
+                break
+
             delta_vals = dict(res.delta.values)
             working.update(delta_vals)
             for k, v in delta_vals.items():
