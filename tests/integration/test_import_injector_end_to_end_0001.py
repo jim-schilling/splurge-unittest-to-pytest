@@ -28,6 +28,9 @@ def test_import_injector_detects_and_inserts_end_to_end():
     # comments and parentheses preserved
     assert "# keep-optional" in code
     assert "# comment-on-list" in code
+    # comments should appear exactly once (no duplication)
+    assert code.count("# keep-optional") == 1
+    assert code.count("# comment-on-list") == 1
 
 
 def test_detect_then_insert_adds_expected_imports():
