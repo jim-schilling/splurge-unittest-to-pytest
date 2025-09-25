@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (system)
+        entry: ruff
+        language: system
+        types: [python]
+        args: ["check", "--fix"]
+
+      - id: mypy
+        name: mypy (system)
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ["-p", "splurge_unittest_to_pytest"]
+
+      - id: pytest-suite
+        name: pytest test suite (system)
+        entry: pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ["-q", "-o", "addopts=-n 7", "-p", "no:pytest_cov", "tests"]
+
