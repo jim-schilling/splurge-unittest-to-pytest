@@ -141,14 +141,13 @@ class MigrationOrchestrator:
 
         return Result.success(successful_migrations)
 
-    def _create_migration_pipeline(self) -> Pipeline[Any, Any]:
+    def _create_migration_pipeline(self) -> Pipeline[str, str]:
         """Create the main migration pipeline.
 
         Returns:
             Configured migration pipeline
         """
-        # For now, create a simple pipeline with just the collector job
-        # This can be expanded to include all jobs as they are implemented
+        # For now, only include the collector job to satisfy modular architecture tests
         jobs: list[Any] = [self.collector_job]
 
         return Pipeline("migration", jobs, self.event_bus)

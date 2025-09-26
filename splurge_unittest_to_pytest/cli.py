@@ -51,6 +51,9 @@ def create_event_bus() -> EventBus:
 
 def create_config(
     target_directory: str | None = None,
+    root_directory: str | None = None,
+    file_patterns: list[str] | None = None,
+    recurse_directories: bool = True,
     preserve_structure: bool = True,
     backup_originals: bool = True,
     convert_classes_to_functions: bool = True,
@@ -68,6 +71,7 @@ def create_config(
     verbose: bool = False,
     generate_report: bool = True,
     report_format: str = "json",
+    test_method_prefixes: list[str] | None = None,
 ) -> MigrationConfig:
     """Create migration configuration from CLI arguments.
 
@@ -100,6 +104,9 @@ def create_config(
 
     return MigrationConfig(
         target_directory=target_directory,
+        root_directory=root_directory,
+        file_patterns=file_patterns or ["test_*.py"],
+        recurse_directories=recurse_directories,
         preserve_structure=preserve_structure,
         backup_originals=backup_originals,
         convert_classes_to_functions=convert_classes_to_functions,
@@ -117,6 +124,7 @@ def create_config(
         verbose=verbose,
         generate_report=generate_report,
         report_format=report_format,
+        test_method_prefixes=test_method_prefixes or ["test"],
     )
 
 
@@ -157,9 +165,71 @@ def validate_source_files(source_files: list[str]) -> list[str]:
     return valid_files
 
 
+def validate_source_files_with_patterns(
+    source_files: list[str], root_directory: str | None, file_patterns: list[str], recurse: bool
+) -> list[str]:
+    """Validate and expand source files using optional root/patterns.
+
+    - If root_directory is provided, search there using patterns.
+    - If no source_files provided, default to root_directory (or ".") and patterns.
+    - If source_files include files/dirs, include them in search scope.
+    """
+    roots: list[Path] = []
+    if root_directory:
+        roots.append(Path(root_directory))
+
+    if source_files:
+        for src in source_files:
+            roots.append(Path(src))
+
+    if not roots:
+        roots = [Path(".")]
+
+    valid_files: list[str] = []
+
+    def add_if_py(p: Path) -> None:
+        if p.is_file() and p.suffix == ".py":
+            valid_files.append(str(p))
+
+    for root in roots:
+        if not root.exists():
+            logger.warning(f"Skipping non-existent path: {root}")
+            continue
+        if root.is_file():
+            add_if_py(root)
+            continue
+        # Directory: apply patterns
+        for pattern in file_patterns:
+            if recurse:
+                for p in root.rglob(pattern):
+                    add_if_py(p)
+            else:
+                for p in root.glob(pattern):
+                    add_if_py(p)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for f in valid_files:
+        if f not in seen:
+            seen.add(f)
+            deduped.append(f)
+
+    if not deduped:
+        logger.error("No Python files found to process")
+        raise typer.Exit(code=1) from None
+
+    return deduped
+
+
 @app.command("migrate")
 def migrate(
-    source_files: list[str] = typer.Argument(..., help="Source unittest files or directories"),
+    source_files: list[str] = typer.Argument(..., help="Source unittest files or directories (use -d/-f to search)"),
+    root_directory: str | None = typer.Option(None, "--dir", "-d", help="Root directory for input files"),
+    file_patterns: list[str] = typer.Option(
+        ["test_*.py"], "--file", "-f", help="Glob patterns for input files (repeatable)"
+    ),
+    recurse: bool = typer.Option(True, "--recurse", "-r", help="Recurse directories when searching for files"),
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
     preserve_structure: bool = typer.Option(True, "--preserve-structure", help="Preserve original directory structure"),
     backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
@@ -178,6 +248,9 @@ def migrate(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     generate_report: bool = typer.Option(True, "--report", help="Generate migration report"),
     report_format: str = typer.Option("json", "--report-format", help="Format for migration report"),
+    test_method_prefixes: list[str] = typer.Option(
+        ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
+    ),
     config_file: str | None = typer.Option(None, "--config", help="Configuration file path"),
 ) -> None:
     """Migrate unittest files to pytest format.
@@ -194,6 +267,9 @@ def migrate(
         # Create configuration
         config = create_config(
             target_directory=target_directory,
+            root_directory=root_directory,
+            file_patterns=file_patterns,
+            recurse_directories=recurse,
             preserve_structure=preserve_structure,
             backup_originals=backup_originals,
             convert_classes_to_functions=convert_classes,
@@ -211,10 +287,11 @@ def migrate(
             verbose=verbose,
             generate_report=generate_report,
             report_format=report_format,
+            test_method_prefixes=test_method_prefixes,
         )
 
         # Validate source files
-        valid_files = validate_source_files(source_files)
+        valid_files = validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse)
         logger.info(f"Found {len(valid_files)} Python files to process")
 
         # Create pipeline factory

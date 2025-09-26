@@ -2,8 +2,14 @@ import unittest
 
 
 class TestExample(unittest.TestCase):
-    def test_simple(self):
-        self.assertEqual(1 + 1, 2)
+    def setUp(self):
+        self.value = 42
+
+    def tearDown(self):
+        pass
+
+    def test_something(self):
+        self.assertEqual(self.value, 42)
 
 
 if __name__ == "__main__":

@@ -62,7 +62,8 @@ if __name__ == "__main__":
     # Verify that pytest fixtures were created
     assert "@pytest.fixture" in transformed
     assert "def setup_method(self):" in transformed
-    assert "def teardown_method(self):" in transformed
+    # We use a single autouse fixture with yield; no separate teardown_method is required
+    assert "def teardown_method(self):" not in transformed
     assert "yield" in transformed  # Fixtures should use yield pattern
 
     # Verify that assertions were transformed

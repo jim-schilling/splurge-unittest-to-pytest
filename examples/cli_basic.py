@@ -106,8 +106,8 @@ if __name__ == "__main__":
         print(f"STDERR: {result.stderr}")
     print()
 
-    # Check if output file was created
-    output_file = Path("example_unittest.py")
+    # Check if output file was created (should be .pytest.py extension)
+    output_file = Path("example_unittest.pytest.py")
     if output_file.exists():
         print("=== Generated pytest file content ===")
         print(output_file.read_text())
@@ -119,9 +119,19 @@ if __name__ == "__main__":
     else:
         print("No output file generated")
 
-    # Clean up the example file
-    example_file.unlink()
-    print("Cleaned up example file")
+    # Also clean up any backup file
+    backup_file = Path("example_unittest.py.backup")
+    if backup_file.exists():
+        backup_file.unlink()
+        print("Cleaned up backup file")
+
+    # Clean up the example file (if it exists)
+    try:
+        if example_file.exists():
+            example_file.unlink()
+            print("Cleaned up example file")
+    except FileNotFoundError:
+        print("Example file was already cleaned up or doesn't exist")
 
 
 def show_advanced_cli_features():

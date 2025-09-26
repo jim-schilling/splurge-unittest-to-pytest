@@ -43,7 +43,8 @@ class T(unittest.TestCase):
     out = make(code)
     assert "@pytest.fixture" in out
     assert "def setup_method(self):" in out
-    assert "def teardown_method(self):" in out
+    # Single autouse fixture with yield is used; no separate teardown_method required
+    assert "def teardown_method(self):" not in out
     assert "yield" in out
 
 

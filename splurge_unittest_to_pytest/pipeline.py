@@ -10,7 +10,7 @@ from typing import Any, Generic, TypeVar
 
 from .context import PipelineContext
 from .events import EventBus, StepCompletedEvent, StepStartedEvent
-from .result import Result
+from .result import Result, ResultStatus
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -158,6 +158,9 @@ class Task(Generic[T, R]):
             # Thread data through pipeline
             if result.data is not None:
                 current_data = result.data
+            elif result.status == ResultStatus.WARNING and current_data is not None:
+                # Keep the current data even if the warning result has None data
+                pass
 
         # Combine warnings from all steps
         all_warnings: list[str] = []
@@ -244,8 +247,8 @@ class Job(Generic[T, R]):
             # Thread context and data through pipeline
             if isinstance(result.data, PipelineContext):
                 current_context = result.data
-            elif result.is_success():
-                # Use result data as input for next task
+            elif result.data is not None:
+                # Use result data as input for next task (works for success and warning results)
                 current_input = result.data
 
         # Combine warnings from all tasks

@@ -26,8 +26,12 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
     def execute(self, context: PipelineContext, module: cst.Module) -> Result[cst.Module]:
         """Apply unittest to pytest transformations."""
         try:
-            transformer = UnittestToPytestTransformer()
-            transformed_module = module.visit(transformer)
+            # Use full transform_code to include assertion replacements and imports
+            transformer = UnittestToPytestTransformer(test_prefixes=context.config.test_method_prefixes)
+            source_code: str = module.code
+            transformed_code: str = transformer.transform_code(source_code)
+            # Parse back into CST for downstream steps
+            transformed_module = cst.parse_module(transformed_code)
             return Result.success(transformed_module)
         except Exception as e:
             return Result.failure(e)

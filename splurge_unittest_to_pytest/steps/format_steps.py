@@ -12,7 +12,7 @@ class FormatCodeStep(Step[str, str]):
     """Format generated code using isort and black programmatic APIs."""
 
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
-        """Format code using isort and black."""
+        """Format code using isort and black programmatic APIs."""
         if not context.config.format_code:
             return Result.success(code)
 

@@ -55,8 +55,8 @@ class OutputJob(Job[str, str]):
         if context.config.backup_originals:
             self._create_backup(context.source_file)
 
-        # Execute the job
-        result = super().execute(context)
+        # Execute the job with the transformed code as input
+        result = super().execute(context, initial_input)
 
         if result.is_success():
             self._logger.info(f"Output job completed successfully: {context.target_file}")

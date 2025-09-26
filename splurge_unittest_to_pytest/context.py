@@ -54,6 +54,9 @@ class MigrationConfig:
 
     # Output settings
     target_directory: str | None = None
+    root_directory: str | None = None
+    file_patterns: list[str] = field(default_factory=lambda: ["test_*.py"])
+    recurse_directories: bool = True
     preserve_structure: bool = True
     backup_originals: bool = True
 
@@ -79,6 +82,9 @@ class MigrationConfig:
     verbose: bool = False
     generate_report: bool = True
     report_format: str = "json"  # json, html, markdown
+
+    # Test discovery / naming
+    test_method_prefixes: list[str] = field(default_factory=lambda: ["test"])
 
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
         """Create new config with overrides.

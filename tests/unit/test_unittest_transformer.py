@@ -105,7 +105,8 @@ class TestExample(unittest.TestCase):
         assert "def setUp(self):" not in result
         assert "def tearDown(self):" not in result
         assert "def setup_method(self):" in result
-        assert "def teardown_method(self):" in result
+        # Single autouse fixture with yield is used; no separate teardown_method required
+        assert "def teardown_method(self):" not in result
         assert "yield" in result  # Should use yield pattern
 
     def test_transform_code_with_setup_class_teardown_class(self):

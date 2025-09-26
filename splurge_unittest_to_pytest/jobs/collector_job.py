@@ -30,7 +30,7 @@ class CollectorJob(Job[str, str]):
         super().__init__("collector", [self._create_parsing_task(event_bus)], event_bus)
         self._logger = logging.getLogger(f"{__name__}.{self.name}")
 
-    def _create_parsing_task(self, event_bus: EventBus) -> Task[Any, Any]:
+    def _create_parsing_task(self, event_bus: EventBus) -> Task[str, str]:
         """Create the parsing task for this job."""
         from ..pipeline import Task
 
