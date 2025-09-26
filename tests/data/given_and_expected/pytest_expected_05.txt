@@ -1,0 +1,28 @@
+import pytest
+
+class TestValidation:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.validator = EmailValidator()
+        yield
+        self.validator = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.valid_email = "test@example.com"
+        self.invalid_email = "invalid-email"
+        yield
+        self.valid_email = None
+        self.invalid_email = None
+
+    def test_valid_email(self):
+        result = self.validator.is_valid(self.valid_email)
+        assert result
+
+    def test_invalid_email(self):
+        result = self.validator.is_valid(self.invalid_email)
+        assert not result
+
+class EmailValidator:
+    def is_valid(self, email):
+        return "@" in email and "." in email

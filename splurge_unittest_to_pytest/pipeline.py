@@ -417,3 +417,5 @@ class PipelineFactory:
             Configured pipeline instance
         """
         return Pipeline(name, jobs, self.event_bus)
+
+        # Import concrete implementations from dedicated modules

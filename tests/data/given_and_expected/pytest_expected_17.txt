@@ -1,0 +1,35 @@
+from unittest.mock import Mock, patch
+
+import pytest
+
+class TestAdvancedMocking:
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.service = ExternalService()
+        self.processor = DataProcessor(self.service)
+        yield
+        self.service = None
+        self.processor = None
+
+    @patch('external_api.requests.get')
+    def test_external_api_call(self, mock_get):
+        mock_response = Mock()
+        mock_response.json.return_value = {"status": "success"}
+        mock_get.return_value = mock_response
+
+        result = self.processor.fetch_data("test_endpoint")
+        assert result["status"] == "success"
+
+class ExternalService:
+    def call_api(self, endpoint):
+        import external_api
+
+        return external_api.requests.get(endpoint)
+
+class DataProcessor:
+    def __init__(self, service):
+        self.service = service
+
+    def fetch_data(self, endpoint):
+        response = self.service.call_api(endpoint)
+        return response.json()

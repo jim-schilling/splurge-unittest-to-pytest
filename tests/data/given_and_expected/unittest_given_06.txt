@@ -1,0 +1,52 @@
+import unittest
+
+
+def setUpModule():
+    global shared_cache
+    shared_cache = {}
+
+
+def tearDownModule():
+    global shared_cache
+    shared_cache.clear()
+    shared_cache = None
+
+
+class TestCacheOperations(unittest.TestCase):
+    def setUp(self):
+        self.cache_manager = CacheManager(shared_cache)
+        self.test_key = "test_key"
+        self.test_value = "test_value"
+    
+    def tearDown(self):
+        self.cache_manager.clear()
+        self.cache_manager = None
+        self.test_key = None
+        self.test_value = None
+    
+    def test_set_and_get(self):
+        self.cache_manager.set(self.test_key, self.test_value)
+        result = self.cache_manager.get(self.test_key)
+        self.assertEqual(result, self.test_value)
+    
+    def test_key_exists(self):
+        self.cache_manager.set(self.test_key, self.test_value)
+        exists = self.cache_manager.exists(self.test_key)
+        self.assertTrue(exists)
+
+
+class CacheManager:
+    def __init__(self, cache):
+        self.cache = cache
+    
+    def set(self, key, value):
+        self.cache[key] = value
+    
+    def get(self, key):
+        return self.cache.get(key)
+    
+    def exists(self, key):
+        return key in self.cache
+    
+    def clear(self):
+        self.cache.clear()

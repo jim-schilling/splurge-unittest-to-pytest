@@ -1,0 +1,270 @@
+import unittest
+from unittest.mock import Mock, patch, call
+import json
+import os
+import logging
+
+
+def setUpModule():
+    global test_config_path, logger
+    test_config_path = "test_config.json"
+    create_test_config()
+    logger = setup_test_logger()
+
+
+def tearDownModule():
+    global test_config_path, logger
+    if os.path.exists(test_config_path):
+        os.remove(test_config_path)
+    test_config_path = None
+    logger = None
+
+
+def create_test_config():
+    config = {
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+            "name": "testdb"
+        },
+        "api": {
+            "base_url": "https://api.test.com",
+            "timeout": 30
+        },
+        "logging": {
+            "level": "INFO",
+            "format": "%(asctime)s - %(levelname)s - %(message)s"
+        }
+    }
+    with open(test_config_path, 'w') as f:
+        json.dump(config, f)
+
+
+def setup_test_logger():
+    logger = logging.getLogger("test_logger")
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
+
+
+class TestConfigManager(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.config_manager = ConfigManager(test_config_path)
+        cls.config_validator = ConfigValidator()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.config_manager = None
+        cls.config_validator = None
+    
+    def setUp(self):
+        self.config_manager.reload_config()
+        self.original_config = self.config_manager.get_all_config()
+    
+    def tearDown(self):
+        self.config_manager.set_config(self.original_config)
+        self.config_manager.save_config()
+        self.original_config = None
+    
+    def test_load_config_from_file(self):
+        config = self.config_manager.get_all_config()
+        self.assertIn("database", config)
+        self.assertIn("api", config)
+        self.assertEqual(config["database"]["host"], "localhost")
+    
+    def test_get_nested_config_value(self):
+        db_host = self.config_manager.get_config("database.host")
+        api_timeout = self.config_manager.get_config("api.timeout")
+        
+        self.assertEqual(db_host, "localhost")
+        self.assertEqual(api_timeout, 30)
+    
+    def test_set_and_persist_config_value(self):
+        new_host = "production.db.com"
+        self.config_manager.set_config_value("database.host", new_host)
+        self.config_manager.save_config()
+        
+        # Reload to verify persistence
+        self.config_manager.reload_config()
+        updated_host = self.config_manager.get_config("database.host")
+        self.assertEqual(updated_host, new_host)
+    
+    def test_config_validation_success(self):
+        valid_config = {
+            "database": {"host": "localhost", "port": 5432, "name": "testdb"},
+            "api": {"base_url": "https://api.test.com", "timeout": 30}
+        }
+        
+        is_valid, errors = self.config_validator.validate_config(valid_config)
+        self.assertTrue(is_valid)
+        self.assertEqual(len(errors), 0)
+    
+    def test_config_validation_failure(self):
+        invalid_config = {
+            "database": {"host": "", "port": "invalid", "name": "testdb"},
+            "api": {"base_url": "not_a_url", "timeout": -1}
+        }
+        
+        is_valid, errors = self.config_validator.validate_config(invalid_config)
+        self.assertFalse(is_valid)
+        self.assertGreater(len(errors), 0)
+    
+    @patch('builtins.open', side_effect=FileNotFoundError)
+    def test_config_file_not_found_handling(self, mock_open):
+        with self.assertRaises(ConfigError):
+            ConfigManager("nonexistent_config.json")
+    
+    def test_environment_variable_override(self):
+        with patch.dict(os.environ, {"DB_HOST": "env.db.com", "API_TIMEOUT": "60"}):
+            env_config = EnvironmentConfigLoader.load_with_env_override(
+                self.config_manager.get_all_config()
+            )
+            
+            self.assertEqual(env_config["database"]["host"], "env.db.com")
+            self.assertEqual(env_config["api"]["timeout"], 60)
+
+
+class TestLoggingIntegration(unittest.TestCase):
+    def setUp(self):
+        self.log_capture = []
+        self.test_handler = TestLogHandler(self.log_capture)
+        logger.addHandler(self.test_handler)
+    
+    def tearDown(self):
+        logger.removeHandler(self.test_handler)
+        self.log_capture = None
+        self.test_handler = None
+    
+    def test_configuration_change_logging(self):
+        config_manager = ConfigManager(test_config_path)
+        config_manager.set_logger(logger)
+        
+        config_manager.set_config_value("database.host", "new.host.com")
+        
+        self.assertTrue(any("Configuration changed" in msg for msg in self.log_capture))
+    
+    def test_validation_error_logging(self):
+        validator = ConfigValidator()
+        validator.set_logger(logger)
+        
+        invalid_config = {"database": {"port": "invalid"}}
+        validator.validate_config(invalid_config)
+        
+        self.assertTrue(any("Validation error" in msg for msg in self.log_capture))
+
+
+class ConfigManager:
+    def __init__(self, config_path):
+        self.config_path = config_path
+        self.config = {}
+        self.logger = None
+        self.load_config()
+    
+    def set_logger(self, logger):
+        self.logger = logger
+    
+    def load_config(self):
+        try:
+            with open(self.config_path, 'r') as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            raise ConfigError(f"Config file not found: {self.config_path}")
+    
+    def reload_config(self):
+        self.load_config()
+    
+    def get_all_config(self):
+        return self.config.copy()
+    
+    def get_config(self, key_path):
+        keys = key_path.split('.')
+        value = self.config
+        for key in keys:
+            value = value.get(key, {})
+        return value
+    
+    def set_config(self, config):
+        self.config = config
+    
+    def set_config_value(self, key_path, value):
+        keys = key_path.split('.')
+        config_ref = self.config
+        
+        for key in keys[:-1]:
+            if key not in config_ref:
+                config_ref[key] = {}
+            config_ref = config_ref[key]
+        
+        config_ref[keys[-1]] = value
+        
+        if self.logger:
+            self.logger.info(f"Configuration changed: {key_path} = {value}")
+    
+    def save_config(self):
+        with open(self.config_path, 'w') as f:
+            json.dump(self.config, f, indent=2)
+
+
+class ConfigValidator:
+    def __init__(self):
+        self.logger = None
+    
+    def set_logger(self, logger):
+        self.logger = logger
+    
+    def validate_config(self, config):
+        errors = []
+        
+        # Validate database config
+        if "database" in config:
+            db_config = config["database"]
+            if not db_config.get("host"):
+                errors.append("Database host is required")
+            if not isinstance(db_config.get("port"), int) or db_config.get("port") <= 0:
+                errors.append("Database port must be a positive integer")
+        
+        # Validate API config
+        if "api" in config:
+            api_config = config["api"]
+            if not api_config.get("base_url", "").startswith("http"):
+                errors.append("API base_url must start with http")
+            if not isinstance(api_config.get("timeout"), int) or api_config.get("timeout") <= 0:
+                errors.append("API timeout must be a positive integer")
+        
+        if errors and self.logger:
+            self.logger.error(f"Validation errors: {errors}")
+        
+        return len(errors) == 0, errors
+
+
+class EnvironmentConfigLoader:
+    @staticmethod
+    def load_with_env_override(base_config):
+        config = base_config.copy()
+        
+        # Override database host
+        if "DB_HOST" in os.environ:
+            config.setdefault("database", {})["host"] = os.environ["DB_HOST"]
+        
+        # Override API timeout
+        if "API_TIMEOUT" in os.environ:
+            config.setdefault("api", {})["timeout"] = int(os.environ["API_TIMEOUT"])
+        
+        return config
+
+
+class TestLogHandler(logging.Handler):
+    def __init__(self, log_capture):
+        super().__init__()
+        self.log_capture = log_capture
+    
+    def emit(self, record):
+        self.log_capture.append(self.format(record))
+
+
+class ConfigError(Exception):
+    pass

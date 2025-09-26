@@ -1,0 +1,183 @@
+import unittest
+from unittest.mock import Mock, patch, call
+import threading
+import time
+
+
+def setUpModule():
+    global shared_counter, lock
+    shared_counter = 0
+    lock = threading.Lock()
+
+
+def tearDownModule():
+    global shared_counter, lock
+    shared_counter = None
+    lock = None
+
+
+class TestConcurrentProcessor(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.processor = ConcurrentProcessor()
+        cls.thread_pool = ThreadPool(max_workers=3)
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.thread_pool.shutdown()
+        cls.processor = None
+        cls.thread_pool = None
+    
+    def setUp(self):
+        global shared_counter
+        shared_counter = 0
+        self.test_tasks = [
+            {"id": 1, "data": "task1"},
+            {"id": 2, "data": "task2"},
+            {"id": 3, "data": "task3"}
+        ]
+        self.results = []
+    
+    def tearDown(self):
+        self.test_tasks = None
+        self.results = None
+    
+    @patch('time.sleep')
+    def test_concurrent_task_execution(self, mock_sleep):
+        mock_sleep.return_value = None
+        
+        futures = []
+        for task in self.test_tasks:
+            future = self.thread_pool.submit(self.processor.process_task, task)
+            futures.append(future)
+        
+        for future in futures:
+            result = future.result()
+            self.results.append(result)
+        
+        self.assertEqual(len(self.results), 3)
+        self.assertTrue(all(r["processed"] for r in self.results))
+    
+    def test_thread_safe_counter_increment(self):
+        def increment_counter():
+            with lock:
+                global shared_counter
+                current = shared_counter
+                time.sleep(0.001)  # Simulate race condition
+                shared_counter = current + 1
+        
+        threads = []
+        for _ in range(10):
+            thread = threading.Thread(target=increment_counter)
+            threads.append(thread)
+            thread.start()
+        
+        for thread in threads:
+            thread.join()
+        
+        self.assertEqual(shared_counter, 10)
+    
+    def test_queue_processing(self):
+        import queue
+        task_queue = queue.Queue()
+        result_queue = queue.Queue()
+        
+        for task in self.test_tasks:
+            task_queue.put(task)
+        
+        worker = QueueWorker(task_queue, result_queue)
+        worker_thread = threading.Thread(target=worker.run)
+        worker_thread.start()
+        
+        # Signal worker to stop
+        task_queue.put(None)
+        worker_thread.join()
+        
+        results = []
+        while not result_queue.empty():
+            results.append(result_queue.get())
+        
+        self.assertEqual(len(results), 3)
+
+
+class ConcurrentProcessor:
+    def process_task(self, task):
+        time.sleep(0.1)
+        return {
+            "id": task["id"],
+            "data": task["data"],
+            "processed": True,
+            "timestamp": time.time()
+        }
+
+
+class ThreadPool:
+    def __init__(self, max_workers):
+        self.max_workers = max_workers
+        self.futures = []
+    
+    def submit(self, fn, *args, **kwargs):
+        future = Future()
+        
+        def run_task():
+            try:
+                result = fn(*args, **kwargs)
+                future.set_result(result)
+            except Exception as e:
+                future.set_exception(e)
+        
+        thread = threading.Thread(target=run_task)
+        thread.start()
+        self.futures.append((future, thread))
+        return future
+    
+    def shutdown(self):
+        for future, thread in self.futures:
+            thread.join()
+
+
+class Future:
+    def __init__(self):
+        self._result = None
+        self._exception = None
+        self._done = False
+        self._condition = threading.Condition()
+    
+    def result(self):
+        with self._condition:
+            while not self._done:
+                self._condition.wait()
+            if self._exception:
+                raise self._exception
+            return self._result
+    
+    def set_result(self, result):
+        with self._condition:
+            self._result = result
+            self._done = True
+            self._condition.notify_all()
+    
+    def set_exception(self, exception):
+        with self._condition:
+            self._exception = exception
+            self._done = True
+            self._condition.notify_all()
+
+
+class QueueWorker:
+    def __init__(self, task_queue, result_queue):
+        self.task_queue = task_queue
+        self.result_queue = result_queue
+    
+    def run(self):
+        while True:
+            task = self.task_queue.get()
+            if task is None:
+                break
+            
+            processed_task = {
+                "id": task["id"],
+                "data": task["data"],
+                "processed": True
+            }
+            self.result_queue.put(processed_task)

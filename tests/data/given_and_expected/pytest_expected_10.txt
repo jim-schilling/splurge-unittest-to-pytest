@@ -1,0 +1,168 @@
+import json
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global api_config, mock_logger
+    api_config = {"base_url": "https://api.test.com", "timeout": 30, "retries": 3}
+    mock_logger = MagicMock()
+    yield
+    api_config = None
+    mock_logger = None
+
+class TestAPIClient:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.api_client = APIClient(api_config)
+        self.api_client.set_logger(mock_logger)
+        self.mock_session = Mock()
+        self.api_client.session = self.mock_session
+        yield
+        self.api_client = None
+        self.mock_session = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.test_endpoint = "/users"
+        self.test_data = {"name": "John", "email": "john@test.com"}
+        self.mock_response = Mock()
+        self.mock_response.status_code = 200
+        self.mock_response.json.return_value = {"id": 1, **self.test_data}
+        self.mock_session.reset_mock()
+        yield
+        self.test_endpoint = None
+        self.test_data = None
+        self.mock_response = None
+
+    def test_successful_get_request(self):
+        self.mock_session.get.return_value = self.mock_response
+        result = self.api_client.get(self.test_endpoint)
+
+        assert result is not None
+        assert result["id"] == 1
+        self.mock_session.get.assert_called_once_with(
+            f"{api_config['base_url']}{self.test_endpoint}", timeout=api_config['timeout']
+        )
+
+    def test_successful_post_request(self):
+        self.mock_response.status_code = 201
+        self.mock_session.post.return_value = self.mock_response
+        result = self.api_client.post(self.test_endpoint, self.test_data)
+
+        assert result is not None
+        assert result["name"] == "John"
+        self.mock_session.post.assert_called_once()
+
+    @patch('time.sleep')
+    def test_retry_mechanism(self, mock_sleep):
+        self.mock_response.status_code = 500
+        self.mock_session.get.return_value = self.mock_response
+
+        result = self.api_client.get(self.test_endpoint)
+        assert result is None
+        assert self.mock_session.get.call_count == 3
+        mock_sleep.assert_called()
+
+    def test_request_timeout_handling(self):
+        from requests.exceptions import Timeout
+
+        self.mock_session.get.side_effect = Timeout("Request timeout")
+
+        result = self.api_client.get(self.test_endpoint)
+        assert result is None
+        mock_logger.error.assert_called_with("Request timeout for /users")
+
+class TestDataProcessor:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.processor = DataProcessor()
+        self.validator = DataValidator()
+        yield
+        self.processor = None
+        self.validator = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.sample_data = [
+            {"id": 1, "name": "Alice", "age": 25, "active": True},
+            {"id": 2, "name": "Bob", "age": 30, "active": False},
+            {"id": 3, "name": "Charlie", "age": 35, "active": True},
+        ]
+        self.invalid_data = [{"id": "invalid", "name": "", "age": -5}]
+        yield
+        self.sample_data = None
+        self.invalid_data = None
+
+    def test_filter_active_users(self):
+        active_users = self.processor.filter_active(self.sample_data)
+        assert len(active_users) == 2
+        assert all(user["active"] for user in active_users)
+
+    def test_calculate_average_age(self):
+        avg_age = self.processor.calculate_average_age(self.sample_data)
+        assert avg_age == 30
+
+    def test_data_validation_success(self):
+        is_valid = self.validator.validate_user_data(self.sample_data[0])
+        assert is_valid
+
+    def test_data_validation_failure(self):
+        is_valid = self.validator.validate_user_data(self.invalid_data[0])
+        assert not is_valid
+
+class APIClient:
+    def __init__(self, config):
+        self.config = config
+        self.session = None
+        self.logger = None
+
+    def set_logger(self, logger):
+        self.logger = logger
+
+    def get(self, endpoint):
+        url = f"{self.config['base_url']}{endpoint}"
+        for attempt in range(self.config['retries']):
+            try:
+                response = self.session.get(url, timeout=self.config['timeout'])
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code >= 500:
+                    if attempt < self.config['retries'] - 1:
+                        import time
+
+                        time.sleep(1)
+                        continue
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"Request timeout for {endpoint}")
+                return None
+        return None
+
+    def post(self, endpoint, data):
+        url = f"{self.config['base_url']}{endpoint}"
+        response = self.session.post(url, json=data, timeout=self.config['timeout'])
+        if response.status_code in [200, 201]:
+            return response.json()
+        return None
+
+class DataProcessor:
+    def filter_active(self, users):
+        return [user for user in users if user.get("active", False)]
+
+    def calculate_average_age(self, users):
+        if not users:
+            return 0
+        total_age = sum(user["age"] for user in users)
+        return total_age / len(users)
+
+class DataValidator:
+    def validate_user_data(self, user):
+        if not isinstance(user.get("id"), int):
+            return False
+        if not user.get("name", "").strip():
+            return False
+        if user.get("age", 0) < 0:
+            return False
+        return True

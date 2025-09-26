@@ -125,15 +125,64 @@ class Fixture:
     yields_value: bool = False
     return_type: Optional[str] = None
 
+class AssertionType(Enum):
+    """Types of unittest assertions to transform."""
+    EQUAL = "assertEqual"
+    NOT_EQUAL = "assertNotEqual"
+    TRUE = "assertTrue"
+    FALSE = "assertFalse"
+    IS = "assertIs"
+    IS_NOT = "assertIsNot"
+    IS_NONE = "assertIsNone"
+    IS_NOT_NONE = "assertIsNotNone"
+    IN = "assertIn"
+    NOT_IN = "assertNotIn"
+    IS_INSTANCE = "assertIsInstance"
+    IS_NOT_INSTANCE = "assertNotIsInstance"
+    GREATER = "assertGreater"
+    GREATER_EQUAL = "assertGreaterEqual"
+    LESS = "assertLess"
+    LESS_EQUAL = "assertLessEqual"
+    ALMOST_EQUAL = "assertAlmostEqual"
+    NOT_ALMOST_EQUAL = "assertNotAlmostEqual"
+    DICT_EQUAL = "assertDictEqual"
+    LIST_EQUAL = "assertListEqual"
+    SET_EQUAL = "assertSetEqual"
+    TUPLE_EQUAL = "assertTupleEqual"
+    COUNT_EQUAL = "assertCountEqual"
+    MULTILINE_EQUAL = "assertMultiLineEqual"
+    SEQUENCE_EQUAL = "assertSequenceEqual"
+    REGEX = "assertRegex"
+    NOT_REGEX = "assertNotRegex"
+    RAISES = "assertRaises"
+    RAISES_REGEX = "assertRaisesRegex"
+    WARNS = "assertWarns"
+    WARNS_REGEX = "assertWarnsRegex"
+    LOGS = "assertLogs"
+    NO_LOGS = "assertNoLogs"
+    CUSTOM = "custom_assertion"
+
 @dataclass(frozen=True)
 class Assertion:
-    """Semantic test assertion."""
+    """Semantic test assertion with comprehensive unittest support."""
     type: AssertionType
     expected: Optional[Expression] = None
     actual: Optional[Expression] = None
     message: Optional[str] = None
     exception_type: Optional[str] = None
     delta: Optional[Expression] = None
+    # Additional fields for specialized assertions
+    regex_pattern: Optional[str] = None  # For assertRaisesRegex, assertWarnsRegex
+    container: Optional[Expression] = None  # For assertIn/assertNotIn
+    instance_type: Optional[str] = None  # For assertIsInstance/assertNotIsInstance
+    warning_category: Optional[str] = None  # For assertWarns/assertWarnsRegex
+    logger_name: Optional[str] = None  # For assertLogs/assertNoLogs
+    log_level: Optional[str] = None  # For assertLogs/assertNoLogs
+    pattern: Optional[str] = None  # For assertRegex/assertNotRegex
+    custom_method: Optional[str] = None  # For custom assertions
+    # Collection comparison fields
+    count_tolerance: Optional[int] = None  # For assertCountEqual
+    sequence_type: Optional[str] = None  # For assertSequenceEqual
 ```
 
 ## Pipeline Implementation

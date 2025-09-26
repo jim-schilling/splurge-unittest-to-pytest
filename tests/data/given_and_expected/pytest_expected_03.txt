@@ -1,0 +1,33 @@
+import pytest
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global test_config
+    test_config = {"mode": "test", "debug": True}
+    yield
+    test_config = None
+
+class TestConfiguration:
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.config_manager = ConfigManager(test_config)
+        yield
+        self.config_manager = None
+
+    def test_get_mode(self):
+        mode = self.config_manager.get_mode()
+        assert mode == "test"
+
+    def test_is_debug(self):
+        debug = self.config_manager.is_debug()
+        assert debug
+
+class ConfigManager:
+    def __init__(self, config):
+        self.config = config
+
+    def get_mode(self):
+        return self.config.get("mode")
+
+    def is_debug(self):
+        return self.config.get("debug", False)

@@ -1,0 +1,182 @@
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global event_loop, executor
+    event_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(event_loop)
+    executor = ThreadPoolExecutor(max_workers=2)
+    yield
+    executor.shutdown(wait=True)
+    event_loop.close()
+    event_loop = None
+    executor = None
+
+class TestAsyncOperations:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.async_service = AsyncService()
+        self.event_dispatcher = EventDispatcher()
+        self.message_queue = MessageQueue()
+        yield
+        self.async_service = None
+        self.event_dispatcher = None
+        self.message_queue = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.test_data = {
+            "message": "test message",
+            "priority": "high",
+            "timestamp": "2024-01-01T00:00:00Z",
+        }
+        self.mock_callback = Mock()
+        self.results = []
+        yield
+        self.message_queue.clear()
+        self.event_dispatcher.clear_handlers()
+        self.test_data = None
+        self.mock_callback = None
+        self.results = None
+
+    def test_async_message_processing(self):
+        async def process_messages():
+            await self.async_service.process_message(self.test_data)
+            result = await self.async_service.get_processed_message()
+            self.results.append(result)
+
+        event_loop.run_until_complete(process_messages())
+
+        assert len(self.results) == 1
+        assert "processed" in self.results[0]
+        assert self.results[0]["processed"]
+
+    @patch('asyncio.sleep')
+    def test_async_batch_processing_with_delay(self, mock_sleep):
+        async def mock_sleep_func(delay):
+            return None
+
+        mock_sleep.side_effect = mock_sleep_func
+
+        messages = [
+            {"id": 1, "data": "message1"},
+            {"id": 2, "data": "message2"},
+            {"id": 3, "data": "message3"},
+        ]
+
+        async def batch_process():
+            tasks = []
+            for msg in messages:
+                task = self.async_service.process_with_delay(msg, 0.1)
+                tasks.append(task)
+
+            results = await asyncio.gather(*tasks)
+            self.results.extend(results)
+
+        event_loop.run_until_complete(batch_process())
+
+        assert len(self.results) == 3
+        assert all(r["delayed_processing"] for r in self.results)
+
+    def test_event_dispatcher_subscribe_and_notify(self):
+        event_name = "test_event"
+
+        self.event_dispatcher.subscribe(event_name, self.mock_callback)
+        self.event_dispatcher.notify(event_name, self.test_data)
+
+        self.mock_callback.assert_called_once_with(self.test_data)
+
+    def test_message_queue_operations(self):
+        self.message_queue.enqueue(self.test_data)
+        assert self.message_queue.size() == 1
+
+        dequeued_message = self.message_queue.dequeue()
+        assert dequeued_message == self.test_data
+        assert self.message_queue.size() == 0
+
+    def test_concurrent_queue_processing(self):
+        messages = [{"id": i, "data": f"message{i}"} for i in range(5)]
+
+        for msg in messages:
+            self.message_queue.enqueue(msg)
+
+        def process_queue():
+            results = []
+            while not self.message_queue.is_empty():
+                msg = self.message_queue.dequeue()
+                if msg:
+                    processed_msg = {"original": msg, "processed": True}
+                    results.append(processed_msg)
+            return results
+
+        future1 = executor.submit(process_queue)
+        future2 = executor.submit(process_queue)
+
+        results1 = future1.result()
+        results2 = future2.result()
+
+        total_processed = len(results1) + len(results2)
+        assert total_processed == 5
+
+class AsyncService:
+    def __init__(self):
+        self.processed_messages = []
+
+    async def process_message(self, message):
+        await asyncio.sleep(0.01)
+        processed = {**message, "processed": True, "processing_time": 0.01}
+        self.processed_messages.append(processed)
+        return processed
+
+    async def get_processed_message(self):
+        if self.processed_messages:
+            return self.processed_messages[-1]
+        return None
+
+    async def process_with_delay(self, message, delay):
+        await asyncio.sleep(delay)
+        return {**message, "delayed_processing": True, "delay": delay}
+
+class EventDispatcher:
+    def __init__(self):
+        self.handlers = {}
+
+    def subscribe(self, event_name, callback):
+        if event_name not in self.handlers:
+            self.handlers[event_name] = []
+        self.handlers[event_name].append(callback)
+
+    def notify(self, event_name, data):
+        if event_name in self.handlers:
+            for handler in self.handlers[event_name]:
+                handler(data)
+
+    def clear_handlers(self):
+        self.handlers.clear()
+
+class MessageQueue:
+    def __init__(self):
+        self.queue = []
+        self.lock = asyncio.Lock() if hasattr(asyncio, 'Lock') else None
+
+    def enqueue(self, message):
+        self.queue.append(message)
+
+    def dequeue(self):
+        if self.queue:
+            return self.queue.pop(0)
+        return None
+
+    def size(self):
+        return len(self.queue)
+
+    def is_empty(self):
+        return len(self.queue) == 0
+
+    def clear(self):
+        self.queue.clear()

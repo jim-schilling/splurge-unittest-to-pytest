@@ -1,0 +1,117 @@
+from unittest.mock import Mock, patch
+
+import pytest
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global database_connection
+    database_connection = DatabaseConnection("test_db")
+    database_connection.connect()
+    yield
+    database_connection.disconnect()
+    database_connection = None
+
+class TestUserRepository:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.user_repo = UserRepository(database_connection)
+        self.test_table = "test_users"
+        self.user_repo.create_table(self.test_table)
+        yield
+        self.user_repo.drop_table(self.test_table)
+        self.user_repo = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.mock_user = Mock()
+        self.mock_user.id = 1
+        self.mock_user.name = "John Doe"
+        self.mock_user.email = "john@example.com"
+        self.user_service = UserService(self.user_repo)
+        yield
+        self.user_repo.clear_table(self.test_table)
+        self.mock_user = None
+        self.user_service = None
+
+    @patch('user_service.send_notification')
+    def test_create_user_with_notification(self, mock_notification):
+        mock_notification.return_value = True
+        user = self.user_service.create_user_with_notification(
+            self.mock_user.name, self.mock_user.email
+        )
+        assert user is not None
+        mock_notification.assert_called_once()
+
+    def test_find_user_by_email(self):
+        created_user = self.user_repo.create_user(self.mock_user.name, self.mock_user.email)
+        found_user = self.user_repo.find_by_email(self.mock_user.email)
+        assert found_user.email == created_user.email
+
+    def test_update_user_details(self):
+        user = self.user_repo.create_user(self.mock_user.name, self.mock_user.email)
+        updated_name = "Jane Doe"
+        self.user_repo.update_user(user.id, name=updated_name)
+        updated_user = self.user_repo.find_by_id(user.id)
+        assert updated_user.name == updated_name
+
+class DatabaseConnection:
+    def __init__(self, db_name):
+        self.db_name = db_name
+        self.connected = False
+
+    def connect(self):
+        self.connected = True
+
+    def disconnect(self):
+        self.connected = False
+
+class UserRepository:
+    def __init__(self, db_connection):
+        self.db = db_connection
+        self.users = {}
+        self.next_id = 1
+
+    def create_table(self, table_name):
+        pass
+
+    def drop_table(self, table_name):
+        pass
+
+    def clear_table(self, table_name):
+        self.users.clear()
+
+    def create_user(self, name, email):
+        user = Mock()
+        user.id = self.next_id
+        user.name = name
+        user.email = email
+        self.users[user.id] = user
+        self.next_id += 1
+        return user
+
+    def find_by_email(self, email):
+        for user in self.users.values():
+            if user.email == email:
+                return user
+        return None
+
+    def find_by_id(self, user_id):
+        return self.users.get(user_id)
+
+    def update_user(self, user_id, **kwargs):
+        user = self.users.get(user_id)
+        if user:
+            for key, value in kwargs.items():
+                setattr(user, key, value)
+
+class UserService:
+    def __init__(self, user_repo):
+        self.user_repo = user_repo
+
+    def create_user_with_notification(self, name, email):
+        user = self.user_repo.create_user(name, email)
+        send_notification(f"User {name} created")
+        return user
+
+def send_notification(message):
+    return True

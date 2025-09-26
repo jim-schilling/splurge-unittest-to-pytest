@@ -1,0 +1,25 @@
+import pytest
+
+class TestBasicIO:
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.file_handler = FileHandler()
+        self.test_content = "Hello, World!"
+        yield
+        self.file_handler = None
+        self.test_content = None
+
+    def test_read_content(self):
+        content = self.file_handler.read_string(self.test_content)
+        assert content == "Hello, World!"
+
+    def test_content_length(self):
+        length = self.file_handler.get_length(self.test_content)
+        assert length == 13
+
+class FileHandler:
+    def read_string(self, content):
+        return content
+
+    def get_length(self, content):
+        return len(content)

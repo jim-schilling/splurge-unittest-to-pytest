@@ -1,0 +1,306 @@
+import unittest
+from unittest.mock import Mock, patch, MagicMock
+import json
+import hashlib
+import base64
+from datetime import datetime, timedelta
+
+
+def setUpModule():
+    global security_config, audit_logger
+    security_config = {
+        "encryption_key": "test_key_12345678",
+        "token_expiry": 3600,
+        "max_login_attempts": 3
+    }
+    audit_logger = MagicMock()
+
+
+def tearDownModule():
+    global security_config, audit_logger
+    security_config = None
+    audit_logger = None
+
+
+class TestSecurityManager(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.security_manager = SecurityManager(security_config)
+        cls.user_auth = UserAuthentication(cls.security_manager)
+        cls.token_manager = TokenManager(security_config)
+        cls.password_policy = PasswordPolicy()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.security_manager = None
+        cls.user_auth = None
+        cls.token_manager = None
+        cls.password_policy = None
+    
+    def setUp(self):
+        self.test_user = {
+            "username": "testuser",
+            "password": "SecurePass123!",
+            "email": "test@example.com"
+        }
+        self.weak_password = "123456"
+        self.invalid_credentials = {
+            "username": "testuser",
+            "password": "wrongpassword"
+        }
+        self.security_manager.set_audit_logger(audit_logger)
+        audit_logger.reset_mock()
+    
+    def tearDown(self):
+        self.security_manager.clear_failed_attempts()
+        self.token_manager.clear_tokens()
+        self.test_user = None
+        self.weak_password = None
+        self.invalid_credentials = None
+    
+    def test_password_hashing_and_verification(self):
+        password = self.test_user["password"]
+        password_hash = self.security_manager.hash_password(password)
+        
+        self.assertNotEqual(password, password_hash)
+        self.assertTrue(self.security_manager.verify_password(password, password_hash))
+        self.assertFalse(self.security_manager.verify_password("wrongpassword", password_hash))
+    
+    def test_user_registration_with_password_policy(self):
+        # Test strong password
+        result = self.user_auth.register_user(
+            self.test_user["username"],
+            self.test_user["password"],
+            self.test_user["email"]
+        )
+        self.assertTrue(result["success"])
+        
+        # Test weak password
+        with self.assertRaises(WeakPasswordError):
+            self.user_auth.register_user(
+                "weakuser",
+                self.weak_password,
+                "weak@example.com"
+            )
+    
+    def test_user_authentication_success(self):
+        # Register user first
+        self.user_auth.register_user(
+            self.test_user["username"],
+            self.test_user["password"],
+            self.test_user["email"]
+        )
+        
+        # Authenticate
+        auth_result = self.user_auth.authenticate(
+            self.test_user["username"],
+            self.test_user["password"]
+        )
+        
+        self.assertTrue(auth_result["authenticated"])
+        self.assertIn("token", auth_result)
+        audit_logger.info.assert_called_with(f"User {self.test_user['username']} authenticated successfully")
+    
+    def test_brute_force_protection(self):
+        # Register user
+        self.user_auth.register_user(
+            self.test_user["username"],
+            self.test_user["password"],
+            self.test_user["email"]
+        )
+        
+        # Simulate multiple failed login attempts
+        for _ in range(3):
+            result = self.user_auth.authenticate(
+                self.invalid_credentials["username"],
+                self.invalid_credentials["password"]
+            )
+            self.assertFalse(result["authenticated"])
+        
+        # Next attempt should be blocked
+        result = self.user_auth.authenticate(
+            self.invalid_credentials["username"],
+            self.invalid_credentials["password"]
+        )
+        self.assertFalse(result["authenticated"])
+        self.assertIn("Account locked", result["message"])
+    
+    def test_token_generation_and_validation(self):
+        user_data = {"user_id": 123, "username": "testuser"}
+        token = self.token_manager.generate_token(user_data)
+        
+        self.assertIsNotNone(token)
+        
+        # Validate token
+        decoded_data = self.token_manager.validate_token(token)
+        self.assertEqual(decoded_data["user_id"], 123)
+        self.assertEqual(decoded_data["username"], "testuser")
+    
+    def test_token_expiration(self):
+        user_data = {"user_id": 123, "username": "testuser"}
+        
+        # Create token with very short expiry
+        with patch.object(self.token_manager, 'token_expiry', 1):
+            token = self.token_manager.generate_token(user_data)
+            
+            # Wait for expiration
+            import time
+            time.sleep(2)
+            
+            with self.assertRaises(TokenExpiredError):
+                self.token_manager.validate_token(token)
+    
+    def test_data_encryption_and_decryption(self):
+        sensitive_data = "This is sensitive information"
+        encrypted_data = self.security_manager.encrypt_data(sensitive_data)
+        
+        self.assertNotEqual(sensitive_data, encrypted_data)
+        
+        decrypted_data = self.security_manager.decrypt_data(encrypted_data)
+        self.assertEqual(sensitive_data, decrypted_data)
+
+
+class SecurityManager:
+    def __init__(self, config):
+        self.config = config
+        self.failed_attempts = {}
+        self.audit_logger = None
+    
+    def set_audit_logger(self, logger):
+        self.audit_logger = logger
+    
+    def hash_password(self, password):
+        salt = "salt123"
+        return hashlib.sha256((password + salt).encode()).hexdigest()
+    
+    def verify_password(self, password, password_hash):
+        return self.hash_password(password) == password_hash
+    
+    def record_failed_attempt(self, username):
+        if username not in self.failed_attempts:
+            self.failed_attempts[username] = 0
+        self.failed_attempts[username] += 1
+    
+    def is_account_locked(self, username):
+        return self.failed_attempts.get(username, 0) >= self.config["max_login_attempts"]
+    
+    def clear_failed_attempts(self):
+        self.failed_attempts.clear()
+    
+    def encrypt_data(self, data):
+        # Simple base64 encoding for demo
+        return base64.b64encode(data.encode()).decode()
+    
+    def decrypt_data(self, encrypted_data):
+        return base64.b64decode(encrypted_data.encode()).decode()
+
+
+class UserAuthentication:
+    def __init__(self, security_manager):
+        self.security_manager = security_manager
+        self.users = {}
+        self.password_policy = PasswordPolicy()
+    
+    def register_user(self, username, password, email):
+        if not self.password_policy.is_strong_password(password):
+            raise WeakPasswordError("Password does not meet security requirements")
+        
+        password_hash = self.security_manager.hash_password(password)
+        self.users[username] = {
+            "password_hash": password_hash,
+            "email": email,
+            "created_at": datetime.now()
+        }
+        
+        return {"success": True, "message": "User registered successfully"}
+    
+    def authenticate(self, username, password):
+        if self.security_manager.is_account_locked(username):
+            return {
+                "authenticated": False,
+                "message": "Account locked due to multiple failed attempts"
+            }
+        
+        if username not in self.users:
+            self.security_manager.record_failed_attempt(username)
+            return {"authenticated": False, "message": "Invalid credentials"}
+        
+        user = self.users[username]
+        if not self.security_manager.verify_password(password, user["password_hash"]):
+            self.security_manager.record_failed_attempt(username)
+            return {"authenticated": False, "message": "Invalid credentials"}
+        
+        # Generate token
+        token_manager = TokenManager(self.security_manager.config)
+        token = token_manager.generate_token({"username": username})
+        
+        if self.security_manager.audit_logger:
+            self.security_manager.audit_logger.info(f"User {username} authenticated successfully")
+        
+        return {
+            "authenticated": True,
+            "token": token,
+            "message": "Authentication successful"
+        }
+
+
+class TokenManager:
+    def __init__(self, config):
+        self.config = config
+        self.token_expiry = config["token_expiry"]
+        self.active_tokens = {}
+    
+    def generate_token(self, user_data):
+        import uuid
+        token_id = str(uuid.uuid4())
+        expires_at = datetime.now() + timedelta(seconds=self.token_expiry)
+        
+        token_data = {
+            "token_id": token_id,
+            "user_data": user_data,
+            "expires_at": expires_at
+        }
+        
+        self.active_tokens[token_id] = token_data
+        return token_id
+    
+    def validate_token(self, token):
+        if token not in self.active_tokens:
+            raise InvalidTokenError("Token not found")
+        
+        token_data = self.active_tokens[token]
+        if datetime.now() > token_data["expires_at"]:
+            del self.active_tokens[token]
+            raise TokenExpiredError("Token has expired")
+        
+        return token_data["user_data"]
+    
+    def clear_tokens(self):
+        self.active_tokens.clear()
+
+
+class PasswordPolicy:
+    def is_strong_password(self, password):
+        if len(password) < 8:
+            return False
+        if not any(c.isupper() for c in password):
+            return False
+        if not any(c.islower() for c in password):
+            return False
+        if not any(c.isdigit() for c in password):
+            return False
+        if not any(c in "!@#$%^&*" for c in password):
+            return False
+        return True
+
+
+class WeakPasswordError(Exception):
+    pass
+
+
+class InvalidTokenError(Exception):
+    pass
+
+
+class TokenExpiredError(Exception):
+    pass

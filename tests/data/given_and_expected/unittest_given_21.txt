@@ -1,0 +1,157 @@
+import unittest
+from typing import Any, Dict, List, Optional
+from unittest.mock import Mock, patch
+import tempfile
+import os
+import warnings
+import logging
+
+
+class Calculator:
+    def add(self, a: float, b: float) -> float:
+        return a + b
+    
+    def divide(self, a: float, b: float) -> float:
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        return a / b
+    
+    def get_none(self) -> None:
+        return None
+
+
+class TestCalculatorComplete(unittest.TestCase):
+    class_level_resource: Optional[str] = None
+    
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.class_level_resource = "shared_resource"
+        print(f"setUpClass: Created {cls.class_level_resource}")
+    
+    @classmethod
+    def tearDownClass(cls) -> None:
+        print(f"tearDownClass: Cleaning up {cls.class_level_resource}")
+        cls.class_level_resource = None
+    
+    def setUp(self) -> None:
+        self.calculator = Calculator()
+        self.test_data: Dict[str, Any] = {
+            'numbers': [1, 2, 3],
+            'string': 'hello',
+            'bool': True,
+            'none_value': None
+        }
+        self.temp_file = tempfile.NamedTemporaryFile(delete=False)
+        self.temp_file.write(b'test content')
+        self.temp_file.close()
+    
+    def tearDown(self) -> None:
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+    
+    def test_equality_assertions(self) -> None:
+        self.assertEqual(self.calculator.add(2, 3), 5)
+        self.assertNotEqual(self.calculator.add(2, 3), 6)
+        self.assertIs(self.test_data['bool'], True)
+        self.assertIsNot(self.test_data['string'], self.test_data['numbers'])
+        self.assertIsNone(self.calculator.get_none())
+        self.assertIsNotNone(self.calculator)
+    
+    def test_boolean_assertions(self) -> None:
+        self.assertTrue(self.test_data['bool'])
+        self.assertFalse(not self.test_data['bool'])
+    
+    def test_type_assertions(self) -> None:
+        self.assertIsInstance(self.calculator, Calculator)
+        self.assertNotIsInstance(self.test_data['string'], int)
+        self.assertIsInstance(self.test_data['numbers'], (list, tuple))
+    
+    def test_container_assertions(self) -> None:
+        self.assertIn(2, self.test_data['numbers'])
+        self.assertNotIn(5, self.test_data['numbers'])
+        self.assertIn('ell', self.test_data['string'])
+        self.assertIn('string', self.test_data)
+        self.assertCountEqual([1, 2, 3], [3, 1, 2])
+    
+    def test_sequence_assertions(self) -> None:
+        test_list = [1, 2, 3, 4, 5]
+        self.assertSequenceEqual(test_list, [1, 2, 3, 4, 5])
+        self.assertListEqual(self.test_data['numbers'], [1, 2, 3])
+        test_tuple = (1, 2, 3)
+        self.assertTupleEqual(test_tuple, (1, 2, 3))
+    
+    def test_set_assertions(self) -> None:
+        set1 = {1, 2, 3}
+        set2 = {1, 2, 3}
+        set3 = {4, 5, 6}
+        self.assertSetEqual(set1, set2)
+    
+    def test_dict_assertions(self) -> None:
+        dict1 = {'a': 1, 'b': 2}
+        dict2 = {'a': 1, 'b': 2}
+        self.assertDictEqual(dict1, dict2)
+    
+    def test_string_assertions(self) -> None:
+        test_string = "Hello World"
+        multiline1 = "line1\nline2\nline3"
+        multiline2 = "line1\nline2\nline3"
+        self.assertMultiLineEqual(multiline1, multiline2)
+        self.assertRegex(test_string, r"Hello.*World")
+        self.assertNotRegex(test_string, r"\d+")
+    
+    def test_numeric_assertions(self) -> None:
+        self.assertAlmostEqual(self.calculator.divide(1, 3), 0.333333, places=5)
+        self.assertNotAlmostEqual(self.calculator.divide(1, 3), 0.5, places=1)
+        self.assertGreater(5, 3)
+        self.assertGreaterEqual(5, 5)
+        self.assertLess(3, 5)
+        self.assertLessEqual(5, 5)
+    
+    def test_exception_assertions(self) -> None:
+        with self.assertRaises(ValueError):
+            self.calculator.divide(10, 0)
+        
+        with self.assertRaises(ValueError) as context:
+            self.calculator.divide(10, 0)
+        self.assertEqual(str(context.exception), "Cannot divide by zero")
+        
+        with self.assertRaisesRegex(ValueError, r"Cannot divide by zero"):
+            self.calculator.divide(10, 0)
+    
+    def test_warning_assertions(self) -> None:
+        def warn_function() -> None:
+            warnings.warn("This is a test warning", UserWarning)
+        
+        with self.assertWarns(UserWarning):
+            warn_function()
+        
+        with self.assertWarnsRegex(UserWarning, r"test warning"):
+            warn_function()
+    
+    def test_log_assertions(self) -> None:
+        logger = logging.getLogger('test_logger')
+        
+        with self.assertLogs(logger, level='INFO') as log:
+            logger.info('Test log message')
+            logger.error('Test error message')
+        
+        self.assertEqual(len(log.output), 2)
+        self.assertIn('Test log message', log.output[0])
+    
+    def test_mock_assertions(self) -> None:
+        mock_obj = Mock()
+        mock_obj.method('arg1', 'arg2')
+        mock_obj.method.assert_called_with('arg1', 'arg2')
+        mock_obj.method.assert_called_once_with('arg1', 'arg2')
+    
+    def test_file_operations(self) -> None:
+        self.assertTrue(os.path.exists(self.temp_file.name))
+        
+        with open(self.temp_file.name, 'rb') as f:
+            content = f.read()
+        
+        self.assertEqual(content, b'test content')
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
