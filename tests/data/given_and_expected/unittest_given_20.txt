@@ -1,0 +1,193 @@
+import unittest
+from unittest.mock import Mock, patch, call
+import logging
+import traceback
+
+
+def setUpModule():
+    global error_tracker, logger
+    error_tracker = ErrorTracker()
+    logger = logging.getLogger("test_logger")
+
+
+def tearDownModule():
+    global error_tracker, logger
+    error_tracker.clear_errors()
+    error_tracker = None
+    logger = None
+
+
+class TestErrorHandling(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.error_handler = ErrorHandler(error_tracker, logger)
+        cls.retry_manager = RetryManager(max_attempts=3)
+        cls.circuit_breaker = CircuitBreaker(failure_threshold=2)
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.error_handler = None
+        cls.retry_manager = None
+        cls.circuit_breaker = None
+    
+    def setUp(self):
+        self.failing_operation = Mock(side_effect=[Exception("Test error"), Exception("Test error"), "Success"])
+        self.always_failing_operation = Mock(side_effect=Exception("Always fails"))
+        error_tracker.clear_errors()
+        self.circuit_breaker.reset()
+    
+    def tearDown(self):
+        self.failing_operation = None
+        self.always_failing_operation = None
+    
+    def test_error_logging_and_tracking(self):
+        try:
+            raise ValueError("Test exception")
+        except Exception as e:
+            self.error_handler.handle_error(e, context={"operation": "test"})
+        
+        errors = error_tracker.get_errors()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("ValueError", errors[0]["error_type"])
+    
+    def test_retry_mechanism_success(self):
+        result = self.retry_manager.execute_with_retry(self.failing_operation)
+        self.assertEqual(result, "Success")
+        self.assertEqual(self.failing_operation.call_count, 3)
+    
+    def test_retry_mechanism_exhaustion(self):
+        with self.assertRaises(Exception):
+            self.retry_manager.execute_with_retry(self.always_failing_operation)
+        
+        self.assertEqual(self.always_failing_operation.call_count, 3)
+    
+    def test_circuit_breaker_functionality(self):
+        # Trigger circuit breaker
+        with self.assertRaises(Exception):
+            self.circuit_breaker.call(self.always_failing_operation)
+        
+        with self.assertRaises(Exception):
+            self.circuit_breaker.call(self.always_failing_operation)
+        
+        # Circuit should be open now
+        with self.assertRaises(CircuitBreakerOpenError):
+            self.circuit_breaker.call(self.always_failing_operation)
+    
+    def test_error_categorization(self):
+        try:
+            raise ConnectionError("Network issue")
+        except Exception as e:
+            self.error_handler.handle_error(e, context={"operation": "api_call"})
+        
+        try:
+            raise ValueError("Invalid input")
+        except Exception as e:
+            self.error_handler.handle_error(e, context={"operation": "validation"})
+        
+        network_errors = error_tracker.get_errors_by_category("network")
+        validation_errors = error_tracker.get_errors_by_category("validation")
+        
+        self.assertEqual(len(network_errors), 1)
+        self.assertEqual(len(validation_errors), 1)
+
+
+class ErrorHandler:
+    def __init__(self, error_tracker, logger):
+        self.error_tracker = error_tracker
+        self.logger = logger
+    
+    def handle_error(self, error, context=None):
+        error_info = {
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "traceback": traceback.format_exc(),
+            "context": context or {}
+        }
+        
+        # Categorize error
+        category = self._categorize_error(error)
+        error_info["category"] = category
+        
+        self.error_tracker.track_error(error_info)
+        
+        if self.logger:
+            self.logger.error(f"Error occurred: {error_info}")
+    
+    def _categorize_error(self, error):
+        if isinstance(error, (ConnectionError, TimeoutError)):
+            return "network"
+        elif isinstance(error, ValueError):
+            return "validation"
+        elif isinstance(error, PermissionError):
+            return "security"
+        else:
+            return "general"
+
+
+class ErrorTracker:
+    def __init__(self):
+        self.errors = []
+    
+    def track_error(self, error_info):
+        import datetime
+        error_info["timestamp"] = datetime.datetime.now()
+        self.errors.append(error_info)
+    
+    def get_errors(self):
+        return self.errors.copy()
+    
+    def get_errors_by_category(self, category):
+        return [error for error in self.errors if error.get("category") == category]
+    
+    def clear_errors(self):
+        self.errors.clear()
+
+
+class RetryManager:
+    def __init__(self, max_attempts=3):
+        self.max_attempts = max_attempts
+    
+    def execute_with_retry(self, operation, *args, **kwargs):
+        last_exception = None
+        
+        for attempt in range(self.max_attempts):
+            try:
+                return operation(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                if attempt == self.max_attempts - 1:
+                    raise last_exception
+                
+                import time
+                time.sleep(0.1 * (attempt + 1))  # Exponential backoff
+        
+        raise last_exception
+
+
+class CircuitBreaker:
+    def __init__(self, failure_threshold=5):
+        self.failure_threshold = failure_threshold
+        self.failure_count = 0
+        self.is_open = False
+    
+    def call(self, operation, *args, **kwargs):
+        if self.is_open:
+            raise CircuitBreakerOpenError("Circuit breaker is open")
+        
+        try:
+            result = operation(*args, **kwargs)
+            self.failure_count = 0  # Reset on success
+            return result
+        except Exception as e:
+            self.failure_count += 1
+            if self.failure_count >= self.failure_threshold:
+                self.is_open = True
+            raise e
+    
+    def reset(self):
+        self.failure_count = 0
+        self.is_open = False
+
+
+class CircuitBreakerOpenError(Exception):
+    pass

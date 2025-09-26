@@ -1,0 +1,131 @@
+import unittest
+from unittest.mock import Mock, patch, MagicMock
+import xml.etree.ElementTree as ET
+
+
+def setUpModule():
+    global xml_parser, json_formatter
+    xml_parser = XMLParser()
+    json_formatter = JSONFormatter()
+
+
+def tearDownModule():
+    global xml_parser, json_formatter
+    xml_parser = None
+    json_formatter = None
+
+
+class TestDataFormats(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.data_converter = DataConverter(xml_parser, json_formatter)
+        cls.schema_validator = SchemaValidator()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.data_converter = None
+        cls.schema_validator = None
+    
+    def setUp(self):
+        self.sample_xml = """<?xml version="1.0"?>
+        <root>
+            <item id="1">
+                <name>Test Item</name>
+                <value>100</value>
+            </item>
+        </root>"""
+        
+        self.sample_json = {
+            "root": {
+                "item": {
+                    "id": "1",
+                    "name": "Test Item",
+                    "value": "100"
+                }
+            }
+        }
+    
+    def tearDown(self):
+        self.sample_xml = None
+        self.sample_json = None
+    
+    def test_xml_parsing(self):
+        parsed = xml_parser.parse(self.sample_xml)
+        self.assertIn("root", parsed)
+        self.assertEqual(parsed["root"]["item"]["name"], "Test Item")
+    
+    def test_json_formatting(self):
+        formatted = json_formatter.format(self.sample_json)
+        self.assertIsInstance(formatted, str)
+        self.assertIn("Test Item", formatted)
+    
+    def test_xml_to_json_conversion(self):
+        result = self.data_converter.xml_to_json(self.sample_xml)
+        self.assertIn("root", result)
+    
+    def test_schema_validation(self):
+        schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+        data = {"name": "test"}
+        
+        is_valid = self.schema_validator.validate(data, schema)
+        self.assertTrue(is_valid)
+
+
+class XMLParser:
+    def parse(self, xml_string):
+        root = ET.fromstring(xml_string)
+        return self._element_to_dict(root)
+    
+    def _element_to_dict(self, element):
+        result = {}
+        if element.attrib:
+            result.update(element.attrib)
+        
+        for child in element:
+            child_data = self._element_to_dict(child)
+            if child.tag in result:
+                if not isinstance(result[child.tag], list):
+                    result[child.tag] = [result[child.tag]]
+                result[child.tag].append(child_data)
+            else:
+                result[child.tag] = child_data
+        
+        if element.text and element.text.strip():
+            if result:
+                result['text'] = element.text.strip()
+            else:
+                return element.text.strip()
+        
+        return result
+
+
+class JSONFormatter:
+    def format(self, data):
+        import json
+        return json.dumps(data, indent=2)
+
+
+class DataConverter:
+    def __init__(self, xml_parser, json_formatter):
+        self.xml_parser = xml_parser
+        self.json_formatter = json_formatter
+    
+    def xml_to_json(self, xml_string):
+        parsed_xml = self.xml_parser.parse(xml_string)
+        return parsed_xml
+
+
+class SchemaValidator:
+    def validate(self, data, schema):
+        # Simple validation for demo
+        if schema.get("type") == "object":
+            if not isinstance(data, dict):
+                return False
+            
+            properties = schema.get("properties", {})
+            for prop, prop_schema in properties.items():
+                if prop in data:
+                    if prop_schema.get("type") == "string" and not isinstance(data[prop], str):
+                        return False
+        
+        return True

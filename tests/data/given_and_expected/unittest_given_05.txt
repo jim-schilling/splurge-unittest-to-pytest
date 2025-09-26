@@ -1,0 +1,32 @@
+import unittest
+
+
+class TestValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.validator = EmailValidator()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.validator = None
+    
+    def setUp(self):
+        self.valid_email = "test@example.com"
+        self.invalid_email = "invalid-email"
+    
+    def tearDown(self):
+        self.valid_email = None
+        self.invalid_email = None
+    
+    def test_valid_email(self):
+        result = self.validator.is_valid(self.valid_email)
+        self.assertTrue(result)
+    
+    def test_invalid_email(self):
+        result = self.validator.is_valid(self.invalid_email)
+        self.assertFalse(result)
+
+
+class EmailValidator:
+    def is_valid(self, email):
+        return "@" in email and "." in email

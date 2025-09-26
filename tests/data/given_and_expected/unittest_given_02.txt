@@ -1,0 +1,33 @@
+import unittest
+
+
+class TestStringOperations(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.processor = StringProcessor()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.processor = None
+    
+    def setUp(self):
+        self.test_string = "Hello World"
+    
+    def tearDown(self):
+        self.test_string = None
+    
+    def test_uppercase(self):
+        result = self.processor.to_upper(self.test_string)
+        self.assertEqual(result, "HELLO WORLD")
+    
+    def test_lowercase(self):
+        result = self.processor.to_lower(self.test_string)
+        self.assertEqual(result, "hello world")
+
+
+class StringProcessor:
+    def to_upper(self, text):
+        return text.upper()
+    
+    def to_lower(self, text):
+        return text.lower()

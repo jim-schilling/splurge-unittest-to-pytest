@@ -1,0 +1,180 @@
+import unittest
+from unittest.mock import Mock, patch, PropertyMock
+import json
+
+
+def setUpModule():
+    global metrics_collector
+    metrics_collector = MetricsCollector()
+
+
+def tearDownModule():
+    global metrics_collector
+    metrics_collector.reset()
+    metrics_collector = None
+
+
+class TestPerformanceMonitor(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.performance_monitor = PerformanceMonitor(metrics_collector)
+        cls.cache_manager = CacheManager(max_size=100)
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.performance_monitor = None
+        cls.cache_manager = None
+    
+    def setUp(self):
+        self.test_operation = "test_operation"
+        self.test_data = {"key": "value", "number": 42}
+        metrics_collector.reset()
+        self.cache_manager.clear()
+    
+    def tearDown(self):
+        self.test_operation = None
+        self.test_data = None
+    
+    def test_operation_timing(self):
+        with self.performance_monitor.time_operation(self.test_operation):
+            import time
+            time.sleep(0.1)
+        
+        metrics = metrics_collector.get_metrics()
+        self.assertIn(self.test_operation, metrics)
+        self.assertGreaterEqual(metrics[self.test_operation]["duration"], 0.1)
+    
+    def test_cache_hit_miss_tracking(self):
+        cache_key = "test_key"
+        cache_value = "test_value"
+        
+        # Cache miss
+        result = self.cache_manager.get(cache_key)
+        self.assertIsNone(result)
+        
+        # Cache set
+        self.cache_manager.set(cache_key, cache_value)
+        
+        # Cache hit
+        result = self.cache_manager.get(cache_key)
+        self.assertEqual(result, cache_value)
+        
+        stats = self.cache_manager.get_stats()
+        self.assertEqual(stats["hits"], 1)
+        self.assertEqual(stats["misses"], 1)
+
+
+class TestMemoryProfiler(unittest.TestCase):
+    def setUp(self):
+        self.memory_profiler = MemoryProfiler()
+        self.data_processor = DataProcessor()
+    
+    def tearDown(self):
+        self.memory_profiler = None
+        self.data_processor = None
+    
+    def test_memory_usage_tracking(self):
+        initial_memory = self.memory_profiler.get_current_memory_usage()
+        
+        # Create large data structure
+        large_data = [i for i in range(100000)]
+        self.data_processor.process_large_dataset(large_data)
+        
+        peak_memory = self.memory_profiler.get_peak_memory_usage()
+        self.assertGreater(peak_memory, initial_memory)
+
+
+class PerformanceMonitor:
+    def __init__(self, metrics_collector):
+        self.metrics_collector = metrics_collector
+    
+    def time_operation(self, operation_name):
+        return TimingContext(operation_name, self.metrics_collector)
+
+
+class TimingContext:
+    def __init__(self, operation_name, metrics_collector):
+        self.operation_name = operation_name
+        self.metrics_collector = metrics_collector
+        self.start_time = None
+    
+    def __enter__(self):
+        import time
+        self.start_time = time.time()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        import time
+        duration = time.time() - self.start_time
+        self.metrics_collector.record_timing(self.operation_name, duration)
+
+
+class MetricsCollector:
+    def __init__(self):
+        self.metrics = {}
+    
+    def record_timing(self, operation, duration):
+        if operation not in self.metrics:
+            self.metrics[operation] = {"duration": 0, "count": 0}
+        
+        self.metrics[operation]["duration"] += duration
+        self.metrics[operation]["count"] += 1
+    
+    def get_metrics(self):
+        return self.metrics.copy()
+    
+    def reset(self):
+        self.metrics.clear()
+
+
+class CacheManager:
+    def __init__(self, max_size=1000):
+        self.max_size = max_size
+        self.cache = {}
+        self.stats = {"hits": 0, "misses": 0}
+    
+    def get(self, key):
+        if key in self.cache:
+            self.stats["hits"] += 1
+            return self.cache[key]
+        else:
+            self.stats["misses"] += 1
+            return None
+    
+    def set(self, key, value):
+        if len(self.cache) >= self.max_size:
+            # Simple LRU: remove first item
+            oldest_key = next(iter(self.cache))
+            del self.cache[oldest_key]
+        
+        self.cache[key] = value
+    
+    def get_stats(self):
+        return self.stats.copy()
+    
+    def clear(self):
+        self.cache.clear()
+        self.stats = {"hits": 0, "misses": 0}
+
+
+class MemoryProfiler:
+    def get_current_memory_usage(self):
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024 / 1024  # MB
+    
+    def get_peak_memory_usage(self):
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        return process.memory_info().peak_wset / 1024 / 1024 if hasattr(process.memory_info(), 'peak_wset') else self.get_current_memory_usage()
+
+
+class DataProcessor:
+    def process_large_dataset(self, data):
+        # Simulate memory-intensive operation
+        processed = []
+        for item in data:
+            processed.append(item * 2)
+        return processed

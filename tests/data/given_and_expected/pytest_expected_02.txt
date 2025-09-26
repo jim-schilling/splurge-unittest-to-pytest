@@ -1,0 +1,29 @@
+import pytest
+
+class TestStringOperations:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(self):
+        self.processor = StringProcessor()
+        yield
+        self.processor = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.test_string = "Hello World"
+        yield
+        self.test_string = None
+
+    def test_uppercase(self):
+        result = self.processor.to_upper(self.test_string)
+        assert result == "HELLO WORLD"
+
+    def test_lowercase(self):
+        result = self.processor.to_lower(self.test_string)
+        assert result == "hello world"
+
+class StringProcessor:
+    def to_upper(self, text):
+        return text.upper()
+
+    def to_lower(self, text):
+        return text.lower()

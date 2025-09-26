@@ -1,0 +1,206 @@
+import unittest
+from unittest.mock import Mock, patch, PropertyMock
+import sqlite3
+import contextlib
+
+
+def setUpModule():
+    global test_db_path
+    test_db_path = ":memory:"
+    init_test_database()
+
+
+def tearDownModule():
+    global test_db_path
+    test_db_path = None
+
+
+def init_test_database():
+    with sqlite3.connect(test_db_path) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE,
+                email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS posts (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                title TEXT,
+                content TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
+
+class TestDatabaseManager(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.db_manager = DatabaseManager(test_db_path)
+        cls.user_repository = UserRepository(cls.db_manager)
+        cls.post_repository = PostRepository(cls.db_manager)
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.db_manager.close()
+        cls.db_manager = None
+        cls.user_repository = None
+        cls.post_repository = None
+    
+    def setUp(self):
+        self.test_user_data = {
+            "username": "testuser",
+            "email": "test@example.com"
+        }
+        self.test_post_data = {
+            "title": "Test Post",
+            "content": "This is a test post content"
+        }
+        self.cleanup_data()
+    
+    def tearDown(self):
+        self.cleanup_data()
+        self.test_user_data = None
+        self.test_post_data = None
+    
+    def cleanup_data(self):
+        with self.db_manager.get_connection() as conn:
+            conn.execute("DELETE FROM posts")
+            conn.execute("DELETE FROM users")
+            conn.commit()
+    
+    def test_user_creation_and_retrieval(self):
+        user_id = self.user_repository.create_user(
+            self.test_user_data["username"],
+            self.test_user_data["email"]
+        )
+        self.assertIsNotNone(user_id)
+        
+        user = self.user_repository.get_user_by_id(user_id)
+        self.assertEqual(user["username"], self.test_user_data["username"])
+        self.assertEqual(user["email"], self.test_user_data["email"])
+    
+    def test_user_duplicate_username_constraint(self):
+        self.user_repository.create_user(
+            self.test_user_data["username"],
+            self.test_user_data["email"]
+        )
+        
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.user_repository.create_user(
+                self.test_user_data["username"],
+                "different@example.com"
+            )
+    
+    def test_post_creation_with_foreign_key(self):
+        user_id = self.user_repository.create_user(
+            self.test_user_data["username"],
+            self.test_user_data["email"]
+        )
+        
+        post_id = self.post_repository.create_post(
+            user_id,
+            self.test_post_data["title"],
+            self.test_post_data["content"]
+        )
+        self.assertIsNotNone(post_id)
+        
+        post = self.post_repository.get_post_by_id(post_id)
+        self.assertEqual(post["user_id"], user_id)
+        self.assertEqual(post["title"], self.test_post_data["title"])
+    
+    @patch.object(DatabaseManager, 'get_connection')
+    def test_database_connection_error_handling(self, mock_get_connection):
+        mock_get_connection.side_effect = sqlite3.Error("Database connection failed")
+        
+        with self.assertRaises(sqlite3.Error):
+            self.user_repository.create_user(
+                self.test_user_data["username"],
+                self.test_user_data["email"]
+            )
+    
+    def test_transaction_rollback_on_error(self):
+        user_id = self.user_repository.create_user(
+            self.test_user_data["username"],
+            self.test_user_data["email"]
+        )
+        
+        # Simulate transaction that should rollback
+        try:
+            with self.db_manager.get_connection() as conn:
+                conn.execute("UPDATE users SET username = ? WHERE id = ?", 
+                           ("newusername", user_id))
+                # Force an error to trigger rollback
+                conn.execute("INVALID SQL STATEMENT")
+        except sqlite3.Error:
+            pass
+        
+        # Verify original data is preserved due to rollback
+        user = self.user_repository.get_user_by_id(user_id)
+        self.assertEqual(user["username"], self.test_user_data["username"])
+
+
+class DatabaseManager:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self._connection = None
+    
+    @contextlib.contextmanager
+    def get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+    
+    def close(self):
+        if self._connection:
+            self._connection.close()
+
+
+class UserRepository:
+    def __init__(self, db_manager):
+        self.db = db_manager
+    
+    def create_user(self, username, email):
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "INSERT INTO users (username, email) VALUES (?, ?)",
+                (username, email)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_user_by_id(self, user_id):
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM users WHERE id = ?", (user_id,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+
+class PostRepository:
+    def __init__(self, db_manager):
+        self.db = db_manager
+    
+    def create_post(self, user_id, title, content):
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "INSERT INTO posts (user_id, title, content) VALUES (?, ?, ?)",
+                (user_id, title, content)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_post_by_id(self, post_id):
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM posts WHERE id = ?", (post_id,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None

@@ -1,0 +1,38 @@
+import unittest
+
+
+def setUpModule():
+    global test_config
+    test_config = {"mode": "test", "debug": True}
+
+
+def tearDownModule():
+    global test_config
+    test_config = None
+
+
+class TestConfiguration(unittest.TestCase):
+    def setUp(self):
+        self.config_manager = ConfigManager(test_config)
+    
+    def tearDown(self):
+        self.config_manager = None
+    
+    def test_get_mode(self):
+        mode = self.config_manager.get_mode()
+        self.assertEqual(mode, "test")
+    
+    def test_is_debug(self):
+        debug = self.config_manager.is_debug()
+        self.assertTrue(debug)
+
+
+class ConfigManager:
+    def __init__(self, config):
+        self.config = config
+    
+    def get_mode(self):
+        return self.config.get("mode")
+    
+    def is_debug(self):
+        return self.config.get("debug", False)

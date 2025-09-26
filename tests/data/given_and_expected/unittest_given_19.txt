@@ -1,0 +1,128 @@
+import unittest
+from unittest.mock import Mock, patch
+import datetime
+
+
+def setUpModule():
+    global notification_service
+    notification_service = NotificationService()
+
+
+def tearDownModule():
+    global notification_service
+    notification_service = None
+
+
+class TestEventSystem(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.event_manager = EventManager(notification_service)
+        cls.subscription_manager = SubscriptionManager()
+    
+    @classmethod
+    def tearDownClass(cls):
+        cls.event_manager = None
+        cls.subscription_manager = None
+    
+    def setUp(self):
+        self.test_event = {
+            "type": "user_registered",
+            "data": {"user_id": 123, "username": "testuser"},
+            "timestamp": datetime.datetime.now()
+        }
+        self.mock_handler = Mock()
+        self.event_manager.clear_events()
+        self.subscription_manager.clear_subscriptions()
+    
+    def tearDown(self):
+        self.test_event = None
+        self.mock_handler = None
+    
+    def test_event_publishing_and_handling(self):
+        self.event_manager.subscribe("user_registered", self.mock_handler)
+        self.event_manager.publish_event(self.test_event)
+        
+        self.mock_handler.assert_called_once_with(self.test_event)
+    
+    def test_multiple_subscribers(self):
+        handler1 = Mock()
+        handler2 = Mock()
+        
+        self.event_manager.subscribe("user_registered", handler1)
+        self.event_manager.subscribe("user_registered", handler2)
+        self.event_manager.publish_event(self.test_event)
+        
+        handler1.assert_called_once_with(self.test_event)
+        handler2.assert_called_once_with(self.test_event)
+    
+    def test_subscription_management(self):
+        subscription_id = self.subscription_manager.subscribe(
+            "test@example.com", "user_registered"
+        )
+        
+        subscriptions = self.subscription_manager.get_subscriptions("test@example.com")
+        self.assertIn("user_registered", subscriptions)
+        
+        self.subscription_manager.unsubscribe(subscription_id)
+        subscriptions = self.subscription_manager.get_subscriptions("test@example.com")
+        self.assertNotIn("user_registered", subscriptions)
+
+
+class EventManager:
+    def __init__(self, notification_service):
+        self.notification_service = notification_service
+        self.subscribers = {}
+        self.events = []
+    
+    def subscribe(self, event_type, handler):
+        if event_type not in self.subscribers:
+            self.subscribers[event_type] = []
+        self.subscribers[event_type].append(handler)
+    
+    def publish_event(self, event):
+        self.events.append(event)
+        event_type = event["type"]
+        
+        if event_type in self.subscribers:
+            for handler in self.subscribers[event_type]:
+                handler(event)
+    
+    def clear_events(self):
+        self.events.clear()
+        self.subscribers.clear()
+
+
+class SubscriptionManager:
+    def __init__(self):
+        self.subscriptions = {}
+        self.next_id = 1
+    
+    def subscribe(self, email, event_type):
+        subscription_id = self.next_id
+        self.next_id += 1
+        
+        if email not in self.subscriptions:
+            self.subscriptions[email] = {}
+        
+        self.subscriptions[email][subscription_id] = event_type
+        return subscription_id
+    
+    def unsubscribe(self, subscription_id):
+        for email, subs in self.subscriptions.items():
+            if subscription_id in subs:
+                del subs[subscription_id]
+                break
+    
+    def get_subscriptions(self, email):
+        if email in self.subscriptions:
+            return list(self.subscriptions[email].values())
+        return []
+    
+    def clear_subscriptions(self):
+        self.subscriptions.clear()
+
+
+class NotificationService:
+    def send_email(self, email, subject, body):
+        # Mock implementation
+        pass
