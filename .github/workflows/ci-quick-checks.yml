@@ -13,10 +13,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.13
+    - name: Set up Python 3.12
       uses: actions/setup-python@v4
       with:
-        python-version: "3.13"
+        python-version: "3.12"
         allow-prereleases: true
 
     - name: Install dependencies
@@ -26,10 +26,10 @@ jobs:
 
     - name: Run Ruff Check
       run: |
-        echo "Running Ruff check with Python 3.13"
+        echo "Running Ruff check with Python 3.12"
         ruff check
 
     - name: Run MyPy Type Check
       run: |
-        echo "Running MyPy type check with Python 3.13"
+        echo "Running MyPy type check with Python 3.12"
         mypy splurge_unittest_to_pytest
