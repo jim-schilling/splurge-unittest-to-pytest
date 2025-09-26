@@ -98,9 +98,11 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
             for alias in node.names:
                 if isinstance(alias.name, cst.Name):
                     module_names.append(alias.name.value)
-                    if alias.asname:
+                    if alias.asname and isinstance(alias.asname.name, cst.Name):
                         # This is an alias: import os as operating_system
-                        return ImportStatement(module=str(alias.name.value), imported_items=[], alias=str(alias.asname.name.value))  # type: ignore[union-attr]
+                        return ImportStatement(
+                            module=str(alias.name.value), imported_items=[], alias=str(alias.asname.name.value)
+                        )
                 else:
                     # Handle complex name expressions
                     module_names.append(str(alias.name))
@@ -119,7 +121,7 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
 
             imported_items = []
             # Handle both ImportAlias and ImportStar cases
-            if hasattr(node.names, '__iter__'):
+            if hasattr(node.names, "__iter__"):
                 for alias in node.names:
                     if isinstance(alias.name, cst.Name):
                         imported_items.append(str(alias.name.value))
@@ -128,7 +130,9 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
                             return ImportStatement(
                                 module=module_name,
                                 imported_items=[str(alias.name.value)],
-                                alias=str(alias.asname.name.value) if isinstance(alias.asname.name, cst.Name) else str(alias.asname.name),
+                                alias=str(alias.asname.name.value)
+                                if isinstance(alias.asname.name, cst.Name)
+                                else str(alias.asname.name),
                                 import_type="from",
                             )
                     else:

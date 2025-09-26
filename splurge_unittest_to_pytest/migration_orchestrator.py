@@ -57,8 +57,16 @@ class MigrationOrchestrator:
         # Create the main migration pipeline
         pipeline = self._create_migration_pipeline()
 
-        # Execute the pipeline
-        result = pipeline.execute(context)
+        # Read source file content for initial input
+        try:
+            with open(source_file, encoding="utf-8") as f:
+                source_code = f.read()
+            self._logger.debug(f"Read source code: {len(source_code)} characters")
+        except Exception as e:
+            return Result.failure(e)
+
+        # Execute the pipeline with source code as initial input
+        result = pipeline.execute(context, source_code)
 
         if result.is_success():
             self._logger.info(f"Migration completed successfully for {source_file}")

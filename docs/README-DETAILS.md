@@ -80,7 +80,7 @@ Core pipeline architecture, event system, and basic transformations
 Intermediate representation, fixture generation, and comprehensive pattern support
 
 ### Phase 3: Advanced Features (Weeks 8-10)
-Mock integration, parameterized tests, and complex scenario handling
+Parameterized tests, and complex scenario handling
 
 ### Phase 4: Production Ready (Weeks 11-12)
 CLI interface, configuration system, and user experience polish

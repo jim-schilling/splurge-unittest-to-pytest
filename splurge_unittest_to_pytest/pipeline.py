@@ -210,11 +210,12 @@ class Job(Generic[T, R]):
         self.event_bus = event_bus
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
-    def execute(self, context: PipelineContext) -> Result[R]:
+    def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
         """Execute all tasks with context threading.
 
         Args:
             context: Pipeline execution context
+            initial_input: Initial input data for the first task
 
         Returns:
             Result containing final transformed data or first error
@@ -223,11 +224,12 @@ class Job(Generic[T, R]):
 
         current_context = context
         task_results = []
+        current_input = initial_input
 
         for i, task in enumerate(self.tasks):
             self._logger.debug(f"Executing task {i + 1}/{len(self.tasks)}: {task.name}")
 
-            result = task.execute(current_context, current_context)
+            result = task.execute(current_context, current_input)
 
             if result.is_error():
                 self._logger.error(f"Task {task.name} failed, aborting job {self.name}")
@@ -239,9 +241,12 @@ class Job(Generic[T, R]):
 
             task_results.append(result)
 
-            # Thread context through pipeline (if returned)
+            # Thread context and data through pipeline
             if isinstance(result.data, PipelineContext):
                 current_context = result.data
+            elif result.is_success():
+                # Use result data as input for next task
+                current_input = result.data
 
         # Combine warnings from all tasks
         all_warnings: list[str] = []
@@ -294,11 +299,12 @@ class Pipeline(Generic[T, R]):
         self.event_bus = event_bus
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
-    def execute(self, context: PipelineContext) -> Result[R]:
+    def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
         """Execute the entire pipeline.
 
         Args:
             context: Pipeline execution context
+            initial_input: Initial input data for the pipeline
 
         Returns:
             Result containing final transformed data or first error
@@ -307,11 +313,12 @@ class Pipeline(Generic[T, R]):
 
         current_context = context
         job_results = []
+        current_input = initial_input
 
         for i, job in enumerate(self.jobs):
             self._logger.debug(f"Executing job {i + 1}/{len(self.jobs)}: {job.name}")
 
-            result = job.execute(current_context)
+            result = job.execute(current_context, current_input)
 
             if result.is_error():
                 self._logger.error(f"Job {job.name} failed, aborting pipeline {self.name}")
@@ -323,9 +330,12 @@ class Pipeline(Generic[T, R]):
 
             job_results.append(result)
 
-            # Thread context through pipeline (if returned)
+            # Thread context and data through pipeline
             if isinstance(result.data, PipelineContext):
                 current_context = result.data
+            elif result.is_success():
+                # Use result data as input for next job
+                current_input = result.data
 
         # Combine warnings from all jobs
         all_warnings: list[str] = []

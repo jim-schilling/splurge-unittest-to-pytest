@@ -11,8 +11,18 @@ from splurge_unittest_to_pytest.steps.parse_steps import GenerateCodeStep, Parse
 
 
 class DummyStep(Step[int, int]):
+    @staticmethod
+    def result_fn(x, ctx):
+        from splurge_unittest_to_pytest.result import Result
+
+        if isinstance(x, PipelineContext):
+            return Result.success(x)
+        if x is None:
+            return Result.success(0)
+        return Result.success(x + 1)
+
     def execute(self, context: PipelineContext, input_data: int):
-        return type(self).result_fn(input_data, context)
+        return DummyStep.result_fn(input_data, context)
 
 
 def test_parse_steps_public_api():
@@ -79,15 +89,6 @@ def test_format_steps_warning_on_exception(monkeypatch):
 def test_pipeline_task_job_public_api():
     bus = EventBus()
     factory = PipelineFactory(bus)
-
-    def result_fn(x, ctx):
-        from splurge_unittest_to_pytest.result import Result
-
-        if isinstance(x, PipelineContext):
-            return Result.success(x)
-        return Result.success(x + 1)
-
-    DummyStep.result_fn = staticmethod(result_fn)
 
     s1 = factory.create_step("s1", DummyStep)
     s2 = factory.create_step("s2", DummyStep)

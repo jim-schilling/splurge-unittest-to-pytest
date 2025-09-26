@@ -39,12 +39,12 @@ class FormatterJob(Job[str, str]):
 
         return Task("formatting", steps, event_bus)
 
-    def execute(self, context: PipelineContext) -> Result[str]:
+    def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[str]:
         """Execute the formatter job.
 
         Args:
             context: Pipeline execution context
-            source_code: Source code to format
+            initial_input: Source code to format
 
         Returns:
             Result containing the formatted source code

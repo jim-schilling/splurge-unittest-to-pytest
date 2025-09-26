@@ -32,11 +32,85 @@ class TestExample(unittest.TestCase):
         assert ir_module.classes[0].name == "TestExample"
         assert ir_module.classes[0].is_unittest_class
 
-    def test_ir_generation_step(self):
+    def test_ir_generation_step(self, tmp_path):
         """Test the IR generation step."""
-        # Skip this test for now - complex integration with PipelineContext
-        # TODO: Implement proper test once context issues are resolved
-        pass
+        # Create a simple unittest file for testing
+        test_file = tmp_path / "test_unittest.py"
+        test_file.write_text("""
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_simple(self):
+        self.assertEqual(1 + 1, 2)
+        self.assertTrue(True)
+
+if __name__ == "__main__":
+    unittest.main()
+""")
+
+        # Create IR generation step
+        from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
+        from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
+
+        config = MigrationConfig()
+        step = UnittestToIRStep("ir_generation_step")
+
+        # Parse the code into a CST module
+        with open(test_file) as f:
+            code = f.read()
+        cst_module = cst.parse_module(code)
+
+        # Create pipeline context
+        context = PipelineContext.create(source_file=str(test_file), config=config)
+
+        # Execute step
+        result = step.execute(context, cst_module)
+
+        # Verify result
+        assert result.is_success(), f"IR generation failed: {result.error}"
+        ir_module = result.data
+
+        # Verify IR structure
+        assert ir_module.name == "test_unittest"
+        assert len(ir_module.classes) == 1
+        assert ir_module.classes[0].name == "TestExample"
+        assert len(ir_module.classes[0].methods) == 1
+        assert ir_module.classes[0].methods[0].name == "test_simple"
+
+    def test_module_level_functions_handling(self, tmp_path):
+        """Test that module-level functions are properly captured in IR."""
+        # Create a unittest file with module-level functions
+        test_file = tmp_path / "test_functions.py"
+        test_file.write_text("""
+import unittest
+
+def helper_function():
+    return "helper"
+
+class TestExample(unittest.TestCase):
+    def test_simple(self):
+        result = helper_function()
+        self.assertEqual(result, "helper")
+
+if __name__ == "__main__":
+    unittest.main()
+""")
+
+        # Analyze the module
+        from splurge_unittest_to_pytest.ir import TestModule
+        from splurge_unittest_to_pytest.pattern_analyzer import UnittestPatternAnalyzer
+
+        analyzer = UnittestPatternAnalyzer()
+        with open(test_file) as f:
+            code = f.read()
+
+        ir_module = analyzer.analyze_module(code)
+
+        # Verify module-level function is captured
+        assert len(ir_module.standalone_functions) == 1
+        assert ir_module.standalone_functions[0].name == "helper_function"
+        # Standalone functions don't have is_unittest_method attribute (it's only for test methods)
+        # The absence of this attribute indicates it's not a unittest method
 
     def test_ir_module_getters(self):
         """Test IR module utility methods."""

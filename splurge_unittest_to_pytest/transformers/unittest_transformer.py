@@ -527,10 +527,16 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         This is a simplified approach - in a full implementation,
         this would properly integrate with libcst's node replacement mechanisms.
+        Since we're currently using string-based transformations, this method
+        is not actively used but is provided for future CST-based implementations.
         """
-        # For now, we'll just store that this node needs replacement
-        # The actual replacement would happen during the leave phase
-        # This is a placeholder for the actual implementation
+        # In a full CST-based implementation, this would:
+        # 1. Store the mapping of old_node -> new_node
+        # 2. Use libcst's node replacement mechanisms
+        # 3. Handle the replacement during the leave phase
+
+        # For now, this is a no-op since we use string-based transformations
+        # But we keep the method signature for future implementation
         pass
 
     def transform_code(self, code: str) -> str:

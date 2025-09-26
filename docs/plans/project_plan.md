@@ -50,7 +50,6 @@ Create a robust, production-ready tool that automatically migrates Python unitte
 
 #### Deliverables
 - Parameterized test support
-- Mock integration (unittest.mock → pytest-mock)
 - Skip and expectedFailure decorators
 - Subtest handling
 - Complex inheritance scenarios

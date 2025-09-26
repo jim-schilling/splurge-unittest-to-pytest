@@ -42,11 +42,12 @@ class CollectorJob(Job[str, str]):
 
         return Task("parsing", steps, event_bus)
 
-    def execute(self, context: PipelineContext) -> Result[str]:
+    def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[str]:
         """Execute the collector job.
 
         Args:
             context: Pipeline execution context
+            initial_input: Initial input data for the job
 
         Returns:
             Result containing the processed source code
@@ -58,7 +59,7 @@ class CollectorJob(Job[str, str]):
             return Result.failure(FileNotFoundError(f"Source file not found: {context.source_file}"))
 
         # Execute the job using the source file as input
-        result = super().execute(context)
+        result = super().execute(context, initial_input)
 
         if result.is_success():
             self._logger.info(f"Collection job completed successfully for {context.source_file}")

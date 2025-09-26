@@ -154,7 +154,20 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         # Regular function - add to standalone functions if in module level
         if self.current_class is None:
             # This is a module-level function
-            pass  # TODO: Handle module-level functions
+            return_type = None
+            if node.returns and node.returns.annotation:
+                return_type = self._normalize_base_name(node.returns.annotation)
+
+            standalone_function = TestMethod(
+                name=func_name,
+                decorators=[],
+                body=[],
+                parameters=[param.name.value for param in node.params.params] if node.params else [],
+                return_type=return_type,
+            )
+
+            if self.ir_module is not None:
+                self.ir_module.standalone_functions.append(standalone_function)
 
     def visit_Call(self, node: cst.Call) -> None:
         """Visit function calls to identify assertions."""
@@ -342,7 +355,7 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
                 arguments.append(Expression(type="Argument", value=expr_module.code.strip()))
             else:
                 # Fallback for non-expression arguments - this handles edge cases
-                arguments.append(Expression(type="Argument", value=str(arg.value))) # type: ignore
+                arguments.append(Expression(type="Argument", value=str(arg.value)))  # type: ignore
 
         # Create assertion
         assertion = Assertion(

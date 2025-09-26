@@ -9,8 +9,9 @@ from pathlib import Path
 
 import typer
 
-from .context import MigrationConfig, PipelineContext
+from .context import MigrationConfig
 from .events import EventBus, LoggingSubscriber
+from .migration_orchestrator import MigrationOrchestrator
 from .pipeline import PipelineFactory
 
 # Initialize typer app
@@ -227,19 +228,19 @@ def migrate(
             try:
                 logger.info(f"Processing: {source_file}")
 
-                # Create pipeline context
-                context = PipelineContext.create(
-                    source_file=source_file,
-                    target_file=None,  # Will be auto-generated
-                    config=config,
-                )
+                # Create migration orchestrator and execute migration
+                orchestrator = MigrationOrchestrator()
 
-                # TODO: Create actual migration pipeline
-                # For now, just log the operation
-                if verbose:
-                    logger.info(f"Context created: {context}")
+                # Execute the migration
+                migration_result = orchestrator.migrate_file(source_file, config)
 
-                successful_migrations += 1
+                if migration_result.is_success():
+                    if verbose:
+                        logger.info(f"Migration completed successfully: {migration_result.data}")
+                    successful_migrations += 1
+                else:
+                    logger.error(f"Migration failed for {source_file}: {migration_result.error}")
+                    failed_migrations += 1
 
             except Exception as e:
                 logger.error(f"Failed to process {source_file}: {e}")

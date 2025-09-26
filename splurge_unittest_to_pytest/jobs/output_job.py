@@ -39,11 +39,12 @@ class OutputJob(Job[str, str]):
 
         return Task("output", steps, event_bus)
 
-    def execute(self, context: PipelineContext) -> Result[str]:
+    def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[str]:
         """Execute the output job.
 
         Args:
             context: Pipeline execution context
+            initial_input: Input data for the job
 
         Returns:
             Result containing the source code that was written
