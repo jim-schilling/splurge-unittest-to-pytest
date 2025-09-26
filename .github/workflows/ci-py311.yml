@@ -1,0 +1,47 @@
+name: Quick Tests (py3.11)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pr-trigger-check:
+    name: PR trigger check
+    runs-on: ubuntu-latest
+    outputs:
+      allow_ci: ${{ steps.check.outputs.allow_ci }}
+    steps:
+      - name: Determine whether to run CI
+        id: check
+        run: |
+          echo "actor=${GITHUB_ACTOR}"
+          allow=true
+          if [ "${GITHUB_ACTOR}" = "github-actions[bot]" ] || [ "${GITHUB_ACTOR}" = "github-actions" ]; then
+            allow=false
+          fi
+          last_msg=$(git log -1 --pretty=%B || true)
+          if echo "$last_msg" | grep -q "^chore(ci)"; then
+            allow=false
+          fi
+          echo "::set-output name=allow_ci::$allow"
+
+  test:
+    needs: [pr-trigger-check]
+    if: needs.pr-trigger-check.outputs.allow_ci == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - name: Run test suite
+        run: pytest -q

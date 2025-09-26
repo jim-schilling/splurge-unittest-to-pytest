@@ -6,6 +6,7 @@ import libcst as cst
 import pytest
 
 from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
+from splurge_unittest_to_pytest.events import EventBus
 from splurge_unittest_to_pytest.result import Result
 from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
 
@@ -15,11 +16,11 @@ class TestUnittestToIRStepAPI:
 
     def setup_method(self):
         """Set up fresh IR step for each test."""
-        self.step = UnittestToIRStep("test_ir_generation")
+        self.step = UnittestToIRStep("test_ir_generation", EventBus())
 
     def test_initialization(self):
         """Test that UnittestToIRStep initializes correctly."""
-        step = UnittestToIRStep("test_step")
+        step = UnittestToIRStep("test_step", EventBus())
         assert step.name == "test_step"
 
     def test_execute_basic_unittest_class(self, tmp_path):

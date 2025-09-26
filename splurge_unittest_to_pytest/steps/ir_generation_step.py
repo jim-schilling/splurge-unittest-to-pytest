@@ -11,6 +11,7 @@ from typing import Any
 import libcst as cst
 
 from ..context import PipelineContext
+from ..events import EventBus
 from ..ir import ImportStatement, TestModule
 from ..pattern_analyzer import UnittestPatternAnalyzer
 from ..pipeline import Step
@@ -20,7 +21,7 @@ from ..result import Result
 class UnittestToIRStep(Step[cst.Module, TestModule]):
     """Step that converts CST Module to IR TestModule using pattern analysis."""
 
-    def __init__(self, name: str, event_bus: Any = None):
+    def __init__(self, name: str, event_bus: EventBus):
         super().__init__(name, event_bus)
 
     def execute(self, context: PipelineContext, module: cst.Module) -> Result[TestModule]:

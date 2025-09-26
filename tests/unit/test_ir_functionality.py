@@ -4,6 +4,7 @@
 import libcst as cst
 import pytest
 
+from splurge_unittest_to_pytest.events import EventBus
 from splurge_unittest_to_pytest.ir import Assertion, Expression, TestClass, TestMethod, TestModule
 from splurge_unittest_to_pytest.pattern_analyzer import UnittestPatternAnalyzer
 from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
 
         config = MigrationConfig()
-        step = UnittestToIRStep("ir_generation_step")
+        step = UnittestToIRStep("ir_generation_step", EventBus())
 
         # Parse the code into a CST module
         with open(test_file) as f:
