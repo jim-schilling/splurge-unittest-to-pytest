@@ -30,6 +30,8 @@ from .assert_transformer import (
     transform_assert_true,
     transform_assert_tuple_equal,
     transform_assertions_string_based,
+    transform_fail,
+    transform_skip_test,
 )
 from .fixture_transformer import (
     create_class_fixture,
@@ -177,6 +179,20 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         return updated_node.with_changes(body=new_body)
 
+    def visit_Decorator(self, node: cst.Decorator) -> bool | None:
+        """Transform @unittest.skip / @unittest.skipIf decorators to pytest marks in-place via string fallback.
+
+        This visitor will set the flag to indicate pytest is needed when such decorators are seen.
+        """
+        # Attempt to recognize patterns like @unittest.skip or @unittest.skipIf
+        try:
+            dec_code = cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value=node.decorator)])]).code.strip()
+            if dec_code.startswith("@unittest.skip") or dec_code.startswith("@unittest.skipIf"):
+                self.needs_pytest_import = True
+        except Exception:
+            pass
+        return True
+
     def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
         """Leave class definition after transformation, adding fixtures."""
         if not self.current_class:
@@ -232,7 +248,76 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.setup_class_code.clear()
         self.teardown_class_code.clear()
 
-        return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+        # Replace decorators that are unittest.skip / unittest.skipIf with pytest marks
+        def _convert_decorators(decorators: list[cst.Decorator]) -> list[cst.Decorator]:
+            new_decs: list[cst.Decorator] = []
+            for d in decorators:
+                # Prefer AST-based detection of unittest.skip and unittest.skipIf
+                if isinstance(d.decorator, cst.Call) and isinstance(d.decorator.func, cst.Attribute):
+                    func = d.decorator.func
+                    if isinstance(func.value, cst.Name) and func.value.value == "unittest":
+                        if func.attr.value == "skip" and isinstance(d.decorator, cst.Call):
+                            args = d.decorator.args
+                            mark = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                            new_call = cst.Call(func=cst.Attribute(value=mark, attr=cst.Name(value="skip")), args=args)
+                            new_decs.append(cst.Decorator(decorator=new_call))
+                            self.needs_pytest_import = True
+                            continue
+                        if func.attr.value == "skipIf" and isinstance(d.decorator, cst.Call):
+                            args = d.decorator.args
+                            mark = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                            new_call = cst.Call(
+                                func=cst.Attribute(value=mark, attr=cst.Name(value="skipif")), args=args
+                            )
+                            new_decs.append(cst.Decorator(decorator=new_call))
+                            self.needs_pytest_import = True
+                            continue
+
+                # Default: keep original decorator
+                new_decs.append(d)
+            return new_decs
+
+        new_decorators = _convert_decorators(list(updated_node.decorators))
+        updated_node = updated_node.with_changes(
+            body=updated_node.body.with_changes(body=new_body), decorators=new_decorators
+        )
+
+        return updated_node
+
+    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        """Rewrite function decorators for skip/skipIf similarly to classes."""
+
+        def _convert_decorators(decorators: list[cst.Decorator]) -> list[cst.Decorator]:
+            new_decs: list[cst.Decorator] = []
+            for d in decorators:
+                # AST-aware decorator detection for unittest.skip / unittest.skipIf
+                if isinstance(d.decorator, cst.Call) and isinstance(d.decorator.func, cst.Attribute):
+                    func = d.decorator.func
+                    if isinstance(func.value, cst.Name) and func.value.value == "unittest":
+                        if func.attr.value == "skip" and isinstance(d.decorator, cst.Call):
+                            mark = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                            new_call = cst.Call(
+                                func=cst.Attribute(value=mark, attr=cst.Name(value="skip")), args=d.decorator.args
+                            )
+                            new_decs.append(cst.Decorator(decorator=new_call))
+                            self.needs_pytest_import = True
+                            continue
+                        if func.attr.value == "skipIf" and isinstance(d.decorator, cst.Call):
+                            mark = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                            new_call = cst.Call(
+                                func=cst.Attribute(value=mark, attr=cst.Name(value="skipif")), args=d.decorator.args
+                            )
+                            new_decs.append(cst.Decorator(decorator=new_call))
+                            self.needs_pytest_import = True
+                            continue
+
+                new_decs.append(d)
+            return new_decs
+
+        if updated_node.decorators:
+            new_decorators = _convert_decorators(list(updated_node.decorators))
+            return updated_node.with_changes(decorators=new_decorators)
+        return updated_node
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Visit function definitions to track setUp/tearDown methods."""
@@ -337,6 +422,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     "assertTupleEqual": transform_assert_tuple_equal,
                     "assertTupleEquals": transform_assert_tuple_equal,
                     "assertCountEqual": transform_assert_count_equal,
+                    "skipTest": transform_skip_test,
+                    "fail": transform_fail,
                     # raises / regex handled with lambdas so we can pass transformer context when needed
                     "assertRaises": transform_assert_raises,
                     "assertRaisesRegex": transform_assert_raises_regex,

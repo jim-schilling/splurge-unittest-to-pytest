@@ -180,6 +180,20 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def transform_skip_test(node: cst.Call) -> cst.CSTNode:
+    """Transform self.skipTest(msg) into pytest.skip(msg)."""
+    # Preserve any arguments (message or reason)
+    new_func = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="skip"))
+    return cst.Call(func=new_func, args=node.args)
+
+
+def transform_fail(node: cst.Call) -> cst.CSTNode:
+    """Transform self.fail(msg) into pytest.fail(msg)."""
+    # Use a Name with dotted path parsed as Name; better to use Attribute
+    new_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fail"))
+    return cst.Call(func=new_attr, args=node.args)
+
+
 def transform_assert_dict_equal(node: cst.Call) -> cst.CSTNode:
     """Transform assertDictEqual to assert ==."""
     if len(node.args) >= 2:
@@ -330,5 +344,12 @@ def transform_assertions_string_based(code: str, test_prefixes: list[str] | None
 
     # Transform unittest.main() calls
     code = re.sub(r"unittest\.main\s*\(\s*\)", r"pytest.main()", code)
+
+    # Transform skipTest and fail calls (support both self and cls)
+    # Normalize cls. to self. for the string-based fallback then perform safe replacement
+    code = code.replace("cls.skipTest(", "self.skipTest(")
+    code = safe_replace_one_arg_call(code, "skipTest", lambda a: f"pytest.skip({a})")
+    code = code.replace("cls.fail(", "self.fail(")
+    code = safe_replace_one_arg_call(code, "fail", lambda a: f"pytest.fail({a})")
 
     return code
