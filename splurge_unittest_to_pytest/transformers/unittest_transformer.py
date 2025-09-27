@@ -31,6 +31,7 @@ from .assert_transformer import (
     transform_assert_is_not,
     transform_assert_isinstance,
     transform_assert_list_equal,
+    transform_assert_multiline_equal,
     transform_assert_not_equal,
     transform_assert_not_in,
     transform_assert_not_isinstance,
@@ -389,227 +390,8 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
         except Exception:
             return updated_node
 
-    def _convert_simple_subtests_to_parametrize(
-        self, original_func: cst.FunctionDef, updated_func: cst.FunctionDef
-    ) -> cst.FunctionDef | None:
-        """Conservatively convert patterns like:
-
-        for val in iterable:
-            with self.subTest(val):
-                assert check(val)
-
-        into a pytest.mark.parametrize decorator on the function when:
-        - the For body is a single With
-        - the With calls self.subTest with a single positional arg which is a Name
-        - the With body contains a single SimpleStatementLine with an assert
-
-        Return a new FunctionDef with the added decorator and the For replaced by a simple body
-        using the new parameter name. If not applicable, return None.
-        """
-        try:
-            body_stmts = list(updated_func.body.body)
-            if len(body_stmts) == 0:
-                return None
-
-            # Look for a leading For statement that matches our pattern
-            first = body_stmts[0]
-            if not isinstance(first, cst.For):
-                return None
-
-            # Ensure For body is a single With
-            for_body = first.body
-            if not isinstance(for_body, cst.IndentedBlock) or len(for_body.body) != 1:
-                return None
-            inner = for_body.body[0]
-            if not isinstance(inner, cst.With):
-                return None
-
-            # Ensure the With has a single call to self.subTest with a single arg
-            if len(inner.items) != 1:
-                return None
-            call = inner.items[0].item
-            if not isinstance(call, cst.Call) or not isinstance(call.func, cst.Attribute):
-                return None
-            if not isinstance(call.func.value, cst.Name) or call.func.value.value not in {"self", "cls"}:
-                return None
-            if call.func.attr.value != "subTest":
-                return None
-            # Require exactly one arg (positional or keyword)
-            if len(call.args) != 1:
-                return None
-
-            single_arg = call.args[0]
-            # Support positional: subTest(i)
-            if single_arg.keyword is None:
-                arg_expr = single_arg.value
-                # Only support simple Name for positional form for safety
-                if not isinstance(arg_expr, cst.Name):
-                    return None
-                param_name = arg_expr.value
-                # We will require loop target to match this name later
-            else:
-                # Keyword form: subTest(i=i) -> keyword name is the param name, value must be Name
-                if not isinstance(single_arg.keyword, cst.Name):
-                    return None
-                kw_name = single_arg.keyword.value
-                arg_expr = single_arg.value
-                if not isinstance(arg_expr, cst.Name):
-                    return None
-                # For safety, require the keyword value to reference the loop variable (same name)
-                # e.g., for i in [..]: with self.subTest(i=i):
-                if arg_expr.value != first.target.value if isinstance(first.target, cst.Name) else True:
-                    return None
-                param_name = kw_name
-
-            # Ensure the With body contains at least one statement; allow multiple
-            inner_body = inner.body
-            if not isinstance(inner_body, cst.IndentedBlock) or len(inner_body.body) < 1:
-                return None
-            # We allow multiple statements but ensure they are simple statements (not nested defs)
-                for stmt in inner_body.body:
-                    if not isinstance(stmt, cst.SimpleStatementLine | cst.If | cst.Expr | cst.Assign):
-                        # Be conservative; if body contains complex nodes, skip parametrize
-                        return None
-
-            # At this point param_name is set from either form
-
-            # Extract param values from the For.iter if it's a literal list/tuple
-            iter_node = first.iter
-            values: list[cst.BaseExpression] = []
-
-            def _extract_from_list_or_tuple(node: cst.BaseExpression) -> list[cst.BaseExpression] | None:
-                vals: list[cst.BaseExpression] = []
-                if isinstance(node, cst.List | cst.Tuple):
-                    for el in node.elements:
-                        if isinstance(el, cst.Element):
-                            vals.append(el.value)
-                    return vals
-                return None
-
-            # 1) Direct literal list/tuple: for x in [..] or (..)
-            maybe_vals = _extract_from_list_or_tuple(iter_node)
-            if maybe_vals is not None:
-                values = maybe_vals
-            else:
-                # 2) range(start, stop, step?) with literal numeric args
-                if (
-                    isinstance(iter_node, cst.Call)
-                    and isinstance(iter_node.func, cst.Name)
-                    and iter_node.func.value == "range"
-                ):
-                    # Accept only literal integer args for range
-                    ok = True
-                    args_vals: list[int] = []
-                    for a in iter_node.args:
-                        if isinstance(a.value, cst.Integer):
-                            try:
-                                args_vals.append(int(a.value.value))
-                            except Exception:
-                                ok = False
-                                break
-                        else:
-                            ok = False
-                            break
-                    if ok and len(args_vals) in {1, 2, 3}:
-                        # Expand range to explicit values conservatively (small ranges only)
-                        # Reject very large ranges to avoid huge param lists
-                        try:
-                            if len(args_vals) == 1:
-                                start, stop, step = 0, args_vals[0], 1
-                            elif len(args_vals) == 2:
-                                start, stop = args_vals[0], args_vals[1]
-                                step = 1
-                            else:
-                                start, stop, step = args_vals[0], args_vals[1], args_vals[2]
-                            # Only allow small ranges up to 20 elements
-                            rng = list(range(start, stop, step))
-                            if len(rng) > 20:
-                                return None
-                            for v in rng:
-                                values.append(cst.Integer(value=str(v)))
-                        except Exception:
-                            return None
-                    else:
-                        return None
-                else:
-                    # 3) Name reference: check for an earlier assignment in the same function
-                    if isinstance(iter_node, cst.Name):
-                        name_to_find = iter_node.value
-                        # Walk function body statements before the For to find an assignment like: name = [..]
-                        assignments_found = None
-                        for prev in body_stmts:
-                            if prev is first:
-                                break
-                            # Only consider simple assignment statements
-                            if isinstance(prev, cst.SimpleStatementLine) and len(prev.body) == 1:
-                                expr = prev.body[0]
-                                if isinstance(expr, cst.Assign):
-                                    # single target Name
-                                    if len(expr.targets) == 1 and isinstance(expr.targets[0].target, cst.Name):
-                                        tgt = expr.targets[0].target.value
-                                        if tgt == name_to_find:
-                                            maybe_vals = _extract_from_list_or_tuple(expr.value)
-                                            if maybe_vals is not None:
-                                                assignments_found = maybe_vals
-                                                # continue scanning to ensure no reassignment occurs before For
-                                                continue
-                                            else:
-                                                assignments_found = None
-                        if assignments_found:
-                            values = assignments_found
-                        else:
-                            return None
-                    else:
-                        return None
-
-            # Build a pytest.mark.parametrize decorator using extracted values
-            param_list = cst.List([cst.Element(value=v) for v in values])
-            params_str = cst.SimpleString(value=f'"{param_name}"')
-            # Build decorator: @pytest.mark.parametrize("<param>", [<values>])
-            mark_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
-            param_call = cst.Call(
-                func=cst.Attribute(value=mark_attr, attr=cst.Name(value="parametrize")),
-                args=[
-                    cst.Arg(value=params_str),
-                    cst.Arg(value=param_list),
-                ],
-            )
-            new_decorator = cst.Decorator(decorator=param_call)
-
-            # If the function already has a parametrize decorator, be idempotent and skip
-            existing_decorators = list(updated_func.decorators or [])
-            for d in existing_decorators:
-                try:
-                    if isinstance(d.decorator, cst.Call):
-                        f = d.decorator.func
-                        # detect patterns like pytest.mark.parametrize
-                        if (
-                            isinstance(f, cst.Attribute)
-                            and isinstance(f.attr, cst.Name)
-                            and f.attr.value == "parametrize"
-                        ):
-                            return None
-                        # or direct name 'parametrize' (unlikely) — be conservative
-                        if isinstance(f, cst.Name) and f.value == "parametrize":
-                            return None
-                except Exception:
-                    continue
-
-            new_decorators = [new_decorator] + existing_decorators
-
-            # Ensure the loop target matches the subTest arg name for safe replacement
-            if not isinstance(first.target, cst.Name) or first.target.value != param_name:
-                return None
-
-            # Use the inner body statements as the new function body (preserving multiple statements)
-            new_body = cst.IndentedBlock(body=list(inner_body.body))
-
-            new_func = updated_func.with_changes(decorators=new_decorators, body=new_body)
-            # Mark that pytest import will be needed
-            self.needs_pytest_import = True
-            return new_func
-        except Exception:
-            return None
+    # _convert_simple_subtests_to_parametrize removed: implementation moved to
+    # splurge_unittest_to_pytest.transformers.subtest_transformer.convert_simple_subtests_to_parametrize
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Visit function definitions to track setUp/tearDown methods."""
@@ -779,6 +561,7 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
                     "assertCountEqual": transform_assert_count_equal,
                     "skipTest": transform_skip_test,
                     "fail": transform_fail,
+                    "assertMultiLineEqual": transform_assert_multiline_equal,
                     # raises / regex handled with lambdas so we can pass transformer context when needed
                     "assertRaises": transform_assert_raises,
                     "assertRaisesRegex": transform_assert_raises_regex,

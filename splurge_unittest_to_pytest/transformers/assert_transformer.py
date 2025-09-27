@@ -238,6 +238,22 @@ def transform_assert_tuple_equal(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def transform_assert_multiline_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertMultiLineEqual(a, b) to a simple equality assertion.
+
+    This is conservative: multiline-specific helpers in unittest mainly
+    provide nicer diffs on failure, but semantically they assert equality
+    of the two string-like values. We'll convert to `assert a == b`.
+    """
+    if len(node.args) >= 2:
+        comp = cst.Comparison(
+            left=node.args[0].value,
+            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
+        )
+        return cst.Assert(test=comp)
+    return node
+
+
 def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
     """Transform assertRaisesRegex to pytest.raises with match (approximate)."""
     if len(node.args) >= 3:
