@@ -11,10 +11,9 @@ The CLI provides several commands:
 - init-config: Initialize a configuration file with default settings
 """
 
+import subprocess
+import sys
 from pathlib import Path
-
-from splurge_unittest_to_pytest import main as main_module
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
 
 
 def run_cli_example():
@@ -82,38 +81,54 @@ if __name__ == "__main__":
     print("=== Running actual examples ===")
     print()
 
-    # First, run the CST/string transformer directly so we can reliably
-    # show the transformed code (the orchestrator pipeline may currently
-    # return the original input depending on pipeline composition).
-    print("Running transformer directly: UnittestToPytestTransformer.transform_code(...)")
-    src_text = example_file.read_text(encoding="utf-8")
-    transformer = UnittestToPytestTransformer()
-    transformed = transformer.transform_code(src_text)
+    # Run the real CLI using the module entrypoint so examples exercise
+    # the actual command-line behavior instead of calling internal APIs.
+    print("Running actual CLI: python -m splurge_unittest_to_pytest.cli migrate example_unittest.py")
 
-    # Write and show transformed output
-    direct_out = Path("example_unittest.transformed.py")
-    direct_out.write_text(transformed, encoding="utf-8")
-    print(f"Wrote direct transformed content to: {direct_out}")
-    print("=== Direct transformed preview (first 2000 chars) ===")
-    print(transformed[:2000])
-    print()
+    def run_cli_command(args: list[str]) -> None:
+        cmd = [sys.executable, "-m", "splurge_unittest_to_pytest.cli"] + args
+        print(f"\n$ {' '.join(cmd)}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except Exception as exc:
+            print(f"Failed to run CLI command: {exc}")
+            return
 
-    # Clean up the direct transformed file for the example
-    try:
-        direct_out.unlink()
-    except Exception:
-        pass
+        print("--- STDOUT ---")
+        print(proc.stdout or "<no stdout>")
+        print("--- STDERR ---")
+        print(proc.stderr or "<no stderr>")
+        print(f"Exit code: {proc.returncode}")
 
-    # Also demonstrate the programmatic migration API as a fallback
-    print("Running migration via programmatic API: main.migrate([...])")
-    res = main_module.migrate([str(example_file)])
+    # Basic migration example
+    run_cli_command(["migrate", str(example_file)])
 
-    if res.is_success():
-        print("Programmatic migrate returned success (data preview):")
-        print(res.data)
+    # Show version
+    run_cli_command(["version"])
+
+    # Attempt to locate and show the transformed output file. The pipeline
+    # creates a target file by replacing the source suffix with '.pytest.py'
+    # when no explicit target is requested.
+    target_candidate = example_file.with_suffix(".pytest.py")
+    if target_candidate.exists():
+        print("\n=== Transformed file (preview) ===")
+        try:
+            print(target_candidate.read_text(encoding="utf-8")[:4000])
+        except Exception as exc:
+            print(f"Failed to read transformed file: {exc}")
     else:
-        print("Programmatic migrate returned error:")
-        print(res.error)
+        # Fallback: find any file that starts with the example stem and is
+        # not the original or backup and print the first match.
+        for p in Path(".").glob(f"{example_file.stem}*.py"):
+            # skip original and backups
+            if p == example_file or p.suffix.endswith(".backup"):
+                continue
+            try:
+                print("\n=== Transformed file (fallback preview) ===")
+                print(p.read_text(encoding="utf-8")[:4000])
+                break
+            except Exception:
+                continue
 
     # Also clean up any backup file the orchestrator may have created
     backup_file = Path("example_unittest.py.backup")

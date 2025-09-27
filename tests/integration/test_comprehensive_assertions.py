@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test comprehensive assertion transformations."""
 
-from splurge_unittest_to_pytest.transformers import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers import UnittestToPytestCSTTransformer
 
 
 def test_comprehensive_assertions():
     """Test all the new assertion transformations."""
-    transformer = UnittestToPytestTransformer()
+    transformer = UnittestToPytestCSTTransformer()
 
     # Test comprehensive assertion support
     test_code = """

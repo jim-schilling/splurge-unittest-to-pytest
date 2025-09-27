@@ -1,7 +1,7 @@
-"""Lightweight UnittestToPytestTransformer shim.
+"""Lightweight UnittestToPytestCSTTransformer shim.
 
 This minimal implementation provides the public API used by tests
-(`UnittestToPytestTransformer.transform_code`) while delegating
+(`UnittestToPytestCSTTransformer.transform_code`) while delegating
 heavy-duty assertion string transforms to the extracted
 `assert_transformer.transform_assertions_string_based` helpers.
 
@@ -12,15 +12,10 @@ smaller modules; this shim keeps compatibility for the test-suite.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 
 import libcst as cst
+from libcst.metadata import MetadataWrapper, PositionProvider
 
-from ..helpers.utility import (
-    safe_replace_one_arg_call,
-    safe_replace_two_arg_call,
-    split_two_args_balanced,
-)
 from .assert_transformer import (
     transform_assert_count_equal,
     transform_assert_dict_equal,
@@ -45,89 +40,23 @@ from .assert_transformer import (
     transform_assertions_string_based,
     transform_fail,
     transform_skip_test,
+    wrap_assert_logs_in_block,
 )
 from .fixture_transformer import (
     create_class_fixture,
     create_instance_fixture,
 )
+from .import_transformer import add_pytest_imports, remove_unittest_imports_if_unused
+from .skip_transformer import rewrite_skip_decorators
 from .subtest_transformer import (
     body_uses_subtests,
     convert_simple_subtests_to_parametrize,
     convert_subtests_in_body,
     ensure_subtests_param,
 )
+from .transformer_helper import ReplacementApplier, ReplacementRegistry
 
 # mypy: ignore-errors
-
-
-class UnittestToPytestTransformer:
-    """Minimal transformer exposing transform_code used by tests.
-
-    This intentionally implements a conservative, string-based
-    transformation pipeline that is good enough for the unit tests in
-    this repository. It does not attempt to be a full CST transformer
-    (that logic lives in other modules).
-    """
-
-    def __init__(self, test_prefixes: list[str] | None = None, parametrize: bool = False) -> None:
-        self.test_prefixes = test_prefixes or ["test"]
-        self.parametrize = parametrize
-
-    def _add_pytest_import(self, code: str) -> str:
-        if "import pytest" in code or "from pytest" in code:
-            return code
-
-        # Find insertion point: first non-empty, non-shebang, non-comment line
-        lines = code.splitlines()
-        insert_at = 0
-        for i, line in enumerate(lines):
-            s = line.strip()
-            if not s or s.startswith("#") or s.startswith('"""') or s.startswith("'''"):
-                continue
-            insert_at = i
-            break
-
-        lines.insert(insert_at, "import pytest")
-        lines.insert(insert_at + 1, "")
-        return "\n".join(lines)
-
-    def transform_code(self, code: str) -> str:
-        """Transform unittest-style code into pytest-style code (best-effort).
-
-        The implementation is intentionally small: it removes
-        `unittest.TestCase` inheritance, delegates assertion rewrites to
-        the string-based helpers and ensures `import pytest` is present
-        when appropriate.
-        """
-        try:
-            # Parse to ensure valid Python; if parsing fails, return original
-            cst.parse_module(code)
-        except Exception:
-            # If parsing fails, return original code (tests expect a string)
-            return code
-
-        # Remove unittest.TestCase inheritance in class definitions
-        code = re.sub(r"class\s+(\w+)\s*\(\s*unittest\.TestCase\s*\)", r"class \1:", code)
-
-        # Apply assertion-level string transforms (fallback implementation)
-        code = transform_assertions_string_based(code, test_prefixes=self.test_prefixes)
-
-        # Replace explicit unittest.main() with pytest.main()
-        code = re.sub(r"unittest\.main\s*\(\s*\)", "pytest.main()", code)
-
-        # If we've removed TestCase or inserted pytest-specific code, ensure pytest import
-        if "import pytest" not in code:
-            # Heuristic: add pytest import when the original code referenced unittest.TestCase
-            # or if transformed code now contains pytest-specific markers
-            if (
-                "unittest.TestCase" in code
-                or "pytest." in code
-                or "with self.assertRaises" in code
-                or "assert " in code
-            ):
-                code = self._add_pytest_import(code)
-
-        return code
 
 
 """CST-based transformer for unittest to pytest conversion."""
@@ -173,6 +102,20 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
         self.test_prefixes: list[str] = (test_prefixes or ["test"]) or ["test"]
         # Whether to attempt conservative subTest -> parametrize transforms
         self.parametrize = parametrize
+        # Replacement registry for two-pass metadata-based replacements
+        self.replacement_registry = ReplacementRegistry()
+
+    # Require PositionProvider metadata so we can record precise source spans
+    METADATA_DEPENDENCIES = (PositionProvider,)
+
+    def record_replacement(self, old_node: cst.CSTNode, new_node: cst.CSTNode) -> None:
+        """Record a planned replacement for old_node -> new_node using PositionProvider."""
+        try:
+            pos = self.get_metadata(PositionProvider, old_node)
+            self.replacement_registry.record(pos, new_node)
+        except Exception:
+            # If metadata isn't available for some reason, skip recording
+            pass
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         """Visit class definition to check for unittest.TestCase inheritance."""
@@ -191,50 +134,7 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
                     break
         return None  # Continue traversal
 
-    def _rewrite_skip_decorators(self, decorators: list[cst.Decorator] | None) -> list[cst.Decorator] | None:
-        """Rewrite decorators like `@unittest.skip` and `@unittest.skipIf` to
-        `@pytest.mark.skip` and `@pytest.mark.skipif` respectively.
-
-        Returns updated decorator list or None.
-        """
-        if not decorators:
-            return decorators
-
-        new_decorators: list[cst.Decorator] = []
-        changed = False
-        for d in decorators:
-            try:
-                dec = d.decorator
-                # We expect a Call: unittest.skip(...)
-                if isinstance(dec, cst.Call) and isinstance(dec.func, cst.Attribute):
-                    owner = dec.func.value
-                    name = dec.func.attr
-                    if isinstance(owner, cst.Name) and owner.value == "unittest" and isinstance(name, cst.Name):
-                        if name.value == "skip":
-                            # Build @pytest.mark.skip(<args...>)
-                            mark_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
-                            new_call = cst.Call(
-                                func=cst.Attribute(value=mark_attr, attr=cst.Name(value="skip")), args=dec.args
-                            )
-                            new_decorators.append(cst.Decorator(decorator=new_call))
-                            self.needs_pytest_import = True
-                            changed = True
-                            continue
-                        elif name.value == "skipIf":
-                            mark_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
-                            new_call = cst.Call(
-                                func=cst.Attribute(value=mark_attr, attr=cst.Name(value="skipif")), args=dec.args
-                            )
-                            new_decorators.append(cst.Decorator(decorator=new_call))
-                            self.needs_pytest_import = True
-                            changed = True
-                            continue
-                # Otherwise keep as-is
-                new_decorators.append(d)
-            except Exception:
-                new_decorators.append(d)
-
-        return new_decorators if changed else decorators
+    # rewrite_skip_decorators moved to transformers.skip_transformer.rewrite_skip_decorators
 
     def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
         """Inject a module-scoped autouse fixture if setUpModule/tearDownModule were present."""
@@ -367,9 +267,11 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
         """Handle function-level rewrites: parametrize conversion, subTest -> subtests, and assertLogs wrapping."""
         try:
             # Rewrite function-level decorators (skip/skipIf)
-            updated_node = updated_node.with_changes(
-                decorators=self._rewrite_skip_decorators(list(updated_node.decorators or []))
-            )
+            orig_decorators = list(updated_node.decorators or [])
+            new_decorators = rewrite_skip_decorators(orig_decorators)
+            if new_decorators is not None and new_decorators is not orig_decorators:
+                self.needs_pytest_import = True
+            updated_node = updated_node.with_changes(decorators=new_decorators)
 
             # First, try conservative parametrize conversion for simple for+subTest patterns
             if getattr(self, "parametrize", False):
@@ -384,14 +286,11 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
             if body_uses_subtests(body_with_subtests):
                 updated_node = ensure_subtests_param(updated_node)
 
-            # Then wrap assertLogs/assertNoLogs patterns
-            new_body = self._wrap_assert_logs_in_block(body_with_subtests)
+            # Then wrap assertLogs/assertNoLogs patterns using shared helper
+            new_body = wrap_assert_logs_in_block(body_with_subtests)
             return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
         except Exception:
             return updated_node
-
-    # _convert_simple_subtests_to_parametrize removed: implementation moved to
-    # splurge_unittest_to_pytest.transformers.subtest_transformer.convert_simple_subtests_to_parametrize
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Visit function definitions to track setUp/tearDown methods."""
@@ -457,54 +356,6 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
                 else:
                     self.re_alias = "re"
         return True
-
-    def _wrap_assert_logs_in_block(self, statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
-        """Scan a list of statements and wrap `self.assertLogs`/`self.assertNoLogs`
-        calls followed by a statement into a With block that contains the following
-        statement as its body.
-
-        This mirrors the string-based fallback which only indents the immediate
-        next non-empty line under the context manager.
-        """
-        out: list[cst.BaseStatement] = []
-        i = 0
-        while i < len(statements):
-            stmt = statements[i]
-            # Only consider simple statement lines with a single Expr containing a Call
-            wrapped = False
-            if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
-                expr = stmt.body[0].value
-                if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
-                    func = expr.func
-                    if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
-                        if func.attr.value in {"assertLogs", "assertNoLogs"}:
-                            # There is a following statement to wrap
-                            if i + 1 < len(statements):
-                                next_stmt = statements[i + 1]
-                                # Create With node using the same call as the context expression
-                                with_item = cst.WithItem(cst.Call(func=expr.func, args=expr.args))
-                                # Build the block body using the next statement as the single body element
-                                body_block = cst.IndentedBlock(body=[next_stmt])
-                                with_node = cst.With(body=body_block, items=[with_item])
-                                out.append(with_node)
-                                i += 2
-                                wrapped = True
-            if not wrapped:
-                out.append(stmt)
-                i += 1
-        return out
-
-    def _convert_subtests_in_body(self, statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
-        # Delegate to implementation in subtest module
-        return convert_subtests_in_body(statements)
-
-    def _body_uses_subtests(self, statements: list[cst.BaseStatement]) -> bool:
-        # Delegate detection to subtest module
-        return body_uses_subtests(statements)
-
-    def _ensure_subtests_param(self, func: cst.FunctionDef) -> cst.FunctionDef:
-        # Delegate parameter injection to subtest module
-        return ensure_subtests_param(func)
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> bool | None:
         """Detect `from re import search` (with optional alias) and capture the local name."""
@@ -582,8 +433,14 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
                         # If we transformed regex assertions, note that we need `re`
                         if method_name in {"assertRegex", "assertNotRegex"}:
                             self.needs_re_import = True
-                        # new_node may be a cst.Assert (an expression node) or other CST node;
-                        # annotate return as BaseExpression to satisfy libcst typed transformer signature
+                        # new_node may be a statement (e.g., cst.Assert) or an expression.
+                        # If it's a statement, record a replacement to apply in a second pass
+                        # keyed by source position. Otherwise return the expression.
+                        if isinstance(new_node, cst.BaseStatement):
+                            # schedule replacement and keep the Call expression intact for now
+                            self.record_replacement(original_node, new_node)
+                            return updated_node
+                        # expression-level replacement is safe to return
                         return new_node  # type: ignore[return-value]
                     except Exception:
                         # On any transformation error, fall back to the original node
@@ -617,39 +474,22 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
 
         return True  # Continue traversal
 
-    # create_class_fixture moved to transformers.fixture_transformer.create_class_fixture
-
-    # create_instance_fixture moved to transformers.fixture_transformer.create_instance_fixture
-
-    # create_teardown_fixture moved to transformers.fixture_transformer.create_teardown_fixture
-
-    # Thin wrapper methods for assertion transforms removed; mapping uses functions from assert_transformer
-
-    def _replace_call_node(self, old_node: cst.Call, new_node: cst.Call) -> None:
-        """Helper method to replace a call node in the CST.
-
-        This is a simplified approach - in a full implementation,
-        this would properly integrate with libcst's node replacement mechanisms.
-        Since we're currently using string-based transformations, this method
-        is not actively used but is provided for future CST-based implementations.
-        """
-        # In a full CST-based implementation, this would:
-        # 1. Store the mapping of old_node -> new_node
-        # 2. Use libcst's node replacement mechanisms
-        # 3. Handle the replacement during the leave phase
-
-        # For now, this is a no-op since we use string-based transformations
-        # But we keep the method signature for future implementation
-        pass
-
     def transform_code(self, code: str) -> str:
         """Transform unittest code to pytest code using CST first, then fallback string ops."""
         try:
             # Parse the code into CST to understand the structure
             module = cst.parse_module(code)
 
-            # Apply CST transformer (handles fixture injection)
-            transformed_cst = module.visit(self)
+            # Apply CST transformer (handles fixture injection). Use MetadataWrapper
+            # so our transformer can access PositionProvider metadata for recording
+            # replacements keyed by source spans.
+            wrapper = MetadataWrapper(module)
+            transformed_cst = wrapper.visit(self)
+
+            # If we recorded replacements, run a second pass to apply them.
+            if self.replacement_registry.replacements:
+                transformed_cst = MetadataWrapper(transformed_cst).visit(ReplacementApplier(self.replacement_registry))
+
             transformed_code = transformed_cst.code
 
             # Also perform simple string-based removal of 'unittest.TestCase' inheritance
@@ -659,11 +499,12 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
             # Transform assertion methods using string replacement fallback
             transformed_code = transform_assertions_string_based(transformed_code, test_prefixes=self.test_prefixes)
 
-            # Add necessary imports
-            transformed_code = self._add_pytest_imports(transformed_code)
+            # Add necessary imports (pass transformer so import_transformer can
+            # consult attributes like needs_re_import/re_alias/re_search_name)
+            transformed_code = add_pytest_imports(transformed_code, transformer=self)
 
             # Remove unittest imports if no longer used
-            transformed_code = self._remove_unittest_imports_if_unused(transformed_code)
+            transformed_code = remove_unittest_imports_if_unused(transformed_code)
 
             # Validate the result with CST
             try:
@@ -679,106 +520,37 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
             return error_msg + code
 
     def _transform_unittest_inheritance(self, code: str) -> str:
-        """Remove unittest.TestCase inheritance from class definitions."""
-        # Simple string replacement for inheritance
-        import re
+        """Use libcst to remove `unittest.TestCase` inheritance from class defs.
 
-        code = re.sub(r"class\s+(\w+)\s*\(\s*unittest\.TestCase\s*\)", r"class \1", code)
-        return code
+        This is safer than regex and preserves formatting more reliably.
+        """
+        try:
+            module = cst.parse_module(code)
 
-    def _split_two_args_balanced(self, s: str) -> tuple[str, str] | None:
-        return split_two_args_balanced(s)
+            class Rewriter(cst.CSTTransformer):
+                def leave_ClassDef(self, original: cst.ClassDef, updated: cst.ClassDef) -> cst.ClassDef:
+                    new_bases = []
+                    changed = False
+                    for base in updated.bases:
+                        try:
+                            if isinstance(base.value, cst.Attribute) and isinstance(base.value.value, cst.Name):
+                                if base.value.value.value == "unittest" and base.value.attr.value == "TestCase":
+                                    changed = True
+                                    continue
+                        except Exception:
+                            pass
+                        new_bases.append(base)
+                    if changed:
+                        return updated.with_changes(bases=new_bases)
+                    return updated
 
-    def _safe_replace_two_arg_call(self, code: str, func_name: str, format_fn: Callable[[str, str], str]) -> str:
-        return safe_replace_two_arg_call(code, func_name, format_fn)
-
-    def _safe_replace_one_arg_call(self, code: str, func_name: str, format_fn: Callable[[str], str]) -> str:
-        return safe_replace_one_arg_call(code, func_name, format_fn)
-
-    # String-based assertion fallback moved to transform_assertions_string_based in assert_transformer
-
-    # Fixture string-based fallback moved to transformers.fixture_transformer.transform_fixtures_string_based
-
-    def _add_pytest_imports(self, code: str) -> str:
-        """Add necessary pytest imports if not already present."""
-
-        # Check if pytest is already imported
-        if "import pytest" not in code and "from pytest" not in code:
-            # Add pytest import at the top
-            lines = code.split("\n")
-            insert_index = 0
-
-            # Find the first non-empty line
-            for i, line in enumerate(lines):
-                if line.strip() and not line.strip().startswith("#"):
-                    insert_index = i
-                    break
-
-            lines.insert(insert_index, "import pytest")
-            lines.insert(insert_index + 1, "")
-            code = "\n".join(lines)
-
-        # If any transforms produced regex uses, ensure `re` is imported (respect alias if present)
-        if getattr(self, "needs_re_import", False):
-            # If caller did `from re import search`, there's no need to add an import
-            if getattr(self, "re_search_name", None):
+            new_mod = module.visit(Rewriter())
+            out_code = new_mod.code
+            # If we removed bases and left empty parentheses, normalize to no-parens form
+            try:
+                out_code = re.sub(r"class\s+(\w+)\s*\(\s*\)\s*:", r"class \1:", out_code)
+            except Exception:
                 pass
-            else:
-                # If an alias was detected in original imports, use it; otherwise add `import re`
-                re_name = getattr(self, "re_alias", None) or "re"
-                # If the chosen name isn't present as an import, add it
-                if f"import {re_name}" not in code and f"from {re_name} import" not in code:
-                    lines = code.split("\n")
-                    insert_index = 0
-                    for i, line in enumerate(lines):
-                        if line.strip() and not line.strip().startswith("#"):
-                            insert_index = i
-                            break
-                    # If alias is not the default 're' (i.e., re_name != 're'), we still add 'import re as <alias>'
-                    if re_name == "re":
-                        lines.insert(insert_index, "import re")
-                    else:
-                        lines.insert(insert_index, f"import re as {re_name}")
-                    lines.insert(insert_index + 1, "")
-                    code = "\n".join(lines)
-
-        return code
-
-    def _remove_unittest_imports_if_unused(self, code: str) -> str:
-        """Remove `import unittest` lines if `unittest` is no longer referenced."""
-        lines = code.split("\n")
-        candidate_indices: list[int] = []
-        non_candidate_lines: list[str] = []
-
-        for idx, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("import unittest") or stripped.startswith("from unittest import"):
-                candidate_indices.append(idx)
-            else:
-                non_candidate_lines.append(line)
-
-        # If no candidates, return as-is
-        if not candidate_indices:
+            return out_code
+        except Exception:
             return code
-
-        rest = "\n".join(non_candidate_lines)
-        # If 'unittest' is not referenced elsewhere, drop the import lines
-        if "unittest" not in rest:
-            kept_lines = [line for i, line in enumerate(lines) if i not in candidate_indices]
-            return "\n".join(kept_lines)
-
-        return code
-
-
-# Public API compatibility: historically the package exported
-# `UnittestToPytestTransformer` as the main transformer class. During
-# refactors we introduced `UnittestToPytestCSTTransformer` (the full
-# libcst-based implementation) and kept a lightweight shim under the
-# original name. Many tests and callers expect a CST-style transformer
-# (with methods like `on_visit` and attributes such as
-# `needs_pytest_import`), so expose the CST implementation under the
-# historical public name to preserve runtime behavior.
-# Preserve the original lightweight shim under a historical alias in case
-# external code depended on the old name. Prefer explicit use of the
-# CST implementation by importing `UnittestToPytestCSTTransformer`.
-HistoricalUnittestToPytestTransformer = UnittestToPytestTransformer  # type: ignore

@@ -180,6 +180,37 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def wrap_assert_logs_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
+    """Wrap `self.assertLogs`/`self.assertNoLogs` calls followed by a statement into a With block.
+
+    This mirrors the previous in-transformer behavior moved here so it can be reused
+    by both CST and string-based pipelines.
+    """
+    out: list[cst.BaseStatement] = []
+    i = 0
+    while i < len(statements):
+        stmt = statements[i]
+        wrapped = False
+        if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
+            expr = stmt.body[0].value
+            if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
+                func = expr.func
+                if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
+                    if func.attr.value in {"assertLogs", "assertNoLogs"}:
+                        if i + 1 < len(statements):
+                            next_stmt = statements[i + 1]
+                            with_item = cst.WithItem(cst.Call(func=expr.func, args=expr.args))
+                            body_block = cst.IndentedBlock(body=[next_stmt])
+                            with_node = cst.With(body=body_block, items=[with_item])
+                            out.append(with_node)
+                            i += 2
+                            wrapped = True
+        if not wrapped:
+            out.append(stmt)
+            i += 1
+    return out
+
+
 def transform_skip_test(node: cst.Call) -> cst.CSTNode:
     """Transform self.skipTest(msg) into pytest.skip(msg)."""
     # Preserve any arguments (message or reason)
@@ -294,7 +325,7 @@ def transform_assertions_string_based(code: str, test_prefixes: list[str] | None
     """Transform unittest assertion methods using string replacement.
 
     This was previously the `_transform_assertions_string_based` method on the
-    `UnittestToPytestTransformer` class. It is extracted for reuse and to
+    `UnittestToPytestCSTTransformer` class. It is extracted for reuse and to
     decouple string-based fallbacks from the transformer instance.
     """
 

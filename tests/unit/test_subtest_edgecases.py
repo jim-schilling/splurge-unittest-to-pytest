@@ -1,12 +1,12 @@
 import libcst as cst
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer as UnittestToPytestTransformer,
+    UnittestToPytestCSTTransformer,
 )
 
 
 def _transform(code: str) -> str:
-    tr = UnittestToPytestTransformer()
+    tr = UnittestToPytestCSTTransformer()
     return tr.transform_code(code)
 
 

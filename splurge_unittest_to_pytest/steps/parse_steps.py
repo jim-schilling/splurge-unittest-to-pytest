@@ -5,7 +5,7 @@ import libcst as cst
 from ..context import PipelineContext
 from ..pipeline import Step
 from ..result import Result
-from ..transformers import UnittestToPytestTransformer
+from ..transformers import UnittestToPytestCSTTransformer
 
 
 class ParseSourceStep(Step[str, cst.Module]):
@@ -27,7 +27,7 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
         """Apply unittest to pytest transformations."""
         try:
             # Use full transform_code to include assertion replacements and imports
-            transformer = UnittestToPytestTransformer(
+            transformer = UnittestToPytestCSTTransformer(
                 test_prefixes=context.config.test_method_prefixes, parametrize=context.config.parametrize
             )
             source_code: str = module.code

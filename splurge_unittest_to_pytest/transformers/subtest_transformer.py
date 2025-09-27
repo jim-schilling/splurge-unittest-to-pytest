@@ -29,7 +29,7 @@ def convert_simple_subtests_to_parametrize(
 ) -> cst.FunctionDef | None:
     """Conservative conversion delegating sanity checks to avoid incorrect rewrites.
 
-    `transformer` is the instance of the UnittestToPytestTransformer and is used
+    `transformer` is the instance of the UnittestToPytestCSTTransformer and is used
     to mark imported needs (e.g., transformer.needs_pytest_import = True).
     """
     try:
@@ -37,8 +37,15 @@ def convert_simple_subtests_to_parametrize(
         if len(body_stmts) == 0:
             return None
 
-        first = body_stmts[0]
-        if not isinstance(first, cst.For):
+        # find the first for-loop in the function body (may not be the very first stmt)
+        first = None
+        first_index = -1
+        for i, stmt in enumerate(body_stmts):
+            if isinstance(stmt, cst.For):
+                first = stmt
+                first_index = i
+                break
+        if first is None:
             return None
 
         for_body = first.body
@@ -133,9 +140,8 @@ def convert_simple_subtests_to_parametrize(
                 if isinstance(iter_node, cst.Name):
                     name_to_find = iter_node.value
                     assignments_found = None
-                    for prev in body_stmts:
-                        if prev is first:
-                            break
+                    # search only the statements that come before the for-loop
+                    for prev in body_stmts[:first_index]:
                         if isinstance(prev, cst.SimpleStatementLine) and len(prev.body) == 1:
                             expr = prev.body[0]
                             if isinstance(expr, cst.Assign):

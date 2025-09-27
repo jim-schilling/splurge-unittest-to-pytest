@@ -1,19 +1,19 @@
-"""Unit tests for UnittestToPytestTransformer public APIs."""
+"""Unit tests for UnittestToPytestCSTTransformer public APIs."""
 
 import libcst as cst
 import pytest
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer as UnittestToPytestTransformer,
+    UnittestToPytestCSTTransformer,
 )
 
 
-class TestUnittestToPytestTransformerAPI:
-    """Test suite for UnittestToPytestTransformer public API behavior."""
+class TestUnittestToPytestCSTTransformerAPI:
+    """Test suite for UnittestToPytestCSTTransformer public API behavior."""
 
     def setup_method(self):
         """Set up fresh transformer for each test."""
-        self.transformer = UnittestToPytestTransformer()
+        self.transformer = UnittestToPytestCSTTransformer()
 
     def test_initial_state(self):
         """Test that transformer initializes with correct default state."""

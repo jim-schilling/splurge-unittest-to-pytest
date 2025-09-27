@@ -30,7 +30,7 @@ from splurge_unittest_to_pytest.exceptions import (
 from splurge_unittest_to_pytest.result import Result
 from splurge_unittest_to_pytest.steps.output_steps import WriteOutputStep
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer as UnittestToPytestTransformer,
+    UnittestToPytestCSTTransformer,
 )
 
 
@@ -156,7 +156,7 @@ def test_write_output_step_dry_run(tmp_path):
 
 
 def test_transformer_error_path_pytest_mock(mocker):
-    tr = UnittestToPytestTransformer()
+    tr = UnittestToPytestCSTTransformer()
     # force parse failure branch inside transform_code
     mocker.patch("libcst.parse_module", side_effect=Exception("parse fail"))
     out = tr.transform_code("class A: pass")
