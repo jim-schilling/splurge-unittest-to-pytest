@@ -47,7 +47,7 @@ class OutputJob(Job[str, str]):
             initial_input: Input data for the job
 
         Returns:
-            Result containing the source code that was written
+            Result containing the path to the file that was written
         """
         self._logger.info(f"Starting output job for {context.target_file}")
 

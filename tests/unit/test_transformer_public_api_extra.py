@@ -1,10 +1,12 @@
 import pytest
 
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import (
+    UnittestToPytestCSTTransformer,
+)
 
 
 def make(code: str) -> str:
-    return UnittestToPytestTransformer().transform_code(code)
+    return UnittestToPytestCSTTransformer().transform_code(code)
 
 
 def test_transformer_various_assertions():

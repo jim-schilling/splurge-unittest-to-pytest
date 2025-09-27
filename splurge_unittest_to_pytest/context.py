@@ -59,6 +59,11 @@ class MigrationConfig:
     recurse_directories: bool = True
     preserve_structure: bool = True
     backup_originals: bool = True
+    # Suffix appended to target filename stem (default: '')
+    target_suffix: str = ""
+    # If set, override the extension on target files (e.g. '.py' or 'txt').
+    # None means preserve original extension.
+    target_extension: str | None = None
 
     # Transformation settings
     convert_classes_to_functions: bool = True
@@ -77,6 +82,8 @@ class MigrationConfig:
     fail_fast: bool = False
     parallel_processing: bool = True
     max_workers: int = 4
+    # Optional transforms
+    parametrize: bool = False
 
     # Reporting settings
     verbose: bool = False

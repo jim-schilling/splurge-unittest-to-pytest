@@ -29,7 +29,9 @@ from splurge_unittest_to_pytest.exceptions import (
 )
 from splurge_unittest_to_pytest.result import Result
 from splurge_unittest_to_pytest.steps.output_steps import WriteOutputStep
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import (
+    UnittestToPytestCSTTransformer,
+)
 
 
 def test_cli_version_command():
@@ -59,7 +61,9 @@ def test_events_bus_and_logging_subscriber(caplog):
     bus = EventBus()
     logger = LoggingSubscriber(bus)
 
-    ctx = PipelineContext.create(source_file=__file__, config=MigrationConfig())
+    # Use a temporary target so we don't write next to test sources
+    target = Path("/tmp") / "out_events.py"
+    ctx = PipelineContext.create(source_file=__file__, target_file=str(target), config=MigrationConfig())
     bus.publish(PipelineStartedEvent(timestamp=1.0, run_id=ctx.run_id, context=ctx))
     bus.publish(StepStartedEvent(timestamp=1.0, run_id=ctx.run_id, context=ctx, step_name="s", step_type="S"))
     bus.publish(
@@ -85,7 +89,8 @@ def test_events_bus_and_logging_subscriber(caplog):
 
 def test_event_timer_publishes(mocker):
     bus = EventBus()
-    ctx = PipelineContext.create(source_file=__file__, config=MigrationConfig())
+    target = Path("/tmp") / "out_timer.py"
+    ctx = PipelineContext.create(source_file=__file__, target_file=str(target), config=MigrationConfig())
     timer = EventTimer(bus, ctx.run_id)
 
     received = {"step": False, "job": False}
@@ -115,7 +120,7 @@ def test_context_public_api_and_immutability(tmp_path):
 
     src = tmp_path / "x.py"
     src.write_text("print(1)\n")
-    ctx = PipelineContext.create(source_file=str(src), config=cfg)
+    ctx = PipelineContext.create(source_file=str(src), target_file=str(tmp_path / "out_ctx.py"), config=cfg)
     d = ctx.to_dict()
     assert d["source_file"].endswith("x.py")
 
@@ -144,15 +149,14 @@ def test_write_output_step_dry_run(tmp_path):
     cfg = MigrationConfig(dry_run=True)
     src = tmp_path / "in.py"
     src.write_text("print(1)\n")
-    ctx = PipelineContext.create(source_file=str(src), config=cfg)
-    object.__setattr__(ctx, "_target_file", str(tmp_path / "out.py"))
+    ctx = PipelineContext.create(source_file=str(src), target_file=str(tmp_path / "out.py"), config=cfg)
     res = WriteOutputStep("write", EventBus()).run(ctx, "x")
     assert res.is_success()
     assert res.metadata.get("dry_run") is True
 
 
 def test_transformer_error_path_pytest_mock(mocker):
-    tr = UnittestToPytestTransformer()
+    tr = UnittestToPytestCSTTransformer()
     # force parse failure branch inside transform_code
     mocker.patch("libcst.parse_module", side_effect=Exception("parse fail"))
     out = tr.transform_code("class A: pass")

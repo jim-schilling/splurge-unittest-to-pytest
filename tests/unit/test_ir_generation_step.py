@@ -7,8 +7,90 @@ import pytest
 
 from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
 from splurge_unittest_to_pytest.events import EventBus
+from splurge_unittest_to_pytest.ir import ImportStatement
+from splurge_unittest_to_pytest.pattern_analyzer import UnittestPatternAnalyzer
 from splurge_unittest_to_pytest.result import Result
 from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
+
+
+class DummyContext:
+    def __init__(self, source_file: str | None = None):
+        self.source_file = source_file
+
+
+def test_execute_parses_various_imports_and_sets_module_name():
+    code = """
+import os as operating_system
+import sys
+from pathlib import Path
+from package import *
+
+class TestExample(unittest.TestCase):
+    def setUp(self):
+        self.value = 1
+
+    def test_one(self):
+        self.assertTrue(self.value == 1)
+"""
+
+    module = cst.parse_module(code)
+    step = UnittestToIRStep("ir", EventBus())
+    ctx = DummyContext(source_file="some/path/my_tests.py")
+
+    res = step.execute(ctx, module)
+    assert isinstance(res, Result)
+    assert res.is_success()
+
+    ir = res.data
+    # Module name should be derived from the context source_file
+    assert ir.name == "my_tests"
+
+    # Imports should have been collected (package import star -> imported_items ['*'])
+    mods = {imp.module: imp for imp in ir.imports}
+    assert "os" in mods or "operating_system" in mods
+    assert any(imp.imported_items == ["*"] for imp in ir.imports if imp.import_type == "from")
+
+
+def test_parse_from_import_alias_and_relative_star():
+    code = """
+from os import path as os_path
+from . import something
+from otherpkg import *
+"""
+
+    module = cst.parse_module(code)
+    step = UnittestToIRStep("ir", EventBus())
+    ctx = DummyContext(source_file=None)
+
+    res = step.execute(ctx, module)
+    assert res.is_success()
+    ir = res.data
+
+    # Find os import with alias
+    found = False
+    for imp in ir.imports:
+        if imp.module == "os" and imp.alias == "os_path":
+            found = True
+    assert found
+
+    # Relative import should create module=="" (per _get_importfrom_module)
+    assert any(imp.module == "" for imp in ir.imports if imp.import_type == "from")
+
+
+def test_execute_returns_failure_when_analyzer_raises(monkeypatch):
+    module = cst.parse_module("print('ok')")
+    step = UnittestToIRStep("ir", EventBus())
+    ctx = DummyContext(source_file="x.py")
+
+    def raise_on_analyze(self, code):
+        raise RuntimeError("analyzer boom")
+
+    monkeypatch.setattr(UnittestPatternAnalyzer, "analyze_module", raise_on_analyze, raising=True)
+
+    res = step.execute(ctx, module)
+    assert res.is_error()
+    assert isinstance(res.error, Exception)
+    assert "analyzer boom" in str(res.error)
 
 
 class TestUnittestToIRStepAPI:

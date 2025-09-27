@@ -13,7 +13,9 @@ class WriteOutputStep(Step[str, str]):
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
         """Write generated code to target file."""
         if context.config.dry_run:
-            return Result.success(code, metadata={"dry_run": True, "target_file": context.target_file})
+            return Result.success(
+                str(context.target_file), metadata={"dry_run": True, "target_file": context.target_file}
+            )
 
         try:
             # Ensure target directory exists
@@ -22,6 +24,7 @@ class WriteOutputStep(Step[str, str]):
 
             with open(context.target_file, "w", encoding="utf-8") as f:
                 f.write(code)
-            return Result.success(code)
+            # Return the path of the file we wrote so callers can use it
+            return Result.success(str(context.target_file))
         except OSError as e:
             return Result.failure(e)

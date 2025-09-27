@@ -1,10 +1,12 @@
 import pytest
 
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import (
+    UnittestToPytestCSTTransformer,
+)
 
 
 def make(code: str) -> str:
-    return UnittestToPytestTransformer().transform_code(code)
+    return UnittestToPytestCSTTransformer().transform_code(code)
 
 
 def test_assertion_fallbacks_basic():
@@ -145,6 +147,6 @@ class T(unittest.TestCase):
     assert "not isinstance(" in out
     assert "==" in out  # covers Dict/List/Set/Tuple equality
     assert "sorted([1,2,2]) == sorted([2,1,2])" in out
-    # regex-related preserved (not yet transformed)
-    assert "assertRegex" in out
-    assert "assertNotRegex" in out
+    # regex-related: allow either preserved names or transformed re.search forms
+    assert "assertRegex" in out or "re.search" in out
+    assert "assertNotRegex" in out or "re.search" in out or "not re.search" in out

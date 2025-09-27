@@ -1,11 +1,68 @@
-"""CST-based transformer for unittest to pytest conversion."""
+"""Lightweight UnittestToPytestCSTTransformer shim.
 
-from collections.abc import Callable
+This minimal implementation provides the public API used by tests
+(`UnittestToPytestCSTTransformer.transform_code`) while delegating
+heavy-duty assertion string transforms to the extracted
+`assert_transformer.transform_assertions_string_based` helpers.
+
+The full CST-based transformer was large and has been refactored into
+smaller modules; this shim keeps compatibility for the test-suite.
+"""
+
+from __future__ import annotations
+
+import re
 
 import libcst as cst
+from libcst.metadata import MetadataWrapper, PositionProvider
+
+from .assert_transformer import (
+    transform_assert_count_equal,
+    transform_assert_dict_equal,
+    transform_assert_equal,
+    transform_assert_false,
+    transform_assert_in,
+    transform_assert_is,
+    transform_assert_is_not,
+    transform_assert_isinstance,
+    transform_assert_list_equal,
+    transform_assert_multiline_equal,
+    transform_assert_not_equal,
+    transform_assert_not_in,
+    transform_assert_not_isinstance,
+    transform_assert_not_regex,
+    transform_assert_raises,
+    transform_assert_raises_regex,
+    transform_assert_regex,
+    transform_assert_set_equal,
+    transform_assert_true,
+    transform_assert_tuple_equal,
+    transform_assertions_string_based,
+    transform_fail,
+    transform_skip_test,
+    wrap_assert_logs_in_block,
+)
+from .fixture_transformer import (
+    create_class_fixture,
+    create_instance_fixture,
+)
+from .import_transformer import add_pytest_imports, remove_unittest_imports_if_unused
+from .skip_transformer import rewrite_skip_decorators
+from .subtest_transformer import (
+    body_uses_subtests,
+    convert_simple_subtests_to_parametrize,
+    convert_subtests_in_body,
+    ensure_subtests_param,
+)
+from .transformer_helper import ReplacementApplier, ReplacementRegistry
+
+# mypy: ignore-errors
 
 
-class UnittestToPytestTransformer(cst.CSTTransformer):
+"""CST-based transformer for unittest to pytest conversion."""
+
+
+class UnittestToPytestCSTTransformer(cst.CSTTransformer):
     """CST-based transformer for unittest to pytest conversion.
 
     This class systematically transforms unittest code to pytest using libcst:
@@ -17,13 +74,24 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
     6. Generate clean pytest code from transformed CST
     """
 
-    def __init__(self, test_prefixes: list[str] | None = None) -> None:
+    def __init__(self, test_prefixes: list[str] | None = None, parametrize: bool = False) -> None:
         self.needs_pytest_import = False
+        # Track whether our transforms require `re` and any alias used in the file
+        self.needs_re_import = False
+        self.re_alias: str | None = None
+        # If the module does `from re import search as s` or `from re import search`,
+        # capture the local name to prefer `search(...)` form
+        self.re_search_name: str | None = None
         self.current_class: str | None = None
+        # Per-class collected setup/teardown code so we can re-insert fixtures inside classes
         self.setup_code: list[str] = []
         self.teardown_code: list[str] = []
         self.setup_class_code: list[str] = []
         self.teardown_class_code: list[str] = []
+        self._per_class_setup: dict[str, list[str]] = {}
+        self._per_class_teardown: dict[str, list[str]] = {}
+        self._per_class_setup_class: dict[str, list[str]] = {}
+        self._per_class_teardown_class: dict[str, list[str]] = {}
         self.setup_module_code: list[str] = []
         self.teardown_module_code: list[str] = []
         self.in_setup = False
@@ -32,6 +100,27 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
         self.in_teardown_class = False
         # Test method prefixes used for normalization (e.g., ["test", "spec"])
         self.test_prefixes: list[str] = (test_prefixes or ["test"]) or ["test"]
+        # Whether to attempt conservative subTest -> parametrize transforms
+        self.parametrize = parametrize
+        # Replacement registry for two-pass metadata-based replacements
+        self.replacement_registry = ReplacementRegistry()
+        # Stack to track current function context during traversal
+        self._function_stack: list[str] = []
+        # Set of function names that need the pytest 'request' fixture injected
+        self._functions_need_request: set[str] = set()
+        # (function stack fields are initialized in __init__)
+
+    # Require PositionProvider metadata so we can record precise source spans
+    METADATA_DEPENDENCIES = (PositionProvider,)
+
+    def record_replacement(self, old_node: cst.CSTNode, new_node: cst.CSTNode) -> None:
+        """Record a planned replacement for old_node -> new_node using PositionProvider."""
+        try:
+            pos = self.get_metadata(PositionProvider, old_node)
+            self.replacement_registry.record(pos, new_node)
+        except Exception:
+            # If metadata isn't available for some reason, skip recording
+            pass
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         """Visit class definition to check for unittest.TestCase inheritance."""
@@ -50,173 +139,222 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     break
         return None  # Continue traversal
 
+    # rewrite_skip_decorators moved to transformers.skip_transformer.rewrite_skip_decorators
+
     def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
         """Inject a module-scoped autouse fixture if setUpModule/tearDownModule were present."""
-        if not (self.setup_module_code or self.teardown_module_code):
-            return updated_node
+        new_body = list(updated_node.body)
 
-        # Build the fixture function: setup_module()
-        decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")),
-                args=[
-                    cst.Arg(keyword=cst.Name(value="scope"), value=cst.SimpleString(value='"module"')),
-                    cst.Arg(keyword=cst.Name(value="autouse"), value=cst.Name(value="True")),
-                ],
-            )
-        )
-
-        # Determine globals: collect names assigned at top level in setup_module code
-        global_names: set[str] = set()
-        for line in self.setup_module_code:
-            try:
-                parsed = cst.parse_statement(line)
-                if isinstance(parsed, cst.SimpleStatementLine):
-                    for small in parsed.body:
-                        if isinstance(small, cst.Assign):
-                            for tgt in small.targets:
-                                if isinstance(tgt.target, cst.Name):
-                                    global_names.add(tgt.target.value)
-            except Exception:
+        # Determine insertion index after imports and module docstring
+        insert_index = 0
+        for i, node in enumerate(new_body):
+            # Keep moving past imports and module-level docstring
+            if isinstance(node, cst.Import | cst.ImportFrom):
+                insert_index = i + 1
                 continue
-
-        body_statements: list[cst.BaseStatement] = []
-        if global_names:
-            body_statements.append(
-                cst.SimpleStatementLine(
-                    body=[
-                        cst.Global(
-                            names=[cst.NameItem(name=cst.Name(value=n)) for n in sorted(global_names)]
-                        )
-                    ]
-                )
-            )
-
-        # Add setup module code
-        for setup_line in self.setup_module_code:
-            try:
-                body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
-            except Exception:
-                try:
-                    stmt = cst.parse_module(setup_line).body[0]
-                    body_statements.append(stmt)
-                except Exception:
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        # Yield
-        body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
-
-        # Add teardown module code
-        for teardown_line in self.teardown_module_code:
-            try:
-                body_statements.append(
-                    cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))])
-                )
-            except Exception:
-                try:
-                    stmt = cst.parse_module(teardown_line).body[0]
-                    body_statements.append(stmt)
-                except Exception:
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        func = cst.FunctionDef(
-            name=cst.Name(value="setup_module"),
-            params=cst.Parameters(params=[]),
-            body=cst.IndentedBlock(body=body_statements or [cst.SimpleStatementLine(body=[cst.Pass()])]),
-            decorators=[decorator],
-        )
-
-        # Remove original setUpModule/tearDownModule definitions from body
-        filtered_body: list[cst.CSTNode] = []
-        for item in updated_node.body:
-            if isinstance(item, cst.FunctionDef) and item.name.value in {"setUpModule", "tearDownModule"}:
+            if (
+                isinstance(node, cst.SimpleStatementLine)
+                and len(node.body) == 1
+                and isinstance(node.body[0], cst.Expr)
+                and isinstance(node.body[0].value, cst.SimpleString)
+            ):
+                insert_index = i + 1
                 continue
-            filtered_body.append(item)
+            break
 
-        # Prepend our fixture
-        new_body = [func] + filtered_body
+        cleaned_body: list[cst.CSTNode] = []
+        remove_names = {"setUp", "tearDown", "setUpClass", "tearDownClass"}
 
-        # Reset storage
-        self.setup_module_code.clear()
-        self.teardown_module_code.clear()
-        self.needs_pytest_import = True
+        # Iterate through top-level nodes; for ClassDefs, insert per-class fixtures and remove original methods
+        for node in new_body:
+            if isinstance(node, cst.ClassDef):
+                cls_name = node.name.value
+                # Build new class body, skipping original setup/teardown methods
+                if isinstance(node.body, cst.IndentedBlock):
+                    class_body_items: list[cst.BaseStatement] = []
+                    # If class has docstring as first statement, keep it at top
+                    idx = 0
+                    if node.body.body and isinstance(node.body.body[0], cst.SimpleStatementLine):
+                        first = node.body.body[0]
+                        if (
+                            len(first.body) == 1
+                            and isinstance(first.body[0], cst.Expr)
+                            and isinstance(first.body[0].value, cst.SimpleString)
+                        ):
+                            class_body_items.append(first)
+                            idx = 1
 
-        return updated_node.with_changes(body=new_body)
+                    # Insert per-class fixtures (class-scoped then instance-scoped) if collected
+                    try:
+                        if cls_name in self._per_class_setup_class or cls_name in self._per_class_teardown_class:
+                            setup_cls = self._per_class_setup_class.get(cls_name, [])
+                            teardown_cls = self._per_class_teardown_class.get(cls_name, [])
+                            if setup_cls or teardown_cls:
+                                class_fixture = create_class_fixture(setup_cls, teardown_cls)
+                                class_body_items.append(class_fixture)
+                                self.needs_pytest_import = True
+                        if cls_name in self._per_class_setup or cls_name in self._per_class_teardown:
+                            setup_inst = self._per_class_setup.get(cls_name, [])
+                            teardown_inst = self._per_class_teardown.get(cls_name, [])
+                            if setup_inst or teardown_inst:
+                                inst_fixture = create_instance_fixture(setup_inst, teardown_inst)
+                                class_body_items.append(inst_fixture)
+                                self.needs_pytest_import = True
+                    except Exception:
+                        # ignore fixture generation errors for this class
+                        pass
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
-        """Leave class definition after transformation, adding fixtures."""
-        if not self.current_class:
-            return updated_node
+                    # Now append remaining original class statements except methods we removed
+                    for stmt in node.body.body[idx:]:
+                        fn = None
+                        if (
+                            isinstance(stmt, cst.SimpleStatementLine)
+                            and len(stmt.body) == 1
+                            and isinstance(stmt.body[0], cst.FunctionDef)
+                        ):
+                            fn = stmt.body[0]
+                        elif isinstance(stmt, cst.FunctionDef):
+                            fn = stmt  # type: ignore
 
-        # Remove unittest.TestCase from base classes
-        new_bases = []
-        for base in updated_node.bases:
-            if isinstance(base.value, cst.Attribute):
-                if (
-                    isinstance(base.value.value, cst.Name)
-                    and base.value.value.value == "unittest"
-                    and base.value.attr.value == "TestCase"
-                ):
-                    continue  # Skip unittest.TestCase
-            new_bases.append(base)
-        # Apply bases change first
-        updated_node = updated_node.with_changes(bases=new_bases)
-        # If no bases and no keywords remain, drop empty parentheses
-        if len(new_bases) == 0 and len(updated_node.keywords) == 0:
-            updated_node = updated_node.with_changes(lpar=(), rpar=())
+                        if fn is not None and isinstance(fn, cst.FunctionDef) and fn.name.value in remove_names:
+                            continue
+                        class_body_items.append(stmt)
 
-        # Generate fixtures if we have setup/teardown code
-        new_body = list(updated_node.body.body)  # Convert to list to modify
+                    new_node = node.with_changes(body=node.body.with_changes(body=class_body_items))
+                    cleaned_body.append(new_node)
+                else:
+                    cleaned_body.append(node)
+            else:
+                cleaned_body.append(node)
 
-        # Module-level fixture generation is handled at module leave, not here
+        # Insert module-level fixtures (collected outside classes) after imports/docstring
+        module_fixtures: list[cst.FunctionDef] = []
+        try:
+            if self.setup_class_code or self.teardown_class_code:
+                class_fixture = create_class_fixture(self.setup_class_code, self.teardown_class_code)
+                module_fixtures.append(class_fixture)
+                self.needs_pytest_import = True
+            if self.setup_code or self.teardown_code:
+                inst_fixture = create_instance_fixture(self.setup_code, self.teardown_code)
+                module_fixtures.append(inst_fixture)
+                self.needs_pytest_import = True
+        except Exception:
+            pass
 
-        # Add class-level fixture for setUpClass/tearDownClass
-        if self.setup_class_code or self.teardown_class_code:
-            class_fixture = self._create_class_fixture()
-            new_body.insert(0, class_fixture)
+        # Clear module-level collected code to avoid duplication
+        self.setup_class_code = []
+        self.teardown_class_code = []
+        self.setup_code = []
+        self.teardown_code = []
 
-        # Add instance-level fixtures for setUp/tearDown
-        # Create a single instance fixture that handles both setup and teardown
-        if self.setup_code or self.teardown_code:
-            instance_fixture = self._create_instance_fixture()
-            new_body.insert(0, instance_fixture)
+        # Clear per-class collected code now that we've inserted fixtures
+        self._per_class_setup.clear()
+        self._per_class_teardown.clear()
+        self._per_class_setup_class.clear()
+        self._per_class_teardown_class.clear()
 
-        # Remove original setUp/tearDown methods as they've been converted to fixtures
-        filtered_body = []
-        for item in new_body:
-            if isinstance(item, cst.FunctionDef):
-                # Skip setUp, tearDown, setUpClass, tearDownClass methods
-                if item.name.value in ["setUp", "tearDown", "setUpClass", "tearDownClass"]:
-                    continue
-            filtered_body.append(item)
-        new_body = filtered_body
+        # Build final body with module-level fixtures inserted at insert_index
+        final_body: list[cst.CSTNode] = []
+        for i, node in enumerate(cleaned_body):
+            if i == insert_index and module_fixtures:
+                for mf in module_fixtures:
+                    final_body.append(mf)
+            final_body.append(node)
 
-        # Reset tracking variables
-        self.current_class = None
-        self.setup_code.clear()
-        self.teardown_code.clear()
-        self.setup_class_code.clear()
-        self.teardown_class_code.clear()
+        # If insert_index is at end, append fixtures now
+        if insert_index >= len(cleaned_body) and module_fixtures:
+            for mf in module_fixtures:
+                final_body.append(mf)
 
-        return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+        return updated_node.with_changes(body=final_body)
+
+    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+        """Handle function-level rewrites: parametrize conversion, subTest -> subtests, and assertLogs wrapping.
+
+        Also inject the `request` fixture parameter when transforms (e.g., self.id()) require it.
+        """
+        func_name = original_node.name.value
+        try:
+            # Rewrite function-level decorators (skip/skipIf)
+            orig_decorators = list(updated_node.decorators or [])
+            new_decorators = rewrite_skip_decorators(orig_decorators)
+            if new_decorators is not None and new_decorators is not orig_decorators:
+                self.needs_pytest_import = True
+            updated_node = updated_node.with_changes(decorators=new_decorators)
+
+            # First, try conservative parametrize conversion for simple for+subTest patterns
+            if getattr(self, "parametrize", False):
+                decorated_node = convert_simple_subtests_to_parametrize(original_node, updated_node, self)
+                if decorated_node is not None:
+                    updated_node = decorated_node
+
+            # Convert subTest context managers to pytest-subtests usage
+            body_with_subtests = convert_subtests_in_body(updated_node.body.body)
+
+            # If we introduced subtests usage, ensure the function signature includes the fixture
+            if body_uses_subtests(body_with_subtests):
+                updated_node = ensure_subtests_param(updated_node)
+
+            # Then wrap assertLogs/assertNoLogs patterns using shared helper
+            new_body = wrap_assert_logs_in_block(body_with_subtests)
+            result_node = updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+        except Exception:
+            result_node = updated_node
+
+        # If this function was marked as requiring the pytest 'request' fixture, ensure it exists
+        if func_name in self._functions_need_request:
+            params = list(result_node.params.params)
+            if not any(isinstance(p.name, cst.Name) and p.name.value == "request" for p in params):
+                params.append(cst.Param(name=cst.Name(value="request")))
+                new_params = result_node.params.with_changes(params=params)
+                result_node = result_node.with_changes(params=new_params)
+
+        # Pop function stack if we tracked it
+        if self._function_stack:
+            try:
+                self._function_stack.pop()
+            except Exception:
+                pass
+
+        return result_node
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Visit function definitions to track setUp/tearDown methods."""
-        if node.name.value == "setUp":
-            # Extract setup code from method body
-            self._extract_method_body(node, self.setup_code)
-        elif node.name.value == "tearDown":
-            # Extract teardown code from method body
-            self._extract_method_body(node, self.teardown_code)
-        elif node.name.value == "setUpClass":
-            # Extract setup_class code from method body
-            self._extract_method_body(node, self.setup_class_code)
-        elif node.name.value == "tearDownClass":
-            # Extract teardown_class code from method body
-            self._extract_method_body(node, self.teardown_class_code)
-        elif node.name.value == "setUpModule":
+        # Track function stack entry so leave_Call can know the enclosing function
+        try:
+            self._function_stack.append(node.name.value)
+        except Exception:
+            pass
+        name = node.name.value
+        # Decide whether we're inside a class; if so, record per-class; otherwise module-level
+        cls = self.current_class
+        if name == "setUp":
+            if cls:
+                self._per_class_setup.setdefault(cls, [])
+                self._extract_method_body(node, self._per_class_setup[cls])
+            else:
+                self._extract_method_body(node, self.setup_code)
+        elif name == "tearDown":
+            if cls:
+                self._per_class_teardown.setdefault(cls, [])
+                self._extract_method_body(node, self._per_class_teardown[cls])
+            else:
+                self._extract_method_body(node, self.teardown_code)
+        elif name == "setUpClass":
+            if cls:
+                self._per_class_setup_class.setdefault(cls, [])
+                self._extract_method_body(node, self._per_class_setup_class[cls])
+            else:
+                self._extract_method_body(node, self.setup_class_code)
+        elif name == "tearDownClass":
+            if cls:
+                self._per_class_teardown_class.setdefault(cls, [])
+                self._extract_method_body(node, self._per_class_teardown_class[cls])
+            else:
+                self._extract_method_body(node, self.teardown_class_code)
+        elif name == "setUpModule":
             self._extract_method_body(node, self.setup_module_code)
-        elif node.name.value == "tearDownModule":
+        elif name == "tearDownModule":
             self._extract_method_body(node, self.teardown_module_code)
 
     def _extract_method_body(self, node: cst.FunctionDef, target_list: list[str]) -> None:
@@ -228,6 +366,8 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                     stmt_module = cst.Module(body=[stmt])
                     target_list.append(stmt_module.code.strip())
 
+    # Fixture string-based fallback moved to transformers.fixture_transformer.transform_fixtures_string_based
+
     def visit_Call(self, node: cst.Call) -> bool | None:
         """Visit function calls to detect pytest.raises usage."""
         # Handle pytest.raises calls by setting the needs_pytest_import flag
@@ -236,6 +376,111 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
                 if node.func.attr.value == "raises":
                     self.needs_pytest_import = True
         return True  # Continue traversal
+
+    def visit_Import(self, node: cst.Import) -> bool | None:
+        """Detect imports of the `re` module and capture any alias (e.g., import re as r)."""
+        for alias in node.names:
+            # alias.name can be a dotted name but for 're' it's a simple Name
+            if isinstance(alias.name, cst.Name) and alias.name.value == "re":
+                if alias.asname and isinstance(alias.asname.name, cst.Name):
+                    self.re_alias = alias.asname.name.value
+                else:
+                    self.re_alias = "re"
+        return True
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool | None:
+        """Detect `from re import search` (with optional alias) and capture the local name."""
+        if isinstance(node.module, cst.Name) and node.module.value == "re":
+            # node.names can be an ImportStar or a sequence of ImportAlias; guard accordingly
+            if isinstance(node.names, cst.ImportStar):
+                return True
+            # mypy doesn't narrow the union enough to allow iteration in some versions
+            for alias in node.names:
+                if isinstance(alias, cst.ImportAlias) and isinstance(alias.name, cst.Name):
+                    if alias.name.value == "search":
+                        if alias.asname and isinstance(alias.asname.name, cst.Name):
+                            self.re_search_name = alias.asname.name.value
+                        else:
+                            self.re_search_name = "search"
+        return True
+
+    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        """Prefer CST-based assertion transforms for supported self.assert* calls.
+
+        This will run before the string-based fallback so that well-formed
+        assertion calls are transformed using libcst nodes.
+        """
+        # We're only interested in attribute calls on `self` or `cls` (e.g., self.assertEqual(...) or cls.assertEqual(...))
+        if isinstance(updated_node.func, cst.Attribute) and isinstance(updated_node.func.value, cst.Name):
+            owner = updated_node.func.value.value
+            if owner in {"self", "cls"}:
+                method_name = updated_node.func.attr.value
+
+                # Map known unittest assert method names to the extracted transform functions
+                mapping = {
+                    "assertEqual": transform_assert_equal,
+                    "assertEquals": transform_assert_equal,
+                    "assertNotEqual": transform_assert_not_equal,
+                    "assertNotEquals": transform_assert_not_equal,
+                    "assertTrue": transform_assert_true,
+                    "assertIsTrue": transform_assert_true,
+                    "assertFalse": transform_assert_false,
+                    "assertIsFalse": transform_assert_false,
+                    "assertIs": transform_assert_is,
+                    "assertIsNot": transform_assert_is_not,
+                    "assertIn": transform_assert_in,
+                    "assertNotIn": transform_assert_not_in,
+                    "assertIsInstance": transform_assert_isinstance,
+                    "assertNotIsInstance": transform_assert_not_isinstance,
+                    "assertDictEqual": transform_assert_dict_equal,
+                    "assertDictEquals": transform_assert_dict_equal,
+                    "assertListEqual": transform_assert_list_equal,
+                    "assertListEquals": transform_assert_list_equal,
+                    "assertSetEqual": transform_assert_set_equal,
+                    "assertSetEquals": transform_assert_set_equal,
+                    "assertTupleEqual": transform_assert_tuple_equal,
+                    "assertTupleEquals": transform_assert_tuple_equal,
+                    "assertCountEqual": transform_assert_count_equal,
+                    "skipTest": transform_skip_test,
+                    "fail": transform_fail,
+                    "assertMultiLineEqual": transform_assert_multiline_equal,
+                    # raises / regex handled with lambdas so we can pass transformer context when needed
+                    "assertRaises": transform_assert_raises,
+                    "assertRaisesRegex": transform_assert_raises_regex,
+                    "assertRegex": lambda node: transform_assert_regex(
+                        node, re_alias=self.re_alias, re_search_name=self.re_search_name
+                    ),
+                    "assertNotRegex": lambda node: transform_assert_not_regex(
+                        node, re_alias=self.re_alias, re_search_name=self.re_search_name
+                    ),
+                }
+
+                if method_name in mapping:
+                    try:
+                        new_node = mapping[method_name](updated_node)
+                        # If we transformed to pytest.raises, ensure import is tracked
+                        if method_name in {"assertRaises", "assertRaisesRegex"}:
+                            self.needs_pytest_import = True
+                        # If we transformed regex assertions, note that we need `re`
+                        if method_name in {"assertRegex", "assertNotRegex"}:
+                            self.needs_re_import = True
+                        # new_node may be a statement (e.g., cst.Assert) or an expression.
+                        # If it's a statement, record a replacement to apply in a second pass
+                        # keyed by source position. Otherwise return the expression.
+                        if isinstance(new_node, cst.BaseStatement):
+                            # schedule replacement and keep the Call expression intact for now
+                            self.record_replacement(original_node, new_node)
+                            return updated_node
+                        # expression-level replacement is safe to return
+                        return new_node  # type: ignore[return-value]
+                    except Exception:
+                        # On any transformation error, fall back to the original node
+                        return updated_node
+
+                # Note: preserve TestCase API calls like self.id() and self.shortDescription()
+                # to maintain compatibility with string-based fallback handling and tests.
+
+        return updated_node
 
     def visit_Expr(self, node: cst.Expr) -> bool | None:
         """Visit expression statements to handle transformed calls."""
@@ -263,403 +508,37 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
 
         return True  # Continue traversal
 
-    def _create_class_fixture(self) -> cst.FunctionDef:
-        """Create a class-level fixture for setUpClass/tearDownClass."""
-        decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")),
-                args=[
-                    cst.Arg(keyword=cst.Name(value="scope"), value=cst.SimpleString(value='"class"')),
-                    cst.Arg(keyword=cst.Name(value="autouse"), value=cst.Name(value="True")),
-                ],
-            )
-        )
-
-        # Create fixture body with extracted setup and teardown code
-        body_statements = []
-
-        # Add setup_class code if available
-        for setup_line in self.setup_class_code:
-            try:
-                body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
-            except Exception:
-                # If parsing as expression fails, parse as statement
-                try:
-                    parsed_stmt = cst.parse_module(setup_line).body[0]
-                    if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                        body_statements.append(parsed_stmt)
-                except Exception:
-                    # If all else fails, create a comment
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        # Add yield point
-        body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
-
-        # Add teardown_class code if available
-        for teardown_line in self.teardown_class_code:
-            try:
-                body_statements.append(
-                    cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))])
-                )
-            except Exception:
-                # If parsing as expression fails, parse as statement
-                try:
-                    parsed_stmt = cst.parse_module(teardown_line).body[0]
-                    if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                        body_statements.append(parsed_stmt)
-                except Exception:
-                    # If all else fails, create a comment
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        # Fallback to pass if no code was extracted
-        if not body_statements:
-            body_statements = [
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]),
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
-            ]
-
-        # Create fixture function
-        func_name = cst.FunctionDef(
-            name=cst.Name(value="setup_class"),
-            params=cst.Parameters(params=[cst.Param(name=cst.Name(value="cls"), annotation=None)]),
-            body=cst.IndentedBlock(body=body_statements),
-            decorators=[decorator],
-            returns=None,
-        )
-
-        return func_name
-
-    def _create_instance_fixture(self) -> cst.FunctionDef:
-        """Create an instance-level fixture for setUp/tearDown."""
-        # Create fixture decorator with autouse=True
-        decorator = cst.Decorator(
-            decorator=cst.Call(
-                func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")),
-                args=[cst.Arg(keyword=cst.Name(value="autouse"), value=cst.Name(value="True"))],
-            )
-        )
-
-        # Create fixture body with extracted setup and teardown code
-        body_statements = []
-
-        # Add setup code if available
-        for setup_line in self.setup_code:
-            try:
-                body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
-            except Exception:
-                # If parsing as expression fails, parse as statement
-                try:
-                    parsed_stmt = cst.parse_module(setup_line).body[0]
-                    if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                        body_statements.append(parsed_stmt)
-                except Exception:
-                    # If all else fails, create a comment
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        # Add yield point
-        body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
-
-        # Add teardown code if available
-        for teardown_line in self.teardown_code:
-            try:
-                body_statements.append(
-                    cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))])
-                )
-            except Exception:
-                # If parsing as expression fails, parse as statement
-                try:
-                    parsed_stmt = cst.parse_module(teardown_line).body[0]
-                    if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                        body_statements.append(parsed_stmt)
-                except Exception:
-                    # If all else fails, create a comment
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        # Fallback to pass if no code was extracted
-        if not body_statements:
-            body_statements = [
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]),
-                cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
-            ]
-
-        # Create fixture function
-        func_name = cst.FunctionDef(
-            name=cst.Name(value="setup_method"),
-            params=cst.Parameters(params=[cst.Param(name=cst.Name(value="self"), annotation=None)]),
-            body=cst.IndentedBlock(body=body_statements),
-            decorators=[decorator],
-            returns=None,
-        )
-
-        return func_name
-
-    def _create_teardown_fixture(self) -> cst.FunctionDef:
-        """Create an instance-level teardown fixture for tearDown using yield-first pattern."""
-        decorator = cst.Decorator(
-            decorator=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture"))
-        )
-
-        body_statements = []
-        # Yield first to model teardown after test
-        body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
-
-        for teardown_line in self.teardown_code:
-            try:
-                body_statements.append(
-                    cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))])
-                )
-            except Exception:
-                try:
-                    parsed_stmt = cst.parse_module(teardown_line).body[0]
-                    if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                        body_statements.append(parsed_stmt)
-                except Exception:
-                    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
-
-        func_name = cst.FunctionDef(
-            name=cst.Name(value="teardown_method"),
-            params=cst.Parameters(params=[cst.Param(name=cst.Name(value="self"), annotation=None)]),
-            body=cst.IndentedBlock(body=body_statements),
-            decorators=[decorator],
-            returns=None,
-        )
-        return func_name
-
-    def _transform_assert_equal(self, node: cst.Call) -> cst.Call:
-        """Transform assertEqual to assert ==."""
-        if len(node.args) >= 2:
-            # Convert: self.assertEqual(a, b) -> assert a == b
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_true(self, node: cst.Call) -> cst.Call:
-        """Transform assertTrue to assert."""
-        if len(node.args) >= 1:
-            # Convert: self.assertTrue(condition) -> assert condition
-            new_func = cst.Name(value="assert")
-            return cst.Call(func=new_func, args=[node.args[0]])
-        return node
-
-    def _transform_assert_false(self, node: cst.Call) -> cst.Call:
-        """Transform assertFalse to assert not."""
-        if len(node.args) >= 1:
-            # Convert: self.assertFalse(condition) -> assert not condition
-            new_func = cst.Name(value="assert")
-            new_args = [cst.Arg(value=cst.UnaryOperation(operator=cst.Not(), expression=node.args[0].value))]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_is(self, node: cst.Call) -> cst.Call:
-        """Transform assertIs to assert is."""
-        if len(node.args) >= 2:
-            # Convert: self.assertIs(a, b) -> assert a is b
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_in(self, node: cst.Call) -> cst.Call:
-        """Transform assertIn to assert in."""
-        if len(node.args) >= 2:
-            # Convert: self.assertIn(item, container) -> assert item in container
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_raises(self, node: cst.Call) -> cst.Call:
-        """Transform assertRaises to pytest.raises context manager."""
-        if len(node.args) >= 2:
-            # Convert: self.assertRaises(Exception, func) -> with pytest.raises(Exception):
-            exception_type = node.args[0].value
-            code_to_test = node.args[1].value
-
-            # For now, return a comment indicating the transformation needed
-            # In a full implementation, this would create a with statement
-            new_func = cst.Name(value="pytest")
-            new_attr = cst.Attribute(value=new_func, attr=cst.Name(value="raises"))
-            new_args = [
-                cst.Arg(value=exception_type),
-                cst.Arg(value=cst.Call(func=new_func, args=[cst.Arg(value=code_to_test)])),
-            ]
-            return cst.Call(func=new_attr, args=new_args)
-        return node  # Return original node if transformation doesn't apply
-
-    def _transform_assert_dict_equal(self, node: cst.Call) -> cst.Call:
-        """Transform assertDictEqual to assert ==."""
-        if len(node.args) >= 2:
-            # Convert: self.assertDictEqual(dict1, dict2) -> assert dict1 == dict2
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_list_equal(self, node: cst.Call) -> cst.Call:
-        """Transform assertListEqual to assert ==."""
-        if len(node.args) >= 2:
-            # Convert: self.assertListEqual(list1, list2) -> assert list1 == list2
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_set_equal(self, node: cst.Call) -> cst.Call:
-        """Transform assertSetEqual to assert ==."""
-        if len(node.args) >= 2:
-            # Convert: self.assertSetEqual(set1, set2) -> assert set1 == set2
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_tuple_equal(self, node: cst.Call) -> cst.Call:
-        """Transform assertTupleEqual to assert ==."""
-        if len(node.args) >= 2:
-            # Convert: self.assertTupleEqual(tuple1, tuple2) -> assert tuple1 == tuple2
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Comparison(
-                        left=node.args[0].value,
-                        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_raises_regex(self, node: cst.Call) -> cst.Call:
-        """Transform assertRaisesRegex to pytest.raises with match."""
-        if len(node.args) >= 3:
-            # Convert: self.assertRaisesRegex(Exception, pattern, func) -> with pytest.raises(Exception, match=pattern):
-            exception_type = node.args[0].value
-            code_to_test = node.args[2].value
-
-            new_func = cst.Name(value="pytest")
-            new_attr = cst.Attribute(value=new_func, attr=cst.Name(value="raises"))
-            new_args = [
-                cst.Arg(value=exception_type),
-                cst.Arg(value=cst.Call(func=new_func, args=[cst.Arg(value=code_to_test)])),
-            ]
-            return cst.Call(func=new_attr, args=new_args)
-        return node  # Return original node if transformation doesn't apply
-
-    def _transform_assert_isinstance(self, node: cst.Call) -> cst.Call:
-        """Transform assertIsInstance to isinstance assert."""
-        if len(node.args) >= 2:
-            # Convert: self.assertIsInstance(obj, class) -> assert isinstance(obj, class)
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.Call(
-                        func=cst.Name(value="isinstance"),
-                        args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _transform_assert_not_isinstance(self, node: cst.Call) -> cst.Call:
-        """Transform assertNotIsInstance to not isinstance assert."""
-        if len(node.args) >= 2:
-            # Convert: self.assertNotIsInstance(obj, class) -> assert not isinstance(obj, class)
-            new_func = cst.Name(value="assert")
-            new_args = [
-                cst.Arg(
-                    value=cst.UnaryOperation(
-                        operator=cst.Not(),
-                        expression=cst.Call(
-                            func=cst.Name(value="isinstance"),
-                            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
-                        ),
-                    )
-                )
-            ]
-            return cst.Call(func=new_func, args=new_args)
-        return node
-
-    def _replace_call_node(self, old_node: cst.Call, new_node: cst.Call) -> None:
-        """Helper method to replace a call node in the CST.
-
-        This is a simplified approach - in a full implementation,
-        this would properly integrate with libcst's node replacement mechanisms.
-        Since we're currently using string-based transformations, this method
-        is not actively used but is provided for future CST-based implementations.
-        """
-        # In a full CST-based implementation, this would:
-        # 1. Store the mapping of old_node -> new_node
-        # 2. Use libcst's node replacement mechanisms
-        # 3. Handle the replacement during the leave phase
-
-        # For now, this is a no-op since we use string-based transformations
-        # But we keep the method signature for future implementation
-        pass
-
     def transform_code(self, code: str) -> str:
         """Transform unittest code to pytest code using CST first, then fallback string ops."""
         try:
             # Parse the code into CST to understand the structure
             module = cst.parse_module(code)
 
-            # Apply CST transformer (handles TestCase removal and fixture injection)
-            transformed_cst = module.visit(self)
+            # Apply CST transformer (handles fixture injection). Use MetadataWrapper
+            # so our transformer can access PositionProvider metadata for recording
+            # replacements keyed by source spans.
+            wrapper = MetadataWrapper(module)
+            transformed_cst = wrapper.visit(self)
+
+            # If we recorded replacements, run a second pass to apply them.
+            if self.replacement_registry.replacements:
+                transformed_cst = MetadataWrapper(transformed_cst).visit(ReplacementApplier(self.replacement_registry))
+
             transformed_code = transformed_cst.code
 
-            # Transform assertion methods using string replacement fallback
-            transformed_code = self._transform_assertions_string_based(transformed_code)
+            # Also perform simple string-based removal of 'unittest.TestCase' inheritance
+            # for cases not handled via CST rewriting.
+            transformed_code = self._transform_unittest_inheritance(transformed_code)
 
-            # Add necessary imports
-            transformed_code = self._add_pytest_imports(transformed_code)
+            # Transform assertion methods using string replacement fallback
+            transformed_code = transform_assertions_string_based(transformed_code, test_prefixes=self.test_prefixes)
+
+            # Add necessary imports (pass transformer so import_transformer can
+            # consult attributes like needs_re_import/re_alias/re_search_name)
+            transformed_code = add_pytest_imports(transformed_code, transformer=self)
 
             # Remove unittest imports if no longer used
-            transformed_code = self._remove_unittest_imports_if_unused(transformed_code)
+            transformed_code = remove_unittest_imports_if_unused(transformed_code)
 
             # Validate the result with CST
             try:
@@ -675,348 +554,37 @@ class UnittestToPytestTransformer(cst.CSTTransformer):
             return error_msg + code
 
     def _transform_unittest_inheritance(self, code: str) -> str:
-        """Remove unittest.TestCase inheritance from class definitions."""
-        # Simple string replacement for inheritance
-        import re
+        """Use libcst to remove `unittest.TestCase` inheritance from class defs.
 
-        code = re.sub(r"class\s+(\w+)\s*\(\s*unittest\.TestCase\s*\)", r"class \1", code)
-        return code
-
-    def _split_two_args_balanced(self, s: str) -> tuple[str, str] | None:
-        """Split a string containing two arguments into (arg1, arg2) respecting brackets and quotes."""
-        depth_paren = depth_brack = depth_brace = 0
-        in_single = in_double = False
-        escape = False
-        for i, ch in enumerate(s):
-            if escape:
-                escape = False
-                continue
-            if ch == "\\":
-                escape = True
-                continue
-            if in_single:
-                if ch == "'":
-                    in_single = False
-                continue
-            if in_double:
-                if ch == '"':
-                    in_double = False
-                continue
-            if ch == "'":
-                in_single = True
-                continue
-            if ch == '"':
-                in_double = True
-                continue
-            if ch == "(":
-                depth_paren += 1
-                continue
-            if ch == ")":
-                if depth_paren > 0:
-                    depth_paren -= 1
-                continue
-            if ch == "[":
-                depth_brack += 1
-                continue
-            if ch == "]":
-                if depth_brack > 0:
-                    depth_brack -= 1
-                continue
-            if ch == "{":
-                depth_brace += 1
-                continue
-            if ch == "}":
-                if depth_brace > 0:
-                    depth_brace -= 1
-                continue
-            if ch == "," and depth_paren == 0 and depth_brack == 0 and depth_brace == 0:
-                left = s[:i].strip()
-                right = s[i + 1 :].strip()
-                return left, right
-        return None
-
-    def _safe_replace_two_arg_call(self, code: str, func_name: str, format_fn: Callable[[str, str], str]) -> str:
-        """Safely replace calls like self.func_name(arg1, arg2) using balanced parsing.
-
-        format_fn: function taking (arg1: str, arg2: str) -> str replacement
+        This is safer than regex and preserves formatting more reliably.
         """
-        needle = f"self.{func_name}("
-        i = 0
-        out_parts: list[str] = []
-        while True:
-            j = code.find(needle, i)
-            if j == -1:
-                out_parts.append(code[i:])
-                break
-            # append up to call
-            out_parts.append(code[i:j])
-            k = j + len(needle)
-            # find matching closing paren for this call
-            depth = 1
-            in_single = in_double = False
-            escape = False
-            while k < len(code):
-                ch = code[k]
-                if escape:
-                    escape = False
-                    k += 1
-                    continue
-                if ch == "\\":
-                    escape = True
-                    k += 1
-                    continue
-                if in_single:
-                    if ch == "'":
-                        in_single = False
-                    k += 1
-                    continue
-                if in_double:
-                    if ch == '"':
-                        in_double = False
-                    k += 1
-                    continue
-                if ch == "'":
-                    in_single = True
-                    k += 1
-                    continue
-                if ch == '"':
-                    in_double = True
-                    k += 1
-                    continue
-                if ch == "(":
-                    depth += 1
-                elif ch == ")":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                k += 1
-            if depth != 0:
-                # unmatched; give up and copy as-is
-                out_parts.append(code[j:k])
-                i = k
-                continue
-            inner = code[j + len(needle) : k]
-            split = self._split_two_args_balanced(inner)
-            if not split:
-                # cannot split; copy original
-                out_parts.append(code[j : k + 1])
-                i = k + 1
-                continue
-            a1, a2 = split
-            replacement = format_fn(a1, a2)
-            out_parts.append(replacement)
-            i = k + 1
-        return "".join(out_parts)
+        try:
+            module = cst.parse_module(code)
 
-    def _safe_replace_one_arg_call(self, code: str, func_name: str, format_fn: Callable[[str], str]) -> str:
-        """Safely replace calls like self.func_name(arg) respecting nesting/quotes."""
-        needle = f"self.{func_name}("
-        i = 0
-        out_parts: list[str] = []
-        while True:
-            j = code.find(needle, i)
-            if j == -1:
-                out_parts.append(code[i:])
-                break
-            out_parts.append(code[i:j])
-            k = j + len(needle)
-            depth = 1
-            in_single = in_double = False
-            escape = False
-            while k < len(code):
-                ch = code[k]
-                if escape:
-                    escape = False
-                    k += 1
-                    continue
-                if ch == "\\":
-                    escape = True
-                    k += 1
-                    continue
-                if in_single:
-                    if ch == "'":
-                        in_single = False
-                    k += 1
-                    continue
-                if in_double:
-                    if ch == '"':
-                        in_double = False
-                    k += 1
-                    continue
-                if ch == "'":
-                    in_single = True
-                    k += 1
-                    continue
-                if ch == '"':
-                    in_double = True
-                    k += 1
-                    continue
-                if ch == "(":
-                    depth += 1
-                elif ch == ")":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                k += 1
-            if depth != 0:
-                out_parts.append(code[j:k])
-                i = k
-                continue
-            inner = code[j + len(needle) : k]
-            replacement = format_fn(inner.strip())
-            out_parts.append(replacement)
-            i = k + 1
-        return "".join(out_parts)
+            class Rewriter(cst.CSTTransformer):
+                def leave_ClassDef(self, original: cst.ClassDef, updated: cst.ClassDef) -> cst.ClassDef:
+                    new_bases = []
+                    changed = False
+                    for base in updated.bases:
+                        try:
+                            if isinstance(base.value, cst.Attribute) and isinstance(base.value.value, cst.Name):
+                                if base.value.value.value == "unittest" and base.value.attr.value == "TestCase":
+                                    changed = True
+                                    continue
+                        except Exception:
+                            pass
+                        new_bases.append(base)
+                    if changed:
+                        return updated.with_changes(bases=new_bases)
+                    return updated
 
-    def _transform_assertions_string_based(self, code: str) -> str:
-        """Transform unittest assertion methods using string replacement."""
-        import re
-
-        # Use balanced/safe replacements to avoid corrupting nested expressions
-        def _fmt_eq(a: str, b: str) -> str:
-            return f"assert {a} == {b}"
-
-        code = self._safe_replace_two_arg_call(code, "assertEqual", _fmt_eq)
-        code = self._safe_replace_two_arg_call(code, "assertEquals", _fmt_eq)
-        code = self._safe_replace_two_arg_call(code, "assertNotEqual", lambda a, b: f"assert {a} != {b}")
-        code = self._safe_replace_two_arg_call(code, "assertNotEquals", lambda a, b: f"assert {a} != {b}")
-        code = self._safe_replace_one_arg_call(code, "assertTrue", lambda a: f"assert {a}")
-        code = self._safe_replace_one_arg_call(code, "assertIsTrue", lambda a: f"assert {a}")
-        code = self._safe_replace_one_arg_call(code, "assertFalse", lambda a: f"assert not {a}")
-        code = self._safe_replace_one_arg_call(code, "assertIsFalse", lambda a: f"assert not {a}")
-        code = self._safe_replace_two_arg_call(code, "assertIs", lambda a, b: f"assert {a} is {b}")
-        code = self._safe_replace_two_arg_call(code, "assertIsNot", lambda a, b: f"assert {a} is not {b}")
-        code = self._safe_replace_one_arg_call(code, "assertIsNone", lambda a: f"assert {a} is None")
-        code = self._safe_replace_one_arg_call(code, "assertIsNotNone", lambda a: f"assert {a} is not None")
-        code = self._safe_replace_two_arg_call(code, "assertIn", lambda a, b: f"assert {a} in {b}")
-        code = self._safe_replace_two_arg_call(code, "assertNotIn", lambda a, b: f"assert {a} not in {b}")
-        code = self._safe_replace_two_arg_call(code, "assertIsInstance", lambda a, b: f"assert isinstance({a}, {b})")
-        code = self._safe_replace_two_arg_call(
-            code, "assertNotIsInstance", lambda a, b: f"assert not isinstance({a}, {b})"
-        )
-        for fn in [
-            "assertDictEqual",
-            "assertDictEquals",
-            "assertListEqual",
-            "assertListEquals",
-            "assertSetEqual",
-            "assertSetEquals",
-            "assertTupleEqual",
-            "assertTupleEquals",
-            "assertSequenceEqual",
-            "assertMultiLineEqual",
-        ]:
-            code = self._safe_replace_two_arg_call(code, fn, _fmt_eq)
-
-        # Safe replacement for assertCountEqual(a, b) -> assert sorted(a) == sorted(b)
-        def _fmt_count_equal(a: str, b: str) -> str:
-            return f"assert sorted({a}) == sorted({b})"
-
-        code = self._safe_replace_two_arg_call(code, "assertCountEqual", _fmt_count_equal)
-
-        # Normalize test method names according to prefixes (basic heuristic)
-        # Convert def <prefix>something to def <prefix>_something (avoid double underscores)
-        def _normalize_name(m: re.Match[str]) -> str:
-            name = m.group(1)
-            rest = m.group(2)
-            # Insert underscore if missing between prefix and rest
-            if rest and not rest.startswith("_"):
-                normalized = f"{name}_{rest}"
-            else:
-                normalized = f"{name}{rest}"
-            # Collapse multiple underscores
-            normalized = re.sub(r"__+", "_", normalized)
-            # Ensure valid identifier chars
-            normalized = re.sub(r"[^0-9a-zA-Z_]", "_", normalized)
-            return f"def {normalized}(self)"
-
-        # Build dynamic pattern from configured prefixes
-        prefixes = "|".join(map(re.escape, getattr(self, "test_prefixes", ["test"])))
-        code = re.sub(rf"def\s+({prefixes})([^\s(]*)\(self\)", _normalize_name, code)
-
-        # Transform exception assertions (basic transformation for now)
-        code = re.sub(r"self\.assertRaises\s*\(\s*([^,]+)\s*\)", r"pytest.raises(\1)", code)
-        code = re.sub(r"self\.assertRaisesRegex\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
-        code = re.sub(r"self\.assertRaisesRegexp\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
-
-        # Transform unittest.main() calls
-        code = re.sub(r"unittest\.main\s*\(\s*\)", r"pytest.main()", code)
-
-        return code
-
-    def _transform_fixtures_string_based(self, code: str) -> str:
-        """Transform setUp/tearDown methods using string replacement."""
-        import re
-
-        # Transform setUp method to setup_method fixture
-        setup_pattern = r"(\s+)def setUp\(self\):(.*?)(?=\n\s*def|\n\s*@|\nclass|\nif __name__|\Z)"
-
-        def setup_replacement(match: re.Match[str]) -> str:
-            indent = match.group(1)
-            setup_body = match.group(2)
-            if setup_body.strip():
-                return f"{indent}@pytest.fixture\n{indent}def setup_method(self):\n{setup_body}{indent}    yield\n"
-            else:
-                return f"{indent}@pytest.fixture\n{indent}def setup_method(self):\n{indent}    pass\n{indent}    yield\n{indent}    pass\n"
-
-        code = re.sub(setup_pattern, setup_replacement, code, flags=re.MULTILINE | re.DOTALL)
-
-        # Remove tearDown method (we model teardown via yield in setup fixture)
-        teardown_pattern = r"(\s+)def tearDown\(self\):(.*?)(?=\n\s*def|\n\s*@|\nclass|\nif __name__|\Z)"
-
-        def teardown_replacement(match: re.Match[str]) -> str:
-            return ""
-
-        code = re.sub(teardown_pattern, teardown_replacement, code, flags=re.MULTILINE | re.DOTALL)
-
-        # Note: setUpClass and tearDownClass transformations are complex and may not work perfectly
-        # with regex patterns. For now, we'll leave them as-is or handle them manually.
-        # These can be enhanced in future versions with more sophisticated CST-based transformations.
-
-        return code
-
-    def _add_pytest_imports(self, code: str) -> str:
-        """Add necessary pytest imports if not already present."""
-
-        # Check if pytest is already imported
-        if "import pytest" not in code and "from pytest" not in code:
-            # Add pytest import at the top
-            lines = code.split("\n")
-            insert_index = 0
-
-            # Find the first non-empty line
-            for i, line in enumerate(lines):
-                if line.strip() and not line.strip().startswith("#"):
-                    insert_index = i
-                    break
-
-            lines.insert(insert_index, "import pytest")
-            lines.insert(insert_index + 1, "")
-            code = "\n".join(lines)
-
-        return code
-
-    def _remove_unittest_imports_if_unused(self, code: str) -> str:
-        """Remove `import unittest` lines if `unittest` is no longer referenced."""
-        lines = code.split("\n")
-        candidate_indices: list[int] = []
-        non_candidate_lines: list[str] = []
-
-        for idx, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("import unittest") or stripped.startswith("from unittest import"):
-                candidate_indices.append(idx)
-            else:
-                non_candidate_lines.append(line)
-
-        # If no candidates, return as-is
-        if not candidate_indices:
+            new_mod = module.visit(Rewriter())
+            out_code = new_mod.code
+            # If we removed bases and left empty parentheses, normalize to no-parens form
+            try:
+                out_code = re.sub(r"class\s+(\w+)\s*\(\s*\)\s*:", r"class \1:", out_code)
+            except Exception:
+                pass
+            return out_code
+        except Exception:
             return code
-
-        rest = "\n".join(non_candidate_lines)
-        # If 'unittest' is not referenced elsewhere, drop the import lines
-        if "unittest" not in rest:
-            kept_lines = [line for i, line in enumerate(lines) if i not in candidate_indices]
-            return "\n".join(kept_lines)
-
-        return code

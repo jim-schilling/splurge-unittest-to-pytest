@@ -77,7 +77,7 @@ def test_pipeline_context_with_custom_target():
 
     try:
         config = MigrationConfig()
-        target_file = temp_file.replace(".py", ".pytest.py")
+        target_file = temp_file.replace(".py", ".pytest.txt")
         context = PipelineContext.create(source_file=temp_file, target_file=target_file, config=config)
 
         assert context.source_file == temp_file

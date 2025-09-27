@@ -81,49 +81,63 @@ if __name__ == "__main__":
     print("=== Running actual examples ===")
     print()
 
-    # Run version command
-    print("Running: splurge-unittest-to-pytest version")
-    result = subprocess.run(
-        [sys.executable, "-m", "splurge_unittest_to_pytest.cli", "version"], capture_output=True, text=True, cwd="."
-    )
-    print(f"Output: {result.stdout.strip()}")
-    print()
+    # Run the real CLI using the module entrypoint so examples exercise
+    # the actual command-line behavior instead of calling internal APIs.
+    print("Running actual CLI: python -m splurge_unittest_to_pytest.cli migrate example_unittest.py")
 
-    # Run migration command
-    print("Running: splurge-unittest-to-pytest migrate example_unittest.py --verbose")
-    result = subprocess.run(
-        [sys.executable, "-m", "splurge_unittest_to_pytest.cli", "migrate", "example_unittest.py", "--verbose"],
-        capture_output=True,
-        text=True,
-        cwd=".",
-    )
+    def run_cli_command(args: list[str]) -> None:
+        cmd = [sys.executable, "-m", "splurge_unittest_to_pytest.cli"] + args
+        print(f"\n$ {' '.join(cmd)}")
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except Exception as exc:
+            print(f"Failed to run CLI command: {exc}")
+            return
 
-    print("Migration completed!")
-    print(f"Return code: {result.returncode}")
-    if result.stdout:
-        print(f"STDOUT: {result.stdout}")
-    if result.stderr:
-        print(f"STDERR: {result.stderr}")
-    print()
+        print("--- STDOUT ---")
+        print(proc.stdout or "<no stdout>")
+        print("--- STDERR ---")
+        print(proc.stderr or "<no stderr>")
+        print(f"Exit code: {proc.returncode}")
 
-    # Check if output file was created (should be .pytest.py extension)
-    output_file = Path("example_unittest.pytest.py")
-    if output_file.exists():
-        print("=== Generated pytest file content ===")
-        print(output_file.read_text())
-        print()
+    # Basic migration example
+    run_cli_command(["migrate", str(example_file)])
 
-        # Clean up
-        output_file.unlink()
-        print("Cleaned up generated file")
+    # Show version
+    run_cli_command(["version"])
+
+    # Attempt to locate and show the transformed output file. The pipeline
+    # creates a target file by replacing the source suffix with '.pytest.py'
+    # when no explicit target is requested.
+    target_candidate = example_file.with_suffix(".pytest.py")
+    if target_candidate.exists():
+        print("\n=== Transformed file (preview) ===")
+        try:
+            print(target_candidate.read_text(encoding="utf-8")[:4000])
+        except Exception as exc:
+            print(f"Failed to read transformed file: {exc}")
     else:
-        print("No output file generated")
+        # Fallback: find any file that starts with the example stem and is
+        # not the original or backup and print the first match.
+        for p in Path(".").glob(f"{example_file.stem}*.py"):
+            # skip original and backups
+            if p == example_file or p.suffix.endswith(".backup"):
+                continue
+            try:
+                print("\n=== Transformed file (fallback preview) ===")
+                print(p.read_text(encoding="utf-8")[:4000])
+                break
+            except Exception:
+                continue
 
-    # Also clean up any backup file
+    # Also clean up any backup file the orchestrator may have created
     backup_file = Path("example_unittest.py.backup")
     if backup_file.exists():
-        backup_file.unlink()
-        print("Cleaned up backup file")
+        try:
+            backup_file.unlink()
+            print("Cleaned up backup file")
+        except Exception:
+            print("Could not remove backup file")
 
     # Clean up the example file (if it exists)
     try:

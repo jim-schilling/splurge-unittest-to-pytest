@@ -61,8 +61,9 @@ if __name__ == "__main__":
             code = f.read()
         cst_module = cst.parse_module(code)
 
-        # Create pipeline context
-        context = PipelineContext.create(source_file=str(test_file), config=config)
+        # Create pipeline context (use temporary target file)
+        target = tmp_path / "out_ir.py"
+        context = PipelineContext.create(source_file=str(test_file), target_file=str(target), config=config)
 
         # Execute step
         result = step.execute(context, cst_module)

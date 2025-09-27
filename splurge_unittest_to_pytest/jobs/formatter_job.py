@@ -51,8 +51,8 @@ class FormatterJob(Job[str, str]):
         """
         self._logger.info(f"Starting formatting job for {context.source_file}")
 
-        # Execute the job
-        result = super().execute(context)
+        # Execute the job, passing along the input from the previous job
+        result = super().execute(context, initial_input)
 
         if result.is_success():
             self._logger.info(f"Formatting job completed successfully for {context.source_file}")
