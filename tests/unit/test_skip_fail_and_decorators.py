@@ -3,7 +3,9 @@ import libcst as cst
 from splurge_unittest_to_pytest.pattern_analyzer import UnittestPatternAnalyzer
 from splurge_unittest_to_pytest.transformers import unittest_transformer
 from splurge_unittest_to_pytest.transformers.assert_transformer import transform_assertions_string_based
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import (
+    UnittestToPytestCSTTransformer as UnittestToPytestTransformer,
+)
 
 
 def test_transform_skip_and_fail_string_based():

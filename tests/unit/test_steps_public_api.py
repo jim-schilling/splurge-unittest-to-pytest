@@ -25,9 +25,11 @@ class DummyStep(Step[int, int]):
         return DummyStep.result_fn(input_data, context)
 
 
-def test_parse_steps_public_api():
+def test_parse_steps_public_api(tmp_path):
     config = MigrationConfig()
-    context = PipelineContext.create(source_file=__file__, config=config)
+    # Use a temporary output file to avoid writing next to the test sources
+    target = tmp_path / "out_parse.py"
+    context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
 
     source = """
 import unittest
@@ -50,17 +52,19 @@ class A(unittest.TestCase):
     assert "class A" in code
 
 
-def test_parse_steps_failure_path():
+def test_parse_steps_failure_path(tmp_path):
     config = MigrationConfig()
-    context = PipelineContext.create(source_file=__file__, config=config)
+    target = tmp_path / "out_bad.py"
+    context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
     bad = "def bad(:\n"
     res = ParseSourceStep("parse", EventBus()).run(context, bad)
     assert res.is_error()
 
 
-def test_format_steps_public_api():
+def test_format_steps_public_api(tmp_path):
     config = MigrationConfig(format_code=True, line_length=88)
-    context = PipelineContext.create(source_file=__file__, config=config)
+    target = tmp_path / "out_format.py"
+    context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
     code = "import sys\n\n\nprint(1)\n"
 
     fmt = FormatCodeStep("format", EventBus())
@@ -75,18 +79,19 @@ def test_format_steps_public_api():
     assert validated.is_success()
 
 
-def test_format_steps_warning_on_exception(monkeypatch):
+def test_format_steps_warning_on_exception(monkeypatch, tmp_path):
     class FailingFormat(FormatCodeStep):
         def _apply_black(self, code, config):
             raise RuntimeError("black failed")
 
     config = MigrationConfig(format_code=True)
-    context = PipelineContext.create(source_file=__file__, config=config)
+    target = tmp_path / "out_failfmt.py"
+    context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
     res = FailingFormat("format", EventBus()).run(context, "print(1)\n")
     assert res.is_warning()
 
 
-def test_pipeline_task_job_public_api():
+def test_pipeline_task_job_public_api(tmp_path):
     bus = EventBus()
     factory = PipelineFactory(bus)
 
@@ -97,7 +102,8 @@ def test_pipeline_task_job_public_api():
     pipe = factory.create_pipeline("p1", [job])
 
     cfg = MigrationConfig()
-    ctx = PipelineContext.create(source_file=__file__, config=cfg)
+    target = tmp_path / "out_pipeline.py"
+    ctx = PipelineContext.create(source_file=__file__, target_file=str(target), config=cfg)
 
     task_result = task.execute(ctx, 0)
     assert task_result.is_success()
@@ -110,7 +116,7 @@ def test_pipeline_task_job_public_api():
     assert pipe_result.is_success()
 
 
-def test_pipeline_task_error_shortcircuit():
+def test_pipeline_task_error_shortcircuit(tmp_path):
     bus = EventBus()
     factory = PipelineFactory(bus)
 
@@ -123,12 +129,13 @@ def test_pipeline_task_error_shortcircuit():
     s = factory.create_step("sx", DummyStep)
     t = factory.create_task("tx", [s])
     cfg = MigrationConfig()
-    ctx = PipelineContext.create(source_file=__file__, config=cfg)
+    target = tmp_path / "out_error.py"
+    ctx = PipelineContext.create(source_file=__file__, target_file=str(target), config=cfg)
     res = t.execute(ctx, 0)
     assert res.is_error()
 
 
-def test_pipeline_task_warning_combined():
+def test_pipeline_task_warning_combined(tmp_path):
     bus = EventBus()
     factory = PipelineFactory(bus)
 
@@ -142,7 +149,8 @@ def test_pipeline_task_warning_combined():
     s2 = factory.create_step("w2", DummyStep)
     t = factory.create_task("tw", [s1, s2])
     cfg = MigrationConfig()
-    ctx = PipelineContext.create(source_file=__file__, config=cfg)
+    target = tmp_path / "out_warn.py"
+    ctx = PipelineContext.create(source_file=__file__, target_file=str(target), config=cfg)
     res = t.execute(ctx, 0)
     assert res.is_warning()
     assert res.warnings and len(res.warnings) >= 1

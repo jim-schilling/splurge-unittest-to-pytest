@@ -3,7 +3,9 @@
 import libcst as cst
 import pytest
 
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import (
+    UnittestToPytestCSTTransformer as UnittestToPytestTransformer,
+)
 
 
 class TestUnittestToPytestTransformerAPI:

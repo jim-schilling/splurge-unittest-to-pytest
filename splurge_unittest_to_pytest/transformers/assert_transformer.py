@@ -342,6 +342,70 @@ def transform_assertions_string_based(code: str, test_prefixes: list[str] | None
     code = re.sub(r"self\.assertRaisesRegex\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
     code = re.sub(r"self\.assertRaisesRegexp\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
 
+    # Transform assertLogs/assertNoLogs into context-manager form for string fallback.
+    # We convert a bare call like 'self.assertLogs(logger, level)' into
+    # a with-statement 'with self.assertLogs(logger, level):' and indent the
+    # following non-empty line so the body remains within the context manager.
+    lines = code.splitlines()
+    out_lines: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.lstrip()
+        prefix = line[: len(line) - len(stripped)]
+
+        handled = False
+        if "self.assertLogs(" in stripped:
+            # Allow empty or one/two-argument forms
+            m = re.search(r"self\.assertLogs\(([^,)]*),?\s*([^)]*)\)", stripped)
+            if m:
+                logger_name, level = m.groups()
+                if logger_name and level:
+                    new_line = f"{prefix}with self.assertLogs({logger_name}, {level}):"
+                elif logger_name:
+                    new_line = f"{prefix}with self.assertLogs({logger_name}):"
+                else:
+                    new_line = f"{prefix}with self.assertLogs():"
+                out_lines.append(new_line)
+                # indent next non-empty line by one extra level (4 spaces)
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1]
+                    if next_line.strip():
+                        out_lines.append(prefix + "    " + next_line.lstrip())
+                        i += 2
+                        handled = True
+                    else:
+                        i += 1
+                        handled = True
+
+        if not handled and "self.assertNoLogs(" in stripped:
+            # Allow empty or one/two-argument forms
+            m = re.search(r"self\.assertNoLogs\(([^,)]*),?\s*([^)]*)\)", stripped)
+            if m:
+                logger_name, level = m.groups()
+                if logger_name and level:
+                    new_line = f"{prefix}with self.assertNoLogs({logger_name}, {level}):"
+                elif logger_name:
+                    new_line = f"{prefix}with self.assertNoLogs({logger_name}):"
+                else:
+                    new_line = f"{prefix}with self.assertNoLogs():"
+                out_lines.append(new_line)
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1]
+                    if next_line.strip():
+                        out_lines.append(prefix + "    " + next_line.lstrip())
+                        i += 2
+                        handled = True
+                    else:
+                        i += 1
+                        handled = True
+
+        if not handled:
+            out_lines.append(line)
+            i += 1
+
+    code = "\n".join(out_lines)
+
     # Transform unittest.main() calls
     code = re.sub(r"unittest\.main\s*\(\s*\)", r"pytest.main()", code)
 

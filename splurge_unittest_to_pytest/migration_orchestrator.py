@@ -47,8 +47,45 @@ class MigrationOrchestrator:
 
         self._logger.info(f"Starting migration of {source_file}")
 
+        # Determine target file path. If a target_directory is provided in
+        # the config, use it while preserving the original filename and
+        # extension. Otherwise, let PipelineContext.create compute a default
+        # (which uses the '.pytest.py' suffix).
+        target_file: str | None = None
+        suffix = config.target_suffix if config else ""
+
+        if config and config.target_directory:
+            src_path = Path(source_file)
+            dest_dir = Path(config.target_directory)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            # Determine extension to use (override if provided)
+            ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
+            if suffix:
+                # Append suffix to the stem, preserve/override extension
+                new_name = f"{src_path.stem}{suffix}{ext_to_use}"
+            else:
+                # No suffix: preserve full stem and set extension (may be same as original)
+                new_name = f"{src_path.stem}{ext_to_use}"
+
+            target_file = str(dest_dir.joinpath(new_name))
+        else:
+            # No explicit target_directory; if a suffix is provided, apply
+            # it to the default target filename stem (before adding the
+            # '.pytest.py' suffix applied by PipelineContext.create). We
+            # construct a tentative target and pass it in; otherwise leave
+            # target_file as None to let PipelineContext.create decide.
+            if suffix:
+                src_path = Path(source_file)
+                # keep original extension, but add suffix to stem then
+                # append the default '.pytest.py' suffix after
+                ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
+                tentative = f"{src_path.stem}{suffix}{ext_to_use}"
+                # Create target path alongside the source
+                target_file = str(src_path.with_name(tentative))
+
         # Create pipeline context
-        context = PipelineContext.create(source_file=source_file, config=config)
+        context = PipelineContext.create(source_file=source_file, target_file=target_file, config=config)
 
         # Validate source file exists
         if not Path(source_file).exists():
@@ -147,8 +184,9 @@ class MigrationOrchestrator:
         Returns:
             Configured migration pipeline
         """
-        # For now, only include the collector job to satisfy modular architecture tests
-        jobs: list[Any] = [self.collector_job]
+        # Build a pipeline that runs collector -> formatter -> output so the
+        # CLI and programmatic API produce written output files by default.
+        jobs: list[Any] = [self.collector_job, self.formatter_job, self.output_job]
 
         return Pipeline("migration", jobs, self.event_bus)
 

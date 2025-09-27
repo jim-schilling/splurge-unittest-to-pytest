@@ -27,7 +27,9 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
         """Apply unittest to pytest transformations."""
         try:
             # Use full transform_code to include assertion replacements and imports
-            transformer = UnittestToPytestTransformer(test_prefixes=context.config.test_method_prefixes)
+            transformer = UnittestToPytestTransformer(
+                test_prefixes=context.config.test_method_prefixes, parametrize=context.config.parametrize
+            )
             source_code: str = module.code
             transformed_code: str = transformer.transform_code(source_code)
             # Parse back into CST for downstream steps

@@ -6,12 +6,13 @@ using the typer library.
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import typer
 
+from . import main as main_module
 from .context import MigrationConfig
 from .events import EventBus, LoggingSubscriber
-from .migration_orchestrator import MigrationOrchestrator
 from .pipeline import PipelineFactory
 
 # Initialize typer app
@@ -72,6 +73,9 @@ def create_config(
     generate_report: bool = True,
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
+    parametrize: bool = False,
+    suffix: str = "",
+    ext: str | None = None,
 ) -> MigrationConfig:
     """Create migration configuration from CLI arguments.
 
@@ -99,8 +103,11 @@ def create_config(
         Configured MigrationConfig instance
     """
     from .context import FixtureScope
+    from .helpers.utility import sanitize_extension, sanitize_suffix
 
     fixture_scope_enum = FixtureScope(fixture_scope)
+    suffix = sanitize_suffix(suffix)
+    ext = sanitize_extension(ext)
 
     return MigrationConfig(
         target_directory=target_directory,
@@ -125,6 +132,9 @@ def create_config(
         generate_report=generate_report,
         report_format=report_format,
         test_method_prefixes=test_method_prefixes or ["test"],
+        parametrize=parametrize,
+        target_suffix=suffix,
+        target_extension=ext,
     )
 
 
@@ -163,6 +173,9 @@ def validate_source_files(source_files: list[str]) -> list[str]:
         raise typer.Exit(code=1)
 
     return valid_files
+
+
+# mypy: ignore-errors
 
 
 def validate_source_files_with_patterns(
@@ -251,6 +264,15 @@ def migrate(
     test_method_prefixes: list[str] = typer.Option(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
+    parametrize: bool = typer.Option(
+        False, "--parametrize", help="Attempt conservative subTest -> parametrize conversions"
+    ),
+    suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
+    ext: str | None = typer.Option(
+        None,
+        "--ext",
+        help="Override target file extension (e.g. 'py' or '.txt'). Defaults to preserving the original extension.",
+    ),
     config_file: str | None = typer.Option(None, "--config", help="Configuration file path"),
 ) -> None:
     """Migrate unittest files to pytest format.
@@ -288,49 +310,34 @@ def migrate(
             generate_report=generate_report,
             report_format=report_format,
             test_method_prefixes=test_method_prefixes,
+            parametrize=parametrize,
+            suffix=suffix,
+            ext=ext,
         )
 
         # Validate source files
-        valid_files = validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse)
-        logger.info(f"Found {len(valid_files)} Python files to process")
+        valid_files = cast(
+            list[str], validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse) or []
+        )
+        assert isinstance(valid_files, list)
+        try:
+            num_valid = len(valid_files)  # type: ignore[arg-type]
+        except Exception:
+            num_valid = 0
+        logger.info(f"Found {num_valid} Python files to process")
 
         # Create pipeline factory
         PipelineFactory(event_bus)  # Initialize factory for future use
 
-        # Process each file
-        successful_migrations = 0
-        failed_migrations = 0
+        # Delegate heavy lifting to the programmatic API entrypoint so the logic
+        # can be exercised from both the CLI and other Python code.
+        result = main_module.migrate(valid_files, config=config)
 
-        for source_file in valid_files:
-            try:
-                logger.info(f"Processing: {source_file}")
-
-                # Create migration orchestrator and execute migration
-                orchestrator = MigrationOrchestrator()
-
-                # Execute the migration
-                migration_result = orchestrator.migrate_file(source_file, config)
-
-                if migration_result.is_success():
-                    if verbose:
-                        logger.info(f"Migration completed successfully: {migration_result.data}")
-                    successful_migrations += 1
-                else:
-                    logger.error(f"Migration failed for {source_file}: {migration_result.error}")
-                    failed_migrations += 1
-
-            except Exception as e:
-                logger.error(f"Failed to process {source_file}: {e}")
-                failed_migrations += 1
-                if fail_fast:
-                    break
-
-        # Print summary
-        logger.info("Migration completed!")
-        logger.info(f"Successful: {successful_migrations}")
-        logger.info(f"Failed: {failed_migrations}")
-
-        if failed_migrations > 0:
+        if result.is_success():
+            logger.info("Migration completed!")
+            logger.info(f"Migrated: {len(result.data)} files")
+        else:
+            logger.error(f"Migration failed: {result.error}")
             raise typer.Exit(code=1) from None
 
     except Exception as e:

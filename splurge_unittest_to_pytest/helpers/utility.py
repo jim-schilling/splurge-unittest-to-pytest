@@ -190,3 +190,43 @@ def safe_replace_one_arg_call(code: str, func_name: str, format_fn: Callable[[st
         out_parts.append(replacement)
         i = k + 1
     return "".join(out_parts)
+
+
+def sanitize_suffix(s: str) -> str:
+    """Sanitize a user-provided suffix to be safe for filenames.
+
+    Rules:
+    - Collapse consecutive dots
+    - Strip leading/trailing dots
+    - Allow only alphanumerics, underscores, and hyphens
+    - Strip leading/trailing underscores/hyphens
+    - If non-empty, return with a single leading underscore (e.g. 'x' -> '_x')
+    """
+    import re
+
+    s = re.sub(r"\.{2,}", ".", s)
+    s = s.strip(".")
+    s = re.sub(r"[^A-Za-z0-9_\-]", "", s)
+    s = s.strip("_-")
+    return f"_{s}" if s else ""
+
+
+def sanitize_extension(e: str | None) -> str | None:
+    """Sanitize and normalize an extension.
+
+    Returns a string starting with '.' or None if no valid extension.
+    Converts to lower-case and strips unsafe characters.
+    """
+    import re
+
+    if e is None:
+        return None
+    e = e.strip()
+    if not e:
+        return None
+    e = re.sub(r"\.{2,}", "", e)
+    e = e.lstrip(".")
+    e = re.sub(r"[^A-Za-z0-9]", "", e)
+    if not e:
+        return None
+    return f".{e.lower()}"

@@ -18,7 +18,8 @@ def test_modular_architecture():
     # Test that we can create a migration pipeline
     pipeline = orchestrator._create_migration_pipeline()
     assert pipeline.name == "migration"
-    assert len(pipeline.jobs) == 1  # Just the collector job for now
+    # Pipeline now includes collector, formatter and output jobs by default
+    assert len(pipeline.jobs) == 3
 
     # Test basic config creation
     config = MigrationConfig()

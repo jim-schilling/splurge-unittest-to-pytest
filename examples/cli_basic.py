@@ -11,9 +11,10 @@ The CLI provides several commands:
 - init-config: Initialize a configuration file with default settings
 """
 
-import subprocess
-import sys
 from pathlib import Path
+
+from splurge_unittest_to_pytest import main as main_module
+from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestTransformer
 
 
 def run_cli_example():
@@ -81,49 +82,47 @@ if __name__ == "__main__":
     print("=== Running actual examples ===")
     print()
 
-    # Run version command
-    print("Running: splurge-unittest-to-pytest version")
-    result = subprocess.run(
-        [sys.executable, "-m", "splurge_unittest_to_pytest.cli", "version"], capture_output=True, text=True, cwd="."
-    )
-    print(f"Output: {result.stdout.strip()}")
+    # First, run the CST/string transformer directly so we can reliably
+    # show the transformed code (the orchestrator pipeline may currently
+    # return the original input depending on pipeline composition).
+    print("Running transformer directly: UnittestToPytestTransformer.transform_code(...)")
+    src_text = example_file.read_text(encoding="utf-8")
+    transformer = UnittestToPytestTransformer()
+    transformed = transformer.transform_code(src_text)
+
+    # Write and show transformed output
+    direct_out = Path("example_unittest.transformed.py")
+    direct_out.write_text(transformed, encoding="utf-8")
+    print(f"Wrote direct transformed content to: {direct_out}")
+    print("=== Direct transformed preview (first 2000 chars) ===")
+    print(transformed[:2000])
     print()
 
-    # Run migration command
-    print("Running: splurge-unittest-to-pytest migrate example_unittest.py --verbose")
-    result = subprocess.run(
-        [sys.executable, "-m", "splurge_unittest_to_pytest.cli", "migrate", "example_unittest.py", "--verbose"],
-        capture_output=True,
-        text=True,
-        cwd=".",
-    )
+    # Clean up the direct transformed file for the example
+    try:
+        direct_out.unlink()
+    except Exception:
+        pass
 
-    print("Migration completed!")
-    print(f"Return code: {result.returncode}")
-    if result.stdout:
-        print(f"STDOUT: {result.stdout}")
-    if result.stderr:
-        print(f"STDERR: {result.stderr}")
-    print()
+    # Also demonstrate the programmatic migration API as a fallback
+    print("Running migration via programmatic API: main.migrate([...])")
+    res = main_module.migrate([str(example_file)])
 
-    # Check if output file was created (should be .pytest.py extension)
-    output_file = Path("example_unittest.pytest.py")
-    if output_file.exists():
-        print("=== Generated pytest file content ===")
-        print(output_file.read_text())
-        print()
-
-        # Clean up
-        output_file.unlink()
-        print("Cleaned up generated file")
+    if res.is_success():
+        print("Programmatic migrate returned success (data preview):")
+        print(res.data)
     else:
-        print("No output file generated")
+        print("Programmatic migrate returned error:")
+        print(res.error)
 
-    # Also clean up any backup file
+    # Also clean up any backup file the orchestrator may have created
     backup_file = Path("example_unittest.py.backup")
     if backup_file.exists():
-        backup_file.unlink()
-        print("Cleaned up backup file")
+        try:
+            backup_file.unlink()
+            print("Cleaned up backup file")
+        except Exception:
+            print("Could not remove backup file")
 
     # Clean up the example file (if it exists)
     try:
