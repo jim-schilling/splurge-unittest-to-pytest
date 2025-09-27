@@ -104,6 +104,11 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
         self.parametrize = parametrize
         # Replacement registry for two-pass metadata-based replacements
         self.replacement_registry = ReplacementRegistry()
+        # Stack to track current function context during traversal
+        self._function_stack: list[str] = []
+        # Set of function names that need the pytest 'request' fixture injected
+        self._functions_need_request: set[str] = set()
+        # (function stack fields are initialized in __init__)
 
     # Require PositionProvider metadata so we can record precise source spans
     METADATA_DEPENDENCIES = (PositionProvider,)
@@ -264,7 +269,11 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
         return updated_node.with_changes(body=final_body)
 
     def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
-        """Handle function-level rewrites: parametrize conversion, subTest -> subtests, and assertLogs wrapping."""
+        """Handle function-level rewrites: parametrize conversion, subTest -> subtests, and assertLogs wrapping.
+
+        Also inject the `request` fixture parameter when transforms (e.g., self.id()) require it.
+        """
+        func_name = original_node.name.value
         try:
             # Rewrite function-level decorators (skip/skipIf)
             orig_decorators = list(updated_node.decorators or [])
@@ -288,12 +297,34 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
 
             # Then wrap assertLogs/assertNoLogs patterns using shared helper
             new_body = wrap_assert_logs_in_block(body_with_subtests)
-            return updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
+            result_node = updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
         except Exception:
-            return updated_node
+            result_node = updated_node
+
+        # If this function was marked as requiring the pytest 'request' fixture, ensure it exists
+        if func_name in self._functions_need_request:
+            params = list(result_node.params.params)
+            if not any(isinstance(p.name, cst.Name) and p.name.value == "request" for p in params):
+                params.append(cst.Param(name=cst.Name(value="request")))
+                new_params = result_node.params.with_changes(params=params)
+                result_node = result_node.with_changes(params=new_params)
+
+        # Pop function stack if we tracked it
+        if self._function_stack:
+            try:
+                self._function_stack.pop()
+            except Exception:
+                pass
+
+        return result_node
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Visit function definitions to track setUp/tearDown methods."""
+        # Track function stack entry so leave_Call can know the enclosing function
+        try:
+            self._function_stack.append(node.name.value)
+        except Exception:
+            pass
         name = node.name.value
         # Decide whether we're inside a class; if so, record per-class; otherwise module-level
         cls = self.current_class
@@ -445,6 +476,9 @@ class UnittestToPytestCSTTransformer(cst.CSTTransformer):
                     except Exception:
                         # On any transformation error, fall back to the original node
                         return updated_node
+
+                # Note: preserve TestCase API calls like self.id() and self.shortDescription()
+                # to maintain compatibility with string-based fallback handling and tests.
 
         return updated_node
 

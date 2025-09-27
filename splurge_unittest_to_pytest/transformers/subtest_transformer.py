@@ -89,8 +89,22 @@ def convert_simple_subtests_to_parametrize(
         if not isinstance(inner_body, cst.IndentedBlock) or len(inner_body.body) < 1:
             return None
         for stmt in inner_body.body:
-            if not isinstance(stmt, cst.SimpleStatementLine | cst.If | cst.Expr | cst.Assign):
-                return None
+            # Allow an If block.
+            if isinstance(stmt, cst.If):
+                continue
+            # Allow a single simple small-statement as long as it is not a Return.
+            if isinstance(stmt, cst.SimpleStatementLine):
+                if len(stmt.body) != 1:
+                    return None
+                inner_stmt = stmt.body[0]
+                # Disallow Return statements inside the subTest body because
+                # they make the conversion unsafe.
+                if isinstance(inner_stmt, cst.Return):
+                    return None
+                # otherwise accept (Expr, Assign, Assert, etc.)
+                continue
+            # other statement types are not allowed
+            return None
 
         iter_node = first.iter
         values: list[cst.BaseExpression] = []
