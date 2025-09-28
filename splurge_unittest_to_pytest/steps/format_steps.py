@@ -1,4 +1,10 @@
-"""Formatting steps for the unittest to pytest migration pipeline."""
+"""Formatting steps used by the migration pipeline.
+
+This module exposes pipeline steps that format and validate the generated
+Python code. The steps use the programmatic APIs of ``isort`` and ``black``
+when available and fall back to returning the unmodified code with a
+warning on failure.
+"""
 
 import ast
 from typing import Any
@@ -9,10 +15,25 @@ from ..result import Result
 
 
 class FormatCodeStep(Step[str, str]):
-    """Format generated code using isort and black programmatic APIs."""
+    """Format generated code using isort and black programmatic APIs.
+
+    The step applies ``isort`` to sort and group imports and then runs
+    ``black`` to format the code. Formatting is always applied by the
+    pipeline; older configuration flags that toggled formatting were removed.
+    """
 
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
-        """Format code using isort and black programmatic APIs."""
+        """Format Python source code.
+
+        Args:
+            context: Pipeline execution context containing configuration.
+            code: Unformatted/generated Python source code.
+
+        Returns:
+            A :class:`Result` containing the formatted code on success or a
+            warning result containing the original code when formatting
+            fails.
+        """
         # Formatting is always applied by the pipeline; the legacy
         # `format_code` flag has been removed. Proceed to format.
 
@@ -37,7 +58,15 @@ class FormatCodeStep(Step[str, str]):
             return Result.warning(code, [f"Code formatting failed: {e}"], metadata={"formatting_failed": True})
 
     def _apply_isort(self, code: str, config: Any) -> str:
-        """Apply isort programmatically to sort imports."""
+        """Sort imports using ``isort`` programmatic API.
+
+        Args:
+            code: Source code to process.
+            config: Pipeline configuration (used for line-length, etc.).
+
+        Returns:
+            The code with imports sorted according to the configured rules.
+        """
         import isort
 
         # Configure isort with appropriate settings
@@ -55,7 +84,16 @@ class FormatCodeStep(Step[str, str]):
         return isort.code(code, config=settings)
 
     def _apply_black(self, code: str, config: Any) -> str:
-        """Apply black programmatically for code formatting."""
+        """Format code using ``black`` programmatic API.
+
+        Args:
+            code: Source code to format.
+            config: Pipeline configuration (unused now but kept for symmetry).
+
+        Returns:
+            The formatted source code. If there is nothing to change the
+            original ``code`` is returned.
+        """
         import black
 
         # Configure black with appropriate settings
@@ -68,10 +106,26 @@ class FormatCodeStep(Step[str, str]):
 
 
 class ValidateGeneratedCodeStep(Step[str, str]):
-    """Validate generated Python code."""
+    """Validate generated Python source for syntax and imports.
+
+    Performs a lightweight validation pass that ensures the generated code is
+    valid Python (parses via ``ast``) and performs basic import-line checks.
+    This step is intentionally conservative and can be extended for deeper
+    analysis in the future.
+    """
 
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
-        """Validate generated code for syntax and imports."""
+        """Validate generated code for syntax and imports.
+
+        Args:
+            context: Pipeline execution context.
+            code: Generated Python source code to validate.
+
+        Returns:
+            A success :class:`Result` with the input code when validation
+            passes, or a failure :class:`Result` with the parsing exception
+            when validation fails.
+        """
         try:
             # Syntax validation
             ast.parse(code)
@@ -84,7 +138,11 @@ class ValidateGeneratedCodeStep(Step[str, str]):
             return Result.failure(e)
 
     def _validate_imports(self, code: str) -> None:
-        """Validate that imports are properly structured."""
+        """Run basic validation of import statements.
+
+        This performs minimal checks on import lines and is a placeholder for
+        more sophisticated validation that may be added later.
+        """
         # Basic import validation - can be extended
         lines = code.split("\n")
         for line in lines:
