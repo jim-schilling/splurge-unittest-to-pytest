@@ -24,6 +24,8 @@ from typing import cast
 
 import libcst as cst
 
+# Debug collector removed; transformations should be silent in normal runs
+
 
 def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
     """Rewrite ``self.assertEqual(a, b)`` to a bare ``assert a == b``.
@@ -584,6 +586,11 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         # Build WithItem if this call maps to a known context (warns/raises/logs)
         with_item = build_with_item_from_assert_call(expr)
         if not with_item:
+            # DEBUG: couldn't build with_item from bare call
+            try:
+                print(f"DEBUG: handle_bare_assert_call - no with_item for expr={expr!r}")
+            except Exception:
+                pass
             return [], 0, False
 
         # Determine next statement (or None)
@@ -616,6 +623,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
     """
     new_items: list[cst.WithItem] = []
     changed = False
+    # silently inspect With items
     for item in stmt.items:
         ctx = item.item
         if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
@@ -636,6 +644,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
                     new_item = cst.WithItem(item=warn_call)
                     new_items.append(new_item)
                     changed = True
+                    # transformed to pytest.warns
                     continue
 
                 if func.attr.value in {"assertLogs", "assertNoLogs"}:
@@ -647,6 +656,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
                     new_item = cst.WithItem(item=cap_call)
                     new_items.append(new_item)
                     changed = True
+                    # transformed to caplog.at_level
                     continue
 
                 if func.attr.value in {"assertRaises", "assertRaisesRegex"}:
@@ -661,6 +671,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
                     new_item = cst.WithItem(item=raises_call, asname=item.asname)
                     new_items.append(new_item)
                     changed = True
+                    # transformed to pytest.raises
                     continue
 
         new_items.append(item)
@@ -1458,123 +1469,173 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                 i += consumed
                 wrapped = consumed > 0
 
-        # Handle existing with-statements that use self.assertLogs / assertWarns etc.
+        # Handle existing with-statements by delegating to transform_with_items
         elif isinstance(stmt, cst.With):
             try:
-                new_items: list[cst.WithItem] = []
-                changed = False
-                for item in stmt.items:
-                    ctx = item.item
-                    if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
-                        func = ctx.func
-                        if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
-                            if func.attr.value in {"assertWarns", "assertWarnsRegex"}:
-                                exc_arg = ctx.args[0] if ctx.args else None
-                                match_arg = ctx.args[1] if len(ctx.args) >= 2 else None
-                                warn_items_args_local: list[cst.Arg] = []
-                                if exc_arg:
-                                    warn_items_args_local.append(cst.Arg(value=exc_arg.value))
-                                if match_arg:
-                                    warn_items_args_local.append(
-                                        cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value)
-                                    )
-                                warn_call = cst.Call(
-                                    func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
-                                    args=warn_items_args_local,
-                                )
-                                new_item = cst.WithItem(item=warn_call)
-                                new_items.append(new_item)
-                                changed = True
-                                continue
+                new_with, alias_name, changed = transform_with_items(stmt)
 
-                            if func.attr.value in {"assertLogs", "assertNoLogs"}:
-                                # logger_arg intentionally unused here; we only need level
-                                level_arg = ctx.args[1] if len(ctx.args) >= 2 else None
-                                if level_arg is None:
-                                    for a in ctx.args:
-                                        if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
-                                            level_arg = a
-                                            break
-                                caplog_level_args_local: list[cst.Arg] = []
-                                if level_arg:
-                                    level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
-                                    caplog_level_args_local.append(cst.Arg(value=level_value))
-                                else:
-                                    caplog_level_args_local.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
-                                cap_call = build_caplog_call(ctx)
-                                # Do not preserve `as <name>` alias for caplog conversions;
-                                # tests expect use of the `caplog` fixture rather than a
-                                # local alias variable.
-                                new_item = cst.WithItem(item=cap_call)
-                                new_items.append(new_item)
-                                changed = True
-                                continue
-
-                            if func.attr.value in {"assertRaises", "assertRaisesRegex"}:
-                                exc_arg = ctx.args[0] if ctx.args else None
-                                raises_items_args_local: list[cst.Arg] = []
-                                if exc_arg:
-                                    raises_items_args_local.append(cst.Arg(value=exc_arg.value))
-                                raises_call = cst.Call(
-                                    func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
-                                    args=raises_items_args_local,
-                                )
-                                # Preserve any 'as <name>' alias from the original WithItem
-                                new_item = cst.WithItem(item=raises_call, asname=item.asname)
-                                new_items.append(new_item)
-                                changed = True
-                                continue
-
-                    # default: keep original item
-                    new_items.append(item)
-
-                if changed:
-                    new_with = stmt.with_changes(items=new_items)
-
-                    # If the original WithItem had an alias (e.g., 'as log'),
-                    # rewrite references to that alias inside the WITH block to
-                    # use the `caplog` fixture. This covers patterns like
-                    #   assert len(log.output) == 2
-                    #   assert 'msg' in log.output[0]
-                    # and also unittest-style calls inside the block such as
-                    #   self.assertEqual(len(log.output), 2)
-                    alias_name = get_with_alias_name(stmt.items)
-
+                if not changed:
+                    # Nothing to do; append original and mark handled to
+                    # avoid falling through and appending twice.
+                    out.append(stmt)
+                    i += 1
+                    wrapped = True
+                else:
+                    # If the transformed With had an alias that should be
+                    # rewritten inside the block, do so.
                     if alias_name:
                         try:
                             new_with = rewrite_asserts_using_alias_in_with_body(new_with, alias_name)
                         except Exception:
-                            # conservative: on any failure keep original new_with
                             pass
 
-                    # Always append the transformed With node (changed -> append)
                     out.append(new_with)
-
-                    # If the original WithItem had an alias (e.g., 'as log'), we need to
-                    # rewrite following assertions that reference that alias to use
-                    # the `caplog` fixture. For example:
-                    #   assert len(log.output) == 2  ->  assert len(caplog.records) == 2
-                    #   assert 'msg' in log.output[0] -> assert 'msg' in caplog.records[0].getMessage()
-                    alias_name = get_with_alias_name(stmt.items)
 
                     if alias_name:
                         try:
                             rewrite_following_statements_for_alias(statements, i + 1, alias_name)
                         except Exception:
-                            # conservative: on any error do nothing
                             pass
 
                     i += 1
                     wrapped = True
             except Exception:
-                # Fall back to preserving original with-statement
-                pass
+                # Conservative fallback: keep original With
+                out.append(stmt)
+                i += 1
+                wrapped = True
 
         if not wrapped:
+            # If stmt is a Try, recursively apply wrap_assert_in_block to its inner blocks
+            try:
+                if isinstance(stmt, cst.Try):
+                    # Process the try body
+                    try_body = getattr(stmt, "body", None)
+                    if try_body is not None and hasattr(try_body, "body"):
+                        new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(try_body.body)))
+                    else:
+                        new_try_body = try_body
+
+                    # Process except handlers
+                    new_handlers = []
+                    for h in getattr(stmt, "handlers", []) or []:
+                        h_body = getattr(h, "body", None)
+                        if h_body is not None and hasattr(h_body, "body"):
+                            new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(h_body.body)))
+                            new_h = h.with_changes(body=new_h_body)
+                        else:
+                            new_h = h
+                        new_handlers.append(new_h)
+
+                    # Process orelse
+                    new_orelse = getattr(stmt, "orelse", None)
+                    if new_orelse is not None and hasattr(new_orelse, "body"):
+                        new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(new_orelse.body)))
+
+                    # Process finalbody
+                    new_finalbody = getattr(stmt, "finalbody", None)
+                    if new_finalbody is not None and hasattr(new_finalbody, "body"):
+                        new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(new_finalbody.body)))
+
+                    # Build new Try node with updated blocks
+                    try:
+                        new_try = stmt.with_changes(
+                            body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody
+                        )
+                        # Constructed new_try; no debug printing
+                        # Ensure nested With items inside the newly constructed Try
+                        # are rewritten as well before appending. This guarantees
+                        # inner context-manager rewrites are not lost.
+                        try:
+                            new_try = _recursively_rewrite_withs(new_try)
+                        except Exception:
+                            pass
+                        out.append(new_try)
+                        i += 1
+                        continue
+                    except Exception:
+                        # fallback to original stmt on any error
+                        pass
+            except Exception:
+                pass
+
             out.append(stmt)
             i += 1
 
-    return out
+    # Final step: ensure nested With items inside Try/If/With were rewritten
+    final_out: list[cst.BaseStatement] = []
+    for s in out:
+        final_out.append(_recursively_rewrite_withs(s))
+
+    return final_out
+
+
+def _recursively_rewrite_withs(stmt: cst.BaseStatement) -> cst.BaseStatement:
+    """Recursively rewrite With.items inside a statement using transform_with_items.
+
+    This post-pass ensures any nested With nodes (inside Try, If, or With
+    bodies) have their With.items converted from self.assert* to pytest
+    equivalents. It is intentionally conservative and returns the original
+    statement on any error.
+    """
+    try:
+        # Direct With node: transform its items and recurse into its body
+        if isinstance(stmt, cst.With):
+            new_with, alias, changed = transform_with_items(stmt)
+            # Recurse into body
+            body = new_with.body
+            if hasattr(body, "body"):
+                new_inner = []
+                for s in body.body:
+                    new_inner.append(_recursively_rewrite_withs(s))
+                new_body = body.with_changes(body=new_inner)
+                return new_with.with_changes(body=new_body)
+            return new_with
+
+        # Try nodes: rewrite bodies and handlers
+        if isinstance(stmt, cst.Try):
+            new_body = stmt.body
+            if hasattr(stmt.body, "body"):
+                new_body = stmt.body.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.body.body])
+
+            new_handlers = []
+            for h in getattr(stmt, "handlers", []) or []:
+                if hasattr(h.body, "body"):
+                    new_h = h.with_changes(
+                        body=h.body.with_changes(body=[_recursively_rewrite_withs(s) for s in h.body.body])
+                    )
+                else:
+                    new_h = h
+                new_handlers.append(new_h)
+
+            new_orelse = stmt.orelse
+            if getattr(stmt, "orelse", None) and hasattr(stmt.orelse, "body"):
+                new_orelse = stmt.orelse.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body])
+
+            new_final = stmt.finalbody
+            if getattr(stmt, "finalbody", None) and hasattr(stmt.finalbody, "body"):
+                new_final = stmt.finalbody.with_changes(
+                    body=[_recursively_rewrite_withs(s) for s in stmt.finalbody.body]
+                )
+
+            return stmt.with_changes(body=new_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_final)
+
+        # If nodes: rewrite bodies and else blocks
+        if isinstance(stmt, cst.If):
+            new_body = stmt.body
+            if hasattr(stmt.body, "body"):
+                new_body = stmt.body.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.body.body])
+            new_orelse = stmt.orelse
+            if getattr(stmt, "orelse", None) and hasattr(stmt.orelse, "body"):
+                new_orelse = stmt.orelse.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body])
+            return stmt.with_changes(body=new_body, orelse=new_orelse)
+
+        # Default: return original
+        return stmt
+    except Exception:
+        return stmt
+
+    # Debug: unreachable here normally
 
 
 def transform_skip_test(node: cst.Call) -> cst.CSTNode:

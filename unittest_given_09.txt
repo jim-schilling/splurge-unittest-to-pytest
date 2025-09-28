@@ -1,0 +1,131 @@
+import os
+import tempfile
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global temp_dir
+    temp_dir = tempfile.mkdtemp()
+    os.environ["TEST_DATA_DIR"] = temp_dir
+    yield
+    global temp_dir
+    import shutil
+
+    shutil.rmtree(temp_dir)
+    del os.environ["TEST_DATA_DIR"]
+    temp_dir = None
+
+
+class TestFileManager:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(cls):
+        cls.file_manager = FileManager(temp_dir)
+        cls.logger = MagicMock()
+        cls.file_manager.set_logger(cls.logger)
+        yield
+        cls.file_manager = None
+        cls.logger = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.test_filename = "test_file.txt"
+        self.test_content = "Test content for file operations"
+        self.test_filepath = os.path.join(temp_dir, self.test_filename)
+        yield
+        if os.path.exists(self.test_filepath):
+            os.remove(self.test_filepath)
+        self.test_filename = None
+        self.test_content = None
+        self.test_filepath = None
+
+    def test_create_file(self):
+        success = self.file_manager.create_file(self.test_filename, self.test_content)
+        assert success
+        assert os.path.exists(self.test_filepath)
+        self.logger.info.assert_called_with(f"File created: {self.test_filename}")
+
+    @patch("builtins.open", side_effect=PermissionError("Access denied"))
+    def test_create_file_permission_error(self, mock_open):
+        success = self.file_manager.create_file(self.test_filename, self.test_content)
+        assert not success
+        self.logger.error.assert_called_with(
+            f"Permission error creating file: {self.test_filename}"
+        )
+
+    def test_read_file_content(self):
+        self.file_manager.create_file(self.test_filename, self.test_content)
+        content = self.file_manager.read_file(self.test_filename)
+        assert content == self.test_content
+
+    def test_file_exists_check(self):
+        assert not self.file_manager.file_exists(self.test_filename)
+        self.file_manager.create_file(self.test_filename, self.test_content)
+        assert self.file_manager.file_exists(self.test_filename)
+
+
+class TestFileProcessor:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(cls):
+        cls.processor = FileProcessor()
+        yield
+        cls.processor = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.sample_lines = ["Line 1", "Line 2", "Line 3"]
+        self.sample_text = "\n".join(self.sample_lines)
+        yield
+        self.sample_lines = None
+        self.sample_text = None
+
+    def test_count_lines(self):
+        count = self.processor.count_lines(self.sample_text)
+        assert count == 3
+
+    def test_count_words(self):
+        count = self.processor.count_words(self.sample_text)
+        assert count == 6
+
+
+class FileManager:
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+        self.logger = None
+
+    def set_logger(self, logger):
+        self.logger = logger
+
+    def create_file(self, filename, content):
+        filepath = os.path.join(self.base_dir, filename)
+        try:
+            with open(filepath, "w") as f:
+                f.write(content)
+            with open(filepath, "w") as f:
+                f.write(content)
+            return True
+        except PermissionError:
+            if self.logger:
+                self.logger.error(f"Permission error creating file: {filename}")
+            return False
+
+    def read_file(self, filename):
+        filepath = os.path.join(self.base_dir, filename)
+        with open(filepath, "r") as f:
+            return f.read()
+        with open(filepath, "r") as f:
+            return f.read()
+
+    def file_exists(self, filename):
+        filepath = os.path.join(self.base_dir, filename)
+        return os.path.exists(filepath)
+
+
+class FileProcessor:
+    def count_lines(self, text):
+        return len(text.split("\n"))
+
+    def count_words(self, text):
+        return len(text.split())

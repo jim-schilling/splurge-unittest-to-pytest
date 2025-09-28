@@ -62,7 +62,12 @@ class OutputJob(Job[str, str]):
 
         # Create backup if requested (skip on dry-run)
         if context.config.backup_originals and not context.config.dry_run:
+            self._logger.info(f"Creating backup for {context.source_file}")
             self._create_backup(context.source_file)
+        else:
+            self._logger.debug(
+                f"Skipping backup: dry_run={context.config.dry_run}, backup={context.config.backup_originals}"
+            )
 
         # Execute the job with the transformed code as input
         result = super().execute(context, initial_input)
@@ -93,5 +98,7 @@ class OutputJob(Job[str, str]):
 
                 shutil.copy2(source_path, backup_path)
                 self._logger.info(f"Created backup: {backup_path}")
+            else:
+                self._logger.info(f"Backup already exists, skipping: {backup_path}")
         except Exception as e:
             self._logger.warning(f"Failed to create backup for {source_file}: {e}")
