@@ -1,8 +1,17 @@
-"""Subtest-related helper transforms extracted from the main unittest transformer.
+"""Helpers to transform unittest subTest patterns to pytest equivalents.
 
-These functions are intentionally conservative and small: they inspect and rewrite
-`with self.subTest(...)` patterns and provide a helper to convert a simple
-for-with-subTest pattern into a pytest.mark.parametrize decorator when safe.
+This module provides conservative, small helpers that inspect and rewrite
+``with self.subTest(...)`` patterns. Functions include utilities to:
+
+- Convert a simple ``for`` loop containing ``with self.subTest(...)``
+    into a ``@pytest.mark.parametrize`` decorator when it is safe to do so.
+- Convert ``self.subTest`` uses into calls to the lightweight
+    ``subtests.test`` helper (when present) by rewriting ``with`` items.
+- Detect whether a body already uses the ``subtests`` helper.
+
+All transforms are intentionally cautious: when a pattern is ambiguous
+or potentially unsafe to rewrite the helpers will return ``None`` or
+leave nodes unchanged.
 """
 
 # mypy: ignore-errors
@@ -15,6 +24,17 @@ import libcst as cst
 
 
 def _extract_from_list_or_tuple(node: cst.BaseExpression) -> list[cst.BaseExpression] | None:
+    """Return list of element expressions when node is a List or Tuple.
+
+    Args:
+        node: A :class:`libcst.BaseExpression` expected to be a list or
+            tuple literal.
+
+    Returns:
+        A list of :class:`libcst.BaseExpression` values when ``node`` is a
+        :class:`libcst.List` or :class:`libcst.Tuple`, otherwise ``None``.
+    """
+
     vals: list[cst.BaseExpression] = []
     if isinstance(node, cst.List | cst.Tuple):
         for el in node.elements:
@@ -27,10 +47,30 @@ def _extract_from_list_or_tuple(node: cst.BaseExpression) -> list[cst.BaseExpres
 def convert_simple_subtests_to_parametrize(
     original_func: cst.FunctionDef, updated_func: cst.FunctionDef, transformer
 ) -> cst.FunctionDef | None:
-    """Conservative conversion delegating sanity checks to avoid incorrect rewrites.
+    """Attempt to convert a simple ``for: with self.subTest(...)`` to parametrize.
 
-    `transformer` is the instance of the UnittestToPytestCSTTransformer and is used
-    to mark imported needs (e.g., transformer.needs_pytest_import = True).
+    This function performs a conservative set of checks to determine if
+    the body of ``updated_func`` contains a single ``for`` loop whose
+    body is a single ``with self.subTest(...)`` block and where the
+    iteration values can be statically determined (a literal list/tuple
+    or a small ``range`` literal). When those conditions are met it
+    builds a ``@pytest.mark.parametrize`` decorator and returns a
+    modified function definition with the new decorator and the inner
+    subTest body as the function body.
+
+    Args:
+        original_func: The original :class:`libcst.FunctionDef` prior to
+            other rewrites (unused by this helper but provided for
+            context).
+        updated_func: The :class:`libcst.FunctionDef` to analyze and
+            potentially transform.
+        transformer: Transformer instance used to record transformation
+            side-effects (for example setting
+            ``transformer.needs_pytest_import = True``).
+
+    Returns:
+        A new :class:`libcst.FunctionDef` with a ``parametrize`` decorator
+        when the conversion is safe, otherwise ``None``.
     """
     try:
         body_stmts = list(updated_func.body.body)
@@ -210,6 +250,21 @@ def convert_simple_subtests_to_parametrize(
 
 
 def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.BaseStatement]:
+    """Convert ``with self.subTest(...)`` items to ``subtests.test(...)``.
+
+    This helper walks the provided statement sequence and replaces
+    occurrences of ``with self.subTest(...)`` (or ``with cls.subTest``)
+    with a call to ``subtests.test(...)`` by rewriting the WithItem to
+    call ``subtests.test`` with the same arguments. Nested blocks are
+    processed recursively.
+
+    Args:
+        statements: A sequence of libcst statement nodes to transform.
+
+    Returns:
+        A list of transformed :class:`libcst.BaseStatement` nodes.
+    """
+
     out: list[cst.BaseStatement] = []
     for stmt in statements:
         if isinstance(stmt, cst.With):
@@ -247,6 +302,16 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
 
 
 def body_uses_subtests(statements: Sequence[cst.CSTNode]) -> bool:
+    """Return True when a statement body uses the `subtests.test` helper.
+
+    Args:
+        statements: Sequence of libcst statement nodes to inspect.
+
+    Returns:
+        ``True`` if any ``with`` item calls ``subtests.test(...);``
+        otherwise ``False``.
+    """
+
     for stmt in statements:
         if isinstance(stmt, cst.With):
             for item in stmt.items:
@@ -259,6 +324,20 @@ def body_uses_subtests(statements: Sequence[cst.CSTNode]) -> bool:
 
 
 def ensure_subtests_param(func: cst.FunctionDef) -> cst.FunctionDef:
+    """Ensure the function has a ``subtests`` parameter.
+
+    If ``func`` already declares a ``subtests`` parameter the original
+    function is returned. Otherwise the helper appends a new parameter
+    named ``subtests`` and returns an updated FunctionDef.
+
+    Args:
+        func: The :class:`libcst.FunctionDef` to update.
+
+    Returns:
+        A :class:`libcst.FunctionDef` that includes a ``subtests``
+        parameter.
+    """
+
     params = list(func.params.params)
     for p in params:
         if isinstance(p.name, cst.Name) and p.name.value == "subtests":

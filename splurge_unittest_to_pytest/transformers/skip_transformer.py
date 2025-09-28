@@ -1,4 +1,11 @@
-"""Skip/skipIf decorator rewrites extracted from the main transformer."""
+"""Rewrite ``unittest`` skip decorators to pytest equivalents.
+
+This module contains a small helper that converts decorators such as
+``@unittest.skip(...)`` and ``@unittest.skipIf(...)`` into pytest's
+``@pytest.mark.skip(...)`` and ``@pytest.mark.skipif(...)`` forms using
+libcst nodes. The transformation is conservative and preserves any
+decorators that it does not recognize.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +13,22 @@ import libcst as cst
 
 
 def rewrite_skip_decorators(decorators: list[cst.Decorator] | None) -> list[cst.Decorator] | None:
-    """Rewrite decorators like `@unittest.skip` and `@unittest.skipIf` to
-    `@pytest.mark.skip` and `@pytest.mark.skipif` respectively.
+    """Convert unittest skip decorators into pytest mark decorators.
 
-    Returns updated decorator list or None.
+    This function inspects a list of :class:`libcst.Decorator` nodes and
+    replaces occurrences of ``@unittest.skip(...)`` with
+    ``@pytest.mark.skip(...)`` and ``@unittest.skipIf(...)`` with
+    ``@pytest.mark.skipif(...)``. Arguments supplied to the original
+    decorator are preserved.
+
+    Args:
+        decorators: A list of :class:`libcst.Decorator` nodes (or
+            ``None``) to transform.
+
+    Returns:
+        A new list of :class:`libcst.Decorator` nodes if any
+        transformations were applied, otherwise the original
+        ``decorators`` value.
     """
     if not decorators:
         return decorators
