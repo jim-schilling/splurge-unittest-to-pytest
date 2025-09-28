@@ -242,7 +242,7 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
     return node
 
 
-def _get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
+def get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
     """If `stmt` is a bare expression like `self.foo(...)` or `cls.foo(...)`,
     return (attr_name, call_expr). Otherwise return None.
     """
@@ -255,7 +255,7 @@ def _get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
     return None
 
 
-def _build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None:
+def build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None:
     """Given a Call node whose func is a `self`/`cls` attribute, build
     a corresponding pytest WithItem for known assert context managers.
 
@@ -318,7 +318,7 @@ def _build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | Non
     return None
 
 
-def _create_with_wrapping_next_stmt(with_item: cst.WithItem, next_stmt: cst.BaseStatement | None) -> tuple[cst.With, int]:
+def create_with_wrapping_next_stmt(with_item: cst.WithItem, next_stmt: cst.BaseStatement | None) -> tuple[cst.With, int]:
     """Create a `With` node that uses `with_item` and wraps `next_stmt`.
 
     Returns a tuple (with_node, consumed_count) where consumed_count is 2
