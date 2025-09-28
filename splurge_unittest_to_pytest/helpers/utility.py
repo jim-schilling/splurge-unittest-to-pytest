@@ -1,20 +1,45 @@
-"""Utility helpers extracted from transformers for reuse.
+"""Utility helpers used by transformers and other modules.
 
-This module provides balanced parsing helpers used when doing
-string-based transformations of calls like self.assertEqual(a, b).
+This module contains small, focused helpers for balanced parsing of
+function-call argument lists, safe string-based replacements of ``self.*``
+calls, and simple filename/extension sanitizers. The functions are used
+by legacy string-based transformers in the project and are implemented to
+be conservative and robust against nested brackets and quoted strings.
 """
 
 from collections.abc import Callable
 
 
 def emit_indented_str(s: str, indent: int = 0) -> str:
-    """Return the input string indented by the specified number of spaces."""
+    """Return the input string prefixed with a number of spaces.
+
+    Args:
+        s: The string to indent.
+        indent: Number of spaces to prefix (negative values are treated as 0).
+
+    Returns:
+        The indented string.
+    """
     indent = max(0, indent)
     return f"{' ' * indent}{s}"
 
 
 def split_two_args_balanced(s: str) -> tuple[str, str] | None:
-    """Split a string containing two arguments into (arg1, arg2) respecting brackets and quotes."""
+    """Split a string containing two comma-separated arguments while
+    respecting nested brackets and quoted strings.
+
+    The function returns a tuple of the left and right argument strings
+    (trimmed). If no top-level comma is found (for example when arguments
+    themselves contain commas inside brackets or strings), ``None`` is
+    returned.
+
+    Args:
+        s: Input string containing two arguments (e.g. "a, b").
+
+    Returns:
+        ``(left, right)`` when a top-level comma is present, otherwise
+        ``None``.
+    """
     depth_paren = depth_brack = depth_brace = 0
     in_single = in_double = False
     escape = False
@@ -68,9 +93,21 @@ def split_two_args_balanced(s: str) -> tuple[str, str] | None:
 
 
 def safe_replace_two_arg_call(code: str, func_name: str, format_fn: Callable[[str, str], str]) -> str:
-    """Safely replace calls like self.func_name(arg1, arg2) using balanced parsing.
+    """Safely replace occurrences of ``self.<func_name>(arg1, arg2)`` in code.
 
-    format_fn: function taking (arg1: str, arg2: str) -> str replacement
+    This function performs balanced parsing to locate the call site and
+    extracts the inner argument text while respecting nested parentheses,
+    brackets, braces, and quoted strings. It then calls ``format_fn`` with
+    the two extracted argument strings to produce a replacement string.
+
+    Args:
+        code: The source code to search and replace.
+        func_name: The method name to look for on ``self`` (without ``self.``).
+        format_fn: Callable that accepts ``(arg1, arg2)`` and returns the
+            replacement string.
+
+    Returns:
+        The transformed source code with replacements applied.
     """
     needle = f"self.{func_name}("
     i = 0
@@ -138,7 +175,22 @@ def safe_replace_two_arg_call(code: str, func_name: str, format_fn: Callable[[st
 
 
 def safe_replace_one_arg_call(code: str, func_name: str, format_fn: Callable[[str], str]) -> str:
-    """Safely replace calls like self.func_name(arg) respecting nesting/quotes."""
+    """Safely replace occurrences of ``self.<func_name>(arg)`` in code.
+
+    The parser is conservative and respects nested parentheses/brackets and
+    both single and double quoted strings. The extracted inner text is
+    passed (trimmed) to ``format_fn`` which should return the replacement
+    snippet.
+
+    Args:
+        code: Source code to process.
+        func_name: Method name to search for on ``self``.
+        format_fn: Callable that accepts the inner argument string and
+            returns the replacement text.
+
+    Returns:
+        The transformed source code.
+    """
     needle = f"self.{func_name}("
     i = 0
     out_parts: list[str] = []
@@ -199,14 +251,19 @@ def safe_replace_one_arg_call(code: str, func_name: str, format_fn: Callable[[st
 
 
 def sanitize_suffix(s: str) -> str:
-    """Sanitize a user-provided suffix to be safe for filenames.
+    """Sanitize a user-provided filename suffix.
 
-    Rules:
-    - Collapse consecutive dots
-    - Strip leading/trailing dots
-    - Allow only alphanumerics, underscores, and hyphens
-    - Strip leading/trailing underscores/hyphens
-    - If non-empty, return with a single leading underscore (e.g. 'x' -> '_x')
+    The function collapses repeated dots, removes unsafe characters, strips
+    leading/trailing dots/underscores/hyphens, and returns an empty string
+    when the result is empty. When a non-empty suffix remains it is
+    returned with a single leading underscore (``"_suffix"``).
+
+    Args:
+        s: User-provided suffix string.
+
+    Returns:
+        A sanitized suffix beginning with ``_`` or an empty string when the
+        sanitized content is empty.
     """
     import re
 
@@ -218,10 +275,14 @@ def sanitize_suffix(s: str) -> str:
 
 
 def sanitize_extension(e: str | None) -> str | None:
-    """Sanitize and normalize an extension.
+    """Sanitize and normalize a file extension string.
 
-    Returns a string starting with '.' or None if no valid extension.
-    Converts to lower-case and strips unsafe characters.
+    Args:
+        e: Extension string supplied by a user (may include leading dot).
+
+    Returns:
+        A normalized extension starting with '.' (lower-cased) or ``None``
+        if no valid extension can be derived.
     """
     import re
 

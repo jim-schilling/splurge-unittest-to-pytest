@@ -317,7 +317,7 @@ def migrate(
         None,
         "--ext",
         help="Override target file extension (e.g. 'py' or '.txt'). Defaults to preserving the original extension.",
-    )
+    ),
 ) -> None:
     """Migrate unittest files to pytest format using the orchestrator.
 
