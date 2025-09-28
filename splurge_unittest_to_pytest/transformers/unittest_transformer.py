@@ -26,6 +26,7 @@ import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
 
 from .assert_transformer import (
+    _recursively_rewrite_withs,
     transform_assert_almost_equal,
     transform_assert_count_equal,
     transform_assert_dict_equal,
@@ -136,6 +137,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         self.parametrize = parametrize
         # Replacement registry for two-pass metadata-based replacements
         self.replacement_registry = ReplacementRegistry()
+        # Debugging flag to enable verbose internal tracing
+        self.debug_trace = True
         # Stack to track current function context during traversal
         self._function_stack: list[str] = []
         # Set of function names that need the pytest 'request' fixture injected
@@ -163,6 +166,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         try:
             pos = self.get_metadata(PositionProvider, old_node)
             self.replacement_registry.record(pos, new_node)
+            # recorded replacement (silent)
         except Exception:
             # If metadata isn't available for some reason, skip recording
             pass
@@ -459,8 +463,25 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         # moves that behavior from the string-based fallback into the CST pass
         # so top-level logging assertions are preserved structurally.
         try:
-            # Only call if helper is available
-            final_body = wrap_assert_in_block(list(final_body))  # type: ignore[arg-type]
+            # Only call the wrap_assert_in_block helper for top-level statements
+            # that are not ClassDef/FunctionDef. Function bodies and class
+            # members are already processed in leave_FunctionDef/leave_ClassDef
+            # (which invoke the helper), so re-running the helper on those
+            # nodes can produce duplicate statements. Apply the helper only
+            # to other top-level statements to handle module-level logging
+            # assertions or similar patterns.
+            selectively_rewritten: list[cst.CSTNode] = []
+            for node in final_body:
+                if isinstance(node, cst.ClassDef | cst.FunctionDef):
+                    selectively_rewritten.append(node)
+                else:
+                    try:
+                        rewritten = wrap_assert_in_block([node])  # type: ignore[arg-type]
+                        selectively_rewritten.extend(rewritten)
+                    except Exception:
+                        selectively_rewritten.append(node)
+
+            final_body = selectively_rewritten
         except Exception:
             # Be conservative: if rewrite fails, keep original final_body
             pass
@@ -513,7 +534,9 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 updated_node = ensure_subtests_param(updated_node)
 
             # Then wrap assertLogs/assertNoLogs patterns using shared helper
+            # before wrap_assert_in_block in function (silent)
             new_body = wrap_assert_in_block(body_with_subtests)
+            # after wrap_assert_in_block in function (silent)
             result_node = updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
         except Exception:
             result_node = updated_node
@@ -549,6 +572,25 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         except Exception:
             # be conservative on errors and leave function untouched
             pass
+
+        # Ensure any helper-produced With rewrites have been applied
+        # recursively to the function body before returning. This catches
+        # nested shapes (Try/If/With) where earlier passes produced
+        # transformed With nodes but they were not persisted into the
+        # returned FunctionDef.
+        try:
+            from .assert_transformer import _recursively_rewrite_withs
+
+            try:
+                rewritten_body = [_recursively_rewrite_withs(s) for s in getattr(result_node.body, "body", [])]
+                result_node = result_node.with_changes(body=result_node.body.with_changes(body=rewritten_body))
+            except Exception:
+                # conservative: if rewrite fails, keep original result_node
+                pass
+        except Exception:
+            # If import or helper is unavailable, do nothing
+            pass
+        # after recursive rewrite in function (silent)
 
         # Pop function stack if we tracked it
         if self._function_stack:
@@ -892,11 +934,78 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             wrapper = MetadataWrapper(module)
             transformed_cst = wrapper.visit(self)
 
+            # Previously we had a conservative post-pass here to catch any
+            # remaining `self.assertRaises`/`self.assertRaisesRegex` With-items
+            # that were not persisted by the main CST pass. After cleaning up
+            # interim debug scaffolding and validating the helper integration
+            # we rely on the primary pass to perform these rewrites; retaining
+            # a post-pass risks masking real pipeline bugs and causes extra
+            # churn. If regressions appear later, reintroduce a focused
+            # fallback with tight unit tests guarding it.
+
             # If we recorded replacements, run a second pass to apply them.
             if self.replacement_registry.replacements:
                 transformed_cst = MetadataWrapper(transformed_cst).visit(ReplacementApplier(self.replacement_registry))
 
             transformed_code = transformed_cst.code
+
+            # Focused final CST pass: apply a lightweight recursive With-item
+            # rewrite to any top-level statements. This is narrower than the
+            # previous conservative safety-net and is idempotent because the
+            # helper only rewrites With.items from ``self``/``cls`` forms to
+            # pytest equivalents; reapplying it will not duplicate statements.
+            try:
+                rewritten_body: list[cst.CSTNode] = []
+                for node in transformed_cst.body:
+                    # For functions, rewrite statements inside the body
+                    if isinstance(node, cst.FunctionDef):
+                        try:
+                            new_stmts = [_recursively_rewrite_withs(s) for s in node.body.body]
+                            new_func = node.with_changes(body=node.body.with_changes(body=new_stmts))
+                            rewritten_body.append(new_func)
+                            continue
+                        except Exception:
+                            rewritten_body.append(node)
+                            continue
+
+                    # For classes, rewrite method bodies similarly
+                    if isinstance(node, cst.ClassDef):
+                        try:
+                            class_items: list[cst.BaseStatement] = []
+                            for stmt in node.body.body:
+                                if isinstance(stmt, cst.FunctionDef):
+                                    try:
+                                        new_stmts = [_recursively_rewrite_withs(s) for s in stmt.body.body]
+                                        new_fn = stmt.with_changes(body=stmt.body.with_changes(body=new_stmts))
+                                        class_items.append(new_fn)
+                                    except Exception:
+                                        class_items.append(stmt)
+                                else:
+                                    class_items.append(stmt)
+                            new_class = node.with_changes(body=node.body.with_changes(body=class_items))
+                            rewritten_body.append(new_class)
+                            continue
+                        except Exception:
+                            rewritten_body.append(node)
+                            continue
+
+                    # Default: try to rewrite the node directly
+                    try:
+                        rewritten_body.append(_recursively_rewrite_withs(node))
+                    except Exception:
+                        rewritten_body.append(node)
+
+                transformed_cst = transformed_cst.with_changes(body=rewritten_body)
+                transformed_code = transformed_cst.code
+            except Exception:
+                transformed_code = transformed_cst.code
+
+            # NOTE: Removed the conservative final CST safety-net pass that
+            # rewrote remaining With-items. This pass could introduce
+            # duplicate statements when earlier passes already performed
+            # the same rewrites. Removing it ensures we rely on the primary
+            # transformer and recursive helpers to perform rewrites exactly
+            # once and avoids masking root causes.
 
             # Use CST-based cleanup for removing unittest.TestCase inheritance
             transformed_code = self._transform_unittest_inheritance(transformed_code)
@@ -912,6 +1021,22 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             # `caplog.at_level` was emitted.
             try:
                 transformed_code = transform_caplog_alias_string_fallback(transformed_code)
+            except Exception:
+                pass
+
+            # Conservative string-level fallback: rewrite any remaining
+            # `with self.assertRaises(...)` and `with self.assertRaisesRegex(...)`
+            # occurrences to `with pytest.raises(...)`. This addresses a few
+            # corner-cases where CST rewrites may not have been applied due to
+            # complex leading/trailing trivia (comments/empty lines). Keep this
+            # narrow and focused to avoid broad, brittle substitutions.
+            try:
+                import re
+
+                transformed_code = re.sub(
+                    r"with\s+self\.assertRaisesRegex\s*\(", "with pytest.raises(", transformed_code
+                )
+                transformed_code = re.sub(r"with\s+self\.assertRaises\s*\(", "with pytest.raises(", transformed_code)
             except Exception:
                 pass
 

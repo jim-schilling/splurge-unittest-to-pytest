@@ -37,10 +37,27 @@ def setup_logging(verbose: bool = False) -> None:
     Args:
         verbose: If True, enable debug-level logging for troubleshooting.
     """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.getLogger().setLevel(level)
+    """
+    When verbose is False, set the root logger to INFO.
 
-    # Reduce noise from third-party libraries
+    When verbose is True, keep the root logger at INFO but enable
+    DEBUG for the package logger only (``splurge_unittest_to_pytest``).
+    This prevents noisy third-party libraries from emitting DEBUG logs
+    while still providing detailed logs from this project.
+    """
+
+    # Keep root at INFO by default to avoid flooding logs with unrelated
+    # debug messages from third-party libraries. When verbose is requested
+    # enable DEBUG only for this package's logger so callers can inspect
+    # internal behavior without external noise.
+    root_level = logging.INFO
+    logging.getLogger().setLevel(root_level)
+
+    if verbose:
+        # Enable DEBUG logging for our package namespace only
+        logging.getLogger("splurge_unittest_to_pytest").setLevel(logging.DEBUG)
+
+    # Explicitly silence known noisy third-party libraries
     logging.getLogger("libcst").setLevel(logging.WARNING)
     logging.getLogger("black").setLevel(logging.WARNING)
     logging.getLogger("isort").setLevel(logging.WARNING)
@@ -186,14 +203,20 @@ def validate_source_files(source_files: list[str]) -> list[str]:
             logger.error(f"Source path does not exist: {source}")
             raise typer.Exit(code=1)
 
-        if path.is_file() and path.suffix == ".py":
+        # When users provide explicit files on the CLI we accept the path as
+        # long as it exists. This lets callers pass non-.py test fixtures
+        # (for example .txt sample inputs used in examples) or pre-expanded
+        # glob results. Directory inputs are still searched recursively but
+        # we keep the default patterning behavior in the pattern-based
+        # helper.
+        if path.is_file():
             valid_files.append(str(path))
         elif path.is_dir():
-            # Recursively find all Python files
+            # Recursively find all Python files by default
             for py_file in path.rglob("*.py"):
                 valid_files.append(str(py_file))
         else:
-            logger.warning(f"Skipping non-Python file: {source}")
+            logger.warning(f"Skipping unknown path type: {source}")
 
     if not valid_files:
         logger.error("No Python files found to process")
@@ -246,7 +269,11 @@ def validate_source_files_with_patterns(
     valid_files: list[str] = []
 
     def add_if_py(p: Path) -> None:
-        if p.is_file() and p.suffix == ".py":
+        # Respect whatever the glob returned. When users supply explicit
+        # filename patterns we should honor them rather than enforcing a
+        # .py-only policy. This enables using example fixtures with other
+        # extensions (for example '.txt') in dry-run or test scenarios.
+        if p.is_file():
             valid_files.append(str(p))
 
     for root in roots:
@@ -293,7 +320,9 @@ def migrate(
     backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
-    quiet: bool = typer.Option(False, "--quiet", help="Suppress informational logging (keeps warnings/errors)"),
+    quiet: bool = typer.Option(
+        True, "--quiet", help="Suppress informational logging (keeps warnings/errors). Default: True"
+    ),
     posix: bool = typer.Option(
         False, "--posix", help="Force POSIX-style path separators (use forward slashes) in CLI output"
     ),
