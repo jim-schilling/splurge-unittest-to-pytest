@@ -1,4 +1,8 @@
-"""Output steps for the unittest to pytest migration pipeline."""
+"""Output steps used by the migration pipeline.
+
+This module contains steps that write generated code to disk or prepare the
+generated artifacts for dry-run presentation to callers (for example the CLI).
+"""
 
 from pathlib import Path
 
@@ -8,10 +12,25 @@ from ..result import Result
 
 
 class WriteOutputStep(Step[str, str]):
-    """Write generated code to target file."""
+    """Write generated code to the configured target file.
+
+    This step either writes the provided source code to ``context.target_file``
+    or, when running in dry-run mode, returns the generated code in the
+    result metadata so callers can present it without filesystem writes.
+    """
 
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
-        """Write generated code to target file."""
+        """Write the generated code or return it for dry-run.
+
+        Args:
+            context: Pipeline execution context with target file and config.
+            code: Generated or formatted Python source to write.
+
+        Returns:
+            A :class:`Result` with the target file path string on success. In
+            dry-run mode the result will include ``generated_code`` in the
+            metadata mapping.
+        """
         if context.config.dry_run:
             # Include the generated/formatted code in metadata so callers (CLI)
             # can display it for dry-run mode without writing files.

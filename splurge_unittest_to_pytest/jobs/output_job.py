@@ -1,9 +1,8 @@
 """Output job for writing generated files to disk.
 
-This job handles the final phase of the migration process:
-1. Write the transformed and formatted code to the target file
-2. Handle backup creation if requested
-3. Ensure proper file permissions and encoding
+This job handles the final phase of the pipeline: writing the transformed
+and formatted code to disk, creating optional backups, and emitting the
+completion events used by callers.
 """
 
 import logging
@@ -18,19 +17,27 @@ from ..steps import WriteOutputStep
 
 
 class OutputJob(Job[str, str]):
-    """Job for writing generated pytest files to disk."""
+    """Write generated pytest files to the filesystem.
+
+    The job is responsible for creating backups when requested and for
+    orchestrating the write to the configured ``context.target_file``.
+    """
 
     def __init__(self, event_bus: EventBus):
         """Initialize the output job.
 
         Args:
-            event_bus: Event bus for publishing events
+            event_bus: Event bus used for publishing pipeline events.
         """
         super().__init__("output", [self._create_output_task(event_bus)], event_bus)
         self._logger = logging.getLogger(f"{__name__}.{self.name}")
 
     def _create_output_task(self, event_bus: EventBus) -> Task[Any, Any]:
-        """Create the output task for this job."""
+        """Create and return the output :class:`Task` for this job.
+
+        The task contains the :class:`WriteOutputStep` which performs the
+        actual filesystem write (or supplies the code in metadata for dry-run).
+        """
         from ..pipeline import Task
 
         steps: list[Any] = [
@@ -40,14 +47,16 @@ class OutputJob(Job[str, str]):
         return Task("output", steps, event_bus)
 
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[str]:
-        """Execute the output job.
+        """Run the output job and write the generated file.
 
         Args:
-            context: Pipeline execution context
-            initial_input: Input data for the job
+            context: Pipeline execution context containing ``target_file`` and
+                configuration such as backup settings.
+            initial_input: The input data passed from the formatting job.
 
         Returns:
-            Result containing the path to the file that was written
+            A :class:`Result` containing the path to the file written (as a
+            string) on success or a failure result when the write fails.
         """
         self._logger.info(f"Starting output job for {context.target_file}")
 
@@ -69,10 +78,10 @@ class OutputJob(Job[str, str]):
         return result
 
     def _create_backup(self, source_file: str) -> None:
-        """Create a backup of the original file.
+        """Create a timestamp-less backup of the original source file.
 
         Args:
-            source_file: Path to the source file to backup
+            source_file: Path to the original file to back up.
         """
         try:
             source_path = Path(source_file)

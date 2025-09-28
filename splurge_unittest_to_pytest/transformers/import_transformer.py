@@ -1,9 +1,11 @@
-"""Import-related CST helpers extracted from unittest_transformer.
+"""Import-related libcst helpers.
 
-These helpers manage insertion of pytest/re imports and removal of unused
-unittest imports. They are written to accept an optional transformer object
-when they need to consult transformer state (e.g., needs_re_import, re_alias,
-re_search_name).
+This module provides small helpers used while migrating unittest-based
+tests to pytest. The functions operate on source text or :mod:`libcst`
+modules to ensure ``pytest``/``re`` imports are present when needed and
+to remove unused ``unittest`` imports. Some helpers accept an optional
+``transformer`` object to consult state such as whether an ``re`` import
+is required and what alias to use.
 """
 
 from __future__ import annotations
@@ -12,12 +14,33 @@ import libcst as cst
 
 
 def add_pytest_imports(code: str, transformer: object | None = None) -> str:
-    """Ensure `import pytest` and `import re` are present when needed.
+    """Ensure ``import pytest`` and optional ``re`` imports are present.
 
-    If `transformer` is provided, the function will consult attributes on it
-    (needs_re_import, re_alias, re_search_name) to decide whether to add an
-    `import re` line. The function performs a quick string-level guard to
-    avoid duplicate insertion and uses libcst nodes to construct imports.
+    This function parses the given source text with libcst and inspects
+    top-level imports and dynamic import calls. If ``pytest`` is not
+    imported it will insert a top-level ``import pytest`` statement.
+
+    When a ``transformer`` object is provided the helper will consult the
+    following attributes to decide whether to insert an ``re`` import:
+        - ``needs_re_import``: boolean indicating an ``re`` import is
+          required
+        - ``re_alias``: optional alias name (e.g., ``'re2'``)
+        - ``re_search_name``: when ``search`` was imported directly from
+          the ``re`` module (e.g., ``from re import search``)
+
+    The function uses a quick string-level guard to avoid unnecessary
+    parsing when ``pytest`` already appears in the source text. On any
+    error it conservatively returns the original source unchanged.
+
+    Args:
+        code: The Python source text to inspect and modify.
+        transformer: Optional object providing flags/alias hints
+            (``needs_re_import``, ``re_alias``, ``re_search_name``).
+
+    Returns:
+        The modified source text with the inserted import statements, or
+        the original text if no insertion was needed or an error
+        occurred.
     """
     try:
         # Quick string-level guard: if pytest is already imported in source text,
@@ -169,7 +192,28 @@ def add_pytest_imports(code: str, transformer: object | None = None) -> str:
 
 
 def remove_unittest_imports_if_unused(code: str) -> str:
-    """Remove top-level unittest imports when the module no longer references unittest."""
+    """Remove top-level ``unittest`` imports when the module no longer references it.
+
+    This helper parses the module with libcst and checks for any
+    runtime usages of the ``unittest`` symbol (including dynamic
+    imports such as ``__import__('unittest')`` or
+    ``importlib.import_module('unittest')``). If no usage is detected
+    it removes top-level import statements that import from the
+    ``unittest`` package (``import unittest`` or ``from unittest import ...``).
+
+    The removal is conservative: usages within import statements,
+    inside classes, or inside functions do not count as module-level
+    usage. On parse or traversal errors the original source is
+    returned unchanged.
+
+    Args:
+        code: The module source text to analyze and potentially modify.
+
+    Returns:
+        The source text with unused top-level unittest imports removed,
+        or the original source if no change was made or an error
+        occurred.
+    """
     try:
         module = cst.parse_module(code)
 

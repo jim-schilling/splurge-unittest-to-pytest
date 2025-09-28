@@ -1,12 +1,23 @@
-"""Lightweight UnittestToPytestCSTTransformer shim.
+"""Unittest -> pytest transformation shim using libcst.
 
-This minimal implementation provides the public API used by tests
-(`UnittestToPytestCSTTransformer.transform_code`) while delegating
-heavy-duty assertion string transforms to the extracted
-`assert_transformer.transform_assertions_string_based` helpers.
+This module provides a compact, test-focused wrapper around several
+smaller transformer modules. The primary entry point used by the
+test-suite is :class:`UnittestToPytestCstTransformer`, which applies a
+CST-based transformation pass to convert unittest-style tests to
+pytest-compatible code. The heavy-weight assertion and string-based
+transforms are delegated to helpers in :mod:`assert_transformer` and
+other submodules to keep this file concise and focused on orchestration.
 
-The full CST-based transformer was large and has been refactored into
-smaller modules; this shim keeps compatibility for the test-suite.
+The transformer performs the following high-level steps:
+- Parse source into a libcst Module and run CST-based passes.
+- Record and apply targeted replacements using position metadata.
+- Convert lifecycle methods (setUp/tearDown) into pytest fixtures.
+- Rewrite unittest assertions and skip decorators to pytest idioms.
+- Tidy up unittest.TestCase inheritance and test method names.
+
+This module aims to preserve original formatting where possible and
+falls back to conservative string-level transformations when CST-based
+rewrites are not applicable.
 """
 
 from __future__ import annotations
@@ -70,15 +81,29 @@ from .transformer_helper import ReplacementApplier, ReplacementRegistry
 
 
 class UnittestToPytestCstTransformer(cst.CSTTransformer):
-    """CST-based transformer for unittest to pytest conversion.
+    """CST transformer that converts unittest tests to pytest.
 
-    This class systematically transforms unittest code to pytest using libcst:
-    1. Parse Python code into AST using libcst
-    2. Keep unittest.TestCase class structure but transform inheritance
-    3. Transform setUpClass/tearDownClass to class-level fixtures (scope='class')
-    4. Transform setUp/tearDown to instance-level fixtures (autouse=True)
-    5. Transform assertions using CST node transformations
-    6. Generate clean pytest code from transformed CST
+    This class implements a libcst.CSTTransformer that coordinates several
+    specialized transformations (assertion rewrites, lifecycle-to-fixture
+    conversion, subTest handling, and import cleanup). It is intentionally
+    conservative: most changes are implemented as targeted node
+    replacements recorded by source position and applied in a second
+    pass, which reduces accidental formatting churn.
+
+    Attributes:
+        needs_pytest_import (bool): Set when transformations require pytest
+            imports (for example when ``pytest.raises`` is emitted).
+        needs_re_import (bool): Set when rewritten code needs the ``re``
+            module.
+        test_prefixes (list[str]): Accepted test method prefixes used when
+            normalizing test method names.
+        replacement_registry (ReplacementRegistry): Registry used to
+            record and later apply node replacements keyed by source span.
+
+    See Also:
+        The concrete transformation implementations are provided in the
+        sibling modules such as :mod:`assert_transformer`,
+        :mod:`fixture_transformer`, and :mod:`subtest_transformer`.
     """
 
     def __init__(self, test_prefixes: list[str] | None = None, parametrize: bool = False) -> None:
@@ -121,7 +146,20 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
     def record_replacement(self, old_node: cst.CSTNode, new_node: cst.CSTNode) -> None:
-        """Record a planned replacement for old_node -> new_node using PositionProvider."""
+        """Record a planned replacement keyed by the original node's position.
+
+        The transformer records replacements using the :class:`PositionProvider`
+        metadata so that multiple, independent passes can safely schedule
+        modifications without clobbering one another.
+
+        Args:
+            old_node: The original CST node to replace.
+            new_node: The replacement CST node.
+
+        Returns:
+            None. Failures to obtain position metadata are ignored to keep
+            the transformer conservative.
+        """
         try:
             pos = self.get_metadata(PositionProvider, old_node)
             self.replacement_registry.record(pos, new_node)
@@ -130,7 +168,19 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             pass
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
-        """Visit class definition to check for unittest.TestCase inheritance."""
+        """Inspect a class definition and mark unittest.TestCase subclasses.
+
+        If the class inherits from ``unittest.TestCase`` the transformer
+        records that fact (used later to adjust method names and insert
+        class-scoped fixtures) and sets flags indicating pytest imports
+        are required.
+
+        Args:
+            node: The :class:`libcst.ClassDef` node being visited.
+
+        Returns:
+            None. This method only updates transformer internal state.
+        """
         self.current_class = node.name.value
 
         # Check for unittest.TestCase inheritance
@@ -156,7 +206,22 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
     # rewrite_skip_decorators moved to transformers.skip_transformer.rewrite_skip_decorators
 
     def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
-        """Inject a module-scoped autouse fixture if setUpModule/tearDownModule were present."""
+        """Finalize module-level transformations and insert module fixtures.
+
+        This method runs after the module has been traversed and is
+        responsible for inserting an autouse module-scoped fixture when
+        ``setUpModule``/``tearDownModule`` code was detected. It also
+        removes converted lifecycle functions from the top-level body so
+        they do not remain as dead code.
+
+        Args:
+            original_node: The original :class:`libcst.Module` node.
+            updated_node: The module node after inner transformations.
+
+        Returns:
+            A possibly modified :class:`libcst.Module` with inserted
+            fixtures and lifecycle methods removed.
+        """
         new_body = list(updated_node.body)
 
         # Determine insertion index after imports and module docstring
@@ -403,9 +468,27 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return updated_node.with_changes(body=final_body)
 
     def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
-        """Handle function-level rewrites: parametrize conversion, subTest -> subtests, and assertLogs wrapping.
+        """Perform function-level rewrites and inject required fixtures.
 
-        Also inject the `request` fixture parameter when transforms (e.g., self.id()) require it.
+        This method applies several function-scoped rewrites in sequence:
+        - Convert simple for+subTest patterns to ``pytest.mark.parametrize`` when
+          the transformer was configured to do so.
+        - Convert ``self.subTest`` context managers to the pytest-subtests
+          style via :func:`convert_subtests_in_body`.
+        - Wrap ``assertLogs``/``assertNoLogs`` usages into the appropriate
+          caplog helpers using :func:`wrap_assert_in_block`.
+
+        If any transform introduces usage of fixtures like ``request`` or
+        ``caplog``, this method ensures the function signature includes
+        those parameters (unless intentionally omitted).
+
+        Args:
+            original_node: The original :class:`libcst.FunctionDef` node.
+            updated_node: The function node after inner transformations.
+
+        Returns:
+            A :class:`libcst.FunctionDef` updated with rewritten body,
+            decorators, and possibly augmented parameters.
         """
         func_name = original_node.name.value
         try:
@@ -516,7 +599,26 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             self._extract_method_body(node, self.teardown_module_code)
 
     def _extract_method_body(self, node: cst.FunctionDef, target_list: list[str]) -> None:
-        """Extract statements from method body."""
+        """Serialize statements from a function body into strings.
+
+        The transformer extracts each top-level statement within the
+        provided function and appends a generated code string to
+        ``target_list``. Compound statements (``if``, ``with``, etc.) are
+        preserved by generating a single-statement :class:`libcst.Module`
+        containing that statement and appending its rendered code. This
+        behavior is used by the fixture conversion helpers which expect
+        ready-to-insert source fragments.
+
+        Args:
+            node: The function node whose body should be inspected.
+            target_list: A list to which serialized statement strings will
+                be appended.
+
+        Returns:
+            None. Failures to render a statement are ignored; in very
+            conservative cases the statement's type name may be appended
+            instead.
+        """
         if node.body.body:
             for stmt in node.body.body:
                 # Preserve any statement (SimpleStatementLine, If, With, etc.) by
@@ -536,7 +638,19 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
     # Fixture string-based fallback moved to transformers.fixture_transformer.transform_fixtures_string_based
 
     def visit_Call(self, node: cst.Call) -> bool | None:
-        """Visit function calls to detect pytest.raises usage."""
+        """Detect calls requiring pytest imports or other special handling.
+
+        Currently this visitor looks for uses of ``pytest.raises`` expressed
+        as attribute calls (``pytest.raises(...)``). If found, the
+        transformer records that pytest imports will be necessary.
+
+        Args:
+            node: The :class:`libcst.Call` node being visited.
+
+        Returns:
+            True to continue traversal; ``None`` would stop traversal of
+            this subtree.
+        """
         # Handle pytest.raises calls by setting the needs_pytest_import flag
         if isinstance(node.func, cst.Attribute):
             if isinstance(node.func.value, cst.Name) and node.func.value.value == "pytest":
@@ -545,7 +659,18 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return True  # Continue traversal
 
     def visit_Import(self, node: cst.Import) -> bool | None:
-        """Detect imports of the `re` module and capture any alias (e.g., import re as r)."""
+        """Capture top-level ``import`` statements for modules we care about.
+
+        The transformer currently tracks whether the module imports ``re``
+        and captures any alias (for example ``import re as r``) so that
+        later transformed code can prefer the existing local name.
+
+        Args:
+            node: The :class:`libcst.Import` node being visited.
+
+        Returns:
+            True to continue traversal.
+        """
         for alias in node.names:
             # alias.name can be a dotted name but for 're' it's a simple Name
             if isinstance(alias.name, cst.Name) and alias.name.value == "re":
@@ -556,7 +681,19 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return True
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> bool | None:
-        """Detect `from re import search` (with optional alias) and capture the local name."""
+        """Capture ``from ... import ...`` forms for modules we care about.
+
+        Specifically, this visitor recognizes ``from re import search``
+        (with optional alias) and stores the local name so rewritten tests
+        can call ``search(...)`` instead of ``re.search(...)`` when the
+        original module used the former form.
+
+        Args:
+            node: The :class:`libcst.ImportFrom` node being visited.
+
+        Returns:
+            True to continue traversal.
+        """
         if isinstance(node.module, cst.Name) and node.module.value == "re":
             # node.names can be an ImportStar or a sequence of ImportAlias; guard accordingly
             if isinstance(node.names, cst.ImportStar):
@@ -572,10 +709,27 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return True
 
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
-        """Prefer CST-based assertion transforms for supported self.assert* calls.
+        """Transform supported ``self.assert*`` calls into pytest equivalents.
 
-        This will run before the string-based fallback so that well-formed
-        assertion calls are transformed using libcst nodes.
+        This method handles attribute calls on ``self`` or ``cls`` and
+        dispatches to the specific assertion transform helpers defined in
+        :mod:`assert_transformer`. Transformations may:
+
+        - Return an expression-level replacement (safe to return directly).
+        - Return a statement-level replacement (these are recorded via
+          :meth:`record_replacement` and applied in a later pass).
+
+        Side Effects:
+            May set ``needs_pytest_import`` or ``needs_re_import`` when a
+            transform emits constructs that require those imports.
+
+        Args:
+            original_node: The original :class:`libcst.Call` node.
+            updated_node: The call node after inner transforms.
+
+        Returns:
+            A :class:`libcst.BaseExpression` representing the transformed
+            call or the original node when no transform applies.
         """
         # We're only interested in attribute calls on `self` or `cls` (e.g., self.assertEqual(...) or cls.assertEqual(...))
         if isinstance(updated_node.func, cst.Attribute) and isinstance(updated_node.func.value, cst.Name):
@@ -661,7 +815,20 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return updated_node
 
     def visit_Expr(self, node: cst.Expr) -> bool | None:
-        """Visit expression statements to handle transformed calls."""
+        """Visit expression statements to detect transformed assertion calls.
+
+        Some assertion transforms produce bare ``assert`` expressions or
+        other statement-like forms as call results. This visitor inspects
+        expressions that may contain transformed calls so later passes can
+        correctly handle them. For now, this method is conservative and
+        does not alter the CST in-place.
+
+        Args:
+            node: The :class:`libcst.Expr` node being visited.
+
+        Returns:
+            True to continue traversal.
+        """
         # The value might be a transformed Call, so we need to return a new Expr
         # with the (potentially transformed) value
         if isinstance(node.value, cst.Call):
@@ -673,7 +840,19 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return True  # Continue traversal
 
     def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> bool | None:
-        """Visit simple statement lines to handle transformed expressions."""
+        """Inspect simple statement lines for transformed assertion expressions.
+
+        When a previously visited Call was transformed into an expression
+        that should be a top-level statement (for example an ``assert``),
+        this visitor detects that pattern. The implementation remains
+        conservative and avoids in-place modifications here.
+
+        Args:
+            node: The :class:`libcst.SimpleStatementLine` being visited.
+
+        Returns:
+            True to continue traversal.
+        """
         # The body might contain transformed expressions, so we need to return a new SimpleStatementLine
         # with the (potentially transformed) body
 
@@ -687,7 +866,22 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         return True  # Continue traversal
 
     def transform_code(self, code: str) -> str:
-        """Transform unittest code to pytest code using CST first, then fallback string ops."""
+        """Convert a source string containing unittest-based tests to pytest.
+
+        The method first parses the input into a libcst Module and runs the
+        transformer passes. Any recorded position-based replacements are
+        applied in a subsequent pass. After CST-based transforms it runs a
+        few conservative string-level cleanups (for example caplog alias
+        fixes) and removes ``unittest`` imports that are no longer used.
+
+        Args:
+            code: The source code to transform.
+
+        Returns:
+            The transformed source code on success. If a validation or
+            parse error occurs during transformation a comment explaining
+            the failure is prepended to the original code and returned.
+        """
         try:
             # Parse the code into CST to understand the structure
             module = cst.parse_module(code)
@@ -738,9 +932,25 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             return error_msg + code
 
     def _transform_unittest_inheritance(self, code: str) -> str:
-        """Use libcst to remove `unittest.TestCase` inheritance from class defs.
+        """Remove ``unittest.TestCase`` inheritance using libcst and normalize classes.
 
-        This is safer than regex and preserves formatting more reliably.
+        This helper performs multiple libcst passes to:
+
+        1. Remove explicit ``unittest.TestCase`` bases from class
+           definitions.
+        2. Normalize class base rendering to avoid leaving empty
+           parentheses or stray commas.
+        3. Adjust test method names inside formerly ``unittest.TestCase``
+           subclasses (inserting an underscore when a test name like
+           ``testSomething`` would be rendered as ``test_Something``).
+
+        Args:
+            code: The source code to process.
+
+        Returns:
+            The code with unittest inheritance removed and class names
+            normalized. If an error occurs the original ``code`` is
+            returned unchanged.
         """
         try:
             module = cst.parse_module(code)

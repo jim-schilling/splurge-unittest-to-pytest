@@ -1,9 +1,9 @@
 """Programmatic API for splurge_unittest_to_pytest.
 
-Exports a single function `migrate(source_files, config=None)` which the CLI
-and tests import. This module keeps the logic small: it instantiates the
-MigrationOrchestrator and delegates per-file migration, collecting the
-written output paths and returning them in a Result.
+This module exposes a small programmatic entry point, ``migrate``, which
+is used by the CLI and tests. It delegates work to
+``MigrationOrchestrator`` and returns a ``Result`` containing the list
+of written target paths.
 """
 
 from __future__ import annotations
@@ -19,11 +19,12 @@ def migrate(source_files: Iterable[str] | str, config: MigrationConfig | None = 
     """Migrate one or more source files programmatically.
 
     Args:
-        source_files: Iterable of file paths (or single path string)
-        config: Optional MigrationConfig
+        source_files: Iterable of file paths (or single path string).
+        config: Optional ``MigrationConfig`` to control migration behavior.
 
     Returns:
-        Result containing a list of written target file paths on success.
+        ``Result`` containing a list of written target file paths on
+        success. On failure a failure ``Result`` is returned.
     """
     if isinstance(source_files, str):
         files = [source_files]

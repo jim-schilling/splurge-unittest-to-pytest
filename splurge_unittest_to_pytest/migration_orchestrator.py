@@ -1,8 +1,8 @@
 """Main migration orchestrator that coordinates all jobs.
 
-This module provides the high-level orchestration of the entire migration
-process, coordinating between the collector, transformer, formatter, and
-output jobs.
+This module provides the high-level orchestration of the entire
+migration process, coordinating the collector, transformer, formatter,
+and output jobs.
 """
 
 import logging
@@ -17,7 +17,12 @@ from .result import Result
 
 
 class MigrationOrchestrator:
-    """Main orchestrator for unittest to pytest migration."""
+    """Main orchestrator for unittest-to-pytest migration.
+
+    The orchestrator wires together jobs and pipelines, exposes file and
+    directory migration helpers, and publishes lifecycle events on the
+    internal event bus.
+    """
 
     def __init__(self) -> None:
         """Initialize the migration orchestrator."""
@@ -36,11 +41,12 @@ class MigrationOrchestrator:
         """Migrate a single unittest file to pytest.
 
         Args:
-            source_file: Path to the source unittest file
-            config: Migration configuration (optional)
+            source_file: Path to the source unittest file.
+            config: Optional ``MigrationConfig`` to control behavior.
 
         Returns:
-            Result containing the path to the migrated file or error
+            ``Result`` containing the path to the migrated file on
+            success, or a failure ``Result`` with diagnostic details.
         """
         if config is None:
             config = MigrationConfig()
@@ -134,14 +140,16 @@ class MigrationOrchestrator:
         return result
 
     def migrate_directory(self, source_dir: str, config: MigrationConfig | None = None) -> Result[list[str]]:
-        """Migrate all unittest files in a directory.
+        """Migrate all unittest files under a directory.
 
         Args:
-            source_dir: Path to the source directory
-            config: Migration configuration (optional)
+            source_dir: Path to the source directory.
+            config: Optional ``MigrationConfig`` to control behavior.
 
         Returns:
-            Result containing list of migrated file paths or error
+            ``Result`` containing a list of migrated file paths on
+            success. On partial failures a ``warning`` result is
+            returned with metadata listing failed files.
         """
         if config is None:
             config = MigrationConfig()
@@ -203,7 +211,7 @@ class MigrationOrchestrator:
         """Create the main migration pipeline.
 
         Returns:
-            Configured migration pipeline
+            Configured migration ``Pipeline`` instance.
         """
         # Build a pipeline that runs collector -> formatter -> output so the
         # CLI and programmatic API produce written output files by default.
@@ -212,13 +220,14 @@ class MigrationOrchestrator:
         return Pipeline("migration", jobs, self.event_bus)
 
     def _is_unittest_file(self, file_path: Path) -> bool:
-        """Check if a Python file contains unittest code.
+        """Check heuristically whether a Python file contains unittest code.
 
         Args:
-            file_path: Path to the Python file
+            file_path: Path to the Python file.
 
         Returns:
-            True if the file appears to contain unittest code
+            ``True`` if the file likely contains ``unittest`` patterns,
+            otherwise ``False``.
         """
         try:
             content = file_path.read_text(encoding="utf-8")

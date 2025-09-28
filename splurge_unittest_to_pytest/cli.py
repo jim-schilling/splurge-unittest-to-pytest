@@ -1,7 +1,10 @@
 """Command-line interface for the unittest-to-pytest migration tool.
 
-This module provides the main CLI entry point and command definitions
-using the typer library.
+This module defines the public CLI commands and utility helpers used by the
+`unittest-to-pytest` command-line application. It uses ``typer`` to expose
+the program entrypoint while delegating the heavy-lifting to the programmatic
+API in :mod:`splurge_unittest_to_pytest.main` so the same logic can be used
+from Python code or the CLI.
 """
 
 import logging
@@ -25,10 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure logging level.
+    """Configure root logging levels.
+
+    This sets the root logger to ``DEBUG`` when ``verbose`` is True and to
+    ``INFO`` otherwise. It also reduces verbosity for known noisy third-party
+    libraries used by the project.
 
     Args:
-        verbose: Enable verbose logging
+        verbose: If True, enable debug-level logging for troubleshooting.
     """
     level = logging.DEBUG if verbose else logging.INFO
     logging.getLogger().setLevel(level)
@@ -40,7 +47,15 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def set_quiet_mode(quiet: bool = False) -> None:
-    """Lower global logging level to WARNING when quiet mode is requested."""
+    """Reduce logging output for quiet CLI invocations.
+
+    When ``quiet`` is True the root logger is set to ``WARNING`` and known
+    third-party libraries are similarly quieted. This is intended for
+    scripted or CI usage where informational logging is undesirable.
+
+    Args:
+        quiet: If True, set logging to the warning level.
+    """
     if quiet:
         logging.getLogger().setLevel(logging.WARNING)
         # Keep third-party noise down as well
@@ -50,10 +65,14 @@ def set_quiet_mode(quiet: bool = False) -> None:
 
 
 def create_event_bus() -> EventBus:
-    """Create and configure event bus.
+    """Create and configure the application event bus.
+
+    The returned :class:`EventBus` will have a ``LoggingSubscriber`` attached
+    so pipeline events are emitted to the configured Python logging
+    infrastructure.
 
     Returns:
-        Configured event bus with logging subscriber
+        An initialized :class:`EventBus` instance.
     """
     event_bus = EventBus()
     LoggingSubscriber(event_bus)  # Configure logging subscriber
@@ -78,26 +97,35 @@ def create_config(
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
-    """Create migration configuration from CLI arguments.
+    """Build a :class:`MigrationConfig` from CLI options.
+
+    The CLI intentionally exposes a smaller surface area than the full
+    :class:`MigrationConfig` to keep the command simple. This helper maps the
+    selected CLI options into a :class:`MigrationConfig` instance used by the
+    programmatic API.
 
     Args:
-        target_directory: Target directory for output files
-        preserve_structure: Preserve original directory structure
-        backup_originals: Create backup of original files
-        convert_classes_to_functions: Convert TestCase classes to functions
-        merge_setup_teardown: Merge setUp/tearDown into fixtures
-        generate_fixtures: Generate pytest fixtures
-        fixture_scope: Scope for generated fixtures
-    format_code: Format generated code with black/isort (always applied)
-        line_length: Maximum line length for formatting
-        dry_run: Show what would be done without making changes
-        fail_fast: Stop on first error
-    parallel_processing: Enable parallel processing
-        verbose: Enable verbose output
-        generate_report: Generate migration report
-        report_format: Format for migration report
+        target_directory: Target directory for output files. When ``None`` the
+            original directory is used (or the configured root).
+        root_directory: Optional root directory used when searching by patterns.
+        file_patterns: Glob patterns used to locate input files.
+        recurse_directories: Whether to recursively search subdirectories.
+        preserve_structure: Preserve original directory structure in output.
+        backup_originals: Create backup copies of original files before writing.
+        line_length: Maximum line length for code formatting (passed to black).
+        dry_run: If True do not write files; return generated code in metadata.
+        fail_fast: Stop processing on the first encountered error.
+        verbose: Enable verbose logging.
+        generate_report: Whether to produce a migration report.
+        report_format: Format for the migration report (e.g. ``json``).
+        test_method_prefixes: Allowed test method name prefixes (repeatable).
+        parametrize: Attempt conservative subTest -> parametrize conversions.
+        suffix: Suffix appended to the target filename stem.
+        ext: Optional override for the target file extension.
+
     Returns:
-        Configured MigrationConfig instance
+        A populated :class:`MigrationConfig` instance ready for use by the
+        migration orchestrator.
     """
     from .helpers.utility import sanitize_extension, sanitize_suffix
 
@@ -131,16 +159,23 @@ def create_config(
 
 
 def validate_source_files(source_files: list[str]) -> list[str]:
-    """Validate and expand source file paths.
+    """Validate and expand source file and directory inputs.
+
+    This helper accepts a list of paths (files or directories) and returns a
+    flattened list of Python source files to process. Non-Python files are
+    skipped, and the function will raise a ``typer.Exit`` with a non-zero
+    exit code when no valid Python files are found or when an explicitly
+    provided path does not exist.
 
     Args:
-        source_files: List of source file or directory paths
+        source_files: List of file or directory paths provided on the CLI.
 
     Returns:
-        List of validated source file paths
+        A list of validated Python file paths as strings.
 
     Raises:
-        typer.Exit: If validation fails
+        typer.Exit: When no Python files are found or a provided path is
+            missing.
     """
     valid_files = []
 
@@ -173,11 +208,29 @@ def validate_source_files(source_files: list[str]) -> list[str]:
 def validate_source_files_with_patterns(
     source_files: list[str], root_directory: str | None, file_patterns: list[str], recurse: bool
 ) -> list[str]:
-    """Validate and expand source files using optional root/patterns.
+    """Validate and expand inputs using an optional root directory and
+    filename patterns.
 
-    - If root_directory is provided, search there using patterns.
-    - If no source_files provided, default to root_directory (or ".") and patterns.
-    - If source_files include files/dirs, include them in search scope.
+    Behavior:
+    - When ``root_directory`` is provided, its tree is searched using the
+      provided ``file_patterns``.
+    - When ``source_files`` are provided they are included in the search
+      scope (files are added directly and directories are searched using
+      the supplied patterns).
+    - When neither ``root_directory`` nor ``source_files`` are provided, the
+      current working directory is searched using ``file_patterns``.
+
+    Args:
+        source_files: Explicit files or directories provided on the CLI.
+        root_directory: Optional base directory to search when patterns are used.
+        file_patterns: Glob-style filename patterns to match (e.g. ``test_*.py``).
+        recurse: Whether to recurse into subdirectories when searching.
+
+    Returns:
+        A deduplicated list of Python file paths matching the search criteria.
+
+    Raises:
+        typer.Exit: When no matching Python files are found.
     """
     roots: list[Path] = []
     if root_directory:
@@ -238,7 +291,6 @@ def migrate(
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
     preserve_structure: bool = typer.Option(True, "--preserve-structure", help="Preserve original directory structure"),
     backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
-    merge_setup_teardown: bool = typer.Option(True, "--merge-setup", help="Merge setUp/tearDown into fixtures"),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress informational logging (keeps warnings/errors)"),
@@ -266,12 +318,35 @@ def migrate(
         "--ext",
         help="Override target file extension (e.g. 'py' or '.txt'). Defaults to preserving the original extension.",
     ),
-    config_file: str | None = typer.Option(None, "--config", help="Configuration file path"),
 ) -> None:
-    """Migrate unittest files to pytest format.
+    """Migrate unittest files to pytest format using the orchestrator.
 
-    This command processes unittest test files and converts them to pytest format,
-    preserving test behavior while applying pytest best practices.
+    The CLI command serves as a thin wrapper that prepares the application
+    configuration, validates inputs, creates the application event bus, and
+    delegates the actual migration work to :func:`splurge_unittest_to_pytest.main.migrate`.
+
+    Args:
+        source_files: Source unittest files or directories to process.
+        root_directory: Optional root directory to search when using patterns.
+        file_patterns: Glob patterns used to discover input files.
+        recurse: Recurse directories when searching for files.
+        target_directory: Directory where converted files will be written.
+        preserve_structure: Preserve the original directory layout when writing output.
+        backup_originals: When True create backups of original files prior to overwriting.
+        line_length: Maximum line length used by code formatters.
+        dry_run: When True, do not write files; return generated code in result metadata.
+        quiet: Suppress informational logging on stdout.
+        posix: Format displayed file paths using POSIX separators when True.
+        diff: When used with --dry-run, show unified diffs rather than full code output.
+        list_files: When used with --dry-run, list files only (no code shown).
+        fail_fast: Stop processing on the first encountered error.
+        verbose: Enable verbose logging.
+        generate_report: Whether to create a migration report.
+        report_format: Report output format (e.g. ``json``).
+        test_method_prefixes: Allowed test method prefixes.
+        parametrize: Attempt conservative subTest -> parametrize conversions.
+        suffix: Suffix appended to target filename stem.
+        ext: Optional override for output file extension.
     """
     setup_logging(verbose)
     set_quiet_mode(quiet)

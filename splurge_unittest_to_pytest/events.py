@@ -1,7 +1,10 @@
 """Event system for pipeline observability.
 
-This module provides an event-driven architecture for observing and
-responding to pipeline execution events.
+This module provides a lightweight, thread-safe publish/subscribe
+mechanism and a set of strongly-typed event dataclasses used to
+observe pipeline execution. Callers may publish events to an
+``EventBus`` and register handlers to respond to lifecycle, step,
+task, and error events.
 """
 
 import logging
@@ -22,13 +25,20 @@ EventHandler = Callable[[Any], None]
 
 @dataclass(frozen=True)
 class BaseEvent:
-    """Base event class with common metadata."""
+    """Base event class that carries common event metadata.
+
+    Subclasses add domain-specific fields such as the current
+    :class:`PipelineContext` and result payloads.
+    """
 
     timestamp: float
     run_id: str
 
     def __post_init__(self) -> None:
-        """Validate event data."""
+        """Perform basic validation of event fields.
+
+        Currently this ensures the timestamp is non-negative.
+        """
         if self.timestamp < 0:
             raise ValueError("Timestamp cannot be negative")
 
@@ -141,7 +151,13 @@ class ErrorEvent(BaseEvent):
 
 
 class EventBus:
-    """Thread-safe event publication and subscription system."""
+    """Thread-safe event publication and subscription system.
+
+    The EventBus maintains per-event-type subscriber lists and
+    guarantees that handlers are invoked outside the internal lock to
+    avoid blocking publishers. Handlers are simple callables that take
+    a single event instance.
+    """
 
     def __init__(self) -> None:
         """Initialize the event bus."""
@@ -150,10 +166,11 @@ class EventBus:
         self._logger = logging.getLogger(__name__)
 
     def clear_subscribers(self, event_type: type[T] | None = None) -> None:
-        """Clear all subscribers, optionally for specific event type.
+        """Clear subscribers for a specific event type or all subscribers.
 
         Args:
-            event_type: Specific event type to clear, or None for all
+            event_type: The event type whose subscribers should be cleared.
+                When omitted all subscribers are removed.
         """
         with self._lock:
             if event_type:
@@ -164,34 +181,34 @@ class EventBus:
                 self._logger.debug("Cleared all subscribers")
 
     def get_subscriber_count(self, event_type: type[T]) -> int:
-        """Get number of subscribers for an event type.
+        """Return the number of subscribers registered for an event type.
 
         Args:
-            event_type: Event type to check
+            event_type: Event type to check.
 
         Returns:
-            Number of subscribers
+            The number of registered subscribers.
         """
         with self._lock:
             return len(self._subscribers.get(event_type, []))
 
     def subscribe(self, event_type: type[T], handler: Callable[[T], None]) -> None:
-        """Subscribe to specific event type.
+        """Register a handler for events of a specific type.
 
         Args:
-            event_type: Type of event to subscribe to
-            handler: Function to call when event is published
+            event_type: The event dataclass/type to subscribe to.
+            handler: Callable that accepts a single event instance.
         """
         with self._lock:
             self._subscribers[event_type].append(handler)
             self._logger.debug(f"Subscribed handler {handler} to {event_type.__name__}")
 
     def unsubscribe(self, event_type: type[T], handler: Callable[[T], None]) -> None:
-        """Unsubscribe from specific event type.
+        """Remove a previously registered handler for an event type.
 
         Args:
-            event_type: Type of event to unsubscribe from
-            handler: Handler to remove
+            event_type: Type of event to unsubscribe from.
+            handler: The handler to remove.
         """
         with self._lock:
             if event_type in self._subscribers and handler in self._subscribers[event_type]:
@@ -199,10 +216,14 @@ class EventBus:
                 self._logger.debug(f"Unsubscribed handler {handler} from {event_type.__name__}")
 
     def publish(self, event: Any) -> None:
-        """Publish event to all subscribers.
+        """Publish an event to all matching subscribers.
+
+        Handlers registered for the concrete type of ``event`` are invoked
+        synchronously. Errors raised by handlers are logged but do not
+        interrupt delivery to other handlers.
 
         Args:
-            event: Event to publish
+            event: The event instance to publish.
         """
         event_type = type(event)
         handlers = []
@@ -221,7 +242,11 @@ class EventBus:
 
 
 class EventSubscriber(ABC):
-    """Base class for event subscribers."""
+    """Base class for event subscribers.
+
+    Subclasses should implement ``_setup_subscriptions`` to register
+    handlers and ``unsubscribe_all`` to remove them.
+    """
 
     def __init__(self, event_bus: EventBus):
         """Initialize subscriber.
@@ -234,18 +259,30 @@ class EventSubscriber(ABC):
 
     @abstractmethod
     def _setup_subscriptions(self) -> None:
-        """Set up event subscriptions."""
+        """Set up event subscriptions.
+
+        Implementations should call ``event_bus.subscribe`` for the
+        events they are interested in.
+        """
         pass
 
     @abstractmethod
     def unsubscribe_all(self) -> None:
-        """Unsubscribe from all events."""
-        # This would need to be implemented by subclasses
-        # to track their subscriptions
+        """Unsubscribe from all events.
+
+        Subclasses should remove any handlers they previously
+        subscribed with ``event_bus.unsubscribe``.
+        """
+        # This should be implemented by subclasses to track subscriptions
+        # and remove them when called.
 
 
 class LoggingSubscriber(EventSubscriber):
-    """Event subscriber that logs events to standard logging."""
+    """Event subscriber that logs pipeline events using the logging module.
+
+    This subscriber registers handlers for a small set of core events
+    and writes human-readable messages at appropriate logging levels.
+    """
 
     def __init__(self, event_bus: EventBus):
         """Initialize logging subscriber.
@@ -257,7 +294,11 @@ class LoggingSubscriber(EventSubscriber):
         self._setup_subscriptions()
 
     def _setup_subscriptions(self) -> None:
-        """Set up logging subscriptions."""
+        """Set up logging subscriptions.
+
+        Subscribes to core pipeline events and routes them to helper
+        methods that produce log messages.
+        """
         self.event_bus.subscribe(PipelineStartedEvent, self._on_pipeline_started)
         self.event_bus.subscribe(PipelineCompletedEvent, self._on_pipeline_completed)
         self.event_bus.subscribe(StepStartedEvent, self._on_step_started)
@@ -265,7 +306,10 @@ class LoggingSubscriber(EventSubscriber):
         self.event_bus.subscribe(ErrorEvent, self._on_error)
 
     def unsubscribe_all(self) -> None:
-        """Unsubscribe from all events."""
+        """Unsubscribe from all events.
+
+        Removes the logging handlers from the event bus.
+        """
         self.event_bus.unsubscribe(PipelineStartedEvent, self._on_pipeline_started)
         self.event_bus.unsubscribe(PipelineCompletedEvent, self._on_pipeline_completed)
         self.event_bus.unsubscribe(StepStartedEvent, self._on_step_started)
@@ -273,27 +317,43 @@ class LoggingSubscriber(EventSubscriber):
         self.event_bus.unsubscribe(ErrorEvent, self._on_error)
 
     def _on_pipeline_started(self, event: PipelineStartedEvent) -> None:
-        """Handle pipeline started event."""
+        """Handle pipeline started event.
+
+        Logs an informational message including source and target
+        files and the current run id.
+        """
         self.event_bus._logger.info(
             f"Pipeline started: {event.context.source_file} -> {event.context.target_file} (run_id: {event.run_id})"
         )
 
     def _on_pipeline_completed(self, event: PipelineCompletedEvent) -> None:
-        """Handle pipeline completed event."""
+        """Handle pipeline completed event.
+
+        Logs completion status and the elapsed duration in milliseconds.
+        """
         status = "SUCCESS" if event.final_result.is_success() else "FAILED"
         self.event_bus._logger.info(f"Pipeline completed in {event.duration_ms:.2f}ms: {status}")
 
     def _on_step_started(self, event: StepStartedEvent) -> None:
-        """Handle step started event."""
+        """Handle step started event.
+
+        Emit a debug-level message that includes the step name and type.
+        """
         self.event_bus._logger.debug(f"Step started: {event.step_name} ({event.step_type})")
 
     def _on_step_completed(self, event: StepCompletedEvent) -> None:
-        """Handle step completed event."""
+        """Handle step completed event.
+
+        Logs the step duration and status at debug level.
+        """
         status = event.result.status.value.upper()
         self.event_bus._logger.debug(f"Step completed in {event.duration_ms:.2f}ms: {event.step_name} ({status})")
 
     def _on_error(self, event: ErrorEvent) -> None:
-        """Handle error event."""
+        """Handle error event.
+
+        Logs the exception with traceback information.
+        """
         self.event_bus._logger.error(f"Error in {event.component}: {event.error}", exc_info=True)
 
 

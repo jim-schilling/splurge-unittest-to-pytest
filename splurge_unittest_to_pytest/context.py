@@ -1,7 +1,11 @@
-"""Pipeline context and configuration management.
+"""Pipeline context and migration configuration helpers.
 
-This module provides immutable context objects that are threaded through
-the entire pipeline execution, along with configuration management.
+This module defines immutable dataclasses and helpers used to carry
+configuration and execution context through the migration pipeline. It
+exposes ``MigrationConfig`` for transform options and ``PipelineContext``
+for passing runtime information (paths, run id, and metadata) between
+pipeline stages. Utility functions for loading and validating
+configuration are provided by ``ContextManager``.
 """
 
 import dataclasses
@@ -15,7 +19,11 @@ from .result import Result
 
 
 class FixtureScope(Enum):
-    """Scope for pytest fixtures."""
+    """Enumeration of supported pytest fixture scopes.
+
+    Members correspond to the standard pytest fixture scope strings:
+    ``function``, ``class``, ``module``, and ``session``.
+    """
 
     FUNCTION = "function"
     CLASS = "class"
@@ -24,7 +32,12 @@ class FixtureScope(Enum):
 
 
 class AssertionType(Enum):
-    """Types of test assertions."""
+    """Types of test assertions.
+
+    These symbolic kinds are used by analysis code to represent the
+    form of an assertion (e.g., equality, membership, raises). They are
+    not executed at runtime.
+    """
 
     EQUAL = "assert ==="
     NOT_EQUAL = "assert !=="
@@ -50,7 +63,12 @@ class AssertionType(Enum):
 
 @dataclass(frozen=True)
 class MigrationConfig:
-    """Migration behavior configuration."""
+    """Migration behavior configuration.
+
+    This dataclass centralizes options that control file discovery,
+    transformation rules, and reporting. It is serializable so callers
+    can construct it from dictionaries or configuration files.
+    """
 
     # Output settings
     target_directory: str | None = None
@@ -89,13 +107,15 @@ class MigrationConfig:
     test_method_prefixes: list[str] = field(default_factory=lambda: ["test"])
 
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
-        """Create new config with overrides.
+        """Return a new ``MigrationConfig`` with specified overrides.
 
         Args:
-            **kwargs: Configuration values to override
+            **kwargs: Configuration values to override on the returned
+                instance.
 
         Returns:
-            New MigrationConfig with overridden values
+            A new ``MigrationConfig`` with the provided overrides
+            applied.
         """
         return dataclasses.replace(self, **kwargs)
 
@@ -104,10 +124,10 @@ class MigrationConfig:
         """Create config from dictionary.
 
         Args:
-            config_dict: Dictionary containing configuration values
+            config_dict: Dictionary containing configuration values.
 
         Returns:
-            New MigrationConfig instance
+            New ``MigrationConfig`` instance.
         """
         # NOTE: legacy keys for removed flags are silently ignored. This allows
         # loading older configuration files without failing when they still
@@ -119,14 +139,21 @@ class MigrationConfig:
         """Convert config to dictionary.
 
         Returns:
-            Dictionary representation of config
+            Dictionary representation of config.
         """
         return dataclasses.asdict(self)
 
 
 @dataclass(frozen=True)
 class PipelineContext:
-    """Immutable execution context passed through entire pipeline execution."""
+    """Immutable context object passed through the migration pipeline.
+
+    The context bundles the source and target file paths, the active
+    :class:`MigrationConfig`, a stable ``run_id`` for correlation, and
+    an optional metadata mapping. Instances are frozen so callers are
+    encouraged to create modified copies rather than mutate shared
+    state.
+    """
 
     source_file: str
     target_file: str
@@ -135,7 +162,13 @@ class PipelineContext:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate context consistency."""
+        """Perform lightweight validation of the constructed context.
+
+        Currently this verifies that the configured ``source_file`` exists
+        and raises ``ValueError`` when it does not. The check is
+        intentionally conservative to catch obvious misconfigurations
+        early in the pipeline.
+        """
         if not Path(self.source_file).exists():
             raise ValueError(f"Source file does not exist: {self.source_file}")
 
@@ -147,16 +180,20 @@ class PipelineContext:
         config: MigrationConfig | None = None,
         run_id: str | None = None,
     ) -> "PipelineContext":
-        """Create new pipeline context.
+        """Construct a ``PipelineContext`` from call-site information.
 
         Args:
-            source_file: Path to source unittest file
-            target_file: Path for output pytest file (optional)
-            config: Migration configuration (optional)
-            run_id: Unique run identifier (optional)
+            source_file: Path to the source unittest file.
+            target_file: Optional output path for the migrated pytest file.
+                When omitted the source path is reused; callers can modify
+                suffix/extension using a ``MigrationConfig``.
+            config: Optional ``MigrationConfig``. When omitted a
+                default configuration is created.
+            run_id: Optional run identifier; if omitted a UUID is
+                generated.
 
         Returns:
-            New PipelineContext instance
+            A new ``PipelineContext`` instance.
         """
         if not target_file:
             # Preserve the original file extension by default. If callers
@@ -175,78 +212,85 @@ class PipelineContext:
         return cls(source_file=source_file, target_file=target_file, config=config, run_id=run_id, metadata={})
 
     def with_metadata(self, key: str, value: Any) -> "PipelineContext":
-        """Return new context with additional metadata.
+        """Return a new context with an additional metadata entry.
 
         Args:
-            key: Metadata key
-            value: Metadata value
+            key: Metadata key to add or replace.
+            value: Value associated with the key.
 
         Returns:
-            New PipelineContext with added metadata
+            A new ``PipelineContext`` with the updated metadata.
         """
         new_metadata = {**self.metadata, key: value}
         return dataclasses.replace(self, metadata=new_metadata)
 
     def with_config(self, **config_overrides: Any) -> "PipelineContext":
-        """Return new context with updated configuration.
+        """Return a new context with updated configuration values.
+
+        The method applies overrides to the current ``MigrationConfig``
+        and returns a copy of the context referencing the updated
+        configuration.
 
         Args:
-            **config_overrides: Configuration values to override
+            **config_overrides: Keyword overrides applied to the config.
 
         Returns:
-            New PipelineContext with updated config
+            A new ``PipelineContext`` instance using the updated
+            configuration.
         """
         new_config = self.config.with_override(**config_overrides)
         return dataclasses.replace(self, config=new_config)
 
     def get_source_path(self) -> Path:
-        """Get source file as Path object.
+        """Return the source file as a :class:`pathlib.Path`.
 
         Returns:
-            Source file path
+            A :class:`pathlib.Path` for the configured source file.
         """
         return Path(self.source_file)
 
     def get_target_path(self) -> Path:
-        """Get target file as Path object.
+        """Return the target file as a :class:`pathlib.Path`.
 
         Returns:
-            Target file path
+            A :class:`pathlib.Path` for the configured target file.
         """
         return Path(self.target_file)
 
     def is_dry_run(self) -> bool:
-        """Check if this is a dry run.
+        """Return True when the pipeline is configured for a dry run.
 
         Returns:
-            True if dry run mode is enabled
+            ``True`` if no changes should be written to disk.
         """
         return self.config.dry_run
 
     def should_format_code(self) -> bool:
-        """Check if code formatting should be applied.
+        """Determine whether formatting should be applied to output code.
 
         Returns:
-            True if code formatting is enabled
+            ``True`` when code formatting is requested. For backward
+            compatibility this prefers an explicit ``format_code`` flag on
+            the configuration when present and otherwise falls back to a
+            sensible default.
         """
-        # Code formatting flags were removed; derive from configuration
-        # presence of a line_length or default policy. If the config has an
-        # explicit 'format_code' attribute (for backward compatibility), use it.
+        # Code formatting flags were removed; prefer explicit flag when present
         return bool(getattr(self.config, "format_code", True))
 
     def get_line_length(self) -> int:
-        """Get configured line length.
+        """Return the configured line length for formatting.
 
         Returns:
-            Line length for formatting
+            The configured maximum line length, defaulting to 120 when
+            unspecified.
         """
         return self.config.line_length or 120
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert context to dictionary representation.
+        """Serialize the context to a simple dictionary.
 
         Returns:
-            Dictionary representation of the context
+            A mapping containing serializable context fields.
         """
         return {
             "source_file": self.source_file,
@@ -257,11 +301,20 @@ class PipelineContext:
         }
 
     def __str__(self) -> str:
-        """String representation of the context."""
+        """Compact string representation for logging.
+
+        Returns:
+            A one-line string showing source, target and an abbreviated
+            run id.
+        """
         return f"PipelineContext(source={self.source_file}, target={self.target_file}, run_id={self.run_id[:8]}...)"
 
     def __repr__(self) -> str:
-        """Detailed string representation of the context."""
+        """Detailed developer-friendly representation.
+
+        Returns:
+            Full ``repr`` suitable for debugging and tests.
+        """
         return (
             f"PipelineContext("
             f"source_file={repr(self.source_file)}, "
@@ -274,17 +327,28 @@ class PipelineContext:
 
 
 class ContextManager:
-    """Utility class for managing pipeline contexts."""
+    """Helper utilities for loading and validating pipeline configuration.
+
+    ``ContextManager`` exposes a small set of convenience methods for
+    reading configuration from files and performing lightweight
+    validation. Methods return ``Result`` instances so callers can
+    react to failures or warnings in a structured way.
+    """
 
     @staticmethod
     def load_config_from_file(config_file: str) -> Result[MigrationConfig]:
-        """Load configuration from file.
+        """Load a ``MigrationConfig`` from a YAML file.
+
+        This helper reads YAML from ``config_file`` and converts it to a
+        ``MigrationConfig``. Unknown top-level keys are ignored so that
+        older configuration files remain compatible.
 
         Args:
-            config_file: Path to configuration file
+            config_file: Path to the YAML configuration file.
 
         Returns:
-            Result containing loaded configuration or error
+            A ``Result`` containing the constructed ``MigrationConfig`` on
+            success or an error describing the problem.
         """
         try:
             import yaml  # type: ignore[import-untyped]
@@ -309,13 +373,18 @@ class ContextManager:
 
     @staticmethod
     def validate_config(config: MigrationConfig) -> Result[MigrationConfig]:
-        """Validate configuration values.
+        """Validate a ``MigrationConfig`` instance.
+
+        The method performs basic sanity checks (for example that
+        ``line_length`` is within a reasonable range) and returns a
+        ``Result`` that may indicate success, a set of warnings, or a
+        failure depending on the configuration.
 
         Args:
-            config: Configuration to validate
+            config: The configuration to validate.
 
         Returns:
-            Result containing validated configuration or error
+            A ``Result`` describing the validation outcome.
         """
         issues = []
 

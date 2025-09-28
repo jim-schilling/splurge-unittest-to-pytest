@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""IR Generation Step for converting CST to Intermediate Representation.
+"""IR generation steps for converting CST to an intermediate representation.
 
-This step analyzes unittest code using the pattern analyzer and generates
-an IR representation that can be more easily transformed and validated.
+This module provides a pipeline step that analyzes Python ``libcst`` modules
+to produce the project's intermediate representation (IR). The IR makes it
+easier for downstream transformers and validators to reason about test
+structures (imports, classes, fixtures, assertions).
 """
 
 from pathlib import Path
@@ -19,20 +21,27 @@ from ..result import Result
 
 
 class UnittestToIRStep(Step[cst.Module, TestModule]):
-    """Step that converts CST Module to IR TestModule using pattern analysis."""
+    """Convert a ``libcst.Module`` into a :class:`TestModule` IR.
+
+    The step uses :class:`UnittestPatternAnalyzer` to extract test classes,
+    methods, assertions, and fixtures, then augments the IR with import
+    information discovered in the original module.
+    """
 
     def __init__(self, name: str, event_bus: EventBus):
         super().__init__(name, event_bus)
 
     def execute(self, context: PipelineContext, module: cst.Module) -> Result[TestModule]:
-        """Execute the IR generation step.
+        """Run pattern analysis over a parsed CST module and produce IR.
 
         Args:
-            context: Pipeline execution context
-            module: CST module to analyze
+            context: Pipeline execution context that may contain source file
+                information and configuration used to populate metadata.
+            module: A parsed ``libcst.Module`` representing the source file.
 
         Returns:
-            Result containing the generated TestModule
+            A :class:`Result` containing the populated :class:`TestModule` on
+            success or a failure result with the exception on error.
         """
         try:
             # Get the source code from the module
@@ -65,11 +74,12 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
             return Result.failure(e)
 
     def _analyze_imports(self, module: cst.Module, ir_module: TestModule) -> None:
-        """Analyze import statements in the module.
+        """Extract import statements from the CST module and add to the IR.
 
         Args:
-            module: CST module to analyze
-            ir_module: IR module to update with import information
+            module: ``libcst.Module`` to inspect for import statements.
+            ir_module: :class:`TestModule` instance to be updated with
+                discovered :class:`ImportStatement` objects.
         """
         for stmt in module.body:
             if isinstance(stmt, cst.SimpleStatementLine):
@@ -85,13 +95,14 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
                             ir_module.add_import(import_stmt)
 
     def _parse_import_statement(self, node: Any) -> ImportStatement | None:
-        """Parse a CST import node into an IR ImportStatement.
+        """Parse a CST import node and return an :class:`ImportStatement`.
 
         Args:
-            node: CST import node (Import or ImportFrom)
+            node: A libcst import node (``Import`` or ``ImportFrom``).
 
         Returns:
-            ImportStatement representing the import
+            An :class:`ImportStatement` describing the import, or ``None`` if
+            the node cannot be represented.
         """
         if isinstance(node, cst.Import):
             # Direct import: import os, sys
@@ -150,13 +161,14 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
         return None
 
     def _get_importfrom_module(self, node: cst.ImportFrom) -> str:
-        """Get the module name from an ImportFrom node.
+        """Return the module name string for an ``ImportFrom`` node.
 
         Args:
-            node: ImportFrom CST node
+            node: libcst ``ImportFrom`` node.
 
         Returns:
-            Module name string
+            The module name as a string or an empty string for relative imports
+            without an explicit module.
         """
         if node.module:
             return str(node.module.value)

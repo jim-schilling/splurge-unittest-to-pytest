@@ -1,8 +1,18 @@
 """String-based fixture transformation helpers.
 
-This module contains the fallback regex-based transformer that converts
-`setUp`/`tearDown` methods into pytest fixtures. Kept separate from the
-CST-based transformers to make testing and reuse easier.
+This module provides fallback, string-based helpers that convert
+``unittest``-style setup/teardown methods into pytest fixtures. These
+helpers are intentionally regex-driven and exist as a fallback when a
+CST-based transformation is inappropriate or unavailable. They are
+separate from the libcst-powered transformers to make targeted testing
+and reuse easier.
+
+Notes:
+        - The string-based transforms are conservative and operate on the
+            raw source text; they are not guaranteed to preserve all edge
+            cases that a full AST transform would handle.
+        - Callers that can use libcst-based helpers should prefer those for
+            more robust parsing and rewriting.
 """
 
 from __future__ import annotations
@@ -13,13 +23,21 @@ import libcst as cst
 
 
 def transform_fixtures_string_based(code: str) -> str:
-    """Fallback string-based fixture transformation.
+    """Perform conservative string-level conversion of setUp/tearDown to fixtures.
+
+    This fallback transformer applies a small set of regex-based
+    rewrites to convert ``def setUp(self):`` into an autouse
+    ``setup_method`` fixture and to remove ``tearDown`` methods
+    (teardown behavior is modeled via ``yield`` inside the generated
+    fixture). The function is deliberately conservative and intended
+    for sources where a full libcst rewrite is not possible.
 
     Args:
-        code: Source code to transform
+        code: The Python source code to transform.
 
     Returns:
-        Transformed source with setup/teardown converted to fixtures
+        The transformed source string with basic fixture conversions
+        applied.
     """
 
     # Transform setUp method to setup_method fixture
@@ -47,11 +65,23 @@ def transform_fixtures_string_based(code: str) -> str:
 
 
 def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[str]) -> cst.FunctionDef:
-    """Create a libcst.FunctionDef for a class-level fixture.
+    """Create a :class:`libcst.FunctionDef` representing a class-scoped fixture.
 
-    Returns a libcst.FunctionDef-like object (we keep typing loose to avoid
-    importing libcst at top-level here). Caller is expected to insert the
-    resulting node into the module AST.
+    The produced fixture is decorated with ``@pytest.fixture(scope="class", autouse=True)``
+    and contains the provided ``setup_class_code`` lines, a ``yield`` to
+    separate setup from teardown, and then the ``teardown_class_code``
+    lines. Inputs are lists of source-code strings which are parsed and
+    appended into the function body when possible.
+
+    Args:
+        setup_class_code: List of source lines to include in the setup
+            portion of the fixture.
+        teardown_class_code: List of source lines to include after the
+            yield for teardown.
+
+    Returns:
+        A :class:`libcst.FunctionDef` node suitable for insertion into
+        a module AST.
     """
 
     decorator = cst.Decorator(
@@ -109,6 +139,22 @@ def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[
 
 
 def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> cst.FunctionDef:
+    """Create an instance-scoped autouse fixture ``setup_method``.
+
+    The returned :class:`libcst.FunctionDef` is decorated with
+    ``@pytest.fixture(autouse=True)`` and will contain parsed setup
+    lines, a ``yield``, and parsed teardown lines. Inputs are lists of
+    source-code strings that are parsed into libcst statements when
+    possible; non-parseable lines are replaced with ``pass``.
+
+    Args:
+        setup_code: Lines to place before the ``yield``.
+        teardown_code: Lines to place after the ``yield``.
+
+    Returns:
+        A :class:`libcst.FunctionDef` for ``setup_method(self)``.
+    """
+
     decorator = cst.Decorator(
         decorator=cst.Call(
             func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")),
@@ -159,6 +205,21 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
 
 
 def create_teardown_fixture(teardown_code: list[str]) -> cst.FunctionDef:
+    """Create an autouse ``teardown_method`` fixture.
+
+    This helper builds a :class:`libcst.FunctionDef` named
+    ``teardown_method(self)`` decorated with ``@pytest.fixture`` and
+    containing a ``yield`` followed by teardown statements parsed from
+    ``teardown_code``. If parsing a line fails the helper inserts a
+    ``pass`` statement as a conservative fallback.
+
+    Args:
+        teardown_code: Lines to execute after the yield.
+
+    Returns:
+        A :class:`libcst.FunctionDef` representing ``teardown_method``.
+    """
+
     decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")))
 
     body_statements: list[cst.BaseStatement] = [cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))])]
@@ -185,10 +246,19 @@ def create_teardown_fixture(teardown_code: list[str]) -> cst.FunctionDef:
 
 
 def create_module_fixture(setup_module_code: list[str], teardown_module_code: list[str]) -> cst.FunctionDef:
-    """Create a module-scoped autouse fixture named `setup_module`.
+    """Create a module-scoped, autouse fixture named ``setup_module``.
 
-    The fixture will be decorated with @pytest.fixture(scope="module", autouse=True)
-    and will include setup lines, a yield, then teardown lines.
+    The returned node is decorated with
+    ``@pytest.fixture(scope="module", autouse=True)`` and contains the
+    provided setup lines, a ``yield``, and the provided teardown lines.
+
+    Args:
+        setup_module_code: Lines to include before the yield.
+        teardown_module_code: Lines to include after the yield.
+
+    Returns:
+        A :class:`libcst.FunctionDef` node for insertion into the module
+        AST.
     """
 
     decorator = cst.Decorator(
