@@ -321,9 +321,6 @@ class ContextManager:
         """
         issues = []
 
-        # Note: parallelism control is deprecated at the CLI surface;
-        # keep parallel_processing flag but do not validate worker counts here.
-
         if config.line_length and (config.line_length < 60 or config.line_length > 200):
             issues.append("line_length must be between 60 and 200")
 
