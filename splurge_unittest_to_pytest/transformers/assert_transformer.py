@@ -242,6 +242,193 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def _get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
+    """If `stmt` is a bare expression like `self.foo(...)` or `cls.foo(...)`,
+    return (attr_name, call_expr). Otherwise return None.
+    """
+    if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
+        expr = stmt.body[0].value
+        if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
+            func = expr.func
+            if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
+                return func.attr.value, expr
+    return None
+
+
+def _build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None:
+    """Given a Call node whose func is a `self`/`cls` attribute, build
+    a corresponding pytest WithItem for known assert context managers.
+
+    Returns a `WithItem` or None if the call_expr is not one we transform.
+    """
+    if not isinstance(call_expr.func, cst.Attribute):
+        return None
+    func = call_expr.func
+    if not (isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}):
+        return None
+
+    attr_name = func.attr.value
+
+    if attr_name in {"assertWarns", "assertWarnsRegex"}:
+        exc_arg = call_expr.args[0] if call_expr.args else None
+        match_arg = call_expr.args[1] if len(call_expr.args) >= 2 else None
+        warn_items_args: list[cst.Arg] = []
+        if exc_arg:
+            warn_items_args.append(cst.Arg(value=exc_arg.value))
+        if match_arg:
+            warn_items_args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
+        warn_call = cst.Call(
+            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
+            args=warn_items_args,
+        )
+        return cst.WithItem(item=warn_call)
+
+    if attr_name in {"assertRaises", "assertRaisesRegex"}:
+        exc_arg = call_expr.args[0] if call_expr.args else None
+        raises_items_args: list[cst.Arg] = []
+        if exc_arg:
+            raises_items_args.append(cst.Arg(value=exc_arg.value))
+        raises_call = cst.Call(
+            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
+            args=raises_items_args,
+        )
+        return cst.WithItem(item=raises_call)
+
+    if attr_name in {"assertLogs", "assertNoLogs"}:
+        level_arg = call_expr.args[1] if len(call_expr.args) >= 2 else None
+        if level_arg is None:
+            for a in call_expr.args:
+                if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
+                    level_arg = a
+                    break
+
+        caplog_level_args: list[cst.Arg] = []
+        if level_arg:
+            level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
+            caplog_level_args.append(cst.Arg(value=level_value))
+        else:
+            caplog_level_args.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
+
+        cap_call = cst.Call(
+            func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
+            args=caplog_level_args,
+        )
+        return cst.WithItem(item=cap_call)
+
+    return None
+
+
+def _create_with_wrapping_next_stmt(with_item: cst.WithItem, next_stmt: cst.BaseStatement | None) -> tuple[cst.With, int]:
+    """Create a `With` node that uses `with_item` and wraps `next_stmt`.
+
+    Returns a tuple (with_node, consumed_count) where consumed_count is 2
+    when a following statement was wrapped (original code advanced i by 2),
+    or 1 when only the assert-call line was consumed and a `pass` body is used.
+    """
+    if next_stmt is not None:
+        if isinstance(next_stmt, cst.With):
+            inner_body = getattr(next_stmt.body, "body", [])
+            body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], inner_body))
+        else:
+            body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [next_stmt]))
+        with_node = cst.With(body=body_block, items=[with_item])
+        return with_node, 2
+    else:
+        pass_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))])
+        body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [pass_stmt]))
+        with_node = cst.With(body=body_block, items=[with_item])
+        return with_node, 1
+
+
+def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
+    """Rewrite With.items that reference `self`/`cls` attribute calls into pytest equivalents.
+
+    Returns (new_with, alias_name, changed) where alias_name is the value of an
+    `as` alias if present on any original WithItem, or None.
+    """
+    new_items: list[cst.WithItem] = []
+    changed = False
+    for item in stmt.items:
+        ctx = item.item
+        if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
+            func = ctx.func
+            if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
+                if func.attr.value in {"assertWarns", "assertWarnsRegex"}:
+                    exc_arg = ctx.args[0] if ctx.args else None
+                    match_arg = ctx.args[1] if len(ctx.args) >= 2 else None
+                    warn_items_args_local: list[cst.Arg] = []
+                    if exc_arg:
+                        warn_items_args_local.append(cst.Arg(value=exc_arg.value))
+                    if match_arg:
+                        warn_items_args_local.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
+                    warn_call = cst.Call(
+                        func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
+                        args=warn_items_args_local,
+                    )
+                    new_item = cst.WithItem(item=warn_call)
+                    new_items.append(new_item)
+                    changed = True
+                    continue
+
+                if func.attr.value in {"assertLogs", "assertNoLogs"}:
+                    level_arg = ctx.args[1] if len(ctx.args) >= 2 else None
+                    if level_arg is None:
+                        for a in ctx.args:
+                            if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
+                                level_arg = a
+                                break
+                    caplog_level_args_local: list[cst.Arg] = []
+                    if level_arg:
+                        level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
+                        caplog_level_args_local.append(cst.Arg(value=level_value))
+                    else:
+                        caplog_level_args_local.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
+                    cap_call = cst.Call(
+                        func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
+                        args=caplog_level_args_local,
+                    )
+                    new_item = cst.WithItem(item=cap_call)
+                    new_items.append(new_item)
+                    changed = True
+                    continue
+
+                if func.attr.value in {"assertRaises", "assertRaisesRegex"}:
+                    exc_arg = ctx.args[0] if ctx.args else None
+                    raises_items_args_local: list[cst.Arg] = []
+                    if exc_arg:
+                        raises_items_args_local.append(cst.Arg(value=exc_arg.value))
+                    raises_call = cst.Call(
+                        func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
+                        args=raises_items_args_local,
+                    )
+                    new_item = cst.WithItem(item=raises_call, asname=item.asname)
+                    new_items.append(new_item)
+                    changed = True
+                    continue
+
+        new_items.append(item)
+
+    if not changed:
+        return stmt, None, False
+
+    new_with = stmt.with_changes(items=new_items)
+
+    alias_name = None
+    for item in stmt.items:
+        try:
+            if (
+                item.asname
+                and isinstance(item.asname, cst.AsName)
+                and isinstance(item.asname.name, cst.Name)
+            ):
+                alias_name = item.asname.name.value
+                break
+        except Exception:
+            pass
+
+    return new_with, alias_name, True
+
+
 def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
     """Wrap `self.assertLogs`/`self.assertNoLogs` calls followed by a statement into a With block.
 
