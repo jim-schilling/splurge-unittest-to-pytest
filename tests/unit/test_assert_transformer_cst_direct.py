@@ -1,6 +1,6 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.transformers.assert_transformer import wrap_assert_logs_in_block
+from splurge_unittest_to_pytest.transformers.assert_transformer import wrap_assert_in_block
 
 
 def _make_assert_len_on_log_output(equal_to: int, use_subscript: bool = False) -> cst.Assert:
@@ -37,7 +37,7 @@ def test_with_inner_assert_node_rewrites_attribute_and_subscript():
     inner_assert = _make_assert_len_on_log_output(2, use_subscript=False)
     with_node = cst.With(body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[inner_assert])]), items=[with_item])
 
-    out = wrap_assert_logs_in_block([with_node])
+    out = wrap_assert_in_block([with_node])
     code = cst.Module(body=out).code
     assert "caplog.records" in code
     assert "len(caplog.records)" in code
@@ -95,7 +95,7 @@ def test_lookahead_rewrites_following_asserts_after_with():
     )
 
     stmts = [with_node, assert1, membership]
-    out = wrap_assert_logs_in_block(stmts)
+    out = wrap_assert_in_block(stmts)
     code = cst.Module(body=out).code
     assert "caplog.records" in code
     assert ".getMessage()" in code

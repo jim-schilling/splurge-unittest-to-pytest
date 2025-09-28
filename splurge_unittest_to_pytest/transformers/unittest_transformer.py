@@ -46,7 +46,7 @@ from .assert_transformer import (
     transform_caplog_alias_string_fallback,
     transform_fail,
     transform_skip_test,
-    wrap_assert_logs_in_block,
+    wrap_assert_in_block,
 )
 from .fixture_transformer import (
     create_class_fixture,
@@ -395,7 +395,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         # so top-level logging assertions are preserved structurally.
         try:
             # Only call if helper is available
-            final_body = wrap_assert_logs_in_block(list(final_body))  # type: ignore[arg-type]
+            final_body = wrap_assert_in_block(list(final_body))  # type: ignore[arg-type]
         except Exception:
             # Be conservative: if rewrite fails, keep original final_body
             pass
@@ -430,7 +430,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 updated_node = ensure_subtests_param(updated_node)
 
             # Then wrap assertLogs/assertNoLogs patterns using shared helper
-            new_body = wrap_assert_logs_in_block(body_with_subtests)
+            new_body = wrap_assert_in_block(body_with_subtests)
             result_node = updated_node.with_changes(body=updated_node.body.with_changes(body=new_body))
         except Exception:
             result_node = updated_node

@@ -2,7 +2,7 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.transformers.assert_transformer import (
     transform_caplog_alias_string_fallback,
-    wrap_assert_logs_in_block,
+    wrap_assert_in_block,
 )
 
 
@@ -22,7 +22,7 @@ def test_fn(self):
     assert isinstance(func, cst.FunctionDef)
     stmts = list(func.body.body)
 
-    out = wrap_assert_logs_in_block(stmts)
+    out = wrap_assert_in_block(stmts)
     # Expect a single With node at start
     assert any(isinstance(s, cst.With) for s in out)
     code = cst.Module(body=out).code

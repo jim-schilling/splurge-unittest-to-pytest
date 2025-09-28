@@ -2,7 +2,7 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.transformers.assert_transformer import (
     transform_caplog_alias_string_fallback,
-    wrap_assert_logs_in_block,
+    wrap_assert_in_block,
 )
 
 
@@ -16,7 +16,7 @@ def _stmt(code: str) -> cst.SimpleStatementLine:
 
 def test_assert_nologs_bare_call_uses_caplog_at_level_and_pass():
     stmt = _stmt("self.assertNoLogs('root', level='DEBUG')")
-    out = wrap_assert_logs_in_block([stmt])
+    out = wrap_assert_in_block([stmt])
     assert len(out) == 1
     w = out[0]
     assert isinstance(w, cst.With)
@@ -27,7 +27,7 @@ def test_assert_nologs_bare_call_uses_caplog_at_level_and_pass():
 
 def test_assert_warnsregex_with_match_kw_converted_to_pytest_warns():
     stmt = _stmt("self.assertWarnsRegex(ValueError, 'msg')")
-    out = wrap_assert_logs_in_block([stmt, _stmt("pass")])
+    out = wrap_assert_in_block([stmt, _stmt("pass")])
     assert isinstance(out[0], cst.With)
     w = out[0]
     # check pytest.warns and match kw present
@@ -84,7 +84,7 @@ def test_lookahead_rewrite_rewrites_following_asserts_using_alias():
     )
 
     stmts = [with_stmt, s1, s2]
-    out = wrap_assert_logs_in_block(stmts)
+    out = wrap_assert_in_block(stmts)
     # After wrapping we should have a With and the lookahead loop should have rewritten s1/s2 in-place
     assert any("caplog.records" in cst.Module(body=out).code for _ in (0,))
 

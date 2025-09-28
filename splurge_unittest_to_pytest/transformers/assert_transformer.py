@@ -242,7 +242,7 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
     return node
 
 
-def wrap_assert_logs_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
+def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
     """Wrap `self.assertLogs`/`self.assertNoLogs` calls followed by a statement into a With block.
 
     This mirrors the previous in-transformer behavior moved here so it can be reused
