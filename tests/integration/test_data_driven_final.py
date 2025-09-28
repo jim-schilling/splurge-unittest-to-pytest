@@ -86,7 +86,7 @@ class TestDataDrivenTransformation:
             output_file = tmp_path / f"test_{test_num}_output.py"
 
             # Create configuration for initial pipeline run (use tmp_path as output dir)
-            config = create_config(format_code=False, dry_run=False, target_directory=str(tmp_path))
+            config = create_config(dry_run=False, target_directory=str(tmp_path))
 
             # Create event bus
             event_bus = create_event_bus()

@@ -11,40 +11,33 @@ def test_migration_config_creation():
     """Test creating migration configuration with defaults."""
     config = MigrationConfig()
 
-    assert config.format_code is True
+    # Basic defaults
     assert config.line_length == 120
     assert config.preserve_structure is True
-    assert config.convert_classes_to_functions is True
-    assert config.fixture_scope == FixtureScope.FUNCTION
 
 
 def test_migration_config_with_overrides():
     """Test creating migration configuration with custom values."""
-    config = MigrationConfig(format_code=False, line_length=100, dry_run=True, fixture_scope=FixtureScope.CLASS)
+    config = MigrationConfig(line_length=100, dry_run=True)
 
-    assert config.format_code is False
     assert config.line_length == 100
     assert config.dry_run is True
-    assert config.fixture_scope == FixtureScope.CLASS
 
 
 def test_migration_config_with_override():
     """Test using with_override method."""
-    config = MigrationConfig(format_code=True, line_length=80)
-    new_config = config.with_override(format_code=False, line_length=120)
+    config = MigrationConfig(line_length=80)
+    new_config = config.with_override(line_length=120)
 
-    assert config.format_code is True
     assert config.line_length == 80
-    assert new_config.format_code is False
     assert new_config.line_length == 120
 
 
 def test_migration_config_to_dict():
     """Test converting config to dictionary."""
-    config = MigrationConfig(format_code=False, line_length=100)
+    config = MigrationConfig(line_length=100)
     config_dict = config.to_dict()
 
-    assert config_dict["format_code"] is False
     assert config_dict["line_length"] == 100
     assert config_dict["preserve_structure"] is True
 
@@ -92,7 +85,6 @@ def test_pipeline_context_with_custom_target():
 def test_pipeline_context_with_metadata():
     """Test pipeline context with metadata."""
     import os
-    import tempfile
 
     # Create a temporary file for testing
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -115,7 +107,6 @@ def test_pipeline_context_with_metadata():
 def test_pipeline_context_with_config():
     """Test pipeline context with config updates."""
     import os
-    import tempfile
 
     # Create a temporary file for testing
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -123,14 +114,12 @@ def test_pipeline_context_with_config():
         temp_file = f.name
 
     try:
-        config = MigrationConfig(format_code=True)
+        config = MigrationConfig()
         context = PipelineContext.create(source_file=temp_file, config=config)
 
-        new_context = context.with_config(format_code=False, line_length=100)
+        new_context = context.with_config(line_length=100)
 
-        assert context.config.format_code is True
         assert context.config.line_length == 120
-        assert new_context.config.format_code is False
         assert new_context.config.line_length == 100
     finally:
         # Clean up the temporary file
@@ -140,7 +129,6 @@ def test_pipeline_context_with_config():
 def test_pipeline_context_getters():
     """Test pipeline context getter methods."""
     import os
-    import tempfile
 
     # Create a temporary file for testing
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -148,11 +136,11 @@ def test_pipeline_context_getters():
         temp_file = f.name
 
     try:
-        config = MigrationConfig(dry_run=True, format_code=False, line_length=100)
+        config = MigrationConfig(dry_run=True, line_length=100)
         context = PipelineContext.create(source_file=temp_file, config=config)
 
         assert context.is_dry_run() is True
-        assert context.should_format_code() is False
+        # should_format_code no longer depends on a flag; skip checking it
         assert context.get_line_length() == 100
     finally:
         # Clean up the temporary file
@@ -162,7 +150,6 @@ def test_pipeline_context_getters():
 def test_pipeline_context_immutability():
     """Test that pipeline context is immutable."""
     import os
-    import tempfile
 
     # Create a temporary file for testing
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -175,7 +162,7 @@ def test_pipeline_context_immutability():
 
         # All these should create new instances
         context1 = context.with_metadata("key", "value")
-        context2 = context.with_config(format_code=False)
+        context2 = context.with_config(line_length=80)
 
         assert context is not context1
         assert context is not context2
@@ -195,24 +182,10 @@ def test_fixture_scope_enum():
 
 def test_context_manager_load_config():
     """Test loading configuration from file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        f.write(
-            """
-format_code: false
-line_length: 100
-dry_run: true
-"""
-        )
-        config_file = f.name
-
-    try:
-        result = MigrationConfig.from_dict({"format_code": False, "line_length": 100, "dry_run": True})
-        assert result.format_code is False
-        assert result.line_length == 100
-        assert result.dry_run is True
-
-    finally:
-        Path(config_file).unlink()
+    # Create a dict with supported keys only
+    result = MigrationConfig.from_dict({"line_length": 100, "dry_run": True})
+    assert result.line_length == 100
+    assert result.dry_run is True
 
 
 def test_config_validation():
@@ -223,7 +196,6 @@ def test_config_validation():
     assert config is not None
 
     # Invalid configs
-    # Invalid configs to exercise validation logic
     invalid_config2 = MigrationConfig(line_length=50)
     invalid_config3 = MigrationConfig(report_format="invalid")
     assert invalid_config2.line_length == 50

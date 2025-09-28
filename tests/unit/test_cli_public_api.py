@@ -13,7 +13,8 @@ def test_create_config_defaults():
     cfg = cli.create_config()
     assert isinstance(cfg, MigrationConfig)
     assert cfg.file_patterns == ["test_*.py"]
-    assert cfg.fixture_scope.value == "function"
+    # fixture_scope is no longer exposed as a CLI option; ensure config created
+    assert hasattr(cfg, "line_length")
 
 
 def test_validate_source_files_with_patterns(tmp_path):

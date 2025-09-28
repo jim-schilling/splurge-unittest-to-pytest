@@ -67,13 +67,9 @@ def create_config(
     recurse_directories: bool = True,
     preserve_structure: bool = True,
     backup_originals: bool = True,
-    merge_setup_teardown: bool = True,
-    format_code: bool = True,
-    fixture_scope: str | None = None,
     line_length: int | None = 120,
     dry_run: bool = False,
     fail_fast: bool = False,
-    parallel_processing: bool = True,
     verbose: bool = False,
     generate_report: bool = True,
     report_format: str = "json",
@@ -103,26 +99,12 @@ def create_config(
     Returns:
         Configured MigrationConfig instance
     """
-    from .context import FixtureScope
     from .helpers.utility import sanitize_extension, sanitize_suffix
 
     suffix = sanitize_suffix(suffix)
     ext = sanitize_extension(ext)
 
     base = MigrationConfig()
-
-    # Normalize fixture_scope if provided (accept strings like "function")
-    fs = base.fixture_scope
-    if fixture_scope is not None:
-        try:
-            if isinstance(fixture_scope, str):
-                fs = FixtureScope(fixture_scope)
-            elif isinstance(fixture_scope, FixtureScope):
-                fs = fixture_scope
-            else:
-                fs = FixtureScope(str(fixture_scope))
-        except Exception:
-            fs = base.fixture_scope
 
     return MigrationConfig(
         target_directory=target_directory,
@@ -131,17 +113,13 @@ def create_config(
         recurse_directories=recurse_directories,
         preserve_structure=preserve_structure,
         backup_originals=backup_originals,
-        convert_classes_to_functions=base.convert_classes_to_functions,
-        merge_setup_teardown=merge_setup_teardown,
-        generate_fixtures=base.generate_fixtures,
-        fixture_scope=fs,
-        format_code=True,  # formatting is mandatory
-        optimize_imports=base.optimize_imports,
-        add_type_hints=base.add_type_hints,
+        # Legacy transformation flags are intentionally not exposed via the CLI.
+        # Keep the MigrationConfig minimal here and let defaults apply.
+        # Legacy flags are intentionally not exposed in the CLI and default
+        # behavior is used. Keep config minimal here.
         line_length=line_length,
         dry_run=dry_run,
         fail_fast=fail_fast,
-        parallel_processing=parallel_processing,
         verbose=verbose,
         generate_report=generate_report,
         report_format=report_format,
@@ -310,8 +288,6 @@ def migrate(
             recurse_directories=recurse,
             preserve_structure=preserve_structure,
             backup_originals=backup_originals,
-            merge_setup_teardown=merge_setup_teardown,
-            format_code=True,
             line_length=line_length,
             dry_run=dry_run,
             fail_fast=fail_fast,
@@ -475,28 +451,22 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "# This file contains configuration options for the migration tool.": None,
         "# You can override these settings using command-line flags.": None,
         "# Output settings": None,
-        "target_directory": default_config["target_directory"],
-        "preserve_structure": default_config["preserve_structure"],
-        "backup_originals": default_config["backup_originals"],
+        "target_directory": default_config.get("target_directory"),
+        "preserve_structure": default_config.get("preserve_structure"),
+        "backup_originals": default_config.get("backup_originals"),
         "# Transformation settings": None,
-        "convert_classes_to_functions": default_config["convert_classes_to_functions"],
-        "merge_setup_teardown": default_config["merge_setup_teardown"],
-        "generate_fixtures": default_config["generate_fixtures"],
-        "fixture_scope": default_config["fixture_scope"],
+        # Legacy/removed transformation settings intentionally omitted
         "# Code quality settings": None,
-        "format_code": default_config["format_code"],
-        "optimize_imports": default_config["optimize_imports"],
-        "add_type_hints": default_config["add_type_hints"],
-        "line_length": default_config["line_length"],
+        # Code quality settings: only include supported options
+        "line_length": default_config.get("line_length"),
         "# Behavior settings": None,
-        "dry_run": default_config["dry_run"],
-        "fail_fast": default_config["fail_fast"],
-        "parallel_processing": default_config["parallel_processing"],
+        "dry_run": default_config.get("dry_run"),
+        "fail_fast": default_config.get("fail_fast"),
         # Note: worker count configuration removed from CLI surface
         "# Reporting settings": None,
-        "verbose": default_config["verbose"],
-        "generate_report": default_config["generate_report"],
-        "report_format": default_config["report_format"],
+        "verbose": default_config.get("verbose"),
+        "generate_report": default_config.get("generate_report"),
+        "report_format": default_config.get("report_format"),
     }
 
     try:

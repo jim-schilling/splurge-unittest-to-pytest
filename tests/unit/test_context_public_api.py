@@ -12,7 +12,8 @@ def test_migration_config_roundtrip():
     cfg = MigrationConfig()
     d = cfg.to_dict()
     cfg2 = MigrationConfig.from_dict(d)
-    assert cfg2.fixture_scope == cfg.fixture_scope
+    # fixture_scope removed; ensure roundtrip preserves other keys
+    assert cfg2.line_length == cfg.line_length
 
 
 def test_pipeline_context_create_and_methods(tmp_path):

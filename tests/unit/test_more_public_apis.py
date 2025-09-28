@@ -114,9 +114,9 @@ def test_event_timer_publishes(mocker):
 
 
 def test_context_public_api_and_immutability(tmp_path):
-    cfg = create_config(fixture_scope="function", line_length=100)
+    cfg = create_config(line_length=100)
     assert isinstance(cfg, MigrationConfig)
-    assert cfg.fixture_scope == FixtureScope.FUNCTION
+    assert cfg.line_length == 100
 
     src = tmp_path / "x.py"
     src.write_text("print(1)\n")
