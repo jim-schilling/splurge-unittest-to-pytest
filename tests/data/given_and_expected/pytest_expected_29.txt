@@ -1,0 +1,10 @@
+import pytest
+
+
+class TestComplexConditions:
+	def test_truthy(self):
+		assert 1 in [1, 2, 3] and "a" not in "b"
+
+	def test_complex_in(self):
+		d = {"k": [1, 2]}
+		assert 1 in d["k"]

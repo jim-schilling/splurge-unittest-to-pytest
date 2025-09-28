@@ -1,8 +1,8 @@
-from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCSTTransformer
+from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
 
 def run_transform(code: str) -> str:
-    t = UnittestToPytestCSTTransformer()
+    t = UnittestToPytestCstTransformer()
     return t.transform_code(code)
 
 

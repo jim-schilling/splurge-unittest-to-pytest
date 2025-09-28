@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test fixture transformation functionality."""
 
-from splurge_unittest_to_pytest.transformers import UnittestToPytestCSTTransformer
+from splurge_unittest_to_pytest.transformers import UnittestToPytestCstTransformer
 
 
 def test_fixture_transformation():
     """Test CST-based fixture transformation."""
-    transformer = UnittestToPytestCSTTransformer()
+    transformer = UnittestToPytestCstTransformer()
 
     # Test unittest with setUp/setUpClass
     test_code = """

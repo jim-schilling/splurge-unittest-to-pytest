@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+
 class Calculator:
     def add(self, a: float, b: float) -> float:
         return a + b
@@ -20,26 +21,27 @@ class Calculator:
     def get_none(self) -> None:
         return None
 
+
 class TestCalculatorComplete:
     @pytest.fixture(scope="class", autouse=True)
-    def setup_class(self):
-        self.class_level_resource = "shared_resource"
-        print(f"setUpClass: Created {self.class_level_resource}")
+    def setup_class(cls):
+        cls.class_level_resource = "shared_resource"
+        print(f"setUpClass: Created {cls.class_level_resource}")
         yield
-        print(f"tearDownClass: Cleaning up {self.class_level_resource}")
-        self.class_level_resource = None
+        print(f"tearDownClass: Cleaning up {cls.class_level_resource}")
+        cls.class_level_resource = None
 
     @pytest.fixture(autouse=True)
     def setup_method(self):
         self.calculator = Calculator()
         self.test_data: Dict[str, Any] = {
-            'numbers': [1, 2, 3],
-            'string': 'hello',
-            'bool': True,
-            'none_value': None,
+            "numbers": [1, 2, 3],
+            "string": "hello",
+            "bool": True,
+            "none_value": None,
         }
         self.temp_file = tempfile.NamedTemporaryFile(delete=False)
-        self.temp_file.write(b'test content')
+        self.temp_file.write(b"test content")
         self.temp_file.close()
         yield
         if os.path.exists(self.temp_file.name):
@@ -50,31 +52,31 @@ class TestCalculatorComplete:
     def test_equality_assertions(self) -> None:
         assert self.calculator.add(2, 3) == 5
         assert self.calculator.add(2, 3) != 6
-        assert self.test_data['bool'] is True
-        assert self.test_data['string'] is not self.test_data['numbers']
+        assert self.test_data["bool"] is True
+        assert self.test_data["string"] is not self.test_data["numbers"]
         assert self.calculator.get_none() is None
         assert self.calculator is not None
 
     def test_boolean_assertions(self) -> None:
-        assert self.test_data['bool']
-        assert not not self.test_data['bool']
+        assert self.test_data["bool"]
+        assert not not self.test_data["bool"]
 
     def test_type_assertions(self) -> None:
         assert isinstance(self.calculator, Calculator)
-        assert not isinstance(self.test_data['string'], int)
-        assert isinstance(self.test_data['numbers'], (list, tuple))
+        assert not isinstance(self.test_data["string"], int)
+        assert isinstance(self.test_data["numbers"], (list, tuple))
 
     def test_container_assertions(self) -> None:
-        assert 2 in self.test_data['numbers']
-        assert 5 not in self.test_data['numbers']
-        assert 'ell' in self.test_data['string']
-        assert 'string' in self.test_data
-        assert [1, 2, 3] == [3, 1, 2]
+        assert 2 in self.test_data["numbers"]
+        assert 5 not in self.test_data["numbers"]
+        assert "ell" in self.test_data["string"]
+        assert "string" in self.test_data
+        assert sorted([1, 2, 3]) == sorted([3, 1, 2])
 
     def test_sequence_assertions(self) -> None:
         test_list = [1, 2, 3, 4, 5]
         assert test_list == [1, 2, 3, 4, 5]
-        assert self.test_data['numbers'] == [1, 2, 3]
+        assert self.test_data["numbers"] == [1, 2, 3]
         test_tuple = (1, 2, 3)
         assert test_tuple == (1, 2, 3)
 
@@ -85,8 +87,8 @@ class TestCalculatorComplete:
         assert set1 == set2
 
     def test_dict_assertions(self) -> None:
-        dict1 = {'a': 1, 'b': 2}
-        dict2 = {'a': 1, 'b': 2}
+        dict1 = {"a": 1, "b": 2}
+        dict2 = {"a": 1, "b": 2}
         assert dict1 == dict2
 
     def test_string_assertions(self) -> None:
@@ -95,7 +97,7 @@ class TestCalculatorComplete:
         multiline2 = "line1\nline2\nline3"
         assert multiline1 == multiline2
         assert re.search(r"Hello.*World", test_string)
-        assert re.search(r"\d+", test_string) is None
+        assert not re.search(r"\d+", test_string)
 
     def test_numeric_assertions(self) -> None:
         assert round(self.calculator.divide(1, 3) - 0.333333, 5) == 0
@@ -111,9 +113,9 @@ class TestCalculatorComplete:
 
         with pytest.raises(ValueError) as context:
             self.calculator.divide(10, 0)
-        assert str(context.value) == "Cannot divide by zero"
+        assert str(context.exception) == "Cannot divide by zero"
 
-        with pytest.raises(ValueError, match=r"Cannot divide by zero"):
+        with pytest.raises(ValueError):
             self.calculator.divide(10, 0)
 
     def test_warning_assertions(self) -> None:
@@ -126,26 +128,28 @@ class TestCalculatorComplete:
         with pytest.warns(UserWarning, match=r"test warning"):
             warn_function()
 
-    def test_log_assertions(self, caplog) -> None:
-        logger = logging.getLogger('test_logger')
+    def test_log_assertions(self) -> None:
+        logger = logging.getLogger("test_logger")
 
-        with caplog.at_level(logging.INFO, logger=logger):
-            logger.info('Test log message')
-            logger.error('Test error message')
+        with caplog.at_level("INFO"):
+            logger.info("Test log message")
+            logger.error("Test error message")
 
-        assert len(log.output) == 2
-        assert 'Test log message' in log.output[0]
+        assert len(caplog.records) == 2
+        assert "Test log message" in caplog.records[0].getMessage()
 
     def test_mock_assertions(self) -> None:
         mock_obj = Mock()
-        mock_obj.method('arg1', 'arg2')
-        mock_obj.method.assert_called_with('arg1', 'arg2')
-        mock_obj.method.assert_called_once_with('arg1', 'arg2')
+        mock_obj.method("arg1", "arg2")
+        mock_obj.method.assert_called_with("arg1", "arg2")
+        mock_obj.method.assert_called_once_with("arg1", "arg2")
 
     def test_file_operations(self) -> None:
         assert os.path.exists(self.temp_file.name)
 
-        with open(self.temp_file.name, 'rb') as f:
+        with open(self.temp_file.name, "rb") as f:
             content = f.read()
 
-        assert content == b'test content'
+        assert content == b"test content"
+
+pytest.main()

@@ -1,12 +1,12 @@
 import pytest
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
 def make(code: str) -> str:
-    return UnittestToPytestCSTTransformer().transform_code(code)
+    return UnittestToPytestCstTransformer().transform_code(code)
 
 
 def test_all_assert_variants_transformed_by_cst_where_possible():

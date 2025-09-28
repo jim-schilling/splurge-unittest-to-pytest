@@ -35,6 +35,9 @@ def migrate(source_files: Iterable[str] | str, config: MigrationConfig | None = 
 
     orchestrator = MigrationOrchestrator()
     written: list[str] = []
+    # Collect per-file generated code when running in dry-run so callers
+    # (CLI) can display the converted code without writing files.
+    generated_map: dict[str, str] = {}
 
     for src in files:
         res = orchestrator.migrate_file(src, config)
@@ -56,8 +59,27 @@ def migrate(source_files: Iterable[str] | str, config: MigrationConfig | None = 
                 written.extend(data)
             else:
                 written.append(str(data))
+            # Collect generated_code if present in the per-file result metadata
+            try:
+                meta = getattr(res, "metadata", None) or {}
+                if isinstance(meta, dict) and "generated_code" in meta:
+                    # If multiple targets were returned for this source, map
+                    # each target to the same generated code; otherwise map
+                    # the single target path.
+                    gen = meta["generated_code"]
+                    if isinstance(data, list):
+                        for d in data:
+                            generated_map[str(d)] = gen
+                    elif data is not None:
+                        generated_map[str(data)] = gen
+                    else:
+                        generated_map[str(src)] = gen
+            except Exception:
+                pass
         else:
             err = getattr(res, "error", Exception("Migration failed"))
             return Result.failure(err)
 
-    return Result.success(written)
+    # Attach generated_code map to metadata if present
+    metadata = {"generated_code": generated_map} if generated_map else None
+    return Result.success(written, metadata=metadata)

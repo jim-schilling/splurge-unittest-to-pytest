@@ -1,0 +1,19 @@
+import unittest
+from unittest.mock import Mock
+
+
+class TestMixed(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.shared = []
+
+    def setUp(self):
+        self.m = Mock()
+        self.m.do('x')
+
+    def test_mock_calls(self):
+        self.m.do.assert_called_with('x')
+
+    def test_regex(self):
+        s = 'abc123'
+        self.assertRegex(s, r'abc\d+')

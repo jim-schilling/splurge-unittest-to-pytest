@@ -1,0 +1,25 @@
+import re
+from unittest.mock import Mock
+
+import pytest
+
+
+class TestMixed:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(cls):
+        cls.shared = []
+        yield
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.m = Mock()
+        self.m.do("x")
+        yield
+
+    def test_mock_calls(self):
+        self.m.do.assert_called_with("x")
+
+    def test_regex(self):
+        s = "abc123"
+        assert re.search(r"abc\d+", s)
+        

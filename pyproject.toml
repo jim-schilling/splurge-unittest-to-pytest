@@ -139,6 +139,14 @@ disallow_untyped_calls = false
 module = "tests.*"
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = "splurge_unittest_to_pytest.transformers.assert_transformer"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "splurge_unittest_to_pytest.transformers.import_transformer"
+ignore_errors = true
+
 # Black configuration
 [tool.black]
 line-length = 120

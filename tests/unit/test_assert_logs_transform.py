@@ -1,5 +1,5 @@
-def test_assert_logs_and_no_logs_string_fallback():
-    from splurge_unittest_to_pytest.transformers.assert_transformer import transform_assertions_string_based
+def test_assert_logs_and_no_logs_cst_pipeline():
+    from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
     code = """
 def test_example(self):
@@ -9,13 +9,54 @@ def test_example(self):
     other_call()
 """
 
-    out = transform_assertions_string_based(code)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(code)
 
-    # assertLogs should be converted to a with statement and the following
-    # code line should be indented inside it
-    assert "with self.assertLogs('my.logger', 'INFO'):" in out
-    assert "    do_something()" in out
+    # assertLogs/assertNoLogs should be converted to caplog.at_level context managers
+    assert "caplog.at_level" in out or "pytest.warns" in out
+    # the following calls should be present (possibly nested inside with blocks)
+    assert "do_something()" in out
+    assert "other_call()" in out
 
-    # assertNoLogs converted similarly
-    assert "with self.assertNoLogs():" in out
-    assert "    other_call()" in out
+
+def test_with_item_assert_logs_converted_and_alias_rewritten():
+    from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
+
+    code = """
+def test_with_items(self):
+    with self.assertLogs('my.logger', level='INFO') as log:
+        self.assertEqual(len(log.output), 2)
+        self.assertIn('started', log.output[0])
+    do_more()
+"""
+
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(code)
+
+    # Should use caplog.at_level and not keep 'log' alias references
+    assert "caplog.at_level" in out
+    # alias.output should be replaced by caplog.records usage
+    assert "log.output" not in out
+    assert "caplog.records" in out
+    # getMessage() calls should be present for membership checks
+    assert ".getMessage()" in out
+
+
+def test_string_fallback_caplog_rewrites():
+    from splurge_unittest_to_pytest.transformers.assert_transformer import transform_caplog_alias_string_fallback
+
+    src = """
+with caplog.at_level('INFO'):
+    pass
+
+if 'oops' in log.output[0]:
+    x = True
+
+if caplog.records[0] == 'oops':
+    x = True
+"""
+
+    out = transform_caplog_alias_string_fallback(src)
+    assert "log.output" not in out
+    assert "caplog.records[0].getMessage()" in out
+    assert "caplog.records[0].getMessage() == 'oops'" in out

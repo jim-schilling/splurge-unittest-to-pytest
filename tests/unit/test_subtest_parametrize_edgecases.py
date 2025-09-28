@@ -3,13 +3,13 @@ import textwrap
 import libcst as cst
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
 def _transform(src: str, parametrize: bool = True) -> str:
     mod = cst.parse_module(src)
-    transformer = UnittestToPytestCSTTransformer(parametrize=parametrize)
+    transformer = UnittestToPytestCstTransformer(parametrize=parametrize)
     new = mod.visit(transformer)
     return new.code
 

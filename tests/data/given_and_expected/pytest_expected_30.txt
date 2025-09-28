@@ -1,0 +1,12 @@
+import pytest
+
+
+class BaseHelper:
+    def helper(self):
+        return "help"
+
+
+class MyTestCase(BaseHelper):
+    def test_combined_inheritance(self):
+        assert self.helper() == "help"
+        assert True

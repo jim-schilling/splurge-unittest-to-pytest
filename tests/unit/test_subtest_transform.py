@@ -2,7 +2,7 @@ def test_subtest_cst_conversion_adds_subtests_param_and_rewrites_with():
     import libcst as cst
 
     from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-        UnittestToPytestCSTTransformer,
+        UnittestToPytestCstTransformer,
     )
 
     code = """
@@ -12,7 +12,7 @@ class MyTests(unittest.TestCase):
             assert do_one()
 """
 
-    transformer = UnittestToPytestCSTTransformer()
+    transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
 
     # After transform, the with should use subtests.test and function should accept subtests param

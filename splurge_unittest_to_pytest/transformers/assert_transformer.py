@@ -5,14 +5,9 @@ into equivalent pytest-style assertions or expressions. They are
 extracted to keep `unittest_transformer.py` focused and allow reuse.
 """
 
-import re
+from typing import cast
 
 import libcst as cst
-
-from ..helpers.utility import (
-    safe_replace_one_arg_call,
-    safe_replace_two_arg_call,
-)
 
 
 def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
@@ -23,6 +18,28 @@ def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
             comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
         )
         return cst.Assert(test=comp)
+    return node
+
+
+def transform_assert_not_almost_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertNotAlmostEqual(a, b, places=N) -> assert not round(a-b, places) == 0."""
+    if len(node.args) >= 2:
+        left = node.args[0].value
+        right = node.args[1].value
+        places = None
+        for arg in node.args:
+            if arg.keyword and isinstance(arg.keyword, cst.Name) and arg.keyword.value == "places":
+                places = arg.value
+                break
+        if places is None:
+            places = cst.Integer(value="7")
+        diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
+        round_call = cst.Call(func=cst.Name(value="round"), args=[cst.Arg(value=diff), cst.Arg(value=places)])
+        comp = cst.Comparison(
+            left=round_call,
+            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer(value="0"))],
+        )
+        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=comp))
     return node
 
 
@@ -106,12 +123,45 @@ def transform_assert_not_in(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def transform_assert_isinstance(node: cst.Call) -> cst.CSTNode:
+    """Transform assertIsInstance(obj, cls) -> assert isinstance(obj, cls)."""
+    if len(node.args) >= 2:
+        isinstance_call = cst.Call(
+            func=cst.Name(value="isinstance"),
+            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
+        )
+        return cst.Assert(test=isinstance_call)
+    return node
+
+
+def transform_assert_not_isinstance(node: cst.Call) -> cst.CSTNode:
+    """Transform assertNotIsInstance(obj, cls) -> assert not isinstance(obj, cls)."""
+    if len(node.args) >= 2:
+        isinstance_call = cst.Call(
+            func=cst.Name(value="isinstance"),
+            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
+        )
+        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=isinstance_call))
+    return node
+
+
 def transform_assert_count_equal(node: cst.Call) -> cst.CSTNode:
     """Transform assertCountEqual(a, b) -> assert sorted(a) == sorted(b)."""
     if len(node.args) >= 2:
         left = cst.Call(func=cst.Name(value="sorted"), args=[cst.Arg(value=node.args[0].value)])
         right = cst.Call(func=cst.Name(value="sorted"), args=[cst.Arg(value=node.args[1].value)])
         comp = cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=right)])
+        return cst.Assert(test=comp)
+    return node
+
+
+def transform_assert_multiline_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertMultiLineEqual(a, b) -> assert a == b."""
+    if len(node.args) >= 2:
+        comp = cst.Comparison(
+            left=node.args[0].value,
+            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
+        )
         return cst.Assert(test=comp)
     return node
 
@@ -180,6 +230,18 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
+    """Transform assertRaisesRegex(exc, callable, regex) -> pytest.raises(exc, match=regex)."""
+    # Only transform when at least 3 args are provided: (exc, callable, regex)
+    if len(node.args) >= 3:
+        exc = node.args[0].value
+        match_arg = node.args[2].value
+        args: list[cst.Arg] = [cst.Arg(value=exc)]
+        args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg))
+        return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")), args=args)
+    return node
+
+
 def wrap_assert_logs_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
     """Wrap `self.assertLogs`/`self.assertNoLogs` calls followed by a statement into a With block.
 
@@ -191,23 +253,809 @@ def wrap_assert_logs_in_block(statements: list[cst.BaseStatement]) -> list[cst.B
     while i < len(statements):
         stmt = statements[i]
         wrapped = False
+
+        # Handle bare expression calls like: self.assertLogs(...)
         if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
             expr = stmt.body[0].value
             if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
                 func = expr.func
                 if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
-                    if func.attr.value in {"assertLogs", "assertNoLogs"}:
+                    # Only handle specific unittest assert context-manager style calls.
+                    attr_name = func.attr.value
+                    with_item = None
+                    if attr_name in {"assertWarns", "assertWarnsRegex"}:
+                        exc_arg = expr.args[0] if expr.args else None
+                        match_arg = expr.args[1] if len(expr.args) >= 2 else None
+                        warn_items_args: list[cst.Arg] = []
+                        if exc_arg:
+                            warn_items_args.append(cst.Arg(value=exc_arg.value))
+                        if match_arg:
+                            warn_items_args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
+                        warn_call = cst.Call(
+                            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
+                            args=warn_items_args,
+                        )
+                        with_item = cst.WithItem(item=warn_call)
+                    elif attr_name in {"assertRaises", "assertRaisesRegex"}:
+                        exc_arg = expr.args[0] if expr.args else None
+                        # Keep simple pytest.raises(exception) form (omit match kw)
+                        raises_items_args: list[cst.Arg] = []
+                        if exc_arg:
+                            raises_items_args.append(cst.Arg(value=exc_arg.value))
+                        raises_call = cst.Call(
+                            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
+                            args=raises_items_args,
+                        )
+                        with_item = cst.WithItem(item=raises_call)
+                    elif attr_name in {"assertLogs", "assertNoLogs"}:
+                        # assertLogs / assertNoLogs -> caplog.at_level(level)
+                        # logger argument is not used directly here; inspect args
+                        level_arg = expr.args[1] if len(expr.args) >= 2 else None
+                        # fallback: look for keyword 'level'
+                        if level_arg is None:
+                            for a in expr.args:
+                                if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
+                                    level_arg = a
+                                    break
+
+                        caplog_level_args: list[cst.Arg] = []
+                        if level_arg:
+                            level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
+                            caplog_level_args.append(cst.Arg(value=level_value))
+                        else:
+                            # default to string "INFO" to match expected outputs
+                            caplog_level_args.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
+
+                        cap_call = cst.Call(
+                            func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
+                            args=caplog_level_args,
+                        )
+                        # do not preserve ``as`` alias; tests expect use of caplog fixture
+                        with_item = cst.WithItem(item=cap_call)
+
+                    # Build with block using the next statement as body if present.
+                    # Only proceed if we actually constructed a with_item above.
+                    if with_item is not None:
+                        # If the next statement is itself a With, unwrap its inner body so
+                        # the generated caplog.at_level contains the original inner
+                        # statements rather than nesting an extra With.
                         if i + 1 < len(statements):
                             next_stmt = statements[i + 1]
-                            with_item = cst.WithItem(cst.Call(func=expr.func, args=expr.args))
-                            body_block = cst.IndentedBlock(body=[next_stmt])
+                            if isinstance(next_stmt, cst.With):
+                                inner_body = getattr(next_stmt.body, "body", [])
+                                body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], inner_body))
+                            else:
+                                # IndentedBlock expects Sequence[BaseStatement]; cast to satisfy mypy
+                                body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [next_stmt]))
                             with_node = cst.With(body=body_block, items=[with_item])
                             out.append(with_node)
                             i += 2
                             wrapped = True
+                        else:
+                            # No following statement: produce a caplog context with a pass
+                            pass_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))])
+                            body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [pass_stmt]))
+                            with_node = cst.With(body=body_block, items=[with_item])
+                            out.append(with_node)
+                            i += 1
+                            wrapped = True
+
+        # Handle existing with-statements that use self.assertLogs / assertWarns etc.
+        elif isinstance(stmt, cst.With):
+            try:
+                new_items: list[cst.WithItem] = []
+                changed = False
+                for item in stmt.items:
+                    ctx = item.item
+                    if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
+                        func = ctx.func
+                        if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
+                            if func.attr.value in {"assertWarns", "assertWarnsRegex"}:
+                                exc_arg = ctx.args[0] if ctx.args else None
+                                match_arg = ctx.args[1] if len(ctx.args) >= 2 else None
+                                warn_items_args_local: list[cst.Arg] = []
+                                if exc_arg:
+                                    warn_items_args_local.append(cst.Arg(value=exc_arg.value))
+                                if match_arg:
+                                    warn_items_args_local.append(
+                                        cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value)
+                                    )
+                                warn_call = cst.Call(
+                                    func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
+                                    args=warn_items_args_local,
+                                )
+                                new_item = cst.WithItem(item=warn_call)
+                                new_items.append(new_item)
+                                changed = True
+                                continue
+
+                            if func.attr.value in {"assertLogs", "assertNoLogs"}:
+                                # logger_arg intentionally unused here; we only need level
+                                level_arg = ctx.args[1] if len(ctx.args) >= 2 else None
+                                if level_arg is None:
+                                    for a in ctx.args:
+                                        if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
+                                            level_arg = a
+                                            break
+                                caplog_level_args_local: list[cst.Arg] = []
+                                if level_arg:
+                                    level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
+                                    caplog_level_args_local.append(cst.Arg(value=level_value))
+                                else:
+                                    caplog_level_args_local.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
+                                cap_call = cst.Call(
+                                    func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
+                                    args=caplog_level_args_local,
+                                )
+                                # preserve any asname from the original WithItem
+                                # Do not preserve `as <name>` alias for caplog conversions;
+                                # tests expect use of the `caplog` fixture rather than a
+                                # local alias variable.
+                                new_item = cst.WithItem(item=cap_call)
+                                new_items.append(new_item)
+                                changed = True
+                                continue
+
+                            if func.attr.value in {"assertRaises", "assertRaisesRegex"}:
+                                exc_arg = ctx.args[0] if ctx.args else None
+                                raises_items_args_local: list[cst.Arg] = []
+                                if exc_arg:
+                                    raises_items_args_local.append(cst.Arg(value=exc_arg.value))
+                                raises_call = cst.Call(
+                                    func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
+                                    args=raises_items_args_local,
+                                )
+                                # Preserve any 'as <name>' alias from the original WithItem
+                                new_item = cst.WithItem(item=raises_call, asname=item.asname)
+                                new_items.append(new_item)
+                                changed = True
+                                continue
+
+                    # default: keep original item
+                    new_items.append(item)
+
+                if changed:
+                    new_with = stmt.with_changes(items=new_items)
+
+                    # If the original WithItem had an alias (e.g., 'as log'),
+                    # rewrite references to that alias inside the WITH block to
+                    # use the `caplog` fixture. This covers patterns like
+                    #   assert len(log.output) == 2
+                    #   assert 'msg' in log.output[0]
+                    # and also unittest-style calls inside the block such as
+                    #   self.assertEqual(len(log.output), 2)
+                    alias_name = None
+                    for item in stmt.items:
+                        try:
+                            if (
+                                item.asname
+                                and isinstance(item.asname, cst.AsName)
+                                and isinstance(item.asname.name, cst.Name)
+                            ):
+                                alias_name = item.asname.name.value
+                                break
+                        except Exception:
+                            pass
+
+                    if alias_name:
+                        try:
+                            new_body: list[cst.BaseSmallStatement] = []
+                            for inner in getattr(new_with.body, "body", []):
+                                s = inner
+                                replaced = False
+                                try:
+                                    # Unwrap Assert inside SimpleStatementLine
+                                    target_assert = None
+                                    wrapper_stmt = None
+                                    if isinstance(s, cst.Assert):
+                                        target_assert = s
+                                    elif (
+                                        isinstance(s, cst.SimpleStatementLine)
+                                        and len(s.body) == 1
+                                        and isinstance(s.body[0], cst.Assert)
+                                    ):
+                                        wrapper_stmt = s
+                                        target_assert = s.body[0]
+
+                                    if target_assert is not None:
+                                        t = target_assert.test
+                                        # len(alias.output) == N
+                                        if isinstance(t, cst.Comparison):
+                                            left = t.left
+                                            if (
+                                                isinstance(left, cst.Call)
+                                                and isinstance(left.func, cst.Name)
+                                                and left.func.value == "len"
+                                                and left.args
+                                            ):
+                                                arg0 = left.args[0].value
+                                                attr: cst.Attribute | None = None
+                                                if isinstance(arg0, cst.Subscript) and isinstance(
+                                                    arg0.value, cst.Attribute
+                                                ):
+                                                    attr = cast(cst.Attribute, arg0.value)
+                                                elif isinstance(arg0, cst.Attribute):
+                                                    attr = cast(cst.Attribute, arg0)
+                                                else:
+                                                    attr = None
+
+                                                if (
+                                                    attr
+                                                    and isinstance(attr.value, cst.Name)
+                                                    and attr.value.value == alias_name
+                                                    and isinstance(attr.attr, cst.Name)
+                                                    and attr.attr.value == "output"
+                                                ):
+                                                    if isinstance(arg0, cst.Subscript):
+                                                        sub0 = cast(cst.Subscript, arg0)
+                                                        if sub0.slice:
+                                                            new_arg = cst.Subscript(
+                                                                value=cst.Attribute(
+                                                                    value=cst.Name(value="caplog"),
+                                                                    attr=cst.Name(value="records"),
+                                                                ),
+                                                                slice=sub0.slice,
+                                                            )
+                                                        else:
+                                                            new_arg = cst.Attribute(
+                                                                value=cst.Name(value="caplog"),
+                                                                attr=cst.Name(value="records"),
+                                                            )
+                                                    else:
+                                                        new_arg = cst.Attribute(
+                                                            value=cst.Name(value="caplog"),
+                                                            attr=cst.Name(value="records"),
+                                                        )
+                                                    new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
+                                                    new_comp = t.with_changes(left=new_left)
+                                                    new_assert = target_assert.with_changes(test=new_comp)
+                                                    if wrapper_stmt is not None:
+                                                        s = wrapper_stmt.with_changes(body=[new_assert])
+                                                    else:
+                                                        s = cst.SimpleStatementLine(body=[new_assert])
+                                                    replaced = True
+
+                                        # membership: 'foo' in alias.output[0]
+                                        for comp in getattr(t, "comparisons", []):
+                                            if isinstance(comp.operator, cst.In):
+                                                comparator = comp.comparator
+                                                comp_attr = None
+                                                if isinstance(comparator, cst.Subscript) and isinstance(
+                                                    comparator.value, cst.Attribute
+                                                ):
+                                                    comp_attr = comparator.value
+                                                elif isinstance(comparator, cst.Attribute):
+                                                    comp_attr = comparator
+
+                                                if (
+                                                    comp_attr
+                                                    and isinstance(comp_attr.value, cst.Name)
+                                                    and comp_attr.value.value == alias_name
+                                                    and isinstance(comp_attr.attr, cst.Name)
+                                                    and comp_attr.attr.value == "output"
+                                                ):
+                                                    if isinstance(comparator, cst.Subscript):
+                                                        comp_sub = cast(cst.Subscript, comparator)
+                                                        if comp_sub.slice:
+                                                            new_sub = cst.Subscript(
+                                                                value=cst.Attribute(
+                                                                    value=cst.Name(value="caplog"),
+                                                                    attr=cst.Name(value="records"),
+                                                                ),
+                                                                slice=comp_sub.slice,
+                                                            )
+                                                        else:
+                                                            new_sub = cst.Attribute(
+                                                                value=cst.Name(value="caplog"),
+                                                                attr=cst.Name(value="records"),
+                                                            )
+                                                    else:
+                                                        new_sub = cst.Attribute(
+                                                            value=cst.Name(value="caplog"),
+                                                            attr=cst.Name(value="records"),
+                                                        )
+                                                    getmsg = cst.Call(
+                                                        func=cst.Attribute(
+                                                            value=new_sub, attr=cst.Name(value="getMessage")
+                                                        ),
+                                                        args=[],
+                                                    )
+                                                    new_comp = t.with_changes(
+                                                        comparisons=[
+                                                            cst.ComparisonTarget(
+                                                                operator=comp.operator, comparator=getmsg
+                                                            )
+                                                        ]
+                                                    )
+                                                    new_assert = target_assert.with_changes(test=new_comp)
+                                                    if wrapper_stmt is not None:
+                                                        s = wrapper_stmt.with_changes(body=[new_assert])
+                                                    else:
+                                                        s = cst.SimpleStatementLine(body=[new_assert])
+                                                    replaced = True
+                                except Exception:
+                                    pass
+
+                                # Additionally handle SimpleStatementLine wrapping a self.assert* call
+                                if not replaced:
+                                    try:
+                                        if (
+                                            isinstance(s, cst.SimpleStatementLine)
+                                            and len(s.body) == 1
+                                            and isinstance(s.body[0], cst.Expr)
+                                        ):
+                                            call_expr = s.body[0].value
+                                            if isinstance(call_expr, cst.Call) and isinstance(
+                                                call_expr.func, cst.Attribute
+                                            ):
+                                                func = call_expr.func
+                                                if isinstance(func.value, cst.Name) and func.value.value in {
+                                                    "self",
+                                                    "cls",
+                                                }:
+                                                    mname = func.attr.value
+                                                    # handle self.assertEqual(len(log.output), N)
+                                                    if mname == "assertEqual" and len(call_expr.args) >= 2:
+                                                        left_arg = call_expr.args[0].value
+                                                        right_arg = call_expr.args[1].value
+                                                        if (
+                                                            isinstance(left_arg, cst.Call)
+                                                            and isinstance(left_arg.func, cst.Name)
+                                                            and left_arg.func.value == "len"
+                                                            and left_arg.args
+                                                        ):
+                                                            arg0 = left_arg.args[0].value
+                                                            if isinstance(arg0, cst.Subscript) and isinstance(
+                                                                arg0.value, cst.Attribute
+                                                            ):
+                                                                attr: cst.Attribute | None = None
+                                                            if isinstance(arg0, cst.Subscript) and isinstance(
+                                                                arg0.value, cst.Attribute
+                                                            ):
+                                                                attr = cast(cst.Attribute, arg0.value)
+                                                            elif isinstance(arg0, cst.Attribute):
+                                                                attr = cast(cst.Attribute, arg0)
+                                                            else:
+                                                                attr = None
+
+                                                            if (
+                                                                attr
+                                                                and isinstance(attr.value, cst.Name)
+                                                                and attr.value.value == alias_name
+                                                                and isinstance(attr.attr, cst.Name)
+                                                                and attr.attr.value == "output"
+                                                            ):
+                                                                if arg0.slice:
+                                                                    new_arg = cst.Subscript(
+                                                                        value=cst.Attribute(
+                                                                            value=cst.Name(value="caplog"),
+                                                                            attr=cst.Name(value="records"),
+                                                                        ),
+                                                                        slice=arg0.slice,
+                                                                    )
+                                                                else:
+                                                                    new_arg = cst.Attribute(
+                                                                        value=cst.Name(value="caplog"),
+                                                                        attr=cst.Name(value="records"),
+                                                                    )
+                                                                new_left = left_arg.with_changes(
+                                                                    args=[cst.Arg(value=new_arg)]
+                                                                )
+                                                                comp = cst.Comparison(
+                                                                    left=new_left,
+                                                                    comparisons=[
+                                                                        cst.ComparisonTarget(
+                                                                            operator=cst.Equal(), comparator=right_arg
+                                                                        )
+                                                                    ],
+                                                                )
+                                                                new_assert = cst.Assert(test=comp)
+                                                                s = cst.SimpleStatementLine(body=[new_assert])
+                                                                replaced = True
+
+                                                    # handle self.assertIn('msg', log.output[0])
+                                                    if (
+                                                        mname == "assertIn" and len(call_expr.args) >= 2
+                                                    ) and not replaced:
+                                                        member = call_expr.args[0].value
+                                                        container = call_expr.args[1].value
+                                                        if isinstance(container, cst.Subscript) and isinstance(
+                                                            container.value, cst.Attribute
+                                                        ):
+                                                            attr: cst.Attribute | None = None
+                                                            if isinstance(container, cst.Subscript) and isinstance(
+                                                                container.value, cst.Attribute
+                                                            ):
+                                                                attr = cast(cst.Attribute, container.value)
+                                                            elif isinstance(container, cst.Attribute):
+                                                                attr = cast(cst.Attribute, container)
+                                                            else:
+                                                                attr = None
+                                                            if (
+                                                                isinstance(attr.value, cst.Name)
+                                                                and attr.value.value == alias_name
+                                                                and isinstance(attr.attr, cst.Name)
+                                                                and attr.attr.value == "output"
+                                                            ):
+                                                                new_sub = cst.Subscript(
+                                                                    value=cst.Attribute(
+                                                                        value=cst.Name(value="caplog"),
+                                                                        attr=cst.Name(value="records"),
+                                                                    ),
+                                                                    slice=container.slice,
+                                                                )
+                                                                getmsg = cst.Call(
+                                                                    func=cst.Attribute(
+                                                                        value=new_sub, attr=cst.Name(value="getMessage")
+                                                                    ),
+                                                                    args=[],
+                                                                )
+                                                                new_comp = cst.Comparison(
+                                                                    left=member,
+                                                                    comparisons=[
+                                                                        cst.ComparisonTarget(
+                                                                            operator=cst.In(), comparator=getmsg
+                                                                        )
+                                                                    ],
+                                                                )
+                                                                new_assert = cst.Assert(test=new_comp)
+                                                                s = cst.SimpleStatementLine(body=[new_assert])
+                                                                replaced = True
+                                    except Exception:
+                                        pass
+
+                                new_body.append(s)
+
+                            # replace the with body with rewritten statements
+                            # new_body is list[cst.BaseSmallStatement]; cast to Sequence[BaseStatement]
+                            new_with = new_with.with_changes(
+                                body=cst.IndentedBlock(body=cast(list[cst.BaseStatement], new_body))
+                            )
+                        except Exception:
+                            # conservative: if anything fails, keep original new_with
+                            pass
+
+                    out.append(new_with)
+
+                    # If the original WithItem had an alias (e.g., 'as log'), we need to
+                    # rewrite following assertions that reference that alias to use
+                    # the `caplog` fixture. For example:
+                    #   assert len(log.output) == 2  ->  assert len(caplog.records) == 2
+                    #   assert 'msg' in log.output[0] -> assert 'msg' in caplog.records[0].getMessage()
+                    alias_name = None
+                    for item in stmt.items:
+                        try:
+                            if (
+                                item.asname
+                                and isinstance(item.asname, cst.AsName)
+                                and isinstance(item.asname.name, cst.Name)
+                            ):
+                                alias_name = item.asname.name.value
+                                break
+                        except Exception:
+                            pass
+
+                    if alias_name:
+                        # look ahead further and rewrite common patterns more aggressively
+                        look_ahead = 12
+                        for k in range(i + 1, min(len(statements), i + 1 + look_ahead)):
+                            s = statements[k]
+                            try:
+                                # Unwrap SimpleStatementLine containing an Assert if necessary
+                                target_assert = None
+                                wrapper_stmt = None
+                                if isinstance(s, cst.Assert):
+                                    target_assert = s
+                                elif (
+                                    isinstance(s, cst.SimpleStatementLine)
+                                    and len(s.body) == 1
+                                    and isinstance(s.body[0], cst.Assert)
+                                ):
+                                    wrapper_stmt = s
+                                    target_assert = s.body[0]
+
+                                if target_assert is None:
+                                    continue
+
+                                t = target_assert.test
+                                # len(log.output) == N
+                                if isinstance(t, cst.Comparison):
+                                    left = t.left
+                                    # Replace len(alias.output) -> len(caplog.records)
+                                    if (
+                                        isinstance(left, cst.Call)
+                                        and isinstance(left.func, cst.Name)
+                                        and left.func.value == "len"
+                                    ):
+                                        if left.args:
+                                            arg0 = left.args[0].value
+                                            # support both attribute-only (log.output) and subscripted (log.output[0]) forms
+                                            if isinstance(arg0, cst.Subscript) and isinstance(
+                                                arg0.value, cst.Attribute
+                                            ):
+                                                attr: cst.Attribute | None = None
+                                                if isinstance(arg0, cst.Subscript) and isinstance(
+                                                    arg0.value, cst.Attribute
+                                                ):
+                                                    attr = cast(cst.Attribute, arg0.value)
+                                                elif isinstance(arg0, cst.Attribute):
+                                                    attr = cast(cst.Attribute, arg0)
+                                                else:
+                                                    attr = None
+
+                                            if (
+                                                attr
+                                                and isinstance(attr.value, cst.Name)
+                                                and attr.value.value == alias_name
+                                                and isinstance(attr.attr, cst.Name)
+                                                and attr.attr.value == "output"
+                                            ):
+                                                # build caplog.records subscript if there was an index
+                                                new_arg = None
+                                                if isinstance(arg0, cst.Subscript) and arg0.slice:
+                                                    new_arg = cst.Subscript(
+                                                        value=cst.Attribute(
+                                                            value=cst.Name(value="caplog"),
+                                                            attr=cst.Name(value="records"),
+                                                        ),
+                                                        slice=arg0.slice,
+                                                    )
+                                                else:
+                                                    new_arg = cst.Attribute(
+                                                        value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                                    )
+                                                new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
+                                                new_comp = t.with_changes(left=new_left)
+                                                new_assert = target_assert.with_changes(test=new_comp)
+                                                if wrapper_stmt is not None:
+                                                    statements[k] = wrapper_stmt.with_changes(body=[new_assert])
+                                                else:
+                                                    statements[k] = cst.SimpleStatementLine(body=[new_assert])
+                                                continue
+
+                                # membership: 'foo' in alias.output[0]
+                                # detect comparisons with 'in'
+                                for comp in getattr(t, "comparisons", []):
+                                    if isinstance(comp.operator, cst.In):
+                                        comparator = comp.comparator
+                                        # if comparator is subscript of alias.output
+                                        # comparator may be a Subscript (log.output[0]) or an Attribute (log.output)
+                                        comp_attr = None
+                                        if isinstance(comparator, cst.Subscript) and isinstance(
+                                            comparator.value, cst.Attribute
+                                        ):
+                                            comp_attr = comparator.value
+                                        elif isinstance(comparator, cst.Attribute):
+                                            comp_attr = comparator
+
+                                        if (
+                                            comp_attr
+                                            and isinstance(comp_attr.value, cst.Name)
+                                            and comp_attr.value.value == alias_name
+                                            and isinstance(comp_attr.attr, cst.Name)
+                                            and comp_attr.attr.value == "output"
+                                        ):
+                                            # transform to caplog.records[index].getMessage() (use Subscript if original had a slice)
+                                            if isinstance(comparator, cst.Subscript) and comparator.slice:
+                                                new_sub = cst.Subscript(
+                                                    value=cst.Attribute(
+                                                        value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                                    ),
+                                                    slice=comparator.slice,
+                                                )
+                                            else:
+                                                new_sub = cst.Attribute(
+                                                    value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                                )
+                                            getmsg = cst.Call(
+                                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")),
+                                                args=[],
+                                            )
+                                            new_comp = t.with_changes(
+                                                comparisons=[
+                                                    cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)
+                                                ]
+                                            )
+                                            new_assert = target_assert.with_changes(test=new_comp)
+                                            if wrapper_stmt is not None:
+                                                statements[k] = wrapper_stmt.with_changes(body=[new_assert])
+                                            else:
+                                                statements[k] = cst.SimpleStatementLine(body=[new_assert])
+                                            continue
+                                    # equality comparisons: caplog.records[0] == 'msg' or alias.output[0] == 'msg'
+                                    if isinstance(t, cst.Comparison):
+                                        # check left and comparisons for equality patterns
+                                        # capture alias_name as default arg to avoid late-binding in loops (ruff B023)
+                                        def _rewrite_eq(
+                                            node: cst.CSTNode, _alias_name=alias_name
+                                        ) -> cst.CSTNode | None:
+                                            # If node is attribute/subscript referencing alias.output, return rewritten node (with .getMessage() when appropriate)
+                                            if isinstance(node, cst.Subscript) and isinstance(
+                                                node.value, cst.Attribute
+                                            ):
+                                                attr = node.value
+                                                if (
+                                                    isinstance(attr.value, cst.Name)
+                                                    and attr.value.value == _alias_name
+                                                    and isinstance(attr.attr, cst.Name)
+                                                    and attr.attr.value == "output"
+                                                ):
+                                                    # return caplog.records[index].getMessage()
+                                                    new_sub = cst.Subscript(
+                                                        value=cst.Attribute(
+                                                            value=cst.Name(value="caplog"),
+                                                            attr=cst.Name(value="records"),
+                                                        ),
+                                                        slice=node.slice,
+                                                    )
+                                                    return cst.Call(
+                                                        func=cst.Attribute(
+                                                            value=new_sub, attr=cst.Name(value="getMessage")
+                                                        ),
+                                                        args=[],
+                                                    )
+                                            if (
+                                                isinstance(node, cst.Attribute)
+                                                and isinstance(node.value, cst.Name)
+                                                and node.value.value == _alias_name
+                                                and isinstance(node.attr, cst.Name)
+                                                and node.attr.value == "output"
+                                            ):
+                                                # alias.output -> caplog.records (no getMessage)
+                                                return cst.Attribute(
+                                                    value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                                )
+                                            return None
+
+                                        # rewrite direct equality comparisons where comparator or left are alias.output forms
+                                        left_rewritten = _rewrite_eq(t.left) if isinstance(t, cst.Comparison) else None
+                                        if left_rewritten is not None:
+                                            # build new comparison with left replaced
+                                            new_comp = t.with_changes(left=left_rewritten)
+                                            new_assert = target_assert.with_changes(test=new_comp)
+                                            if wrapper_stmt is not None:
+                                                statements[k] = wrapper_stmt.with_changes(body=[new_assert])
+                                            else:
+                                                statements[k] = cst.SimpleStatementLine(body=[new_assert])
+                                            continue
+
+                                        # check comparisons list for equality operator
+                                        for ct in getattr(t, "comparisons", []):
+                                            if isinstance(ct.operator, cst.Equal):
+                                                rhs = ct.comparator
+                                                rhs_rewritten = _rewrite_eq(rhs)
+                                                if rhs_rewritten is not None:
+                                                    new_comparisons = [
+                                                        cst.ComparisonTarget(
+                                                            operator=ct.operator, comparator=rhs_rewritten
+                                                        )
+                                                    ]
+                                                    new_comp = t.with_changes(comparisons=new_comparisons)
+                                                    new_assert = target_assert.with_changes(test=new_comp)
+                                                    if wrapper_stmt is not None:
+                                                        statements[k] = wrapper_stmt.with_changes(body=[new_assert])
+                                                    else:
+                                                        statements[k] = cst.SimpleStatementLine(body=[new_assert])
+                                                    continue
+                            except Exception:
+                                # be conservative on errors
+                                pass
+                                # Additionally, handle SimpleStatementLine wrapping a self.assert* call
+                            try:
+                                if (
+                                    isinstance(s, cst.SimpleStatementLine)
+                                    and len(s.body) == 1
+                                    and isinstance(s.body[0], cst.Expr)
+                                ):
+                                    call_expr = s.body[0].value
+                                    if isinstance(call_expr, cst.Call) and isinstance(call_expr.func, cst.Attribute):
+                                        func = call_expr.func
+                                        if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
+                                            mname = func.attr.value
+                                            # handle self.assertEqual(len(log.output), N)
+                                            if mname == "assertEqual" and len(call_expr.args) >= 2:
+                                                left_arg = call_expr.args[0].value
+                                                right_arg = call_expr.args[1].value
+                                                # detect len(alias.output)
+                                                if (
+                                                    isinstance(left_arg, cst.Call)
+                                                    and isinstance(left_arg.func, cst.Name)
+                                                    and left_arg.func.value == "len"
+                                                ):
+                                                    if left_arg.args:
+                                                        arg0 = left_arg.args[0].value
+                                                        if isinstance(arg0, cst.Subscript) and isinstance(
+                                                            arg0.value, cst.Attribute
+                                                        ):
+                                                            attr = arg0.value
+                                                            if (
+                                                                isinstance(attr.value, cst.Name)
+                                                                and attr.value.value == alias_name
+                                                                and isinstance(attr.attr, cst.Name)
+                                                                and attr.attr.value == "output"
+                                                            ):
+                                                                # build caplog.records subscript if there was an index
+                                                                if arg0.slice:
+                                                                    new_arg = cst.Subscript(
+                                                                        value=cst.Attribute(
+                                                                            value=cst.Name(value="caplog"),
+                                                                            attr=cst.Name(value="records"),
+                                                                        ),
+                                                                        slice=arg0.slice,
+                                                                    )
+                                                                else:
+                                                                    new_arg = cst.Attribute(
+                                                                        value=cst.Name(value="caplog"),
+                                                                        attr=cst.Name(value="records"),
+                                                                    )
+                                                                new_left = left_arg.with_changes(
+                                                                    args=[cst.Arg(value=new_arg)]
+                                                                )
+                                                                comp = cst.Comparison(
+                                                                    left=new_left,
+                                                                    comparisons=[
+                                                                        cst.ComparisonTarget(
+                                                                            operator=cst.Equal(), comparator=right_arg
+                                                                        )
+                                                                    ],
+                                                                )
+                                                                new_assert = cst.Assert(test=comp)
+                                                                statements[k] = cst.SimpleStatementLine(
+                                                                    body=[new_assert]
+                                                                )
+                                                                continue
+
+                                            # handle self.assertIn('msg', log.output[0])
+                                            if mname == "assertIn" and len(call_expr.args) >= 2:
+                                                member = call_expr.args[0].value
+                                                container = call_expr.args[1].value
+                                                if isinstance(container, cst.Subscript) and isinstance(
+                                                    container.value, cst.Attribute
+                                                ):
+                                                    attr = container.value
+                                                    if (
+                                                        isinstance(attr.value, cst.Name)
+                                                        and attr.value.value == alias_name
+                                                        and isinstance(attr.attr, cst.Name)
+                                                        and attr.attr.value == "output"
+                                                    ):
+                                                        new_sub = cst.Subscript(
+                                                            value=cst.Attribute(
+                                                                value=cst.Name(value="caplog"),
+                                                                attr=cst.Name(value="records"),
+                                                            ),
+                                                            slice=container.slice,
+                                                        )
+                                                        getmsg = cst.Call(
+                                                            func=cst.Attribute(
+                                                                value=new_sub, attr=cst.Name(value="getMessage")
+                                                            ),
+                                                            args=[],
+                                                        )
+                                                        new_comp = cst.Comparison(
+                                                            left=member,
+                                                            comparisons=[
+                                                                cst.ComparisonTarget(
+                                                                    operator=cst.In(), comparator=getmsg
+                                                                )
+                                                            ],
+                                                        )
+                                                        new_assert = cst.Assert(test=new_comp)
+                                                        statements[k] = cst.SimpleStatementLine(body=[new_assert])
+                                                        continue
+                            except Exception:
+                                pass
+
+                    i += 1
+                    wrapped = True
+            except Exception:
+                # Fall back to preserving original with-statement
+                pass
+
         if not wrapped:
             out.append(stmt)
             i += 1
+
     return out
 
 
@@ -234,6 +1082,30 @@ def transform_assert_dict_equal(node: cst.Call) -> cst.CSTNode:
         )
         return cst.Assert(test=comp)
     return node
+
+
+def transform_caplog_alias_string_fallback(code: str) -> str:
+    """Conservative string-level rewrites to fix caplog/alias patterns missed by CST transforms.
+
+    This function applies a few safe regex-based replacements to convert
+    `log.output` patterns to `caplog.records` and to call `.getMessage()`
+    where membership/equality comparisons expect message strings.
+    """
+    import re
+
+    out = code
+    # Replace direct alias.output[...] with caplog.records[...]
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\s*\[", r"caplog.records[", out)
+    # Replace standalone alias.output (no subscript) with caplog.records (e.g., len(log.output))
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\b", r"caplog.records", out)
+
+    # If someone compared caplog.records[0] == 'msg', rewrite to caplog.records[0].getMessage() == 'msg'
+    out = re.sub(r"caplog\.records\s*\[(\d+)\]\s*==\s*('.*?'|\".*?\")", r"caplog.records[\1].getMessage() == \2", out)
+
+    # Membership: 'msg' in caplog.records[0] -> 'msg' in caplog.records[0].getMessage()
+    out = re.sub(r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]", r"\1 in caplog.records[\2].getMessage()", out)
+
+    return out
 
 
 def transform_assert_list_equal(node: cst.Call) -> cst.CSTNode:
@@ -269,198 +1141,90 @@ def transform_assert_tuple_equal(node: cst.Call) -> cst.CSTNode:
     return node
 
 
-def transform_assert_multiline_equal(node: cst.Call) -> cst.CSTNode:
-    """Transform assertMultiLineEqual(a, b) to a simple equality assertion.
-
-    This is conservative: multiline-specific helpers in unittest mainly
-    provide nicer diffs on failure, but semantically they assert equality
-    of the two string-like values. We'll convert to `assert a == b`.
-    """
+def transform_assert_greater(node: cst.Call) -> cst.CSTNode:
+    """Transform assertGreater(a, b) -> assert a > b."""
     if len(node.args) >= 2:
         comp = cst.Comparison(
             left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
+            comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=node.args[1].value)],
         )
         return cst.Assert(test=comp)
     return node
 
 
-def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
-    """Transform assertRaisesRegex to pytest.raises with match (approximate)."""
-    if len(node.args) >= 3:
-        exception_type = node.args[0].value
-        code_to_test = node.args[2].value
-        new_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises"))
-        new_args = [
-            cst.Arg(value=exception_type),
-            cst.Arg(value=cst.Call(func=cst.Name(value="lambda"), args=[cst.Arg(value=code_to_test)])),
-        ]
-        return cst.Call(func=new_attr, args=new_args)
-    return node
-
-
-def transform_assert_isinstance(node: cst.Call) -> cst.CSTNode:
-    """Transform assertIsInstance to isinstance assert."""
+def transform_assert_greater_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertGreaterEqual(a, b) -> assert a >= b."""
     if len(node.args) >= 2:
-        call = cst.Call(
-            func=cst.Name(value="isinstance"),
-            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
+        comp = cst.Comparison(
+            left=node.args[0].value,
+            comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=node.args[1].value)],
         )
-        return cst.Assert(test=call)
+        return cst.Assert(test=comp)
     return node
 
 
-def transform_assert_not_isinstance(node: cst.Call) -> cst.CSTNode:
-    """Transform assertNotIsInstance to not isinstance assert."""
+def transform_assert_less(node: cst.Call) -> cst.CSTNode:
+    """Transform assertLess(a, b) -> assert a < b."""
     if len(node.args) >= 2:
-        call = cst.Call(
-            func=cst.Name(value="isinstance"),
-            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
+        comp = cst.Comparison(
+            left=node.args[0].value,
+            comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=node.args[1].value)],
         )
-        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=call))
+        return cst.Assert(test=comp)
     return node
 
 
-def transform_assertions_string_based(code: str, test_prefixes: list[str] | None = None) -> str:
-    """Transform unittest assertion methods using string replacement.
+def transform_assert_less_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertLessEqual(a, b) -> assert a <= b."""
+    if len(node.args) >= 2:
+        comp = cst.Comparison(
+            left=node.args[0].value,
+            comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=node.args[1].value)],
+        )
+        return cst.Assert(test=comp)
+    return node
 
-    This was previously the `_transform_assertions_string_based` method on the
-    `UnittestToPytestCSTTransformer` class. It is extracted for reuse and to
-    decouple string-based fallbacks from the transformer instance.
+
+def transform_assert_almost_equal(node: cst.Call) -> cst.CSTNode:
+    """Transform assertAlmostEqual(a, b, places=N) -> assert a == pytest.approx(b, rel=None, abs=...) or use approx with places.
+
+    We'll prefer pytest.approx(b) for simple forms. If `places` is provided we'll approximate using a small absolute tolerance via round/places fallback.
     """
-
-    # Use balanced/safe replacements to avoid corrupting nested expressions
-    def _fmt_eq(a: str, b: str) -> str:
-        return f"assert {a} == {b}"
-
-    code = safe_replace_two_arg_call(code, "assertEqual", _fmt_eq)
-    code = safe_replace_two_arg_call(code, "assertEquals", _fmt_eq)
-    code = safe_replace_two_arg_call(code, "assertNotEqual", lambda a, b: f"assert {a} != {b}")
-    code = safe_replace_two_arg_call(code, "assertNotEquals", lambda a, b: f"assert {a} != {b}")
-    code = safe_replace_one_arg_call(code, "assertTrue", lambda a: f"assert {a}")
-    code = safe_replace_one_arg_call(code, "assertIsTrue", lambda a: f"assert {a}")
-    code = safe_replace_one_arg_call(code, "assertFalse", lambda a: f"assert not {a}")
-    code = safe_replace_one_arg_call(code, "assertIsFalse", lambda a: f"assert not {a}")
-    code = safe_replace_two_arg_call(code, "assertIs", lambda a, b: f"assert {a} is {b}")
-    code = safe_replace_two_arg_call(code, "assertIsNot", lambda a, b: f"assert {a} is not {b}")
-    code = safe_replace_one_arg_call(code, "assertIsNone", lambda a: f"assert {a} is None")
-    code = safe_replace_one_arg_call(code, "assertIsNotNone", lambda a: f"assert {a} is not None")
-    code = safe_replace_two_arg_call(code, "assertIn", lambda a, b: f"assert {a} in {b}")
-    code = safe_replace_two_arg_call(code, "assertNotIn", lambda a, b: f"assert {a} not in {b}")
-    code = safe_replace_two_arg_call(code, "assertIsInstance", lambda a, b: f"assert isinstance({a}, {b})")
-    code = safe_replace_two_arg_call(code, "assertNotIsInstance", lambda a, b: f"assert not isinstance({a}, {b})")
-    for fn in [
-        "assertDictEqual",
-        "assertDictEquals",
-        "assertListEqual",
-        "assertListEquals",
-        "assertSetEqual",
-        "assertSetEquals",
-        "assertTupleEqual",
-        "assertTupleEquals",
-        "assertSequenceEqual",
-        "assertMultiLineEqual",
-    ]:
-        code = safe_replace_two_arg_call(code, fn, _fmt_eq)
-
-    # Safe replacement for assertCountEqual(a, b) -> assert sorted(a) == sorted(b)
-    def _fmt_count_equal(a: str, b: str) -> str:
-        return f"assert sorted({a}) == sorted({b})"
-
-    code = safe_replace_two_arg_call(code, "assertCountEqual", _fmt_count_equal)
-
-    # Normalize test method names according to prefixes (basic heuristic)
-    def _normalize_name(m: re.Match[str]) -> str:
-        name = m.group(1)
-        rest = m.group(2)
-        if rest and not rest.startswith("_"):
-            normalized = f"{name}_{rest}"
+    if len(node.args) >= 2:
+        left = node.args[0].value
+        right = node.args[1].value
+        # find places kwarg if present (libcst represents keywords as Arg with keyword attr)
+        places = None
+        for arg in node.args:
+            if arg.keyword and isinstance(arg.keyword, cst.Name) and arg.keyword.value == "places":
+                places = arg.value
+                break
+        # If places not provided, use pytest.approx(right)
+        if places is None:
+            approx_call = cst.Call(
+                func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="approx")),
+                args=[cst.Arg(value=right)],
+            )
+            comp = cst.Comparison(
+                left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]
+            )
+            return cst.Assert(test=comp)
         else:
-            normalized = f"{name}{rest}"
-        normalized = re.sub(r"__+", "_", normalized)
-        normalized = re.sub(r"[^0-9a-zA-Z_]", "_", normalized)
-        return f"def {normalized}(self)"
+            # Fallback: keep previous behavior using round() to emulate places
+            diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
+            round_call = cst.Call(func=cst.Name(value="round"), args=[cst.Arg(value=diff), cst.Arg(value=places)])
+            comp = cst.Comparison(
+                left=round_call,
+                comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer(value="0"))],
+            )
+            return cst.Assert(test=comp)
 
-    prefixes = "|".join(map(re.escape, test_prefixes or ["test"]))
-    code = re.sub(rf"def\s+({prefixes})([^\s(]*)\(self\)", _normalize_name, code)
 
-    # Transform exception assertions (basic transformation for now)
-    code = re.sub(r"self\.assertRaises\s*\(\s*([^,]+)\s*\)", r"pytest.raises(\1)", code)
-    code = re.sub(r"self\.assertRaisesRegex\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
-    code = re.sub(r"self\.assertRaisesRegexp\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)", r"pytest.raises(\1)", code)
+def transform_assert_almost_equals(node: cst.Call) -> cst.CSTNode:
+    """Alias for deprecated assertAlmostEquals -> delegate to transform_assert_almost_equal."""
+    return transform_assert_almost_equal(node)
 
-    # Transform assertLogs/assertNoLogs into context-manager form for string fallback.
-    # We convert a bare call like 'self.assertLogs(logger, level)' into
-    # a with-statement 'with self.assertLogs(logger, level):' and indent the
-    # following non-empty line so the body remains within the context manager.
-    lines = code.splitlines()
-    out_lines: list[str] = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.lstrip()
-        prefix = line[: len(line) - len(stripped)]
 
-        handled = False
-        if "self.assertLogs(" in stripped:
-            # Allow empty or one/two-argument forms
-            m = re.search(r"self\.assertLogs\(([^,)]*),?\s*([^)]*)\)", stripped)
-            if m:
-                logger_name, level = m.groups()
-                if logger_name and level:
-                    new_line = f"{prefix}with self.assertLogs({logger_name}, {level}):"
-                elif logger_name:
-                    new_line = f"{prefix}with self.assertLogs({logger_name}):"
-                else:
-                    new_line = f"{prefix}with self.assertLogs():"
-                out_lines.append(new_line)
-                # indent next non-empty line by one extra level (4 spaces)
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1]
-                    if next_line.strip():
-                        out_lines.append(prefix + "    " + next_line.lstrip())
-                        i += 2
-                        handled = True
-                    else:
-                        i += 1
-                        handled = True
-
-        if not handled and "self.assertNoLogs(" in stripped:
-            # Allow empty or one/two-argument forms
-            m = re.search(r"self\.assertNoLogs\(([^,)]*),?\s*([^)]*)\)", stripped)
-            if m:
-                logger_name, level = m.groups()
-                if logger_name and level:
-                    new_line = f"{prefix}with self.assertNoLogs({logger_name}, {level}):"
-                elif logger_name:
-                    new_line = f"{prefix}with self.assertNoLogs({logger_name}):"
-                else:
-                    new_line = f"{prefix}with self.assertNoLogs():"
-                out_lines.append(new_line)
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1]
-                    if next_line.strip():
-                        out_lines.append(prefix + "    " + next_line.lstrip())
-                        i += 2
-                        handled = True
-                    else:
-                        i += 1
-                        handled = True
-
-        if not handled:
-            out_lines.append(line)
-            i += 1
-
-    code = "\n".join(out_lines)
-
-    # Transform unittest.main() calls
-    code = re.sub(r"unittest\.main\s*\(\s*\)", r"pytest.main()", code)
-
-    # Transform skipTest and fail calls (support both self and cls)
-    # Normalize cls. to self. for the string-based fallback then perform safe replacement
-    code = code.replace("cls.skipTest(", "self.skipTest(")
-    code = safe_replace_one_arg_call(code, "skipTest", lambda a: f"pytest.skip({a})")
-    code = code.replace("cls.fail(", "self.fail(")
-    code = safe_replace_one_arg_call(code, "fail", lambda a: f"pytest.fail({a})")
-
-    return code
+def transform_assert_not_almost_equals(node: cst.Call) -> cst.CSTNode:
+    """Alias for deprecated assertNotAlmostEquals -> delegate to transform_assert_not_almost_equal."""
+    return transform_assert_not_almost_equal(node)

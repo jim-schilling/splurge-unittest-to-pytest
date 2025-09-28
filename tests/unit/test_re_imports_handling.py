@@ -1,12 +1,12 @@
 import textwrap
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
 def transform(code: str) -> str:
-    return UnittestToPytestCSTTransformer().transform_code(textwrap.dedent(code))
+    return UnittestToPytestCstTransformer().transform_code(textwrap.dedent(code))
 
 
 def test_from_re_import_search_uses_search_and_no_import_added():

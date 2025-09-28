@@ -7,6 +7,12 @@ string-based transformations of calls like self.assertEqual(a, b).
 from collections.abc import Callable
 
 
+def emit_indented_str(s: str, indent: int = 0) -> str:
+    """Return the input string indented by the specified number of spaces."""
+    indent = max(0, indent)
+    return f"{' ' * indent}{s}"
+
+
 def split_two_args_balanced(s: str) -> tuple[str, str] | None:
     """Split a string containing two arguments into (arg1, arg2) respecting brackets and quotes."""
     depth_paren = depth_brack = depth_brace = 0

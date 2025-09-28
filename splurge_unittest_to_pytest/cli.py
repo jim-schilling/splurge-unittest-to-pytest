@@ -39,6 +39,16 @@ def setup_logging(verbose: bool = False) -> None:
     logging.getLogger("isort").setLevel(logging.WARNING)
 
 
+def set_quiet_mode(quiet: bool = False) -> None:
+    """Lower global logging level to WARNING when quiet mode is requested."""
+    if quiet:
+        logging.getLogger().setLevel(logging.WARNING)
+        # Keep third-party noise down as well
+        logging.getLogger("libcst").setLevel(logging.WARNING)
+        logging.getLogger("black").setLevel(logging.WARNING)
+        logging.getLogger("isort").setLevel(logging.WARNING)
+
+
 def create_event_bus() -> EventBus:
     """Create and configure event bus.
 
@@ -57,18 +67,13 @@ def create_config(
     recurse_directories: bool = True,
     preserve_structure: bool = True,
     backup_originals: bool = True,
-    convert_classes_to_functions: bool = True,
     merge_setup_teardown: bool = True,
-    generate_fixtures: bool = True,
-    fixture_scope: str = "function",
     format_code: bool = True,
-    optimize_imports: bool = True,
-    add_type_hints: bool = False,
+    fixture_scope: str | None = None,
     line_length: int | None = 120,
     dry_run: bool = False,
     fail_fast: bool = False,
     parallel_processing: bool = True,
-    max_workers: int = 4,
     verbose: bool = False,
     generate_report: bool = True,
     report_format: str = "json",
@@ -87,51 +92,60 @@ def create_config(
         merge_setup_teardown: Merge setUp/tearDown into fixtures
         generate_fixtures: Generate pytest fixtures
         fixture_scope: Scope for generated fixtures
-        format_code: Format generated code with black/isort
-        optimize_imports: Optimize import statements
-        add_type_hints: Add type hints to generated code
+    format_code: Format generated code with black/isort (always applied)
         line_length: Maximum line length for formatting
         dry_run: Show what would be done without making changes
         fail_fast: Stop on first error
-        parallel_processing: Enable parallel processing
-        max_workers: Maximum number of worker processes
+    parallel_processing: Enable parallel processing
         verbose: Enable verbose output
         generate_report: Generate migration report
         report_format: Format for migration report
-
     Returns:
         Configured MigrationConfig instance
     """
     from .context import FixtureScope
     from .helpers.utility import sanitize_extension, sanitize_suffix
 
-    fixture_scope_enum = FixtureScope(fixture_scope)
     suffix = sanitize_suffix(suffix)
     ext = sanitize_extension(ext)
+
+    base = MigrationConfig()
+
+    # Normalize fixture_scope if provided (accept strings like "function")
+    fs = base.fixture_scope
+    if fixture_scope is not None:
+        try:
+            if isinstance(fixture_scope, str):
+                fs = FixtureScope(fixture_scope)
+            elif isinstance(fixture_scope, FixtureScope):
+                fs = fixture_scope
+            else:
+                fs = FixtureScope(str(fixture_scope))
+        except Exception:
+            fs = base.fixture_scope
 
     return MigrationConfig(
         target_directory=target_directory,
         root_directory=root_directory,
-        file_patterns=file_patterns or ["test_*.py"],
+        file_patterns=file_patterns or base.file_patterns,
         recurse_directories=recurse_directories,
         preserve_structure=preserve_structure,
         backup_originals=backup_originals,
-        convert_classes_to_functions=convert_classes_to_functions,
+        convert_classes_to_functions=base.convert_classes_to_functions,
         merge_setup_teardown=merge_setup_teardown,
-        generate_fixtures=generate_fixtures,
-        fixture_scope=fixture_scope_enum,
-        format_code=format_code,
-        optimize_imports=optimize_imports,
-        add_type_hints=add_type_hints,
+        generate_fixtures=base.generate_fixtures,
+        fixture_scope=fs,
+        format_code=True,  # formatting is mandatory
+        optimize_imports=base.optimize_imports,
+        add_type_hints=base.add_type_hints,
         line_length=line_length,
         dry_run=dry_run,
         fail_fast=fail_fast,
         parallel_processing=parallel_processing,
-        max_workers=max_workers,
         verbose=verbose,
         generate_report=generate_report,
         report_format=report_format,
-        test_method_prefixes=test_method_prefixes or ["test"],
+        test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
         parametrize=parametrize,
         target_suffix=suffix,
         target_extension=ext,
@@ -246,18 +260,19 @@ def migrate(
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
     preserve_structure: bool = typer.Option(True, "--preserve-structure", help="Preserve original directory structure"),
     backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
-    convert_classes: bool = typer.Option(True, "--convert-classes", help="Convert TestCase classes to functions"),
     merge_setup_teardown: bool = typer.Option(True, "--merge-setup", help="Merge setUp/tearDown into fixtures"),
-    generate_fixtures: bool = typer.Option(True, "--fixtures", help="Generate pytest fixtures"),
-    fixture_scope: str = typer.Option("function", "--fixture-scope", help="Scope for generated fixtures"),
-    format_code: bool = typer.Option(True, "--format", help="Format generated code with black/isort"),
-    optimize_imports: bool = typer.Option(True, "--optimize-imports", help="Optimize import statements"),
-    add_type_hints: bool = typer.Option(False, "--type-hints", help="Add type hints to generated code"),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress informational logging (keeps warnings/errors)"),
+    posix: bool = typer.Option(
+        False, "--posix", help="Force POSIX-style path separators (use forward slashes) in CLI output"
+    ),
+    diff: bool = typer.Option(
+        False, "--diff", help="When used with --dry-run, show unified diffs instead of the full converted code"
+    ),
+    list_files: bool = typer.Option(False, "--list", help="When used with --dry-run, list files only (no code shown)"),
     fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop on first error"),
-    parallel: bool = typer.Option(True, "--parallel", help="Enable parallel processing"),
-    max_workers: int = typer.Option(4, "--workers", help="Maximum number of worker processes"),
+    # Note: max_workers/--workers removed from CLI; parallelism is not exposed
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     generate_report: bool = typer.Option(True, "--report", help="Generate migration report"),
     report_format: str = typer.Option("json", "--report-format", help="Format for migration report"),
@@ -281,6 +296,7 @@ def migrate(
     preserving test behavior while applying pytest best practices.
     """
     setup_logging(verbose)
+    set_quiet_mode(quiet)
 
     try:
         # Create event bus
@@ -294,18 +310,11 @@ def migrate(
             recurse_directories=recurse,
             preserve_structure=preserve_structure,
             backup_originals=backup_originals,
-            convert_classes_to_functions=convert_classes,
             merge_setup_teardown=merge_setup_teardown,
-            generate_fixtures=generate_fixtures,
-            fixture_scope=fixture_scope,
-            format_code=format_code,
-            optimize_imports=optimize_imports,
-            add_type_hints=add_type_hints,
+            format_code=True,
             line_length=line_length,
             dry_run=dry_run,
             fail_fast=fail_fast,
-            parallel_processing=parallel,
-            max_workers=max_workers,
             verbose=verbose,
             generate_report=generate_report,
             report_format=report_format,
@@ -331,11 +340,102 @@ def migrate(
 
         # Delegate heavy lifting to the programmatic API entrypoint so the logic
         # can be exercised from both the CLI and other Python code.
+        # If dry-run, log what we'd do and then run migrate which will avoid writes
+        if config.dry_run:
+            logger.info("Dry-run mode enabled. No files will be written.")
+            logger.info("Files that would be processed:")
+            for f in valid_files:
+                logger.info(f"  - {f}")
+
         result = main_module.migrate(valid_files, config=config)
 
         if result.is_success():
             logger.info("Migration completed!")
             logger.info(f"Migrated: {len(result.data)} files")
+
+            # If dry-run, the orchestrator may attach the generated/formatted
+            # code in the Result.metadata under 'generated_code'. Print it
+            # to stdout so users can inspect the conversion without writing.
+            if config.dry_run:
+                # The main.migrate result.metadata contains a mapping under
+                # 'generated_code' of target_file -> generated_code for
+                # dry-run. Present it according to dry_run_mode.
+                meta = getattr(result, "metadata", None) or {}
+                gen_map = {}
+                if isinstance(meta, dict):
+                    gen = meta.get("generated_code")
+                    if isinstance(gen, dict):
+                        # Coerce keys to plain strings (Path objects may be present)
+                        from pathlib import Path as _P
+
+                        for k, v in gen.items():
+                            try:
+                                gen_map[str(_P(k))] = v
+                            except Exception:
+                                gen_map[str(k)] = v
+                    elif isinstance(gen, str):
+                        # Single-string fallback - map the single target path
+                        # reported in result.data to the code
+                        path = result.data[0] if isinstance(result.data, list) and result.data else (result.data or "")
+                        try:
+                            from pathlib import Path as _P
+
+                            gen_map[str(_P(path))] = gen
+                        except Exception:
+                            gen_map[str(path)] = gen
+                # Determine presentation mode from CLI flags (diff/list_files)
+                if list_files:
+                    for fname in gen_map.keys():
+                        # Print filepath using requested format
+                        from pathlib import Path as _P
+
+                        p = _P(fname)
+                        display = p.as_posix() if posix else str(p)
+                        typer.echo(f"== FILES: {display} ==")
+                else:
+                    import difflib
+
+                    for fname, code in gen_map.items():
+                        if diff:
+                            # Produce a unified diff between original source and
+                            # generated code.
+                            try:
+                                from pathlib import Path
+
+                                original = Path(fname)
+                                # If original path doesn't exist, don't attempt
+                                # to guess legacy filenames. We intentionally do
+                                # not include fallbacks for old '.pytest.py' names
+                                # — the tool now preserves original extensions by
+                                # default and users should pass explicit targets
+                                # or use the backup/extension flags when needed.
+
+                                orig_text = original.read_text(encoding="utf-8") if original.exists() else ""
+                            except Exception:
+                                orig_text = ""
+
+                            a = orig_text.splitlines(keepends=True)
+                            b = code.splitlines(keepends=True)
+                            from pathlib import Path as _P
+
+                            p = _P(fname)
+                            display = p.as_posix() if posix else str(p)
+                            diff_lines = list(
+                                difflib.unified_diff(a, b, fromfile=f"orig:{original}", tofile=f"new:{display}")
+                            )
+                            typer.echo(f"== DIFF: {display} ==")
+                            if diff_lines:
+                                typer.echo("".join(diff_lines))
+                            else:
+                                typer.echo("<no differences detected>")
+                        else:
+                            # Default printing of the converted pytest code
+                            from pathlib import Path as _P
+
+                            p = _P(fname)
+                            display = p.as_posix() if posix else str(p)
+                            typer.echo(f"== PYTEST: {display} ==")
+                            typer.echo(code)
         else:
             logger.error(f"Migration failed: {result.error}")
             raise typer.Exit(code=1) from None
@@ -392,7 +492,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "dry_run": default_config["dry_run"],
         "fail_fast": default_config["fail_fast"],
         "parallel_processing": default_config["parallel_processing"],
-        "max_workers": default_config["max_workers"],
+        # Note: worker count configuration removed from CLI surface
         "# Reporting settings": None,
         "verbose": default_config["verbose"],
         "generate_report": default_config["generate_report"],

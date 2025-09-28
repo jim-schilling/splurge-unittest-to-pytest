@@ -1,0 +1,14 @@
+import logging
+import pytest
+
+
+class TestLogsNoAs:
+    def test_assert_logs_no_as(self):
+        logger = logging.getLogger("z")
+        with caplog.at_level("WARNING"):
+            logger.warning("warn")
+
+    def test_assert_no_logs(self):
+        with caplog.at_level("INFO"):
+            pass
+            

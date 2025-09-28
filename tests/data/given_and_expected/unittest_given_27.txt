@@ -1,0 +1,12 @@
+import unittest
+
+
+class TestBasics(unittest.TestCase):
+    def test_none_checks(self):
+        self.assertIsNone(None)
+        self.assertIsNotNone(1)
+
+    def test_identity_and_sequence(self):
+        a = (1,2)
+        b = (1,2)
+        self.assertTupleEqual(a, b)

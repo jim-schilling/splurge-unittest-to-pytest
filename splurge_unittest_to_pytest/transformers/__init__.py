@@ -5,9 +5,9 @@ for converting unittest patterns to pytest equivalents.
 """
 
 from .unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 __all__ = [
-    "UnittestToPytestCSTTransformer",
+    "UnittestToPytestCstTransformer",
 ]

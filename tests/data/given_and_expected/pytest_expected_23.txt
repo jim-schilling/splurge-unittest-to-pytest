@@ -1,0 +1,12 @@
+import logging
+import pytest
+
+
+class TestLogs:
+    def test_assert_logs_basic(self):
+        logger = logging.getLogger('a')
+
+        with self.assertLogs(logger, level='INFO') as cm:
+            logger.info('ok')
+
+        assert len(cm.output) == 1

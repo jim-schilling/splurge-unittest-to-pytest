@@ -5,7 +5,7 @@ import libcst as cst
 from ..context import PipelineContext
 from ..pipeline import Step
 from ..result import Result
-from ..transformers import UnittestToPytestCSTTransformer
+from ..transformers import UnittestToPytestCstTransformer
 
 
 class ParseSourceStep(Step[str, cst.Module]):
@@ -14,6 +14,8 @@ class ParseSourceStep(Step[str, cst.Module]):
     def execute(self, context: PipelineContext, source_code: str) -> Result[cst.Module]:
         """Parse source code using libcst."""
         try:
+            # Parse the provided source code directly. Test data are expected
+            # to be raw Python files and should not require any pre-processing.
             module = cst.parse_module(source_code)
             return Result.success(module)
         except cst.ParserSyntaxError as e:
@@ -27,7 +29,7 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
         """Apply unittest to pytest transformations."""
         try:
             # Use full transform_code to include assertion replacements and imports
-            transformer = UnittestToPytestCSTTransformer(
+            transformer = UnittestToPytestCstTransformer(
                 test_prefixes=context.config.test_method_prefixes, parametrize=context.config.parametrize
             )
             source_code: str = module.code

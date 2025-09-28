@@ -4,7 +4,7 @@ import libcst as cst
 import pytest
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
@@ -13,7 +13,7 @@ class TestUnittestToPytestCSTTransformerAPI:
 
     def setup_method(self):
         """Set up fresh transformer for each test."""
-        self.transformer = UnittestToPytestCSTTransformer()
+        self.transformer = UnittestToPytestCstTransformer()
 
     def test_initial_state(self):
         """Test that transformer initializes with correct default state."""

@@ -1,0 +1,13 @@
+import unittest
+import logging
+
+
+class TestLogs(unittest.TestCase):
+    def test_assert_logs_basic(self):
+        logger = logging.getLogger('a')
+
+        with self.assertLogs(logger, level='INFO') as cm:
+            logger.info('ok')
+
+        self.assertEqual(len(cm.output), 1)
+

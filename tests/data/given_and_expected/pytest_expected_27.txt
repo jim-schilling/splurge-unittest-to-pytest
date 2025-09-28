@@ -1,0 +1,12 @@
+import pytest
+
+
+class TestBasics:
+    def test_none_checks(self):
+        assert None is None
+        assert 1 is not None
+
+    def test_identity_and_sequence(self):
+        a = (1, 2)
+        b = (1, 2)
+        assert a == b
