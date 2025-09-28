@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Pattern analyzer for unittest code.
 
-This module analyzes unittest code patterns and identifies structures that need
-to be transformed to pytest equivalents.
+This module analyzes ``unittest`` code patterns and identifies structures
+that should be transformed into pytest equivalents. The analyzer builds a
+lightweight IR (``TestModule``, ``TestClass``, ``TestMethod``, etc.) that
+downstream generators consume.
 """
 
 import libcst as cst
@@ -20,7 +22,11 @@ from .ir import (
 
 
 class UnittestPatternAnalyzer(cst.CSTVisitor):
-    """Analyzes unittest code and identifies transformation patterns."""
+    """Visitor that identifies unittest patterns and produces IR.
+
+    The visitor collects classes, methods, fixtures, and assertions and
+    exposes the parsed ``TestModule`` via ``analyze_module``.
+    """
 
     def __init__(self) -> None:
         self.needs_pytest_import = False
@@ -31,7 +37,15 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         self._classes: dict[str, TestClass] = {}
 
     def _normalize_base_name(self, value: cst.BaseExpression) -> str:
-        """Normalize a base expression to a dotted name string if possible."""
+        """Normalize a base expression to a dotted name string if possible.
+
+        Args:
+            value: A CST base expression node.
+
+        Returns:
+            Dotted string representation when possible, otherwise a best-effort
+            string fallback.
+        """
         if isinstance(value, cst.Name):
             return value.value
         if isinstance(value, cst.Attribute):
@@ -45,13 +59,14 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
             return str(value)
 
     def analyze_module(self, code: str) -> TestModule:
-        """Analyze a complete Python module and return its IR representation.
+        """Analyze a Python module and return its IR representation.
 
         Args:
-            code: The Python code to analyze
+            code: The Python source code to analyze.
 
         Returns:
-            TestModule representing the analyzed code
+            ``TestModule`` representing the discovered tests, fixtures, and
+            imports.
         """
         try:
             # Parse the code into CST
@@ -102,7 +117,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
             raise ValueError(f"Failed to analyze module: {e}") from e
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
-        """Visit a class definition to analyze test classes."""
+        """Handle a class definition and record test-class information.
+
+        This method records base classes, detects ``unittest.TestCase``
+        inheritance, and collects methods for later processing.
+        """
         class_name = node.name.value
 
         # Check if this is a unittest.TestCase
@@ -135,7 +154,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         self.current_class = old_class
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
-        """Visit a function definition to analyze test methods and fixtures."""
+        """Handle a function definition to classify test methods and fixtures.
+
+        Module-level functions are treated as standalone functions and
+        converted to ``TestMethod`` entries in the IR when appropriate.
+        """
         func_name = node.name.value
 
         # Check if this is a setUp/tearDown method
@@ -170,7 +193,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
                 self.ir_module.standalone_functions.append(standalone_function)
 
     def visit_Call(self, node: cst.Call) -> None:
-        """Visit function calls to identify assertions."""
+        """Inspect call expressions to detect unittest assertion calls.
+
+        When an assertion call (e.g., ``self.assertEqual``) is found the
+        analyzer records an ``Assertion`` object in the current method IR.
+        """
         if isinstance(node.func, cst.Attribute):
             if isinstance(node.func.value, cst.Name) and node.func.value.value == "self":
                 method_name = node.func.attr.value
@@ -181,7 +208,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
                     self._analyze_assertion(node, assertion_type)
 
     def _is_unittest_testcase(self, node: cst.ClassDef) -> bool:
-        """Check if a class inherits from unittest.TestCase or TestCase."""
+        """Return True when a class inherits from ``unittest.TestCase``.
+
+        The check handles both fully-qualified base names and imported
+        ``TestCase`` symbols.
+        """
         for base in node.bases:
             value = base.value
             # unittest.TestCase
@@ -198,7 +229,10 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return False
 
     def _is_test_method(self, method_name: str) -> bool:
-        """Check if a method is a test method."""
+        """Return True when the method name follows pytest/unittest test naming.
+
+        Currently this uses the ``test_`` prefix heuristic.
+        """
         return method_name.startswith("test_")
 
     def _is_setup_method(self, method_name: str) -> bool:
@@ -210,7 +244,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return method_name in ["tearDown", "tearDownClass"]
 
     def _get_assertion_type(self, method_name: str) -> AssertionType | None:
-        """Convert unittest assertion method name to AssertionType enum."""
+        """Convert unittest assertion method name to ``AssertionType``.
+
+        Returns the corresponding ``AssertionType`` or ``None`` when the
+        method name is not a recognized unittest assertion.
+        """
         mapping = {
             "assertEqual": AssertionType.ASSERT_EQUAL,
             "assertTrue": AssertionType.ASSERT_TRUE,
@@ -246,7 +284,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return mapping.get(method_name)
 
     def _analyze_setup_method(self, node: cst.FunctionDef, method_name: str) -> None:
-        """Analyze a setUp or setUpClass method."""
+        """Extract setup code from ``setUp``/``setUpClass`` and create a ``Fixture``.
+
+        The extracted code is stored as strings in the ``Fixture`` for later
+        emission by generators.
+        """
         if self.current_class is None:
             return
 
@@ -276,7 +318,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return
 
     def _analyze_teardown_method(self, node: cst.FunctionDef, method_name: str) -> None:
-        """Analyze a tearDown or tearDownClass method."""
+        """Extract teardown code from ``tearDown``/``tearDownClass`` and create a ``Fixture``.
+
+        The extracted code is stored as strings in the ``Fixture`` for later
+        emission by generators.
+        """
         if self.current_class is None:
             return
 
@@ -310,7 +356,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return
 
     def _analyze_test_method(self, node: cst.FunctionDef, method_name: str) -> None:
-        """Analyze a test method."""
+        """Create a ``TestMethod`` and collect assertions found in the body.
+
+        The method's decorators and parameters are recorded on the IR
+        ``TestMethod`` for use by downstream code generators.
+        """
         if self.current_class is None:
             return
 
@@ -342,7 +392,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         return
 
     def _analyze_assertion(self, node: cst.Call, assertion_type: AssertionType) -> None:
-        """Analyze an assertion call."""
+        """Create an ``Assertion`` IR node from a unittest assertion call.
+
+        The call arguments are stringified into ``Expression`` objects for
+        easier formatting by code generators.
+        """
         if self.current_method is None:
             return
 

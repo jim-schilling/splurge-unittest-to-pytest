@@ -1,7 +1,8 @@
 """Result type for functional error handling.
 
-This module provides a Result[T] type that encapsulates both successful results
-and error conditions, enabling functional composition of operations.
+This module provides an immutable ``Result[T]`` type that encapsulates
+successful values, warnings, and errors. It enables functional-style
+composition with helper methods such as ``map`` and ``bind``.
 """
 
 from collections.abc import Callable
@@ -14,7 +15,10 @@ R = TypeVar("R")
 
 
 class ResultStatus(Enum):
-    """Status of a Result operation."""
+    """Enumerates possible statuses for a ``Result``.
+
+    Values include ``SUCCESS``, ``WARNING``, ``ERROR``, and ``SKIPPED``.
+    """
 
     SUCCESS = "success"
     WARNING = "warning"
@@ -24,10 +28,11 @@ class ResultStatus(Enum):
 
 @dataclass(frozen=True)
 class Result(Generic[T]):
-    """Immutable result with error handling.
+    """Immutable result value with structured errors and warnings.
 
-    This class provides functional error handling through method chaining,
-    similar to Rust's Result or Haskell's Either types.
+    The class models operation outcomes and provides convenience
+    constructors for common cases (``success``, ``failure``,
+    ``warning``, ``skipped``) plus helpers for composition.
     """
 
     status: ResultStatus
@@ -37,7 +42,11 @@ class Result(Generic[T]):
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
-        """Validate result consistency."""
+        """Validate internal consistency of the result instance.
+
+        Ensures success results don't carry errors and error results don't
+        carry data.
+        """
         if self.status == ResultStatus.SUCCESS and self.error is not None:
             raise ValueError("Success results cannot have errors")
         if self.status == ResultStatus.ERROR and self.data is not None:
@@ -49,26 +58,59 @@ class Result(Generic[T]):
 
     @classmethod
     def success(cls, data: T, metadata: dict[str, Any] | None = None) -> "Result[T]":
-        """Create a successful result."""
+        """Create a successful result.
+
+        Args:
+            data: Successful value.
+            metadata: Optional metadata mapping.
+
+        Returns:
+            ``Result`` with ``status==SUCCESS``.
+        """
         return cls(status=ResultStatus.SUCCESS, data=data, error=None, metadata=metadata or {})
 
     @classmethod
     def failure(cls, error: Exception, metadata: dict[str, Any] | None = None) -> "Result[T]":
-        """Create an error result."""
+        """Create an error result.
+
+        Args:
+            error: Exception instance describing the failure.
+            metadata: Optional metadata mapping.
+
+        Returns:
+            ``Result`` with ``status==ERROR``.
+        """
         return cls(status=ResultStatus.ERROR, error=error, metadata=metadata or {})
 
     @classmethod
     def warning(cls, data: T, warnings: list[str], metadata: dict[str, Any] | None = None) -> "Result[T]":
-        """Create a result with warnings."""
+        """Create a result that succeeded with warnings.
+
+        Args:
+            data: Value produced by the operation.
+            warnings: List of warning messages.
+            metadata: Optional metadata mapping.
+
+        Returns:
+            ``Result`` with ``status==WARNING``.
+        """
         return cls(status=ResultStatus.WARNING, data=data, warnings=warnings, metadata=metadata or {})
 
     @classmethod
     def skipped(cls, reason: str, metadata: dict[str, Any] | None = None) -> "Result[T]":
-        """Create a skipped result."""
+        """Create a skipped result.
+
+        Args:
+            reason: Explanation for why the operation was skipped.
+            metadata: Optional metadata mapping.
+
+        Returns:
+            ``Result`` with ``status==SKIPPED``.
+        """
         return cls(status=ResultStatus.SKIPPED, metadata=metadata or {})
 
     def is_success(self) -> bool:
-        """Check if result is successful."""
+        """Return True when the result is a success."""
         return self.status == ResultStatus.SUCCESS
 
     def is_error(self) -> bool:
@@ -84,13 +126,14 @@ class Result(Generic[T]):
         return self.status == ResultStatus.SKIPPED
 
     def map(self, func: Callable[[T], R]) -> "Result[R]":
-        """Apply function to successful result data.
+        """Apply a function to the successful result data.
 
         Args:
-            func: Function to apply to the data
+            func: Function to apply to the data.
 
         Returns:
-            New Result with transformed data or original error
+            A new ``Result`` containing transformed data, or the original
+            error result if this result is an error.
         """
         if self.is_error():
             return Result[R](
@@ -111,13 +154,14 @@ class Result(Generic[T]):
             return Result.failure(e, self.metadata)
 
     def bind(self, func: Callable[[T], "Result[R]"]) -> "Result[R]":
-        """Apply function that returns a Result.
+        """Chain a function that returns a ``Result``.
 
         Args:
-            func: Function that takes data and returns a Result
+            func: Function that consumes the data and returns a ``Result``.
 
         Returns:
-            Result from applying the function or original error
+            The ``Result`` returned by ``func`` or the original error
+            result if this result is an error.
         """
         if self.is_error():
             return Result[R](
@@ -136,26 +180,27 @@ class Result(Generic[T]):
             return Result.failure(e, self.metadata)
 
     def or_else(self, default_value: T) -> T:
-        """Get data or return default value.
+        """Return data if present or a default value.
 
         Args:
-            default_value: Value to return if result is error or skipped
+            default_value: Value to return if the result is an error or
+                skipped.
 
         Returns:
-            Data if successful, default_value otherwise
+            Data when successful, otherwise ``default_value``.
         """
         if self.is_success() and self.data is not None:
             return self.data
         return default_value
 
     def unwrap(self) -> T:
-        """Get data or raise error.
+        """Return data if successful or raise an exception.
 
         Returns:
-            Data if successful
+            The successful data value.
 
         Raises:
-            Exception: If result is error or skipped
+            Exception: If the result represents an error or was skipped.
         """
         if self.is_error():
             raise self.error or RuntimeError("Result contains error")
@@ -166,23 +211,24 @@ class Result(Generic[T]):
         return self.data
 
     def unwrap_or(self, default_value: T) -> T:
-        """Get data or default value.
+        """Return data if present, otherwise ``default_value``.
 
         Args:
-            default_value: Default value to return if no data
+            default_value: Default value to return if no data is available.
 
         Returns:
-            Data if available, default_value otherwise
+            Data when successful, otherwise ``default_value``.
         """
         if self.is_success() and self.data is not None:
             return self.data
         return default_value
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert result to dictionary representation.
+        """Convert the result to a dictionary representation.
 
         Returns:
-            Dictionary representation of the result
+            A serializable mapping with status, data, error, warnings, and
+            metadata.
         """
         return {
             "status": self.status.value,
@@ -193,7 +239,7 @@ class Result(Generic[T]):
         }
 
     def __str__(self) -> str:
-        """String representation of the result."""
+        """Human-friendly string representation of the result."""
         if self.is_success():
             return f"Result(success, data={self.data})"
         elif self.is_error():

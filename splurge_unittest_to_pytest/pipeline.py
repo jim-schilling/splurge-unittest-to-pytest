@@ -1,7 +1,8 @@
 """Pipeline architecture for functional composition.
 
-This module provides the core pipeline architecture with Step, Task, and Job
-abstractions that enable functional composition of operations.
+This module provides the core pipeline architecture with ``Step``,
+``Task``, and ``Job`` abstractions that enable functional composition of
+operations.
 """
 
 import logging
@@ -18,18 +19,20 @@ U = TypeVar("U")
 
 
 class Step(ABC, Generic[T, R]):
-    """Atomic operation with single responsibility.
+    """Atomic operation with a single responsibility.
 
-    Steps are the smallest unit of work in the pipeline. Each step
-    takes input of type T and produces output of type R.
+    A ``Step`` transforms input of type ``T`` into output of type
+    ``R``. Concrete steps implement ``execute`` and are run with the
+    ``run`` helper that publishes start/completion events and handles
+    exceptions.
     """
 
     def __init__(self, name: str, event_bus: EventBus) -> None:
         """Initialize step.
 
         Args:
-            name: Unique name for this step
-            event_bus: Event bus for publishing events
+            name: Unique name for this step.
+            event_bus: Event bus for publishing events.
         """
         self.name = name
         self.event_bus = event_bus
@@ -37,26 +40,30 @@ class Step(ABC, Generic[T, R]):
 
     @abstractmethod
     def execute(self, context: PipelineContext, input_data: T) -> Result[R]:
-        """Pure transformation function.
+        """Pure transformation function to implement in subclasses.
 
         Args:
-            context: Pipeline execution context
-            input_data: Input data for transformation
+            context: Pipeline execution context.
+            input_data: Input data for transformation.
 
         Returns:
-            Result containing transformed data or error
+            ``Result`` containing transformed data or an error.
         """
         pass
 
     def run(self, context: PipelineContext, input_data: T) -> Result[R]:
-        """Execute step with event publishing and error handling.
+        """Execute the step with event publishing and error handling.
+
+        This helper publishes ``StepStartedEvent`` and ``StepCompletedEvent``
+        around the call to ``execute`` and converts exceptions into an
+        error ``Result``.
 
         Args:
-            context: Pipeline execution context
-            input_data: Input data for transformation
+            context: Pipeline execution context.
+            input_data: Input data for transformation.
 
         Returns:
-            Result containing transformed data or error
+            ``Result`` containing transformed data or an error.
         """
         # Publish start event
         start_event = StepStartedEvent(
@@ -95,10 +102,10 @@ class Step(ABC, Generic[T, R]):
         return result
 
     def _get_timestamp(self) -> float:
-        """Get current timestamp.
+        """Get current timestamp in seconds.
 
         Returns:
-            Current timestamp in seconds
+            Current timestamp in seconds (float).
         """
         import time
 
@@ -106,10 +113,10 @@ class Step(ABC, Generic[T, R]):
 
 
 class Task(Generic[T, R]):
-    """Collection of related steps.
+    """Collection of related steps executed sequentially.
 
-    Tasks compose multiple steps together, executing them in sequence
-    and short-circuiting on errors.
+    A ``Task`` composes multiple ``Step`` instances and threads data
+    through them, short-circuiting when a step produces an error.
     """
 
     def __init__(self, name: str, steps: list[Step], event_bus: EventBus) -> None:
@@ -126,14 +133,15 @@ class Task(Generic[T, R]):
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
     def execute(self, context: PipelineContext, input_data: T) -> Result[R]:
-        """Execute steps in sequence with short-circuit on error.
+        """Execute the configured steps in sequence.
 
         Args:
-            context: Pipeline execution context
-            input_data: Input data for the first step
+            context: Pipeline execution context.
+            input_data: Input data for the first step.
 
         Returns:
-            Result containing final transformed data or first error
+            ``Result`` containing the final transformed data on success or
+            the first error encountered.
         """
         self._logger.debug(f"Starting task: {self.name} with {len(self.steps)} steps")
 
@@ -179,7 +187,7 @@ class Task(Generic[T, R]):
         """Add a step to the task.
 
         Args:
-            step: Step to add
+            step: Step instance to append to this task.
         """
         self.steps.append(step)
         self._logger.debug(f"Added step {step.name} to task {self.name}")
@@ -194,10 +202,10 @@ class Task(Generic[T, R]):
 
 
 class Job(Generic[T, R]):
-    """High-level processing unit.
+    """High-level processing unit composed of tasks.
 
-    Jobs compose multiple tasks together, providing high-level
-    orchestration of complex operations.
+    Jobs orchestrate multiple ``Task`` instances and provide higher-level
+    error aggregation and context threading.
     """
 
     def __init__(self, name: str, tasks: list[Task], event_bus: EventBus) -> None:
@@ -214,14 +222,15 @@ class Job(Generic[T, R]):
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
-        """Execute all tasks with context threading.
+        """Execute all tasks and thread context/data through them.
 
         Args:
-            context: Pipeline execution context
-            initial_input: Initial input data for the first task
+            context: Pipeline execution context.
+            initial_input: Optional initial input for the first task.
 
         Returns:
-            Result containing final transformed data or first error
+            ``Result`` containing final transformed data on success or the
+            first encountered error.
         """
         self._logger.info(f"Starting job: {self.name} with {len(self.tasks)} tasks")
 
@@ -268,7 +277,7 @@ class Job(Generic[T, R]):
         """Add a task to the job.
 
         Args:
-            task: Task to add
+            task: Task instance to append to this job.
         """
         self.tasks.append(task)
         self._logger.debug(f"Added task {task.name} to job {self.name}")
@@ -285,8 +294,8 @@ class Job(Generic[T, R]):
 class Pipeline(Generic[T, R]):
     """Main pipeline orchestrator.
 
-    The pipeline coordinates the execution of jobs and manages
-    the overall flow of data transformation.
+    The pipeline coordinates execution of ``Job`` instances and manages
+    overall data and context flow.
     """
 
     def __init__(self, name: str, jobs: list[Job], event_bus: EventBus) -> None:
@@ -303,14 +312,15 @@ class Pipeline(Generic[T, R]):
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
-        """Execute the entire pipeline.
+        """Execute all jobs in the pipeline in order.
 
         Args:
-            context: Pipeline execution context
-            initial_input: Initial input data for the pipeline
+            context: Pipeline execution context.
+            initial_input: Optional initial input for the pipeline.
 
         Returns:
-            Result containing final transformed data or first error
+            ``Result`` containing final transformed data on success or the
+            first error encountered.
         """
         self._logger.info(f"Starting pipeline: {self.name} with {len(self.jobs)} jobs")
 
@@ -357,7 +367,7 @@ class Pipeline(Generic[T, R]):
         """Add a job to the pipeline.
 
         Args:
-            job: Job to add
+            job: Job instance to append to this pipeline.
         """
         self.jobs.append(job)
         self._logger.debug(f"Added job {job.name} to pipeline {self.name}")

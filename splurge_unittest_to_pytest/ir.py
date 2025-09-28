@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Intermediate Representation (IR) for unittest to pytest migration.
 
-This module defines data structures that represent unittest code semantically,
-making transformations more reliable and testable than direct CST manipulation.
+This module defines data structures that represent unittest code
+semantically, making transformations more reliable and testable than
+direct CST manipulation.
 """
 
 from dataclasses import dataclass, field
@@ -11,7 +12,11 @@ from typing import Any
 
 
 class AssertionType(Enum):
-    """Types of unittest assertions that need transformation."""
+    """Types of unittest assertions that need transformation.
+
+    Enum members correspond to common ``unittest.TestCase`` assertion
+    helpers that are mapped to idiomatic ``pytest`` assertions.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -48,7 +53,11 @@ class AssertionType(Enum):
 
 
 class FixtureScope(Enum):
-    """Scope for pytest fixtures."""
+    """Scope values for pytest fixtures.
+
+    Values mirror pytest's fixture scope strings: ``function``,
+    ``class``, ``module``, and ``session``.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -60,7 +69,13 @@ class FixtureScope(Enum):
 
 @dataclass
 class Expression:
-    """Represents a generic expression in the code."""
+    """Representation of a generic expression in source code.
+
+    Attributes:
+        type: Short string identifying the expression kind (e.g., "Call").
+        value: Code-like string representation of the expression.
+        metadata: Optional mapping with additional analysis data.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -71,7 +86,14 @@ class Expression:
 
 @dataclass
 class Assertion:
-    """Represents a unittest assertion that needs to be transformed."""
+    """Represents a unittest assertion that should be transformed.
+
+    Attributes:
+        arguments: List of argument expressions for the assertion call.
+        assertion_type: Optional ``AssertionType`` describing the form.
+        message: Optional assertion message provided by the original call.
+        original_location: Optional mapping with source location info.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -83,7 +105,16 @@ class Assertion:
 
 @dataclass
 class Fixture:
-    """Represents a setup/teardown fixture that needs to be converted."""
+    """Represents a setup/teardown fixture to be converted to pytest.
+
+    Attributes:
+        name: Fixture name.
+        scope: ``FixtureScope`` value.
+        setup_code: List of code strings to run before tests.
+        teardown_code: List of code strings to run after tests.
+        dependencies: Other fixtures this one depends on.
+        is_autouse: Whether the fixture should be autouse.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -97,7 +128,15 @@ class Fixture:
 
 @dataclass
 class TestMethod:
-    """Represents a test method."""
+    """Represents a test method.
+
+    Attributes:
+        name: Method name.
+        body: Sequence of statements (Assertions or Expressions).
+        decorators: Decorators applied to the method.
+        parameters: Parameter names for the method.
+        return_type: Optional return type annotation as a string.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -110,7 +149,18 @@ class TestMethod:
 
 @dataclass
 class TestClass:
-    """Represents a test class (unittest.TestCase or regular class)."""
+    """Represents a test class (either a ``unittest.TestCase`` or plain).
+
+    Attributes:
+        name: Class name.
+        base_classes: List of base class names.
+        methods: List of contained ``TestMethod`` objects.
+        class_setup: Optional class-level setup ``Fixture``.
+        class_teardown: Optional class-level teardown ``Fixture``.
+        instance_setup: Optional instance-level setup ``Fixture``.
+        instance_teardown: Optional instance-level teardown ``Fixture``.
+        is_unittest_class: Whether this was originally a ``unittest.TestCase``.
+    """
 
     __test__ = False  # Tell pytest not to collect this as a test class
 
@@ -126,7 +176,11 @@ class TestClass:
 
     @property
     def needs_pytest_import(self) -> bool:
-        """Check if this class needs pytest import."""
+        """Return True when the class requires importing pytest.
+
+        This property is used by generators to decide whether to add a
+        top-level ``import pytest`` statement for the generated module.
+        """
         return self._needs_pytest_import
 
     @needs_pytest_import.setter
@@ -164,7 +218,11 @@ class TestModule:
 
     @property
     def needs_pytest_import(self) -> bool:
-        """Check if this module needs pytest import."""
+        """Return True when the module requires importing pytest.
+
+        The module needs pytest import if any contained class requires it
+        or if the override flag has been set.
+        """
         return self._needs_pytest_import_override or any(cls.needs_pytest_import for cls in self.classes)
 
     @needs_pytest_import.setter
@@ -173,7 +231,10 @@ class TestModule:
         self._needs_pytest_import_override = value
 
     def add_import(self, import_stmt: ImportStatement) -> None:
-        """Add an import statement if it doesn't already exist."""
+        """Add an import statement if it doesn't already exist.
+
+        Duplicate imports (module, items, alias) are ignored.
+        """
         existing_imports = {(imp.module, tuple(sorted(imp.imported_items)), imp.alias) for imp in self.imports}
         new_import_key = (import_stmt.module, tuple(sorted(import_stmt.imported_items)), import_stmt.alias)
 
@@ -181,7 +242,14 @@ class TestModule:
             self.imports.append(import_stmt)
 
     def get_assertions_by_type(self, assertion_type: AssertionType) -> list[Assertion]:
-        """Get all assertions of a specific type from all test methods."""
+        """Return all assertions of the specified ``AssertionType``.
+
+        Args:
+            assertion_type: The assertion type to filter by.
+
+        Returns:
+            List of matching ``Assertion`` objects.
+        """
         assertions = []
         for cls in self.classes:
             for method in cls.methods:
@@ -191,7 +259,10 @@ class TestModule:
         return assertions
 
     def get_fixture_count(self) -> int:
-        """Get total number of fixtures in this module."""
+        """Return the total number of fixtures in this module.
+
+        This counts class-/instance-level fixtures and global fixtures.
+        """
         count = 0
         for cls in self.classes:
             if cls.class_setup:

@@ -238,7 +238,6 @@ def migrate(
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
     preserve_structure: bool = typer.Option(True, "--preserve-structure", help="Preserve original directory structure"),
     backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
-    merge_setup_teardown: bool = typer.Option(True, "--merge-setup", help="Merge setUp/tearDown into fixtures"),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress informational logging (keeps warnings/errors)"),
@@ -265,8 +264,7 @@ def migrate(
         None,
         "--ext",
         help="Override target file extension (e.g. 'py' or '.txt'). Defaults to preserving the original extension.",
-    ),
-    config_file: str | None = typer.Option(None, "--config", help="Configuration file path"),
+    )
 ) -> None:
     """Migrate unittest files to pytest format.
 
