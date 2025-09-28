@@ -318,7 +318,9 @@ def build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None
     return None
 
 
-def create_with_wrapping_next_stmt(with_item: cst.WithItem, next_stmt: cst.BaseStatement | None) -> tuple[cst.With, int]:
+def create_with_wrapping_next_stmt(
+    with_item: cst.WithItem, next_stmt: cst.BaseStatement | None
+) -> tuple[cst.With, int]:
     """Create a `With` node that uses `with_item` and wraps `next_stmt`.
 
     Returns a tuple (with_node, consumed_count) where consumed_count is 2
@@ -416,11 +418,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
     alias_name = None
     for item in stmt.items:
         try:
-            if (
-                item.asname
-                and isinstance(item.asname, cst.AsName)
-                and isinstance(item.asname.name, cst.Name)
-            ):
+            if item.asname and isinstance(item.asname, cst.AsName) and isinstance(item.asname.name, cst.Name):
                 alias_name = item.asname.name.value
                 break
         except Exception:
@@ -493,13 +491,19 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                     sub0 = cast(cst.Subscript, arg0)
                                     if sub0.slice:
                                         new_arg = cst.Subscript(
-                                            value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                            value=cst.Attribute(
+                                                value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                            ),
                                             slice=sub0.slice,
                                         )
                                     else:
-                                        new_arg = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                                        new_arg = cst.Attribute(
+                                            value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                        )
                                 else:
-                                    new_arg = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                                    new_arg = cst.Attribute(
+                                        value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                    )
                                 new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
                                 new_comp = t.with_changes(left=new_left)
                                 new_assert = target_assert.with_changes(test=new_comp)
@@ -530,15 +534,25 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                     comp_sub = cast(cst.Subscript, comparator)
                                     if comp_sub.slice:
                                         new_sub = cst.Subscript(
-                                            value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                            value=cst.Attribute(
+                                                value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                            ),
                                             slice=comp_sub.slice,
                                         )
                                     else:
-                                        new_sub = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                                        new_sub = cst.Attribute(
+                                            value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                        )
                                 else:
-                                    new_sub = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                                getmsg = cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                                new_comp = t.with_changes(comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)])
+                                    new_sub = cst.Attribute(
+                                        value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                    )
+                                getmsg = cst.Call(
+                                    func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
+                                )
+                                new_comp = t.with_changes(
+                                    comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
+                                )
                                 new_assert = target_assert.with_changes(test=new_comp)
                                 if wrapper_stmt is not None:
                                     s = wrapper_stmt.with_changes(body=[new_assert])
@@ -551,11 +565,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
             # Additionally handle SimpleStatementLine wrapping a self.assert* call
             if not replaced:
                 try:
-                    if (
-                        isinstance(s, cst.SimpleStatementLine)
-                        and len(s.body) == 1
-                        and isinstance(s.body[0], cst.Expr)
-                    ):
+                    if isinstance(s, cst.SimpleStatementLine) and len(s.body) == 1 and isinstance(s.body[0], cst.Expr):
                         call_expr = s.body[0].value
                         if isinstance(call_expr, cst.Call) and isinstance(call_expr.func, cst.Attribute):
                             func = call_expr.func
@@ -572,7 +582,9 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                     ):
                                         if left_arg.args:
                                             arg0 = left_arg.args[0].value
-                                            if isinstance(arg0, cst.Subscript) and isinstance(arg0.value, cst.Attribute):
+                                            if isinstance(arg0, cst.Subscript) and isinstance(
+                                                arg0.value, cst.Attribute
+                                            ):
                                                 attr = arg0.value
                                                 if (
                                                     isinstance(attr.value, cst.Name)
@@ -582,13 +594,26 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                                 ):
                                                     if arg0.slice:
                                                         new_arg = cst.Subscript(
-                                                            value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                                            value=cst.Attribute(
+                                                                value=cst.Name(value="caplog"),
+                                                                attr=cst.Name(value="records"),
+                                                            ),
                                                             slice=arg0.slice,
                                                         )
                                                     else:
-                                                        new_arg = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                                                        new_arg = cst.Attribute(
+                                                            value=cst.Name(value="caplog"),
+                                                            attr=cst.Name(value="records"),
+                                                        )
                                                     new_left = left_arg.with_changes(args=[cst.Arg(value=new_arg)])
-                                                    comp = cst.Comparison(left=new_left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=right_arg)])
+                                                    comp = cst.Comparison(
+                                                        left=new_left,
+                                                        comparisons=[
+                                                            cst.ComparisonTarget(
+                                                                operator=cst.Equal(), comparator=right_arg
+                                                            )
+                                                        ],
+                                                    )
                                                     new_assert = cst.Assert(test=comp)
                                                     s = cst.SimpleStatementLine(body=[new_assert])
                                                     replaced = True
@@ -597,7 +622,9 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                 if mname == "assertIn" and len(call_expr.args) >= 2:
                                     member = call_expr.args[0].value
                                     container = call_expr.args[1].value
-                                    if isinstance(container, cst.Subscript) and isinstance(container.value, cst.Attribute):
+                                    if isinstance(container, cst.Subscript) and isinstance(
+                                        container.value, cst.Attribute
+                                    ):
                                         attr = container.value
                                         if (
                                             isinstance(attr.value, cst.Name)
@@ -606,11 +633,21 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                                             and attr.attr.value == "output"
                                         ):
                                             new_sub = cst.Subscript(
-                                                value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                                value=cst.Attribute(
+                                                    value=cst.Name(value="caplog"), attr=cst.Name(value="records")
+                                                ),
                                                 slice=container.slice,
                                             )
-                                            getmsg = cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                                            new_comp = cst.Comparison(left=member, comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=getmsg)])
+                                            getmsg = cst.Call(
+                                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")),
+                                                args=[],
+                                            )
+                                            new_comp = cst.Comparison(
+                                                left=member,
+                                                comparisons=[
+                                                    cst.ComparisonTarget(operator=cst.In(), comparator=getmsg)
+                                                ],
+                                            )
                                             new_assert = cst.Assert(test=new_comp)
                                             s = cst.SimpleStatementLine(body=[new_assert])
                                             replaced = True
@@ -626,7 +663,9 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
         return new_with
 
 
-def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], start_index: int, alias_name: str) -> None:
+def rewrite_following_statements_for_alias(
+    statements: list[cst.BaseStatement], start_index: int, alias_name: str
+) -> None:
     """Look ahead from start_index and rewrite common patterns that reference alias.output.
 
     Mutates `statements` in place.
@@ -651,9 +690,7 @@ def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], 
             if isinstance(t, cst.Comparison):
                 left = t.left
                 if (
-                    isinstance(left, cst.Call)
-                    and isinstance(left.func, cst.Name)
-                    and left.func.value == "len"
+                    isinstance(left, cst.Call) and isinstance(left.func, cst.Name) and left.func.value == "len"
                 ) and left.args:
                     arg0 = left.args[0].value
                     if isinstance(arg0, cst.Subscript) and isinstance(arg0.value, cst.Attribute):
@@ -673,7 +710,10 @@ def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], 
                             and attr.attr.value == "output"
                         ):
                             if arg0.slice:
-                                new_arg = cst.Subscript(value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")), slice=arg0.slice)
+                                new_arg = cst.Subscript(
+                                    value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                    slice=arg0.slice,
+                                )
                             else:
                                 new_arg = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
                             new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
@@ -703,11 +743,16 @@ def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], 
                         and comp_attr.attr.value == "output"
                     ):
                         if isinstance(comparator, cst.Subscript) and comparator.slice:
-                            new_sub = cst.Subscript(value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")), slice=comparator.slice)
+                            new_sub = cst.Subscript(
+                                value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                slice=comparator.slice,
+                            )
                         else:
                             new_sub = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
                         getmsg = cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                        new_comp = t.with_changes(comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)])
+                        new_comp = t.with_changes(
+                            comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
+                        )
                         new_assert = target_assert.with_changes(test=new_comp)
                         if wrapper_stmt is not None:
                             statements[k] = wrapper_stmt.with_changes(body=[new_assert])
@@ -717,6 +762,7 @@ def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], 
 
             # equality comparisons: caplog.records[0] == 'msg' or alias.output[0] == 'msg'
             if isinstance(t, cst.Comparison):
+
                 def _rewrite_eq(node: cst.CSTNode, _alias_name=alias_name) -> cst.CSTNode | None:
                     if isinstance(node, cst.Subscript) and isinstance(node.value, cst.Attribute):
                         attr = node.value
@@ -726,8 +772,13 @@ def rewrite_following_statements_for_alias(statements: list[cst.BaseStatement], 
                             and isinstance(attr.attr, cst.Name)
                             and attr.attr.value == "output"
                         ):
-                            new_sub = cst.Subscript(value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")), slice=node.slice)
-                            return cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
+                            new_sub = cst.Subscript(
+                                value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records")),
+                                slice=node.slice,
+                            )
+                            return cst.Call(
+                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
+                            )
                     if (
                         isinstance(node, cst.Attribute)
                         and isinstance(node.value, cst.Name)

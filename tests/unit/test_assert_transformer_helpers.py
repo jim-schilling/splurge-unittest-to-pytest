@@ -61,7 +61,9 @@ def test_build_with_item_assertlogs_default_level():
 
 def test_create_with_wrapping_next_stmt_unwraps_and_pass():
     # when next_stmt is a normal statement
-    wi = cst.WithItem(item=cst.Call(func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")), args=[]))
+    wi = cst.WithItem(
+        item=cst.Call(func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")), args=[])
+    )
     stmt = parse_stmt("x = 1")
     wnode, consumed = create_with_wrapping_next_stmt(wi, stmt)
     assert consumed == 2
@@ -71,4 +73,3 @@ def test_create_with_wrapping_next_stmt_unwraps_and_pass():
     wnode2, consumed2 = create_with_wrapping_next_stmt(wi, None)
     assert consumed2 == 1
     assert isinstance(wnode2, cst.With)
-
