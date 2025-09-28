@@ -3,7 +3,7 @@ import libcst as cst
 from splurge_unittest_to_pytest.transformers.assert_transformer import (
     transform_assert_almost_equal,
     transform_caplog_alias_string_fallback,
-    wrap_assert_logs_in_block,
+    wrap_assert_in_block,
 )
 
 
@@ -20,7 +20,7 @@ def test_wrap_assert_warns_bare_call_wraps_following_stmt():
     # covers wrap_assert_logs_in_block bare-call path (lines ~267-278)
     stmt1 = _make_simple_stmt_from_code("self.assertWarns(ValueError)")
     stmt2 = _make_simple_stmt_from_code("raise ValueError()")
-    out = wrap_assert_logs_in_block([stmt1, stmt2])
+    out = wrap_assert_in_block([stmt1, stmt2])
     assert len(out) == 1
     # expect a With wrapping the following statement
     assert isinstance(out[0], cst.With)
@@ -79,7 +79,7 @@ def test_rewrite_equality_and_membership_variants_using_alias_lookahead():
     with_stmt = cst.With(body=cst.IndentedBlock(body=[inner_assert1, inner_assert2]), items=[with_item])
 
     # run through wrap_assert_logs_in_block which handles With rewriting and lookahead
-    out = wrap_assert_logs_in_block([with_stmt])
+    out = wrap_assert_in_block([with_stmt])
     # Expect the produced With to reference caplog in inner assertions
     assert len(out) == 1
     new_with = out[0]

@@ -62,7 +62,7 @@ def test_parse_steps_failure_path(tmp_path):
 
 
 def test_format_steps_public_api(tmp_path):
-    config = MigrationConfig(format_code=True, line_length=88)
+    config = MigrationConfig(line_length=88)
     target = tmp_path / "out_format.py"
     context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
     code = "import sys\n\n\nprint(1)\n"
@@ -84,7 +84,7 @@ def test_format_steps_warning_on_exception(monkeypatch, tmp_path):
         def _apply_black(self, code, config):
             raise RuntimeError("black failed")
 
-    config = MigrationConfig(format_code=True)
+    config = MigrationConfig()
     target = tmp_path / "out_failfmt.py"
     context = PipelineContext.create(source_file=__file__, target_file=str(target), config=config)
     res = FailingFormat("format", EventBus()).run(context, "print(1)\n")

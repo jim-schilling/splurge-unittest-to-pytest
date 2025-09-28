@@ -66,21 +66,17 @@ class MigrationConfig:
     target_extension: str | None = None
 
     # Transformation settings
-    convert_classes_to_functions: bool = True
-    merge_setup_teardown: bool = True
-    generate_fixtures: bool = True
-    fixture_scope: FixtureScope = FixtureScope.FUNCTION
+    # Legacy transformation flags removed: convert_classes_to_functions,
+    # merge_setup_teardown, generate_fixtures, fixture_scope
 
     # Code quality settings
-    format_code: bool = True
-    optimize_imports: bool = True
-    add_type_hints: bool = False
+    # Code quality flags removed: format_code, optimize_imports, add_type_hints
     line_length: int | None = 120  # Use black default (120) if None
 
     # Behavior settings
     dry_run: bool = False
     fail_fast: bool = False
-    parallel_processing: bool = True
+    # parallel_processing removed; library no longer exposes parallelism flag
     # Optional transforms
     parametrize: bool = False
 
@@ -113,12 +109,11 @@ class MigrationConfig:
         Returns:
             New MigrationConfig instance
         """
-        # Handle enum conversions
-        if "fixture_scope" in config_dict and isinstance(config_dict["fixture_scope"], str):
-            config_dict["fixture_scope"] = FixtureScope(config_dict["fixture_scope"])
-        # NOTE: legacy key handling removed: MigrationConfig has no DryRunMode
-
-        return cls(**config_dict)
+        # NOTE: legacy keys for removed flags are silently ignored. This allows
+        # loading older configuration files without failing when they still
+        # contain retired options.
+        filtered = {k: v for k, v in config_dict.items() if k in cls.__dataclass_fields__}
+        return cls(**filtered)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary.
@@ -234,7 +229,10 @@ class PipelineContext:
         Returns:
             True if code formatting is enabled
         """
-        return self.config.format_code
+        # Code formatting flags were removed; derive from configuration
+        # presence of a line_length or default policy. If the config has an
+        # explicit 'format_code' attribute (for backward compatibility), use it.
+        return bool(getattr(self.config, "format_code", True))
 
     def get_line_length(self) -> int:
         """Get configured line length.
@@ -320,9 +318,6 @@ class ContextManager:
             Result containing validated configuration or error
         """
         issues = []
-
-        # Note: parallelism control is deprecated at the CLI surface;
-        # keep parallel_processing flag but do not validate worker counts here.
 
         if config.line_length and (config.line_length < 60 or config.line_length > 200):
             issues.append("line_length must be between 60 and 200")

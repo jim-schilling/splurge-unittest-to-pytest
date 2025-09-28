@@ -1,6 +1,6 @@
 import libcst as cst
 
-from splurge_unittest_to_pytest.transformers.assert_transformer import wrap_assert_logs_in_block
+from splurge_unittest_to_pytest.transformers.assert_transformer import wrap_assert_in_block
 
 
 def _with_assertlogs_as_log(inner_stmts):
@@ -25,7 +25,7 @@ def test_with_assertRaises_preserves_asname():
         asname=cst.AsName(name=cst.Name(value="e")),
     )
     w = cst.With(body=cst.IndentedBlock(body=[cst.Pass()]), items=[item])
-    out = wrap_assert_logs_in_block([w])
+    out = wrap_assert_in_block([w])
     assert len(out) == 1
     new_w = out[0]
     assert isinstance(new_w, cst.With)
@@ -49,7 +49,7 @@ def test_attribute_equality_rewritten_to_caplog_records_inside_with():
         ]
     )
 
-    out = wrap_assert_logs_in_block([with_stmt, following_assert])
+    out = wrap_assert_in_block([with_stmt, following_assert])
     code = cst.Module(body=out).code
     assert "caplog.records" in code
 
@@ -73,7 +73,7 @@ def test_rhs_attribute_lookahead_rewrite_changes_rhs_to_caplog_records():
             )
         ]
     )
-    out = wrap_assert_logs_in_block([with_stmt, s])
+    out = wrap_assert_in_block([with_stmt, s])
     code = cst.Module(body=out).code
     assert "caplog.records" in code
 
@@ -99,7 +99,7 @@ def test_rhs_subscript_getmessage_transformed_by_lookahead():
             )
         ]
     )
-    out = wrap_assert_logs_in_block([with_stmt, s])
+    out = wrap_assert_in_block([with_stmt, s])
     code = cst.Module(body=out).code
     # expecting .getMessage() inserted
     assert ".getMessage(" in code or "caplog.records" in code

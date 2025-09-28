@@ -13,8 +13,8 @@ class FormatCodeStep(Step[str, str]):
 
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
         """Format code using isort and black programmatic APIs."""
-        if not context.config.format_code:
-            return Result.success(code)
+        # Formatting is always applied by the pipeline; the legacy
+        # `format_code` flag has been removed. Proceed to format.
 
         try:
             # Apply isort for import sorting

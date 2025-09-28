@@ -24,7 +24,6 @@ def test_modular_architecture():
     # Test basic config creation
     config = MigrationConfig()
     assert config.line_length == 120
-    assert config.format_code is True
     assert config.backup_originals is True
 
     assert True  # Mark test as successful
