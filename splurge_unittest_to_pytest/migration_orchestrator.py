@@ -50,7 +50,8 @@ class MigrationOrchestrator:
         # Determine target file path. If a target_directory is provided in
         # the config, use it while preserving the original filename and
         # extension. Otherwise, let PipelineContext.create compute a default
-        # (which uses the '.pytest.py' suffix).
+        # (which preserves the original extension unless overridden by
+        # `target_extension`/`target_suffix`).
         target_file: str | None = None
         suffix = config.target_suffix if config else ""
 
@@ -71,14 +72,14 @@ class MigrationOrchestrator:
             target_file = str(dest_dir.joinpath(new_name))
         else:
             # No explicit target_directory; if a suffix is provided, apply
-            # it to the default target filename stem (before adding the
-            # '.pytest.py' suffix applied by PipelineContext.create). We
-            # construct a tentative target and pass it in; otherwise leave
-            # target_file as None to let PipelineContext.create decide.
+            # it to the filename stem. We construct a tentative target and
+            # pass it in; otherwise leave target_file as None to let
+            # PipelineContext.create decide (which will preserve the
+            # original extension by default).
             if suffix:
                 src_path = Path(source_file)
-                # keep original extension, but add suffix to stem then
-                # append the default '.pytest.py' suffix after
+                # keep original extension (unless target_extension provided),
+                # but add suffix to stem.
                 ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
                 tentative = f"{src_path.stem}{suffix}{ext_to_use}"
                 # Create target path alongside the source
@@ -104,9 +105,29 @@ class MigrationOrchestrator:
 
         # Execute the pipeline with source code as initial input
         result = pipeline.execute(context, source_code)
-
         if result.is_success():
             self._logger.info(f"Migration completed successfully for {source_file}")
+            # If running in dry-run, run a preview pipeline (collector +
+            # formatter) to produce the transformed and formatted code so it
+            # can be printed to stdout. This avoids relying on the final
+            # pipeline metadata propagation which may vary across steps.
+            if config.dry_run:
+                try:
+                    preview_jobs: list[Any] = [self.collector_job, self.formatter_job]
+                    preview_pipeline: Pipeline[str, str] = Pipeline("dryrun_preview", preview_jobs, self.event_bus)
+                    preview_result = preview_pipeline.execute(context, source_code)
+                    if preview_result.is_success():
+                        gen_code = preview_result.data
+                        # Return a success Result that includes the generated
+                        # code in metadata so callers (CLI) can access and
+                        # print it. Ensure we return a str for the primary data
+                        # (path) to satisfy Result[str].
+                        primary = getattr(result, "data", "")
+                        primary_str = primary if isinstance(primary, str) else str(primary)
+                        return Result.success(primary_str, metadata={"generated_code": gen_code})
+                except Exception:
+                    # Fall back to returning the original result
+                    pass
         else:
             self._logger.error(f"Migration failed for {source_file}: {result.error}")
 

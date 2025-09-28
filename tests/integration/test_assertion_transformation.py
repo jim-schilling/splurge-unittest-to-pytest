@@ -4,7 +4,7 @@
 import libcst as cst
 import pytest
 
-from splurge_unittest_to_pytest.transformers import UnittestToPytestCSTTransformer
+from splurge_unittest_to_pytest.transformers import UnittestToPytestCstTransformer
 from tests.test_utils import assert_code_structure_equals
 
 
@@ -13,7 +13,7 @@ class TestAssertionTransformation:
 
     def test_assert_equal_transformation(self):
         """Test that assertEqual is transformed to assert ==."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -42,7 +42,7 @@ class TestExample(unittest.TestCase):
 
     def test_assert_true_false_transformation(self):
         """Test that assertTrue and assertFalse are transformed correctly."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -67,7 +67,7 @@ class TestExample(unittest.TestCase):
 
     def test_assert_is_transformation(self):
         """Test that assertIs is transformed to assert is."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -91,7 +91,7 @@ class TestExample(unittest.TestCase):
 
     def test_assert_in_transformation(self):
         """Test that assertIn is transformed to assert in."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -113,7 +113,7 @@ class TestExample(unittest.TestCase):
 
     def test_collection_assertions_transformation(self):
         """Test that collection assertion methods are transformed."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -142,7 +142,7 @@ class TestExample(unittest.TestCase):
 
     def test_type_assertions_transformation(self):
         """Test that type assertion methods are transformed."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -166,7 +166,7 @@ class TestExample(unittest.TestCase):
 
     def test_exception_assertions_transformation(self):
         """Test that exception assertion methods are transformed."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -193,7 +193,7 @@ class TestExample(unittest.TestCase):
 
     def test_multiple_assertions_in_method(self):
         """Test that multiple assertions in a single method are all transformed."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest
@@ -228,7 +228,7 @@ class TestExample(unittest.TestCase):
 
     def test_transform_code_preserves_structure(self):
         """Test that transform_code preserves overall code structure."""
-        transformer = UnittestToPytestCSTTransformer()
+        transformer = UnittestToPytestCstTransformer()
 
         test_code = """
 import unittest

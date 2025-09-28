@@ -81,7 +81,6 @@ class MigrationConfig:
     dry_run: bool = False
     fail_fast: bool = False
     parallel_processing: bool = True
-    max_workers: int = 4
     # Optional transforms
     parametrize: bool = False
 
@@ -117,6 +116,7 @@ class MigrationConfig:
         # Handle enum conversions
         if "fixture_scope" in config_dict and isinstance(config_dict["fixture_scope"], str):
             config_dict["fixture_scope"] = FixtureScope(config_dict["fixture_scope"])
+        # NOTE: legacy key handling removed: MigrationConfig has no DryRunMode
 
         return cls(**config_dict)
 
@@ -164,8 +164,12 @@ class PipelineContext:
             New PipelineContext instance
         """
         if not target_file:
+            # Preserve the original file extension by default. If callers
+            # want a different extension or suffix they may pass
+            # `target_extension` or `target_suffix` via the MigrationConfig
+            # (or provide an explicit target_file).
             source_path = Path(source_file)
-            target_file = str(source_path.with_suffix(".pytest.py"))
+            target_file = str(source_path)
 
         if not config:
             config = MigrationConfig()
@@ -317,8 +321,8 @@ class ContextManager:
         """
         issues = []
 
-        if config.max_workers < 1:
-            issues.append("max_workers must be at least 1")
+        # Note: parallelism control is deprecated at the CLI surface;
+        # keep parallel_processing flag but do not validate worker counts here.
 
         if config.line_length and (config.line_length < 60 or config.line_length > 200):
             issues.append("line_length must be between 60 and 200")

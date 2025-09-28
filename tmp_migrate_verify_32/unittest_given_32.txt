@@ -1,0 +1,28 @@
+import pytest
+
+
+class BaseTest:
+    def helper(self, x):
+        return x * 2
+
+
+class TestMultiInherit(BaseTest):
+    def test_helper(self):
+        assert self.helper(3) == 6
+
+    def test_using_mock(self):
+        m = mock.Mock()
+        m.method.return_value = 42
+        assert m.method() == 42
+
+    def test_with_subtests(self):
+        for i in range(3):
+            with subtests.test(i=i):
+                assert i < 5
+
+
+def test_already_pytest_style():
+    assert 1 + 1 == 2
+
+
+pytest.main()

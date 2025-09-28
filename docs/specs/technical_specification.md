@@ -700,7 +700,7 @@ class MigrationConfig:
     dry_run: bool = False
     fail_fast: bool = False
     parallel_processing: bool = True
-    max_workers: int = 4
+    # Per-run worker tuning removed from public API (max_workers omitted)
     
     # Reporting settings
     verbose: bool = False

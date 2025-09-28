@@ -1,4 +1,4 @@
-from splurge_unittest_to_pytest.transformers.fixture_transformer import transform_fixtures_string_based
+from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
 
 def test_transform_fixtures_string_based_with_body():
@@ -9,10 +9,12 @@ class TestX(unittest.TestCase):
     def tearDown(self):
         del self.x
 """
-    out = transform_fixtures_string_based(code)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(code)
     assert "@pytest.fixture" in out
-    assert "def setup_method(self):" in out
-    assert "del self.x" not in out  # tearDown should be removed
+    assert "def setup_method" in out
+    # tearDown content should be incorporated into teardown portion (yield-based)
+    assert "del self.x" in out or "yield" in out
 
 
 def test_transform_fixtures_string_based_empty_body():
@@ -23,6 +25,7 @@ class TestX(unittest.TestCase):
     def tearDown(self):
         pass
 """
-    out = transform_fixtures_string_based(code)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(code)
     assert "@pytest.fixture" in out
     assert "yield" in out

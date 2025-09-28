@@ -2,10 +2,7 @@ import libcst as cst
 
 from splurge_unittest_to_pytest.pattern_analyzer import UnittestPatternAnalyzer
 from splurge_unittest_to_pytest.transformers import unittest_transformer
-from splurge_unittest_to_pytest.transformers.assert_transformer import transform_assertions_string_based
-from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
-)
+from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
 
 def test_transform_skip_and_fail_string_based():
@@ -15,7 +12,8 @@ class ExampleTest(unittest.TestCase):
         self.skipTest("not relevant")
         self.fail('boom')
 """
-    out = transform_assertions_string_based(src)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(src)
     assert 'pytest.skip("not relevant")' in out or "pytest.skip('not relevant')" in out
     assert "pytest.fail('boom')" in out or 'pytest.fail("boom")' in out
 
@@ -55,7 +53,7 @@ def test_free_function():
 """
     # Parse and run transformer
     module = cst.parse_module(src)
-    transformer = UnittestToPytestCSTTransformer()
+    transformer = UnittestToPytestCstTransformer()
     new_mod = module.visit(transformer)
     code = new_mod.code
 
@@ -75,7 +73,7 @@ class SkipMe(unittest.TestCase):
     def test_one(self):
         self.skipTest("not relevant")
 """
-    transformer = UnittestToPytestCSTTransformer()
+    transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(src)
     # Should contain an import pytest line inserted
     assert "import pytest" in out
@@ -92,7 +90,7 @@ import unittest
 def test_something():
     self.skipTest("x")
 """
-    transformer = UnittestToPytestCSTTransformer()
+    transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(src)
     # Should still contain the original import pytest (not duplicated in odd places)
     assert out.count("import pytest") >= 1

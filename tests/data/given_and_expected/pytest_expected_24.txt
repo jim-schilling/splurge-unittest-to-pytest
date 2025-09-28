@@ -1,0 +1,11 @@
+import pytest
+
+
+class TestRaises:
+    def test_raises_basic(self):
+        with pytest.raises(ValueError):
+            raise ValueError('boom')
+
+    def test_raises_regex(self):
+        with pytest.raises(ValueError):
+            raise ValueError('boom')

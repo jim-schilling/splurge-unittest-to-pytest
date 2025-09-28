@@ -1,0 +1,18 @@
+import unittest
+import warnings
+
+
+class TestWarnings(unittest.TestCase):
+    def test_warns_simple(self):
+        def f():
+            warnings.warn("hey", UserWarning)
+
+        with self.assertWarns(UserWarning):
+            f()
+
+    def test_warns_regex(self):
+        def g():
+            warnings.warn("match-me-123", UserWarning)
+
+        with self.assertWarnsRegex(UserWarning, r"match-me-\d+"):
+            g()

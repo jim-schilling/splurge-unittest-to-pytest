@@ -4,26 +4,29 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
+
 @pytest.fixture(scope="module", autouse=True)
 def setup_module():
     global error_tracker, logger
     error_tracker = ErrorTracker()
     logger = logging.getLogger("test_logger")
     yield
+    global error_tracker, logger
     error_tracker.clear_errors()
     error_tracker = None
     logger = None
 
+
 class TestErrorHandling:
     @pytest.fixture(scope="class", autouse=True)
-    def setup_class(self):
-        self.error_handler = ErrorHandler(error_tracker, logger)
-        self.retry_manager = RetryManager(max_attempts=3)
-        self.circuit_breaker = CircuitBreaker(failure_threshold=2)
+    def setup_class(cls):
+        cls.error_handler = ErrorHandler(error_tracker, logger)
+        cls.retry_manager = RetryManager(max_attempts=3)
+        cls.circuit_breaker = CircuitBreaker(failure_threshold=2)
         yield
-        self.error_handler = None
-        self.retry_manager = None
-        self.circuit_breaker = None
+        cls.error_handler = None
+        cls.retry_manager = None
+        cls.circuit_breaker = None
 
     @pytest.fixture(autouse=True)
     def setup_method(self):
@@ -87,6 +90,7 @@ class TestErrorHandling:
         assert len(network_errors) == 1
         assert len(validation_errors) == 1
 
+
 class ErrorHandler:
     def __init__(self, error_tracker, logger):
         self.error_tracker = error_tracker
@@ -119,6 +123,7 @@ class ErrorHandler:
         else:
             return "general"
 
+
 class ErrorTracker:
     def __init__(self):
         self.errors = []
@@ -137,6 +142,7 @@ class ErrorTracker:
 
     def clear_errors(self):
         self.errors.clear()
+
 
 class RetryManager:
     def __init__(self, max_attempts=3):
@@ -158,6 +164,7 @@ class RetryManager:
                 time.sleep(0.1 * (attempt + 1))  # Exponential backoff
 
         raise last_exception
+
 
 class CircuitBreaker:
     def __init__(self, failure_threshold=5):
@@ -182,6 +189,7 @@ class CircuitBreaker:
     def reset(self):
         self.failure_count = 0
         self.is_open = False
+
 
 class CircuitBreakerOpenError(Exception):
     pass

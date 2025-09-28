@@ -64,16 +64,17 @@ def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[
         )
     )
 
-    body_statements = []
+    body_statements: list[cst.BaseStatement] = []
 
     for setup_line in setup_class_code:
         try:
+            # Try parsing as an expression (simple assignments/expressions)
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
         except Exception:
             try:
+                # Parse full statement and append it regardless of its concrete type
                 parsed_stmt = cst.parse_module(setup_line).body[0]
-                if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                    body_statements.append(parsed_stmt)
+                body_statements.append(parsed_stmt)
             except Exception:
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
@@ -85,8 +86,7 @@ def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[
         except Exception:
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
-                if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                    body_statements.append(parsed_stmt)
+                body_statements.append(parsed_stmt)
             except Exception:
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
@@ -116,7 +116,7 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
         )
     )
 
-    body_statements = []
+    body_statements: list[cst.BaseStatement] = []
 
     for setup_line in setup_code:
         try:
@@ -124,8 +124,7 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
         except Exception:
             try:
                 parsed_stmt = cst.parse_module(setup_line).body[0]
-                if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                    body_statements.append(parsed_stmt)
+                body_statements.append(parsed_stmt)
             except Exception:
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
@@ -137,8 +136,7 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
         except Exception:
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
-                if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                    body_statements.append(parsed_stmt)
+                body_statements.append(parsed_stmt)
             except Exception:
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
@@ -163,7 +161,7 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
 def create_teardown_fixture(teardown_code: list[str]) -> cst.FunctionDef:
     decorator = cst.Decorator(decorator=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")))
 
-    body_statements = [cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))])]
+    body_statements: list[cst.BaseStatement] = [cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))])]
 
     for teardown_line in teardown_code:
         try:
@@ -171,14 +169,73 @@ def create_teardown_fixture(teardown_code: list[str]) -> cst.FunctionDef:
         except Exception:
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
-                if isinstance(parsed_stmt, cst.SimpleStatementLine):
-                    body_statements.append(parsed_stmt)
+                body_statements.append(parsed_stmt)
             except Exception:
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     func = cst.FunctionDef(
         name=cst.Name(value="teardown_method"),
         params=cst.Parameters(params=[cst.Param(name=cst.Name(value="self"), annotation=None)]),
+        body=cst.IndentedBlock(body=body_statements),
+        decorators=[decorator],
+        returns=None,
+    )
+
+    return func
+
+
+def create_module_fixture(setup_module_code: list[str], teardown_module_code: list[str]) -> cst.FunctionDef:
+    """Create a module-scoped autouse fixture named `setup_module`.
+
+    The fixture will be decorated with @pytest.fixture(scope="module", autouse=True)
+    and will include setup lines, a yield, then teardown lines.
+    """
+
+    decorator = cst.Decorator(
+        decorator=cst.Call(
+            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="fixture")),
+            args=[
+                cst.Arg(keyword=cst.Name(value="scope"), value=cst.SimpleString(value='"module"')),
+                cst.Arg(keyword=cst.Name(value="autouse"), value=cst.Name(value="True")),
+            ],
+        )
+    )
+
+    body_statements: list[cst.BaseStatement] = []
+
+    for line in setup_module_code:
+        try:
+            body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(line))]))
+        except Exception:
+            try:
+                parsed_stmt = cst.parse_module(line).body[0]
+                body_statements.append(parsed_stmt)
+            except Exception:
+                body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
+
+    # Insert the yield for teardown pairing
+    body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
+
+    for line in teardown_module_code:
+        try:
+            body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(line))]))
+        except Exception:
+            try:
+                parsed_stmt = cst.parse_module(line).body[0]
+                body_statements.append(parsed_stmt)
+            except Exception:
+                body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
+
+    if not body_statements:
+        body_statements = [
+            cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
+            cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]),
+            cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]),
+        ]
+
+    func = cst.FunctionDef(
+        name=cst.Name(value="setup_module"),
+        params=cst.Parameters(params=[]),
         body=cst.IndentedBlock(body=body_statements),
         decorators=[decorator],
         returns=None,

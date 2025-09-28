@@ -1,0 +1,10 @@
+import unittest
+
+
+class TestComplexConditions(unittest.TestCase):
+    def test_truthy(self):
+        self.assertTrue(1 in [1,2,3] and 'a' not in 'b')
+
+    def test_complex_in(self):
+        d = {'k': [1,2]}
+        self.assertIn(1, d['k'])

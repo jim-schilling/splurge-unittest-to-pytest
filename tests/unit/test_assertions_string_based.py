@@ -1,4 +1,4 @@
-from splurge_unittest_to_pytest.transformers.assert_transformer import transform_assertions_string_based
+from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
 
 def test_transform_assertions_basic_equal_and_true():
@@ -9,7 +9,8 @@ class ExampleTest(unittest.TestCase):
         self.assertTrue(x)
 """
 
-    out = transform_assertions_string_based(src)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(src)
 
     assert "assert a == b" in out
     assert "assert x" in out
@@ -23,7 +24,8 @@ class ExampleTest(unittest.TestCase):
             do_it()
 """
 
-    out = transform_assertions_string_based(src)
+    transformer = UnittestToPytestCstTransformer()
+    out = transformer.transform_code(src)
 
     # name should be normalized (underscore inserted; capitalization is preserved)
     assert "def test_Something(self)" in out

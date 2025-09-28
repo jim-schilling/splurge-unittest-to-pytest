@@ -1,0 +1,13 @@
+import unittest
+import logging
+
+
+class TestLogsNoAs(unittest.TestCase):
+    def test_assert_logs_no_as(self):
+        logger = logging.getLogger('z')
+        with self.assertLogs(logger, level='WARNING'):
+            logger.warning('warn')
+
+    def test_assert_no_logs(self):
+        with self.assertNoLogs():
+            pass

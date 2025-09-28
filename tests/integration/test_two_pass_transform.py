@@ -1,7 +1,7 @@
 import textwrap
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
@@ -18,7 +18,7 @@ def test_two_pass_assert_statement_replacement():
         """
     )
 
-    t = UnittestToPytestCSTTransformer()
+    t = UnittestToPytestCstTransformer()
     out = t.transform_code(src)
 
     # Final output should contain a plain pytest-style assert and not the original method call
@@ -39,7 +39,7 @@ def test_two_pass_assert_multiline_equal_replacement():
         """
     )
 
-    t = UnittestToPytestCSTTransformer()
+    t = UnittestToPytestCstTransformer()
     out = t.transform_code(src)
 
     assert "assert 'a' == 'b'" in out or 'assert "a" == "b"' in out

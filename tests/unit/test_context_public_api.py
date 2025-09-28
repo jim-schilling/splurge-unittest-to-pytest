@@ -51,7 +51,8 @@ def test_context_manager_load_config(tmp_path):
 
 
 def test_validate_config_warnings():
-    cfg = MigrationConfig(max_workers=0, line_length=10, report_format="xml")
+    cfg = MigrationConfig(line_length=10, report_format="xml")
     res = ContextManager.validate_config(cfg)
+    # Expect a warning due to report_format='xml' not being supported
     assert not res.is_success()
     assert isinstance(res, Result)

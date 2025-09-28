@@ -1,0 +1,18 @@
+import unittest
+import pytest
+
+class TestContextManager(unittest.TestCase):
+    def test_open_file(self):
+        with open(__file__, 'r') as f:
+            content = f.read()
+            self.assertTrue(len(content) > 0)
+
+    def test_subtest_and_nested(self):
+        with self.subTest(msg='outer'):
+            with self.subTest(msg='inner'):
+                self.assertIsNotNone(1)
+
+
+@pytest.mark.parametrize('a,b,exp', [(1,2,3),(2,3,5)])
+def test_param(a,b,exp):
+    assert a + b == exp

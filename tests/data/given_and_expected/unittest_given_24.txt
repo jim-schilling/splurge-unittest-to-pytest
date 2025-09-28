@@ -1,0 +1,11 @@
+import unittest
+
+
+class TestRaises(unittest.TestCase):
+    def test_raises_basic(self):
+        with self.assertRaises(ValueError):
+            raise ValueError('boom')
+
+    def test_raises_regex(self):
+        with self.assertRaisesRegex(ValueError, r'boom'):
+            raise ValueError('boom')

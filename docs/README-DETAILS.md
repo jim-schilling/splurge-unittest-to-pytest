@@ -61,87 +61,121 @@ This directory contains comprehensive documentation for the unittest-to-pytest m
 
 ### Core Dependencies
 - **libcst**: High-fidelity code transformations preserving formatting
-- **Python 3.10+**: Modern Python with type annotations
-- **typer**: CLI interface with excellent user experience
-- **pydantic**: Configuration validation and data modeling
+# splurge-unittest-to-pytest — Detailed Reference
 
-### Development Tools
-- **pytest**: Testing framework (dogfooding approach)
-- **hypothesis**: Property-based testing for transformation correctness
-- **black/isort**: Code formatting and import organization
-- **mypy**: Static type checking for reliability
+This file documents the current state of the tool: features, CLI reference, examples, and the programmatic API. It intentionally reflects the current behavior and does not describe legacy or historical behaviors.
 
-## Implementation Phases
+Table of contents
+- Overview
+- Features
+- CLI reference (exhaustive)
+- Examples (CLI and programmatic)
+- Notes on safety and limitations
 
-### Phase 1: Foundation (Weeks 1-3)
-Core pipeline architecture, event system, and basic transformations
+Overview
+--------
+splurge-unittest-to-pytest converts Python unittest-based test suites to pytest style using safe, AST/CST-based transformations. The goal is to preserve test semantics while producing idiomatic pytest code.
 
-### Phase 2: Core Transformations (Weeks 4-7)  
-Intermediate representation, fixture generation, and comprehensive pattern support
+Features
+--------
+- CST-based transformations using `libcst` for stable, semantics-preserving edits.
+- Converts `unittest.TestCase` classes and test methods into pytest-style functions and fixtures.
+- Merges `setUp`/`tearDown` into pytest fixtures when appropriate.
+- Converts common `unittest` assertions to direct `assert` statements or pytest helpers.
+- Dry-run preview modes: print converted content, show unified diffs, or list files.
+- Preserves the original file extension by default. Use `--ext` to override the extension.
+- Backups: enable `--backup` to keep copy of originals before overwriting.
+- Formatting: generated code is always formatted with `black` and `isort`.
+- Import optimization and safe removal of unused `unittest` imports.
 
-### Phase 3: Advanced Features (Weeks 8-10)
-Parameterized tests, and complex scenario handling
+CLI reference
+-------------
+All flags are available on the `migrate` command. This is an exhaustive, current reference.
 
-### Phase 4: Production Ready (Weeks 11-12)
-CLI interface, configuration system, and user experience polish
+- `-d, --dir DIR` : Root directory for input discovery.
+- `-f, --file PATTERN` : Glob pattern(s) to select files. Repeatable. Default: `test_*.py`.
+- `-r, --recurse / --no-recurse` : Recurse directories (default: recurse).
+-- `-t, --target-dir DIR` : Directory to write outputs.
+-- `--preserve-structure / --no-preserve-structure` : Keep original directory structure (default: preserve).
+-- `--backup / --no-backup` : Create a `.backup` copy of originals when writing (default: backup).
+-- `--merge-setup / --no-merge-setup` : Merge `setUp`/`tearDown` into fixtures (default: on).
+- `--line-length N` : Max line length used by formatter (default: 120).
+- `--dry-run` : Do not write files, produce preview output instead.
+	- With `--dry-run --diff`: show unified diffs.
+	- With `--dry-run --list`: list files only.
+- `--ext EXT` : Override the target file extension (e.g., `py`, `.txt`). Default is to preserve the original extension.
+- `--suffix SUFFIX` : Append the suffix to the target filename stem when writing.
+- `--fail-fast` : Stop on first error (default: off).
+- `-v, --verbose` : Verbose logging (default: off).
+- `--report / --no-report` : Generate a migration report (default: on).
+- `--report-format [json|html|markdown]` : Report format (default: json).
+- `--config FILE` : Load configuration from YAML file.
+- `--prefix PREFIX` : Allowed test method prefixes; repeatable (default: `test`).
 
-## Quality Assurance Strategy
+Examples
+--------
 
-### Testing Approach
-- **Unit Tests**: >95% coverage of individual components
-- **Integration Tests**: Component interaction validation  
-- **Property Tests**: Transformation correctness verification
-- **Performance Tests**: Benchmarking against large codebases
-- **Dogfooding**: Tool migrates its own test suite
+Preview a single file (print converted code):
 
-### Performance Targets
-- Process 1000+ test files in under 5 minutes
-- Memory usage under 500MB for large codebases
-- Single file transformation under 1 second
-- Error recovery without pipeline failure
+```bash
+python -m splurge_unittest_to_pytest.cli migrate tests/test_example.py --dry-run
+```
 
-## Documentation Completeness
+Show unified diffs for a directory:
 
-### ✅ Completed
-- [x] Project planning and timeline
-- [x] Technical architecture specification  
-- [x] Implementation roadmap with priorities
-- [x] System architecture diagrams
-- [x] Configuration system design
-- [x] Project structure and organization
+```bash
+python -m splurge_unittest_to_pytest.cli migrate tests/ -r --dry-run --diff
+```
 
-### 📝 To Be Added (During Implementation)
-- [ ] API reference documentation
-- [ ] User guide with examples
-- [ ] Troubleshooting guide
-- [ ] Migration pattern catalog
-- [ ] Plugin development guide
-- [ ] Contributing guidelines
+Write changes to a target directory with backups (formatting is always applied):
 
-## Success Metrics
+```bash
+python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted --backup
+```
 
-### Quantitative Goals
-- **Transformation Accuracy**: >95% of common unittest patterns correctly transformed
-- **Performance**: Process large codebases efficiently with parallel processing
-- **Error Rate**: <5% of files require manual intervention after migration
-- **Pattern Coverage**: Support 90% of unittest patterns in popular Python projects
+Override extension (write `.txt` files instead of `.py`):
 
-### Qualitative Goals
-- Generated pytest code passes existing test suites without modification
-- Code formatting and style are preserved or improved
-- Error messages are clear and actionable for manual intervention
-- Tool adoption by development teams for production migrations
+```bash
+python -m splurge_unittest_to_pytest.cli migrate tests/test_example.py --ext txt
+```
 
-## Risk Mitigation
+Programmatic API
+-----------------
 
-### Technical Risks
-- **libcst Learning Curve**: Addressed through dedicated spike weeks and comprehensive examples
-- **Edge Case Coverage**: Managed through 80/20 rule focus and clear unsupported pattern reporting
-- **Performance Concerns**: Mitigated through parallel processing and incremental optimization
+Call `main.migrate(files: list[str], config: MigrationConfig)` to run migrations from Python code. The function returns a `Result` containing migrated paths and optional metadata (e.g., generated code when `dry_run=True`).
 
-### Project Risks
-- **Scope Creep**: Controlled through clear phase boundaries and success criteria
-- **Quality Concerns**: Addressed through comprehensive testing and dogfooding approach
-- **Adoption Barriers**: Reduced through excellent dry-run capabilities and conservative defaults
+Example:
 
-This documentation provides a complete foundation for implementing a production-ready unittest-to-pytest migration tool that follows software engineering best practices while delivering real value to development teams migrating large Python codebases.
+```python
+from splurge_unittest_to_pytest import main
+from splurge_unittest_to_pytest.context import MigrationConfig
+
+config = MigrationConfig(dry_run=True)
+result = main.migrate(["tests/test_example.py"], config=config)
+if result.is_success():
+		# For dry-run, metadata may contain a 'generated_code' mapping
+		gen_map = result.metadata.get("generated_code", {})
+		print(gen_map)
+else:
+		print("Migration failed:", result.error)
+```
+
+Safety and limitations
+----------------------
+
+- The tool focuses on common unittest patterns and conservative transformations. Complex or highly dynamic test code may not be automatically converted.
+- All transformations are implemented to minimize behavioral changes, but users should inspect diffs (use `--dry-run --diff`) and run their test suites after migration.
+- Use `--backup` to retain originals when writing.
+
+Notes
+-----
+- This document is up-to-date with the current release behavior and intentionally omits discussion of previously used legacy naming behaviors.
+
+Recent updates
+--------------
+
+- Added focused unit tests for `splurge_unittest_to_pytest.transformers.assert_transformer` to exercise
+	the libcst-based wrap/alias rewrite logic and string-fallbacks. These tests cover assertWarns/assertRaises/assertLogs/assertNoLogs
+	conversions into pytest contexts and `caplog` usage patterns.
+- Added tests to validate `assertAlmostEqual` -> `pytest.approx` conversions and membership/equality rewrites that call `.getMessage()` where appropriate.
+- These are test-only changes intended to raise confidence in the transformer passes; no production API behavior was changed.

@@ -13,8 +13,15 @@ class WriteOutputStep(Step[str, str]):
     def execute(self, context: PipelineContext, code: str) -> Result[str]:
         """Write generated code to target file."""
         if context.config.dry_run:
+            # Include the generated/formatted code in metadata so callers (CLI)
+            # can display it for dry-run mode without writing files.
             return Result.success(
-                str(context.target_file), metadata={"dry_run": True, "target_file": context.target_file}
+                str(context.target_file),
+                metadata={
+                    "dry_run": True,
+                    "target_file": context.target_file,
+                    "generated_code": code,
+                },
             )
 
         try:

@@ -1,12 +1,12 @@
 import pytest
 
 from splurge_unittest_to_pytest.transformers.unittest_transformer import (
-    UnittestToPytestCSTTransformer,
+    UnittestToPytestCstTransformer,
 )
 
 
 def make(code: str) -> str:
-    return UnittestToPytestCSTTransformer().transform_code(code)
+    return UnittestToPytestCstTransformer().transform_code(code)
 
 
 def test_malformed_self_assert_variants_are_ignored():

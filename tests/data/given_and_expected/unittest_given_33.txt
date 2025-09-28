@@ -1,0 +1,21 @@
+import unittest
+import pytest
+import os
+
+class TestSkipAndClasssetup(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = "tmpdir"
+
+    @unittest.skipIf(os.name == 'nt', "Not on Windows")
+    def test_skipped_on_windows(self):
+        self.assertTrue(True)
+
+    def test_raises_regex(self):
+        with self.assertRaisesRegex(ValueError, 'bad'):
+            raise ValueError('bad value')
+
+
+def test_mixed_asserts_and_pytest():
+    assert 'a' in 'abc'
+    assert not False

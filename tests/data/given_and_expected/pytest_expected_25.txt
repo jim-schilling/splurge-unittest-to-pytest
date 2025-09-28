@@ -1,0 +1,9 @@
+import pytest
+
+
+class TestNumericAndContainers:
+    def test_almost_equal(self):
+        assert round(0.3333333 - 1 / 3, 6) == 0
+
+    def test_count_equal(self):
+        assert sorted([1, 2, 2]) == sorted([2, 1, 2])

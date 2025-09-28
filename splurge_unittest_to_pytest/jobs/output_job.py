@@ -51,15 +51,18 @@ class OutputJob(Job[str, str]):
         """
         self._logger.info(f"Starting output job for {context.target_file}")
 
-        # Create backup if requested
-        if context.config.backup_originals:
+        # Create backup if requested (skip on dry-run)
+        if context.config.backup_originals and not context.config.dry_run:
             self._create_backup(context.source_file)
 
         # Execute the job with the transformed code as input
         result = super().execute(context, initial_input)
 
         if result.is_success():
-            self._logger.info(f"Output job completed successfully: {context.target_file}")
+            if context.config.dry_run:
+                self._logger.info(f"Dry-run: would write output to {context.target_file}")
+            else:
+                self._logger.info(f"Output job completed successfully: {context.target_file}")
         else:
             self._logger.error(f"Output job failed for {context.target_file}: {result.error}")
 
