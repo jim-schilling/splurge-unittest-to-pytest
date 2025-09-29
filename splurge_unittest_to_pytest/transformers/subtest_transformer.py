@@ -269,7 +269,55 @@ def convert_simple_subtests_to_parametrize(
                 return None
 
         new_body = cst.IndentedBlock(body=list(inner_body.body))
-        new_func = updated_func.with_changes(decorators=new_decorators, body=new_body)
+
+        # Add new parameters to the function signature matching the
+        # parametrize names (preserve existing params like `self` or `cls`).
+        try:
+            # param_name may be a single name or a comma-separated list for tuple-unpack
+            param_names = [p.strip() for p in str(param_name).split(",") if p.strip()]
+
+            # If any of the loop targets were starred (e.g., *rest) or otherwise
+            # unsupported, bail out conservatively to avoid generating invalid
+            # function signatures. We detect simple starred targets by inspecting
+            # the first.target when it's a Tuple containing StarredElement.
+            if isinstance(first.target, cst.Tuple):
+                for el in first.target.elements:
+                    # element can be a starred expression (e.g. *rest) represented
+                    # by a Name inside an Element with an IndirectNode; libcst
+                    # represents starred targets as StarredElement in some cases
+                    # but to be conservative, check for any node that is not a
+                    # plain Name.
+                    if not isinstance(el, cst.Element) or not isinstance(el.value, cst.Name):
+                        # unsupported unpacking (Starred/complex target)
+                        return None
+
+            existing_params = list(updated_func.params.params)
+            existing_names = [p.name.value for p in existing_params if isinstance(p.name, cst.Name)]
+
+            # Decide insertion index: append at the end of existing params so
+            # we preserve any explicit parameters declared by the user.
+            insert_at = len(existing_params)
+
+            # Append parameters at the computed insertion point, avoiding collisions
+            new_params: list[cst.Param] = []
+            for pn in param_names:
+                candidate = pn
+                suffix = 1
+                while candidate in existing_names or any(
+                    (isinstance(q.name, cst.Name) and q.name.value == candidate) for q in existing_params + new_params
+                ):
+                    candidate = f"{pn}_{suffix}"
+                    suffix += 1
+                new_params.append(cst.Param(name=cst.Name(value=candidate)))
+
+            # Build the new params list with insertion
+            updated_params_list = existing_params[:insert_at] + new_params + existing_params[insert_at:]
+            new_params_obj = updated_func.params.with_changes(params=updated_params_list)
+            new_func = updated_func.with_changes(decorators=new_decorators, body=new_body, params=new_params_obj)
+        except Exception:
+            # Fallback: if anything unexpected happens, produce the function with
+            # the decorator but don't change the signature to avoid invalid code.
+            new_func = updated_func.with_changes(decorators=new_decorators, body=new_body)
         transformer.needs_pytest_import = True
         return new_func
     except Exception:

@@ -138,8 +138,17 @@ def test_case_helper_tuple_unpacking_converts_to_parametrize():
         '@pytest.mark.parametrize("input_str,expected"' in out or "@pytest.mark.parametrize('input_str,expected'" in out
     )
 
+    parametrize_present = (
+        '@pytest.mark.parametrize("input_str,expected"' in out or "@pytest.mark.parametrize('input_str,expected'" in out
+    )
+
     for m in expected_methods:
-        assert f"def {m}(self)" in out or f"def {m}(self):" in out
+        if parametrize_present:
+            # When we converted to @pytest.mark.parametrize the function signature
+            # should include the param names after self.
+            assert f"def {m}(self, input_str, expected)" in out or f"def {m}(self, input_str, expected):" in out
+        else:
+            assert f"def {m}(self)" in out or f"def {m}(self):" in out
 
     # The complex "test_handle_empty_values" should not be converted to parametrize
     assert "test_handle_empty_values" in out
