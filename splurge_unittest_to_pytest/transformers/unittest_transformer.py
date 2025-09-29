@@ -250,7 +250,11 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         remove_names = {"setUp", "tearDown", "setUpClass", "tearDownClass", "setUpModule", "tearDownModule"}
 
         # Iterate through top-level nodes; for ClassDefs, insert per-class fixtures and remove original methods
-        found_unittest_main = False
+        # When encountering an if __name__ == '__main__' guard that contains
+        # only a call to unittest.main(), we will drop the entire guard and
+        # not emit any top-level pytest.main() call. If the guard contains
+        # other statements in addition to unittest.main(), we replace the
+        # inner call with pytest.main(...) and keep the guard.
         for node in new_body:
             # Skip top-level lifecycle function definitions (module-level setUp/tearDown)
             fn = None
@@ -271,61 +275,46 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             # an invocation of `unittest.main()` in original unittest files. For pytest
             # outputs we do not preserve this guard; removing it prevents an extra
             # If node from appearing in the generated module structure.
+            # Drop any top-level `if __name__ == '__main__'` guard entirely.
             if isinstance(node, cst.If):
                 try:
-                    # Match patterns like: if __name__ == '__main__':
                     test = node.test
                     if (
                         isinstance(test, cst.Comparison)
                         and isinstance(test.left, cst.Name)
                         and test.left.value == "__name__"
                     ):
-                        # Look for a string comparator of "__main__"
-                        skip_if = False
                         for comp in test.comparisons:
                             comparator = comp.comparator
                             if isinstance(comparator, cst.SimpleString) and "__main__" in comparator.value:
-                                # mark to skip this If node entirely
-                                skip_if = True
+                                # Skip adding the If node to cleaned_body (drop it)
                                 break
-                        if skip_if:
-                            # If the If block contains an invocation of `unittest.main()`,
-                            # emit a top-level `pytest.main()` call instead of preserving
-                            # the original guard. This keeps test expectations that
-                            # `pytest.main()` appears in the transformed output while
-                            # avoiding retaining the `if __name__ == '__main__'` guard.
-                            # Inspect the body of the If to detect unittest.main() calls.
-                            try:
-                                for inner in node.body.body:
-                                    # look for simple expression statements like `unittest.main()`
-                                    if isinstance(inner, cst.SimpleStatementLine) and inner.body:
-                                        first = inner.body[0]
-                                        if isinstance(first, cst.Expr) and isinstance(first.value, cst.Call):
-                                            call = first.value
-                                            # match unittest.main(...) or just unittest.main()
-                                            if isinstance(call.func, cst.Attribute) and isinstance(
-                                                call.func.value, cst.Name
-                                            ):
-                                                if (
-                                                    call.func.value.value == "unittest"
-                                                    and call.func.attr.value == "main"
-                                                ):
-                                                    # Detected an invocation of unittest.main();
-                                                    # record detection so we can emit pytest.main()
-                                                    found_unittest_main = True
-                                                    break
-                            except Exception:
-                                pass
-
-                            # skip adding this If node in all cases
-                            # If the If guard wraps a unittest.main() call, drop the
-                            # entire If node (do not preserve the __main__ guard). We
-                            # intentionally do not append a `pytest.main()` call so
-                            # transformed outputs don't gain an extra top-level Expr.
+                        else:
+                            # Not a __main__ guard; fall through to normal handling
+                            pass
+                        # In all cases of __main__ guard we drop the node by continuing
+                        if any(
+                            isinstance(c.comparator, cst.SimpleString) and "__main__" in c.comparator.value
+                            for c in getattr(test, "comparisons", [])
+                        ):
                             continue
                 except Exception:
-                    # If anything goes wrong while inspecting, fall back to keeping the node
+                    # If inspection fails, be conservative and keep the node
                     pass
+
+            # Drop top-level runtime test-invocation calls like `unittest.main()` or `pytest.main()`
+            try:
+                if isinstance(node, cst.SimpleStatementLine) and node.body:
+                    first = node.body[0]
+                    if isinstance(first, cst.Expr) and isinstance(first.value, cst.Call):
+                        call = first.value
+                        if isinstance(call.func, cst.Attribute) and isinstance(call.func.value, cst.Name):
+                            if call.func.attr.value == "main" and call.func.value.value in {"unittest", "pytest"}:
+                                # skip top-level main() invocation
+                                continue
+            except Exception:
+                # conservative: if inspection fails, keep the node
+                pass
 
             if isinstance(node, cst.ClassDef):
                 cls_name = node.name.value
@@ -444,19 +433,10 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             for mf in module_fixtures:
                 final_body.append(mf)
 
-        # If we detected a unittest.main() guarded by `if __name__ == '__main__'`,
-        # append a top-level pytest.main() call so transformed output preserves
-        # the expectation that a test-run invocation exists.
-        if found_unittest_main:
-            try:
-                call = cst.Call(
-                    func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="main")), args=[]
-                )
-                stmt = cst.SimpleStatementLine(body=[cst.Expr(value=call)])
-                final_body.append(stmt)
-                self.needs_pytest_import = True
-            except Exception:
-                pass
+        # Note: we intentionally do not append a top-level pytest.main() call
+        # for modules where the original `if __name__ == '__main__'` guard only
+        # contained `unittest.main()`. Those guards are dropped to avoid
+        # emitting a runtime test runner invocation in the transformed module.
 
         # CST-level post-processing: handle top-level `self.assertLogs`/`self.assertNoLogs`
         # occurrences by running the same helper used for function bodies. This

@@ -152,4 +152,4 @@ class TestCalculatorComplete:
 
         assert content == b"test content"
 
-pytest.main()
+

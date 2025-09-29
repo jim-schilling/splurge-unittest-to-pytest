@@ -41,6 +41,7 @@ an alternate location.
   ``unittest.TestCase`` are preserved to maintain class-scoped fixtures and
   organization unless a conversion is explicitly desired.
 - Backups of originals are available via ``--backup``.
+ - Backups of originals are available via ``--backup`` (off by default; pass ``--backup`` to enable).
 - Configurable discovery patterns, test method prefixes, and other options
   via the CLI or a programmatic ``MigrationConfig``.
 
@@ -50,16 +51,15 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 
 - ``-d, --dir DIR``: Root directory for discovery
 - ``-f, --file PATTERN``: Glob pattern(s) to select files (repeatable)
-- ``-r, --recurse/--no-recurse``: Recurse directories (default: recurse)
-- ``-t, --target-dir DIR``: Directory to write converted files
-- ``--dry-run``: Preview generated output without writing files
-- ``--diff``: When used with ``--dry-run``, show unified diffs
-- ``--list``: When used with ``--dry-run``, list files only
-- ``--posix``: Force POSIX-style path output in dry-run mode
-- ``--quiet``: Suppress extras in dry-run output
-- ``--ext EXT``: Override the target file extension
-- ``--suffix SUFFIX``: Append a suffix to converted filenames
-- ``--backup/--no-backup``: Create backup copies of originals
+ - ``--dry-run``: Preview generated output without writing files (presence-only flag)
+ - ``--diff``: When used with ``--dry-run``, show unified diffs (presence-only flag)
+ - ``--list``: When used with ``--dry-run``, list files only (presence-only flag)
+ - ``--posix``: Force POSIX-style path output in dry-run mode (presence-only flag)
+ - ``--quiet``: Suppress extras in dry-run output (presence-only flag)
+ - ``--suffix SUFFIX``: Append a suffix to converted filenames
+ - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
+ - ``--suffix SUFFIX``: Append a suffix to converted filenames
+ - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
 - ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``)
 
 For the full set of flags and detailed help, run:

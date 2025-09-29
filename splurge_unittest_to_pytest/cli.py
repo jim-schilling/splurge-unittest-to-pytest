@@ -27,20 +27,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(debug_mode: bool = False) -> None:
     """Configure root logging levels.
 
-    This sets the root logger to ``DEBUG`` when ``verbose`` is True and to
+    This sets the root logger to ``DEBUG`` when ``debug_mode`` is True and to
     ``INFO`` otherwise. It also reduces verbosity for known noisy third-party
     libraries used by the project.
 
     Args:
-        verbose: If True, enable debug-level logging for troubleshooting.
+        debug_mode: If True, enable debug-level logging for troubleshooting.
     """
     """
-    When verbose is False, set the root logger to INFO.
+    When debug_mode is False, set the root logger to INFO.
 
-    When verbose is True, keep the root logger at INFO but enable
+    When debug_mode is True, keep the root logger at INFO but enable
     DEBUG for the package logger only (``splurge_unittest_to_pytest``).
     This prevents noisy third-party libraries from emitting DEBUG logs
     while still providing detailed logs from this project.
@@ -53,7 +53,7 @@ def setup_logging(verbose: bool = False) -> None:
     root_level = logging.INFO
     logging.getLogger().setLevel(root_level)
 
-    if verbose:
+    if debug_mode:
         # Enable DEBUG logging for our package namespace only
         logging.getLogger("splurge_unittest_to_pytest").setLevel(logging.DEBUG)
 
@@ -102,7 +102,7 @@ def create_config(
     file_patterns: list[str] | None = None,
     recurse_directories: bool = True,
     preserve_structure: bool = True,
-    backup_originals: bool = True,
+    backup_originals: bool = False,
     line_length: int | None = 120,
     dry_run: bool = False,
     fail_fast: bool = False,
@@ -316,30 +316,38 @@ def migrate(
     ),
     recurse: bool = typer.Option(True, "--recurse", "-r", help="Recurse directories when searching for files"),
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
-    preserve_structure: bool = typer.Option(True, "--preserve-structure", help="Preserve original directory structure"),
-    backup_originals: bool = typer.Option(True, "--backup", help="Create backup of original files"),
+    preserve_structure: bool = typer.Option(
+        True, "--preserve-structure", help="Preserve original directory structure", is_flag=True
+    ),
+    backup_originals: bool = typer.Option(
+        False, "--backup", "-b", help="Create backup of original files", is_flag=True
+    ),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
-    quiet: bool = typer.Option(
-        True, "--quiet", help="Suppress informational logging (keeps warnings/errors). Default: True"
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be done without making changes", is_flag=True
     ),
     posix: bool = typer.Option(
-        False, "--posix", help="Force POSIX-style path separators (use forward slashes) in CLI output"
+        False, "--posix", help="Force POSIX-style path separators (use forward slashes) in CLI output", is_flag=True
     ),
     diff: bool = typer.Option(
-        False, "--diff", help="When used with --dry-run, show unified diffs instead of the full converted code"
+        False,
+        "--diff",
+        help="When used with --dry-run, show unified diffs instead of the full converted code",
+        is_flag=True,
     ),
-    list_files: bool = typer.Option(False, "--list", help="When used with --dry-run, list files only (no code shown)"),
-    fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop on first error"),
-    # Note: max_workers/--workers removed from CLI; parallelism is not exposed
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    generate_report: bool = typer.Option(True, "--report", help="Generate migration report"),
+    list_files: bool = typer.Option(
+        False, "--list", help="When used with --dry-run, list files only (no code shown)", is_flag=True
+    ),
+    fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop on first error", is_flag=True),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable informational logging output", is_flag=True),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug logging output", is_flag=True),
+    generate_report: bool = typer.Option(False, "--report", help="Generate migration report", is_flag=True),
     report_format: str = typer.Option("json", "--report-format", help="Format for migration report"),
     test_method_prefixes: list[str] = typer.Option(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
     parametrize: bool = typer.Option(
-        False, "--parametrize", help="Attempt conservative subTest -> parametrize conversions"
+        False, "--parametrize", help="Attempt conservative subTest -> parametrize conversions", is_flag=True
     ),
     suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
     ext: str | None = typer.Option(
@@ -364,12 +372,12 @@ def migrate(
         backup_originals: When True create backups of original files prior to overwriting.
         line_length: Maximum line length used by code formatters.
         dry_run: When True, do not write files; return generated code in result metadata.
-        quiet: Suppress informational logging on stdout.
+        debug: Enable debug-level logging output.
         posix: Format displayed file paths using POSIX separators when True.
         diff: When used with --dry-run, show unified diffs rather than full code output.
         list_files: When used with --dry-run, list files only (no code shown).
         fail_fast: Stop processing on the first encountered error.
-        verbose: Enable verbose logging.
+        verbose: Enable verbose info logging.
         generate_report: Whether to create a migration report.
         report_format: Report output format (e.g. ``json``).
         test_method_prefixes: Allowed test method prefixes.
@@ -377,7 +385,21 @@ def migrate(
         suffix: Suffix appended to target filename stem.
         ext: Optional override for output file extension.
     """
-    setup_logging(verbose)
+    # Validate mutually exclusive flags: verbose and debug cannot be used together
+    if verbose and debug:
+        typer.echo("Error: --verbose and --debug cannot be used together.")
+        raise typer.Exit(code=2)
+
+    # quiet is implicit (default True) unless verbose is set
+    quiet = not bool(verbose)
+
+    # Ensure verbose unsets quiet
+    if verbose:
+        quiet = False
+
+    if not quiet:
+        setup_logging(debug)
+
     set_quiet_mode(quiet)
 
     try:
