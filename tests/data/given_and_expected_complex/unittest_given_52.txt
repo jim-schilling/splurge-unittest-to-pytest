@@ -1,0 +1,394 @@
+"""Complex unittest example with subTest for API response validation."""
+import unittest
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+
+class HttpMethod(Enum):
+    """HTTP methods."""
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+
+
+class StatusCode(Enum):
+    """HTTP status codes."""
+    OK = 200
+    CREATED = 201
+    NO_CONTENT = 204
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    INTERNAL_ERROR = 500
+
+
+@dataclass
+class ApiResponse:
+    """Mock API response."""
+    status_code: int
+    headers: dict[str, str]
+    body: dict[str, Any] | None
+    
+    @property
+    def is_success(self) -> bool:
+        """Check if response is successful."""
+        return 200 <= self.status_code < 300
+
+
+class ApiClient:
+    """Mock API client."""
+    
+    def __init__(self) -> None:
+        self._resources: dict[str, dict[str, Any]] = {}
+        self._next_id: int = 1
+    
+    def request(
+        self,
+        method: HttpMethod,
+        endpoint: str,
+        data: dict[str, Any] | None = None
+    ) -> ApiResponse:
+        """Make API request."""
+        if method == HttpMethod.GET:
+            return self._handle_get(endpoint)
+        elif method == HttpMethod.POST:
+            return self._handle_post(endpoint, data)
+        elif method == HttpMethod.PUT:
+            return self._handle_put(endpoint, data)
+        elif method == HttpMethod.DELETE:
+            return self._handle_delete(endpoint)
+        elif method == HttpMethod.PATCH:
+            return self._handle_patch(endpoint, data)
+        
+        return ApiResponse(
+            status_code=StatusCode.BAD_REQUEST.value,
+            headers={"Content-Type": "application/json"},
+            body={"error": "Invalid method"}
+        )
+    
+    def _handle_get(self, endpoint: str) -> ApiResponse:
+        """Handle GET request."""
+        if endpoint.startswith("/resources/"):
+            resource_id = endpoint.split("/")[-1]
+            if resource_id in self._resources:
+                return ApiResponse(
+                    status_code=StatusCode.OK.value,
+                    headers={"Content-Type": "application/json"},
+                    body=self._resources[resource_id]
+                )
+            return ApiResponse(
+                status_code=StatusCode.NOT_FOUND.value,
+                headers={"Content-Type": "application/json"},
+                body={"error": "Resource not found"}
+            )
+        
+        return ApiResponse(
+            status_code=StatusCode.OK.value,
+            headers={"Content-Type": "application/json"},
+            body={"resources": list(self._resources.values())}
+        )
+    
+    def _handle_post(self, endpoint: str, data: dict[str, Any] | None) -> ApiResponse:
+        """Handle POST request."""
+        if not data:
+            return ApiResponse(
+                status_code=StatusCode.BAD_REQUEST.value,
+                headers={"Content-Type": "application/json"},
+                body={"error": "Missing data"}
+            )
+        
+        resource_id = str(self._next_id)
+        self._next_id += 1
+        resource = {"id": resource_id, **data}
+        self._resources[resource_id] = resource
+        
+        return ApiResponse(
+            status_code=StatusCode.CREATED.value,
+            headers={"Content-Type": "application/json", "Location": f"/resources/{resource_id}"},
+            body=resource
+        )
+    
+    def _handle_put(self, endpoint: str, data: dict[str, Any] | None) -> ApiResponse:
+        """Handle PUT request."""
+        resource_id = endpoint.split("/")[-1]
+        if resource_id not in self._resources:
+            return ApiResponse(
+                status_code=StatusCode.NOT_FOUND.value,
+                headers={"Content-Type": "application/json"},
+                body={"error": "Resource not found"}
+            )
+        
+        self._resources[resource_id] = {"id": resource_id, **(data or {})}
+        return ApiResponse(
+            status_code=StatusCode.OK.value,
+            headers={"Content-Type": "application/json"},
+            body=self._resources[resource_id]
+        )
+    
+    def _handle_patch(self, endpoint: str, data: dict[str, Any] | None) -> ApiResponse:
+        """Handle PATCH request."""
+        resource_id = endpoint.split("/")[-1]
+        if resource_id not in self._resources:
+            return ApiResponse(
+                status_code=StatusCode.NOT_FOUND.value,
+                headers={"Content-Type": "application/json"},
+                body={"error": "Resource not found"}
+            )
+        
+        self._resources[resource_id].update(data or {})
+        return ApiResponse(
+            status_code=StatusCode.OK.value,
+            headers={"Content-Type": "application/json"},
+            body=self._resources[resource_id]
+        )
+    
+    def _handle_delete(self, endpoint: str) -> ApiResponse:
+        """Handle DELETE request."""
+        resource_id = endpoint.split("/")[-1]
+        if resource_id not in self._resources:
+            return ApiResponse(
+                status_code=StatusCode.NOT_FOUND.value,
+                headers={"Content-Type": "application/json"},
+                body={"error": "Resource not found"}
+            )
+        
+        del self._resources[resource_id]
+        return ApiResponse(
+            status_code=StatusCode.NO_CONTENT.value,
+            headers={},
+            body=None
+        )
+
+
+class TestApiClientEndpoints(unittest.TestCase):
+    """Test API client with various endpoint scenarios using subTest."""
+    
+    def setUp(self) -> None:
+        """Set up test API client."""
+        self.client = ApiClient()
+    
+    def test_http_methods_on_same_resource(self) -> None:
+        """Test different HTTP methods on the same resource lifecycle."""
+        test_scenarios = [
+            {
+                "method": HttpMethod.POST,
+                "endpoint": "/resources",
+                "data": {"name": "Test Resource", "value": 100},
+                "expected_status": StatusCode.CREATED.value,
+                "expected_body_keys": ["id", "name", "value"],
+                "description": "Create resource with POST"
+            },
+            {
+                "method": HttpMethod.GET,
+                "endpoint": "/resources/1",
+                "data": None,
+                "expected_status": StatusCode.OK.value,
+                "expected_body_keys": ["id", "name", "value"],
+                "description": "Read created resource with GET"
+            },
+            {
+                "method": HttpMethod.PATCH,
+                "endpoint": "/resources/1",
+                "data": {"value": 200},
+                "expected_status": StatusCode.OK.value,
+                "expected_body_contains": {"value": 200},
+                "description": "Partially update resource with PATCH"
+            },
+            {
+                "method": HttpMethod.PUT,
+                "endpoint": "/resources/1",
+                "data": {"name": "Updated Resource", "value": 300},
+                "expected_status": StatusCode.OK.value,
+                "expected_body_contains": {"name": "Updated Resource", "value": 300},
+                "description": "Fully update resource with PUT"
+            },
+            {
+                "method": HttpMethod.DELETE,
+                "endpoint": "/resources/1",
+                "data": None,
+                "expected_status": StatusCode.NO_CONTENT.value,
+                "description": "Delete resource with DELETE"
+            },
+            {
+                "method": HttpMethod.GET,
+                "endpoint": "/resources/1",
+                "data": None,
+                "expected_status": StatusCode.NOT_FOUND.value,
+                "description": "Verify resource deleted with GET"
+            },
+        ]
+        
+        for i, scenario in enumerate(test_scenarios):
+            with self.subTest(step=i, description=scenario["description"]):
+                response = self.client.request(
+                    scenario["method"],
+                    scenario["endpoint"],
+                    scenario.get("data")
+                )
+                
+                self.assertEqual(response.status_code, scenario["expected_status"])
+                
+                if "expected_body_keys" in scenario:
+                    self.assertIsNotNone(response.body)
+                    for key in scenario["expected_body_keys"]:
+                        self.assertIn(key, response.body)
+                
+                if "expected_body_contains" in scenario:
+                    self.assertIsNotNone(response.body)
+                    for key, value in scenario["expected_body_contains"].items():
+                        self.assertEqual(response.body[key], value)
+    
+    def test_error_conditions_and_edge_cases(self) -> None:
+        """Test various error conditions and edge cases."""
+        # Create a resource first for some tests
+        self.client.request(
+            HttpMethod.POST,
+            "/resources",
+            {"name": "Existing Resource"}
+        )
+        
+        error_scenarios = [
+            {
+                "method": HttpMethod.GET,
+                "endpoint": "/resources/999",
+                "data": None,
+                "expected_status": StatusCode.NOT_FOUND.value,
+                "should_have_error": True,
+                "description": "GET non-existent resource"
+            },
+            {
+                "method": HttpMethod.POST,
+                "endpoint": "/resources",
+                "data": None,
+                "expected_status": StatusCode.BAD_REQUEST.value,
+                "should_have_error": True,
+                "description": "POST without data"
+            },
+            {
+                "method": HttpMethod.PUT,
+                "endpoint": "/resources/999",
+                "data": {"name": "Test"},
+                "expected_status": StatusCode.NOT_FOUND.value,
+                "should_have_error": True,
+                "description": "PUT to non-existent resource"
+            },
+            {
+                "method": HttpMethod.PATCH,
+                "endpoint": "/resources/999",
+                "data": {"name": "Test"},
+                "expected_status": StatusCode.NOT_FOUND.value,
+                "should_have_error": True,
+                "description": "PATCH non-existent resource"
+            },
+            {
+                "method": HttpMethod.DELETE,
+                "endpoint": "/resources/999",
+                "data": None,
+                "expected_status": StatusCode.NOT_FOUND.value,
+                "should_have_error": True,
+                "description": "DELETE non-existent resource"
+            },
+        ]
+        
+        for scenario in error_scenarios:
+            with self.subTest(description=scenario["description"]):
+                response = self.client.request(
+                    scenario["method"],
+                    scenario["endpoint"],
+                    scenario.get("data")
+                )
+                
+                self.assertEqual(response.status_code, scenario["expected_status"])
+                self.assertFalse(response.is_success)
+                
+                if scenario["should_have_error"]:
+                    self.assertIsNotNone(response.body)
+                    self.assertIn("error", response.body)
+    
+    def test_bulk_operations_with_multiple_resources(self) -> None:
+        """Test creating and managing multiple resources."""
+        bulk_test_cases = [
+            {
+                "operation": "create_multiple",
+                "resources": [
+                    {"name": "Resource A", "priority": 1},
+                    {"name": "Resource B", "priority": 2},
+                    {"name": "Resource C", "priority": 3},
+                ],
+                "verify_count": 3,
+                "description": "Create three resources"
+            },
+            {
+                "operation": "update_all",
+                "updates": [
+                    ("1", {"status": "active"}),
+                    ("2", {"status": "pending"}),
+                    ("3", {"status": "inactive"}),
+                ],
+                "description": "Update all resources with different statuses"
+            },
+            {
+                "operation": "delete_selective",
+                "delete_ids": ["2"],
+                "remaining_ids": ["1", "3"],
+                "description": "Delete middle resource, verify others remain"
+            },
+        ]
+        
+        created_ids = []
+        
+        for test_case in bulk_test_cases:
+            with self.subTest(operation=test_case["description"]):
+                if test_case["operation"] == "create_multiple":
+                    for resource_data in test_case["resources"]:
+                        response = self.client.request(
+                            HttpMethod.POST,
+                            "/resources",
+                            resource_data
+                        )
+                        self.assertEqual(response.status_code, StatusCode.CREATED.value)
+                        self.assertIsNotNone(response.body)
+                        created_ids.append(response.body["id"])
+                    
+                    # Verify count via GET all
+                    list_response = self.client.request(HttpMethod.GET, "/resources")
+                    self.assertEqual(list_response.status_code, StatusCode.OK.value)
+                    self.assertEqual(
+                        len(list_response.body["resources"]),
+                        test_case["verify_count"]
+                    )
+                
+                elif test_case["operation"] == "update_all":
+                    for resource_id, updates in test_case["updates"]:
+                        response = self.client.request(
+                            HttpMethod.PATCH,
+                            f"/resources/{resource_id}",
+                            updates
+                        )
+                        self.assertEqual(response.status_code, StatusCode.OK.value)
+                        self.assertIsNotNone(response.body)
+                        self.assertEqual(response.body["status"], updates["status"])
+                
+                elif test_case["operation"] == "delete_selective":
+                    for resource_id in test_case["delete_ids"]:
+                        response = self.client.request(
+                            HttpMethod.DELETE,
+                            f"/resources/{resource_id}"
+                        )
+                        self.assertEqual(response.status_code, StatusCode.NO_CONTENT.value)
+                    
+                    # Verify remaining resources exist
+                    for resource_id in test_case["remaining_ids"]:
+                        response = self.client.request(
+                            HttpMethod.GET,
+                            f"/resources/{resource_id}"
+                        )
+                        self.assertEqual(response.status_code, StatusCode.OK.value)
+
+
+if __name__ == "__main__":
+    unittest.main()
