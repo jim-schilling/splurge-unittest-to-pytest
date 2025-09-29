@@ -1,0 +1,11 @@
+import pytest
+
+
+class T:
+    def test_raise(self, subtests):
+        try:
+            with pytest.raises(ValueError):
+                int("x")
+        except Exception:
+            with subtests.test():
+                assert True

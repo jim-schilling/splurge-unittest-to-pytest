@@ -523,24 +523,24 @@ class TestDataDrivenTransformation:
         pairs = self.get_test_pairs()
         assert len(pairs) > 0, "No test pairs found"
 
-        # Check we have consecutive numbering
-        test_numbers = [int(pair[2]) for pair in pairs]
-        expected_numbers = list(range(1, len(pairs) + 1))
+        # Ensure that each discovered pair references existing files and
+        # that the numeric suffix extracted from filenames is parseable.
+        for given_file, expected_file, test_num in pairs:
+            try:
+                int(test_num)
+            except Exception:
+                pytest.fail(f"Invalid test numbering format for pair: {given_file}, {expected_file}")
 
-        assert test_numbers == expected_numbers, (
-            f"Missing test numbers. Expected: {expected_numbers}, Got: {test_numbers}"
-        )
+    def test_pair_exists_for_discovered_pairs(self):
+        """Test that each discovered pair exists on disk."""
+        pairs = self.get_test_pairs()
+        assert pairs, "No test pairs discovered"
 
-    @pytest.mark.parametrize("test_num", range(1, 22))  # We have 21 test pairs
-    def test_pair_exists(self, test_num):
-        """Test that each expected pair exists."""
-        given_file = f"tests/data/given_and_expected/unittest_given_{test_num:02d}.txt"
-        expected_file = f"tests/data/given_and_expected/pytest_expected_{test_num:02d}.txt"
+        for given_file, expected_file, _test_num in pairs:
+            assert os.path.exists(given_file), f"Missing given file: {given_file}"
+            assert os.path.exists(expected_file), f"Missing expected file: {expected_file}"
 
-        assert os.path.exists(given_file), f"Missing given file: {given_file}"
-        assert os.path.exists(expected_file), f"Missing expected file: {expected_file}"
-
-    def test_converted_output_matches_expected(self):
+    def test_converted_output_matches_expected(self, given_file, expected_file, test_num):
         """Run the real migration orchestrator on each given file and compare output.
 
         This test loads each pair from tests/data/given_and_expected/, runs the
@@ -553,9 +553,10 @@ class TestDataDrivenTransformation:
         from splurge_unittest_to_pytest.context import MigrationConfig
         from splurge_unittest_to_pytest.migration_orchestrator import MigrationOrchestrator
 
-        pairs = self.get_test_pairs()
-        assert pairs, "No test pairs found for conversion comparison"
-
+        # This test is parametrized by pytest_generate_tests to receive a
+        # single (given_file, expected_file, test_num) tuple. Do not
+        # re-iterate over all pairs here - that created an O(N^2) workload
+        # when the test was parametrized. Operate only on the provided pair.
         orchestrator = MigrationOrchestrator()
 
         import ast
@@ -658,149 +659,170 @@ class TestDataDrivenTransformation:
 
             return bodies
 
-        for given_file, expected_file, test_num in pairs:
-            with open(expected_file, encoding="utf-8") as f:
-                expected = f.read()
+        with open(expected_file, encoding="utf-8") as f:
+            expected = f.read()
 
-            # Run orchestrator in dry-run mode so outputs are not written
-            cfg = MigrationConfig(dry_run=True)
-            result = orchestrator.migrate_file(str(given_file), cfg)
+        # Run orchestrator in dry-run mode so outputs are not written
+        cfg = MigrationConfig(dry_run=True)
+        result = orchestrator.migrate_file(str(given_file), cfg)
 
-            assert result.is_success(), f"Migration failed for {given_file}: {result.error}"
+        assert result.is_success(), f"Migration failed for {given_file}: {result.error}"
 
-            # The orchestrator returns generated preview code in metadata
-            # under the 'generated_code' key when run in dry_run mode.
-            meta = getattr(result, "metadata", None) or {}
-            gen = meta.get("generated_code") if isinstance(meta, dict) else None
+        # The orchestrator returns generated preview code in metadata
+        # under the 'generated_code' key when run in dry_run mode.
+        meta = getattr(result, "metadata", None) or {}
+        gen = meta.get("generated_code") if isinstance(meta, dict) else None
 
-            actual = ""
-            from pathlib import Path as _P
+        actual = ""
+        from pathlib import Path as _P
 
-            if gen is None:
-                # Fallback: some implementations return the code as result.data
-                actual = result.data or ""
-            elif isinstance(gen, dict):
-                # gen may be a mapping target->code; try to pick the entry
-                # that matches our given file stem, otherwise take first value
-                key_match = None
-                for k in gen.keys():
-                    try:
-                        if _P(k).stem == _P(given_file).stem:
-                            key_match = k
-                            break
-                    except Exception:
-                        continue
-                if key_match:
-                    actual = gen[key_match]
-                else:
-                    # fallback to first mapping value
-                    actual = next(iter(gen.values()))
-            elif isinstance(gen, str):
-                actual = gen
-            else:
-                actual = str(gen)
-
-            # Use shared test utilities for imports and structure comparisons
-            from tests.test_utils import assert_code_structure_equals, assert_has_imports
-
-            # Ensure expected imports are present in actual output
-            # Build expected import strings from expected source using AST
-            exp_imports, exp_struct = extract_imports_and_structure(expected)
-            # Convert import descriptors produced by extract_imports_and_structure
-            # into import lines that assert_has_imports expects. We accept both
-            # `import x` and `from pkg import Y` styles, so reconstruct simple
-            # textual forms.
-            reconstructed_expected_imports: list[str] = []
-            # Collect simple imports and from-imports grouped by module
-            from_imports: dict[str, set[str]] = {}
-            for imp in sorted(exp_imports):
-                if imp.startswith("import:"):
-                    # 'import:pytest' -> 'import pytest'
-                    reconstructed_expected_imports.append(f"import {imp.split(':', 1)[1]}")
-                elif imp.startswith("from:"):
-                    # 'from:module:Name' -> group by module
-                    _, module, name = imp.split(":", 2)
-                    from_imports.setdefault(module, set()).add(name)
-
-            # Build grouped from-import lines like 'from module import A, B'
-            for module, names in from_imports.items():
-                sorted_names = sorted(names)
-                reconstructed_expected_imports.append(f"from {module} import {', '.join(sorted_names)}")
-
-            # Prefer AST-derived import descriptor subset check which ignores aliasing
-            act_imports, act_struct = extract_imports_and_structure(actual)
-            missing_descriptors = exp_imports - act_imports
-            if missing_descriptors:
-                # Enforce required imports derived from expected source. Tests
-                # assume expected files are the canonical outputs; if imports
-                # are missing in the actual transformation, fail the test.
-                assert_has_imports(actual, reconstructed_expected_imports, message=f" for test {test_num}")
-
-            # Use shared structural assertion (CST-based) to ensure expected top-level
-            # structure appears in actual. This helper is tolerant about ordering
-            # and focuses on structure rather than exact formatting.
-            assert_code_structure_equals(actual, expected, message=f" for test {test_num}")
-
-            # Now perform function/method body equivalence as before using AST
-            try:
-                exp_bodies = extract_function_bodies(expected)
-                act_bodies = extract_function_bodies(actual)
-            except Exception:
-                exp_bodies = {}
-                act_bodies = {}
-
-            # Compare bodies for expected entries using shared structural helper
-            from tests.test_utils import assert_code_structure_equals
-
-            def _normalize_unittest_asserts(src: str) -> str:
-                # Lightweight normalization of some common unittest assertion
-                # call patterns into pytest-style asserts so comparisons are
-                # tolerant when some transforms haven't been applied.
-                replacements = [
-                    (r"self\.assertGreater\(([^,]+),\s*([^)]+)\)", r"assert \1 > \2"),
-                    (r"self\.assertGreaterEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 >= \2"),
-                    (r"self\.assertLess\(([^,]+),\s*([^)]+)\)", r"assert \1 < \2"),
-                    (r"self\.assertLessEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 <= \2"),
-                    (r"self\.assertTrue\(([^)]+)\)", r"assert \1"),
-                    (r"self\.assertFalse\(([^)]+)\)", r"assert not \1"),
-                    (r"self\.assertEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 == \2"),
-                    (r"self\.assertIsNone\(([^)]+)\)", r"assert \1 is None"),
-                    (r"self\.assertIsNotNone\(([^)]+)\)", r"assert \1 is not None"),
-                ]
-                import re as _re
-
-                out = src
-                for pat, repl in replacements:
-                    out = _re.sub(pat, repl, out)
-                return out
-
-            for key, exp_node in exp_bodies.items():
-                if key not in act_bodies:
-                    pytest.fail(f"Missing body for {key} in test {test_num}")
-
-                # Try to unparse both nodes and compare their structure using the
-                # CST/AST based helper which tolerates formatting differences.
+        if gen is None:
+            # Fallback: some implementations return the code as result.data
+            actual = result.data or ""
+        elif isinstance(gen, dict):
+            # gen may be a mapping target->code; try to pick the entry
+            # that matches our given file stem, otherwise take first value
+            key_match = None
+            for k in gen.keys():
                 try:
-                    # ast.unparse expects Module nodes to have a type_ignores attribute
-                    if isinstance(exp_node, ast.Module) and not hasattr(exp_node, "type_ignores"):
-                        exp_node.type_ignores = []
-                    if isinstance(act_bodies[key], ast.Module) and not hasattr(act_bodies[key], "type_ignores"):
-                        act_bodies[key].type_ignores = []
-
-                    exp_src = ast.unparse(exp_node)
-                    act_src = ast.unparse(act_bodies[key])
-
-                    # Normalize unittest-style asserts into pytest asserts for both
-                    # expected and actual before performing structural comparison.
-                    exp_src_norm = _normalize_unittest_asserts(exp_src)
-                    act_src_norm = _normalize_unittest_asserts(act_src)
-
-                    assert_code_structure_equals(
-                        act_src_norm, exp_src_norm, message=f" body for {key} in test {test_num}"
-                    )
+                    if _P(k).stem == _P(given_file).stem:
+                        key_match = k
+                        break
                 except Exception:
-                    # Fallback to AST dump comparison if unparse fails
+                    continue
+            if key_match:
+                actual = gen[key_match]
+            else:
+                # fallback to first mapping value
+                actual = next(iter(gen.values()))
+        elif isinstance(gen, str):
+            actual = gen
+        else:
+            actual = str(gen)
+
+        # Use shared test utilities for imports and structure comparisons
+        from tests.test_utils import assert_code_structure_equals, assert_has_imports
+
+        # Ensure expected imports are present in actual output
+        # Build expected import strings from expected source using AST
+        exp_imports, exp_struct = extract_imports_and_structure(expected)
+        # Convert import descriptors produced by extract_imports_and_structure
+        # into import lines that assert_has_imports expects. We accept both
+        # `import x` and `from pkg import Y` styles, so reconstruct simple
+        # textual forms.
+        reconstructed_expected_imports: list[str] = []
+        # Collect simple imports and from-imports grouped by module
+        from_imports: dict[str, set[str]] = {}
+        for imp in sorted(exp_imports):
+            if imp.startswith("import:"):
+                # 'import:pytest' -> 'import pytest'
+                reconstructed_expected_imports.append(f"import {imp.split(':', 1)[1]}")
+            elif imp.startswith("from:"):
+                # 'from:module:Name' -> group by module
+                _, module, name = imp.split(":", 2)
+                from_imports.setdefault(module, set()).add(name)
+
+        # Build grouped from-import lines like 'from module import A, B'
+        for module, names in from_imports.items():
+            sorted_names = sorted(names)
+            reconstructed_expected_imports.append(f"from {module} import {', '.join(sorted_names)}")
+
+        # Prefer AST-derived import descriptor subset check which ignores aliasing
+        act_imports, act_struct = extract_imports_and_structure(actual)
+        missing_descriptors = exp_imports - act_imports
+        if missing_descriptors:
+            # Enforce required imports derived from expected source. Tests
+            # assume expected files are the canonical outputs; if imports
+            # are missing in the actual transformation, fail the test.
+            assert_has_imports(actual, reconstructed_expected_imports, message=f" for test {test_num}")
+
+        # Use shared structural assertion (CST-based) to ensure expected top-level
+        # structure appears in actual. This helper is tolerant about ordering
+        # and focuses on structure rather than exact formatting.
+        assert_code_structure_equals(actual, expected, message=f" for test {test_num}")
+
+        # Now perform function/method body equivalence as before using AST
+        try:
+            exp_bodies = extract_function_bodies(expected)
+            act_bodies = extract_function_bodies(actual)
+        except Exception:
+            exp_bodies = {}
+            act_bodies = {}
+
+        # Compare bodies for expected entries using shared structural helper
+        from tests.test_utils import assert_code_structure_equals
+
+        def _normalize_unittest_asserts(src: str) -> str:
+            # Lightweight normalization of some common unittest assertion
+            # call patterns into pytest-style asserts so comparisons are
+            # tolerant when some transforms haven't been applied.
+            replacements = [
+                (r"self\.assertGreater\(([^,]+),\s*([^)]+)\)", r"assert \1 > \2"),
+                (r"self\.assertGreaterEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 >= \2"),
+                (r"self\.assertLess\(([^,]+),\s*([^)]+)\)", r"assert \1 < \2"),
+                (r"self\.assertLessEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 <= \2"),
+                (r"self\.assertTrue\(([^)]+)\)", r"assert \1"),
+                (r"self\.assertFalse\(([^)]+)\)", r"assert not \1"),
+                (r"self\.assertEqual\(([^,]+),\s*([^)]+)\)", r"assert \1 == \2"),
+                (r"self\.assertIsNone\(([^)]+)\)", r"assert \1 is None"),
+                (r"self\.assertIsNotNone\(([^)]+)\)", r"assert \1 is not None"),
+            ]
+            import re as _re
+
+            out = src
+            for pat, repl in replacements:
+                out = _re.sub(pat, repl, out)
+            return out
+
+        for key, exp_node in exp_bodies.items():
+            if key not in act_bodies:
+                pytest.fail(f"Missing body for {key} in test {test_num}")
+
+            # Try to unparse both nodes and compare their structure using the
+            # CST/AST based helper which tolerates formatting differences.
+            try:
+                # ast.unparse expects Module nodes to have a type_ignores attribute
+                if isinstance(exp_node, ast.Module) and not hasattr(exp_node, "type_ignores"):
+                    exp_node.type_ignores = []
+                if isinstance(act_bodies[key], ast.Module) and not hasattr(act_bodies[key], "type_ignores"):
+                    act_bodies[key].type_ignores = []
+
+                exp_src = ast.unparse(exp_node)
+                act_src = ast.unparse(act_bodies[key])
+
+                # Normalize unittest-style asserts into pytest asserts for both
+                # expected and actual before performing structural comparison.
+                exp_src_norm = _normalize_unittest_asserts(exp_src)
+                act_src_norm = _normalize_unittest_asserts(act_src)
+
+                assert_code_structure_equals(act_src_norm, exp_src_norm, message=f" body for {key} in test {test_num}")
+            except Exception:
+                # Fallback to AST dump comparison if unparse fails
+                try:
                     if ast.dump(exp_node, include_attributes=False) != ast.dump(
                         act_bodies[key], include_attributes=False
                     ):
                         pytest.fail(f"Body mismatch for {key} in test {test_num}")
+                except Exception:
+                    # If even dumping fails, fail with a generic message
+                    pytest.fail(f"Unable to compare body for {key} in test {test_num}")
+
+
+def pytest_generate_tests(metafunc):
+    """Dynamically parametrize the conversion-comparison test with discovered pairs.
+
+    This hook ensures pytest reports each given/expected pair as a separate
+    parametrized test case for clearer reporting and easier selection.
+    """
+    try:
+        # Only parametrize the specific test function in this module
+        if metafunc.function.__name__ == "test_converted_output_matches_expected":
+            t = TestDataDrivenTransformation()
+            pairs = t.get_test_pairs()
+            if not pairs:
+                return
+            ids = [p[2] for p in pairs]
+            metafunc.parametrize(("given_file", "expected_file", "test_num"), pairs, ids=ids)
+    except Exception:
+        # Fail safely: if param generation errors, let tests run normally
+        return

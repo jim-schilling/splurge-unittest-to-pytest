@@ -246,7 +246,24 @@ def assert_code_structure_equals(actual: str, expected: str, message: str = "") 
     Raises:
         AssertionError: If the code structures don't match
     """
-    # Try CST-based comparison first
+    # Fast paths to avoid expensive CST parsing when possible
+    # 1) Exact text match after trimming - common when regeneration created same output
+    if actual.strip() == expected.strip():
+        return
+
+    # 2) AST structural equality - much cheaper than full CST analysis and
+    #    catches cases where formatting differs but structure is identical.
+    try:
+        actual_tree = ast.parse(actual)
+        expected_tree = ast.parse(expected)
+        # Use ast.dump without attributes for a quick structural compare
+        if ast.dump(actual_tree, include_attributes=False) == ast.dump(expected_tree, include_attributes=False):
+            return
+    except Exception:
+        # If parsing fails, fall back to more expensive CST-based comparison below
+        pass
+
+    # Try CST-based comparison as a more precise, but heavier, analysis
     try:
         actual_structure = _normalize_code_structure_cst(actual)
         expected_structure = _normalize_code_structure_cst(expected)

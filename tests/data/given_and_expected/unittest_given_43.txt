@@ -1,0 +1,14 @@
+import unittest
+
+
+class T(unittest.TestCase):
+    @classmethod
+    def test_cls(cls):
+        with cls.subTest():
+            cls.assertTrue(True)
+
+    @staticmethod
+    def test_static():
+        # invalid usage of self in staticmethod should be left alone
+        with self.subTest():
+            assert True

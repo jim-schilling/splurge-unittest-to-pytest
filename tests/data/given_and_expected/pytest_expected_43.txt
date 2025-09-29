@@ -1,0 +1,14 @@
+import pytest
+
+
+class T:
+    @classmethod
+    def test_cls(cls, subtests):
+        with subtests.test():
+            assert True
+
+    @staticmethod
+    def test_static(subtests):
+        # invalid usage of self in staticmethod should be left alone
+        with subtests.test():
+            assert True

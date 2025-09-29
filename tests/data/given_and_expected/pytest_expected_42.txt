@@ -1,0 +1,10 @@
+import re
+
+import pytest
+
+
+class T:
+    def test_regex(self, subtests):
+        for a, b in [("a1", "a"), ("b2", "b")]:
+            with subtests.test(a=a, b=b):
+                assert re.search(r"[a-z]\d", a)
