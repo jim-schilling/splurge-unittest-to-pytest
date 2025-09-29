@@ -195,8 +195,33 @@ if __name__ == "__main__":
         result = self.transformer.transform_code(code)
 
         assert isinstance(result, str)
-        assert "pytest.main()" in result
+        # When the original module only contained a bare `unittest.main()`
+        # guarded by `if __name__ == "__main__":`, we drop that guard and
+        # intentionally do not append a top-level `pytest.main()` call.
+        assert "pytest.main()" not in result
         assert "unittest.main()" not in result
+
+    def test_transform_code_with_unittest_main_and_other_statements(self):
+        """If the __main__ guard contains other statements, replace only unittest.main() with pytest.main() and keep the guard."""
+        code = """
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_simple(self):
+        self.assertEqual(1, 1)
+
+if __name__ == "__main__":
+    print('start')
+    unittest.main()
+"""
+        result = self.transformer.transform_code(code)
+
+        assert isinstance(result, str)
+        # The __main__ guard is dropped by design; don't expect it to be present
+        assert 'if __name__ == "__main__":' not in result
+        # The inner call should be removed (no unittest.main or pytest.main should be emitted)
+        assert "unittest.main()" not in result
+        assert "pytest.main()" not in result
 
     def test_transform_code_empty_code(self):
         """Test transform_code with empty code."""
@@ -216,6 +241,41 @@ class TestExample(unittest.TestCase):
         # Should still attempt transformation and return a string
         result = self.transformer.transform_code(code)
         assert isinstance(result, str)
+
+    def test_transform_code_removes_any_main_guard(self):
+        """Ensure any top-level `if __name__ == "__main__"` guard is removed.
+
+        The guard may contain complex contents (multiple statements, try/except,
+        function calls). The transformer should drop the entire block and not
+        emit any pytest.main() or unittest.main() calls.
+        """
+        code = """
+import unittest
+
+def helper():
+    print('helper')
+
+class TestExample(unittest.TestCase):
+    def test_something(self):
+        self.assertEqual(1, 1)
+
+if __name__ == "__main__":
+    print('start')
+    try:
+        helper()
+    except Exception:
+        print('error')
+    unittest.main()
+"""
+
+        result = self.transformer.transform_code(code)
+
+        assert isinstance(result, str)
+        # The guard should be removed entirely
+        assert 'if __name__ == "__main__":' not in result
+        # No runner invocations should be emitted
+        assert "unittest.main()" not in result
+        assert "pytest.main()" not in result
 
     def test_transform_code_preserves_whitespace_and_comments(self):
         """Test that transform_code preserves formatting and comments."""

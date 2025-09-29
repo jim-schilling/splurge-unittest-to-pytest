@@ -22,6 +22,8 @@ if transf.replacement_registry.replacements:
 else:
     applied = transformed1
     print("--- no replacements recorded ---")
+
+
 class RemainingWithRewriter(cst.CSTTransformer):
     def leave_With(self, original: cst.With, updated: cst.With) -> cst.With:
         try:

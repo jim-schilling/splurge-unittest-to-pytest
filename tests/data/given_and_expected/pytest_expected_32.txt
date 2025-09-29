@@ -25,4 +25,3 @@ def test_already_pytest_style():
     assert 1 + 1 == 2
 
 
-pytest.main()

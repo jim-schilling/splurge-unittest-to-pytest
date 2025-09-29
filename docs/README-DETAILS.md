@@ -133,7 +133,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``-r, --recurse / --no-recurse``: Recurse directories (default: recurse).
 - ``-t, --target-dir DIR``: Directory to write outputs.
 - ``--preserve-structure / --no-preserve-structure``: Preserve original directory layout (default: preserve).
-- ``--backup / --no-backup``: Create a ``.backup`` copy of originals when writing (default: backup).
+ - ``--backup``: Create a ``.backup`` copy of originals when writing (presence-only flag; default: off).
 - ``--line-length N``: Max line length used by formatters (default: 120).
 - ``--dry-run``: Do not write files; return or display generated output.
 	- With ``--dry-run --diff``: show unified diffs.
@@ -141,7 +141,15 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``--ext EXT``: Override the target file extension.
 - ``--suffix SUFFIX``: Append suffix to target filename stem when writing.
 - ``--fail-fast``: Stop on first error (default: off).
-- ``-v, --verbose``: Verbose logging.
+ - ``-v, --verbose``: Verbose logging (presence-only flag). Note: ``--verbose`` and ``--quiet`` are mutually exclusive; do not pass both.
+ - ``--dry-run``: Do not write files; return or display generated output (presence-only flag).
+	 - With ``--dry-run --diff``: show unified diffs (``--diff`` is presence-only).
+	 - With ``--dry-run --list``: list files only (``--list`` is presence-only).
+ - ``--diff``: Show unified diffs in dry-run mode (presence-only flag).
+ - ``--list``: List files only in dry-run mode (presence-only flag).
+ - ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
+ - ``--fail-fast``: Stop on first error (presence-only flag).
+ - ``--parametrize``: Attempt conservative subTest -> parametrize conversions (presence-only flag).
 - ``--report / --no-report``: Generate a migration report (default: on).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
 - ``--config FILE``: Load configuration from YAML file.
@@ -206,6 +214,17 @@ Safety and limitations
 	project tests after migration. The tool aims to be conservative and
 	preserve behavior, but automated transformations require manual
 	verification in complex cases.
+
+Note on top-level __main__ guards and runtime test invocations
+------------------------------------------------------------
+
+- The transformer removes top-level ``if __name__ == "__main__":`` guard
+	blocks and any top-level calls to ``unittest.main()`` or ``pytest.main()``.
+	This avoids emitting runtime test-invocation code in transformed files.
+	The expectation is that tests are executed via the command line or a
+	test runner (for example, ``pytest``). If you need to preserve these
+	guards for runnable transformed files, please open an issue or feature
+	request — there is no preservation option in the current release.
 
 Developer notes
 ---------------

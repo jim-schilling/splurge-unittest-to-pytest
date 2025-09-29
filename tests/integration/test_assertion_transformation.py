@@ -266,7 +266,10 @@ if __name__ == "__main__":
 
         # Verify unittest references are transformed
         assert "unittest.TestCase" not in transformed
-        assert "pytest.main()" in transformed  # unittest.main() should be transformed to pytest.main()
+        # When the original file only had a bare unittest.main() guarded by
+        # `if __name__ == "__main__":` we intentionally do not append a
+        # top-level pytest.main() in the transformed output.
+        assert "pytest.main()" not in transformed
 
         # Verify original assertions are gone
         assert "self.assertEqual" not in transformed
