@@ -15,7 +15,14 @@ import typer
 
 from . import main as main_module
 from .context import MigrationConfig
-from .events import EventBus, LoggingSubscriber
+from .events import (
+    EventBus,
+    LoggingSubscriber,
+    PipelineCompletedEvent,
+    PipelineStartedEvent,
+    StepCompletedEvent,
+    StepStartedEvent,
+)
 from .pipeline import PipelineFactory
 
 # Initialize typer app
@@ -94,6 +101,43 @@ def create_event_bus() -> EventBus:
     event_bus = EventBus()
     LoggingSubscriber(event_bus)  # Configure logging subscriber
     return event_bus
+
+
+def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None:
+    """Attach simple progress-printing handlers to the event bus.
+
+    Handlers print compact progress updates to stdout using typer.echo.
+    They are intentionally lightweight and will be no-ops when ``not verbose`` is
+    True so the CLI's verbose mode is respected.
+    """
+    if not verbose:
+        return
+
+    def _on_pipeline_started(event: PipelineStartedEvent) -> None:
+        from pathlib import Path
+
+        try:
+            src = Path(event.context.source_file)
+            tgt = Path(event.context.target_file)
+            typer.echo(f"Pipeline started: {src} -> {tgt} (run_id={event.run_id})")
+        except Exception:
+            typer.echo(f"Pipeline started (run_id={event.run_id})")
+
+    def _on_step_started(event: StepStartedEvent) -> None:
+        typer.echo(f"  -> Step: {event.step_name} ({event.step_type})")
+
+    def _on_step_completed(event: StepCompletedEvent) -> None:
+        status = event.result.status.name if hasattr(event.result, "status") else "UNKNOWN"
+        typer.echo(f"     Completed: {event.step_name} [{status}] in {event.duration_ms:.2f}ms")
+
+    def _on_pipeline_completed(event: PipelineCompletedEvent) -> None:
+        status = "SUCCESS" if event.final_result.is_success() else "FAILED"
+        typer.echo(f"Pipeline completed: {status} in {event.duration_ms:.2f}ms")
+
+    event_bus.subscribe(PipelineStartedEvent, _on_pipeline_started)
+    event_bus.subscribe(StepStartedEvent, _on_step_started)
+    event_bus.subscribe(StepCompletedEvent, _on_step_completed)
+    event_bus.subscribe(PipelineCompletedEvent, _on_pipeline_completed)
 
 
 def create_config(
@@ -339,7 +383,8 @@ def migrate(
         False, "--list", help="When used with --dry-run, list files only (no code shown)", is_flag=True
     ),
     fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop on first error", is_flag=True),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable informational logging output", is_flag=True),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output", is_flag=True),
+    info: bool = typer.Option(False, "--info", help="Enable info logging output", is_flag=True),
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging output", is_flag=True),
     generate_report: bool = typer.Option(False, "--report", help="Generate migration report", is_flag=True),
     report_format: str = typer.Option("json", "--report-format", help="Format for migration report"),
@@ -386,25 +431,20 @@ def migrate(
         ext: Optional override for output file extension.
     """
     # Validate mutually exclusive flags: verbose and debug cannot be used together
-    if verbose and debug:
-        typer.echo("Error: --verbose and --debug cannot be used together.")
+    if info and debug:
+        typer.echo("Error: --info and --debug cannot be used together.")
         raise typer.Exit(code=2)
 
-    # quiet is implicit (default True) unless verbose is set
-    quiet = not bool(verbose)
-
-    # Ensure verbose unsets quiet
-    if verbose:
-        quiet = False
-
-    if not quiet:
+    if debug or info:
         setup_logging(debug)
 
-    set_quiet_mode(quiet)
+    set_quiet_mode(debug or info)
 
     try:
         # Create event bus
         event_bus = create_event_bus()
+        # Attach lightweight progress handlers that print to stdout when not quiet
+        attach_progress_handlers(event_bus, verbose=verbose)
 
         # Create configuration
         config = create_config(

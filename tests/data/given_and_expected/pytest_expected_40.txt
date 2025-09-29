@@ -1,0 +1,8 @@
+import pytest
+
+
+class T:
+    def test_nested(self, subtests):
+        for i in [1, 2]:
+            with subtests.test(i=i):
+                assert str(i) == str(i)

@@ -1,0 +1,9 @@
+import unittest
+import re
+
+
+class T(unittest.TestCase):
+    def test_regex(self):
+        for a, b in [("a1","a"), ("b2","b")]:
+            with self.subTest(a=a, b=b):
+                self.assertRegex(a, r"[a-z]\d")

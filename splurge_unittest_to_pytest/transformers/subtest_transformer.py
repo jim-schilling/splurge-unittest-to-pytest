@@ -115,15 +115,38 @@ def convert_simple_subtests_to_parametrize(
                 return None
             param_name = arg_expr.value
         else:
+            # keyword form: subTest(key=name) where name should refer to
+            # one of the loop target variables. Support single-name targets
+            # and tuple-unpacking targets (e.g. "for a, b in ..."). When the
+            # loop target is a tuple we create a multi-parameter string
+            # for pytest ("a,b") and expect the iter values to be tuples.
             if not isinstance(single_arg.keyword, cst.Name):
                 return None
             kw_name = single_arg.keyword.value
             arg_expr = single_arg.value
             if not isinstance(arg_expr, cst.Name):
                 return None
-            if not isinstance(first.target, cst.Name) or arg_expr.value != first.target.value:
+
+            # Handle simple single-name target
+            if isinstance(first.target, cst.Name):
+                if arg_expr.value != first.target.value:
+                    return None
+                param_name = kw_name
+            # Handle tuple-unpacking target
+            elif isinstance(first.target, cst.Tuple):
+                # Collect names from the tuple target
+                tuple_names: list[str] = []
+                for el in first.target.elements:
+                    if not isinstance(el, cst.Element) or not isinstance(el.value, cst.Name):
+                        return None
+                    tuple_names.append(el.value.value)
+                # The subTest should reference one of the unpacked names
+                if arg_expr.value not in tuple_names:
+                    return None
+                # Parametrize should include all unpacked names in order
+                param_name = ",".join(tuple_names)
+            else:
                 return None
-            param_name = kw_name
 
         inner_body = inner.body
         if not isinstance(inner_body, cst.IndentedBlock) or len(inner_body.body) < 1:
@@ -238,8 +261,12 @@ def convert_simple_subtests_to_parametrize(
 
         new_decorators = [new_decorator] + existing_decorators
 
-        if not isinstance(first.target, cst.Name) or first.target.value != param_name:
-            return None
+        # If the loop target is a single name and we used the positional
+        # form above ensure it matches the param_name. When the loop target
+        # is a tuple we already validated compatibility above.
+        if isinstance(first.target, cst.Name):
+            if first.target.value != param_name:
+                return None
 
         new_body = cst.IndentedBlock(body=list(inner_body.body))
         new_func = updated_func.with_changes(decorators=new_decorators, body=new_body)
@@ -284,17 +311,62 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                         out.append(new_with)
                         continue
 
+        # Handle statements that have an indented body (If, For, While, Try,
+        # FunctionDef, ClassDef, etc.) by converting their inner blocks.
         if hasattr(stmt, "body") and isinstance(stmt.body, cst.IndentedBlock):
             inner_block = stmt.body
             converted = convert_subtests_in_body(inner_block.body)
             new_block = inner_block.with_changes(body=converted)
             try:
+                # For simple cases this will return a new statement with the
+                # updated body (works for If, For, While, Try, with the
+                # exception of Try handlers which we handle below).
                 new_stmt = stmt.with_changes(body=new_block)  # type: ignore[arg-type]
-                out.append(new_stmt)
-                continue
             except Exception:
-                out.append(stmt)
-                continue
+                new_stmt = stmt
+
+            # Special-case Try: we must also convert handler bodies,
+            # orelse, and finalbody which are not reachable via simple
+            # `with_changes(body=...)` above.
+            if isinstance(stmt, cst.Try):
+                # convert handlers
+                new_handlers: list[cst.ExceptHandler] = []
+                for h in getattr(stmt, "handlers", []) or []:
+                    h_body = getattr(h, "body", None)
+                    if isinstance(h_body, cst.IndentedBlock):
+                        converted_h = convert_subtests_in_body(h_body.body)
+                        new_h = h.with_changes(body=h_body.with_changes(body=converted_h))
+                    else:
+                        new_h = h
+                    new_handlers.append(new_h)
+
+                # convert orelse and finalbody
+                orelse_block = getattr(stmt, "orelse", None)
+                final_block = getattr(stmt, "finalbody", None)
+                if isinstance(orelse_block, cst.BaseSuite):
+                    converted_orelse = convert_subtests_in_body(getattr(orelse_block, "body", []))
+                    new_orelse = orelse_block.with_changes(body=converted_orelse)
+                else:
+                    new_orelse = orelse_block
+
+                if isinstance(final_block, cst.BaseSuite):
+                    converted_final = convert_subtests_in_body(getattr(final_block, "body", []))
+                    new_final = final_block.with_changes(body=converted_final)
+                else:
+                    new_final = final_block
+
+                try:
+                    new_try = stmt.with_changes(
+                        body=new_block, handlers=new_handlers, orelse=new_orelse, finalbody=new_final
+                    )
+                    out.append(new_try)
+                    continue
+                except Exception:
+                    out.append(new_stmt)
+                    continue
+
+            out.append(new_stmt)
+            continue
 
         out.append(stmt)
 
@@ -312,15 +384,64 @@ def body_uses_subtests(statements: Sequence[cst.CSTNode]) -> bool:
         otherwise ``False``.
     """
 
-    for stmt in statements:
-        if isinstance(stmt, cst.With):
-            for item in stmt.items:
-                if isinstance(item.item, cst.Call) and isinstance(item.item.func, cst.Attribute):
-                    func = item.item.func
-                    if isinstance(func.value, cst.Name) and func.value.value == "subtests":
-                        if func.attr.value == "test":
+    def _walk(stmts: Sequence[cst.CSTNode]) -> bool:
+        for s in stmts:
+            # Direct With nodes
+            if isinstance(s, cst.With):
+                for item in s.items:
+                    if isinstance(item.item, cst.Call) and isinstance(item.item.func, cst.Attribute):
+                        func = item.item.func
+                        if isinstance(func.value, cst.Name) and func.value.value == "subtests":
+                            if func.attr.value == "test":
+                                return True
+                # check nested body
+                body = getattr(s.body, "body", [])
+                if _walk(body):
+                    return True
+
+            # If statements: check body and orelse
+            if isinstance(s, cst.If):
+                if _walk(getattr(s.body, "body", [])):
+                    return True
+                # orelse can be an IndentedBlock, SimpleStatementSuite, or another If (elif)
+                orelse = getattr(s, "orelse", None)
+                if orelse:
+                    # orelse may be a list of nodes in SimpleStatementSuite or an IndentedBlock
+                    if isinstance(orelse, cst.BaseSuite):
+                        if _walk(getattr(orelse, "body", [])):
                             return True
-    return False
+
+            # For/While loops: check body and orelse
+            if isinstance(s, cst.For | cst.While):
+                if _walk(getattr(s.body, "body", [])):
+                    return True
+                orelse = getattr(s, "orelse", None)
+                if orelse and isinstance(orelse, cst.BaseSuite):
+                    if _walk(getattr(orelse, "body", [])):
+                        return True
+
+            # Try: check body, handlers, orelse, finalbody
+            if isinstance(s, cst.Try):
+                if _walk(getattr(s.body, "body", [])):
+                    return True
+                for h in getattr(s, "handlers", []) or []:
+                    if _walk(getattr(h.body, "body", [])):
+                        return True
+                if _walk(getattr(s.orelse, "body", []) if getattr(s, "orelse", None) else []):
+                    return True
+                if _walk(getattr(s.finalbody, "body", []) if getattr(s, "finalbody", None) else []):
+                    return True
+
+            # SimpleStatementLine may contain nested statements (rare) - inspect inner statements
+            if isinstance(s, cst.SimpleStatementLine):
+                for inner in getattr(s, "body", []) or []:
+                    # some inner nodes might be With/If/etc.
+                    if _walk([inner]):
+                        return True
+
+        return False
+
+    return _walk(statements)
 
 
 def ensure_subtests_param(func: cst.FunctionDef) -> cst.FunctionDef:

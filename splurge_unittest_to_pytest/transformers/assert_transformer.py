@@ -586,11 +586,6 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         # Build WithItem if this call maps to a known context (warns/raises/logs)
         with_item = build_with_item_from_assert_call(expr)
         if not with_item:
-            # DEBUG: couldn't build with_item from bare call
-            try:
-                print(f"DEBUG: handle_bare_assert_call - no with_item for expr={expr!r}")
-            except Exception:
-                pass
             return [], 0, False
 
         # Determine next statement (or None)

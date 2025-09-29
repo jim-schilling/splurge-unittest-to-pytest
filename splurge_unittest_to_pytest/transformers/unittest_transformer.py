@@ -572,6 +572,16 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             pass
         # after recursive rewrite in function (silent)
 
+        # Ensure subtests param is present if any rewrite introduced subtests.test
+        # Use pure-AST detection via body_uses_subtests which was updated to
+        # recursively inspect nested statements produced by helper rewrites.
+        try:
+            if body_uses_subtests(getattr(result_node.body, "body", [])):
+                result_node = ensure_subtests_param(result_node)
+        except Exception:
+            # be conservative on failures
+            pass
+
         # Pop function stack if we tracked it
         if self._function_stack:
             try:
