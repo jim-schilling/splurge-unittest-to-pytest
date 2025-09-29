@@ -1,11 +1,124 @@
 def test_case_helper_tuple_unpacking_converts_to_parametrize():
     """Ensure the real-world example in tests/tmp/test_case_helper.py converts to parametrize."""
-    from pathlib import Path
+    import textwrap
 
     from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
 
-    p = Path("tests/tmp/test_case_helper.py")
-    src = p.read_text(encoding="utf-8")
+    # The real test fixture file lives under tests/tmp/ (gitignored). To make
+    # this unit test self-contained and deterministic we embed the source here
+    # directly so the test does not depend on a gitignored file.
+    src = textwrap.dedent(
+        '''
+    import unittest
+
+    from splurge_tools.case_helper import CaseHelper
+
+
+    class TestCaseHelper(unittest.TestCase):
+        """Test cases for CaseHelper class."""
+
+        def test_to_train(self):
+            """Test train case conversion."""
+            test_cases = [
+                ("hello world", "Hello-World"),
+                ("HELLO WORLD", "Hello-World"),
+                ("hello-world", "Hello-World"),
+                ("hello_world", "Hello-World"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_train(input_str) == expected
+
+        def test_to_sentence(self):
+            """Test sentence case conversion."""
+            test_cases = [
+                ("hello world", "Hello world"),
+                ("HELLO WORLD", "Hello world"),
+                ("hello-world", "Hello world"),
+                ("hello_world", "Hello world"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_sentence(input_str) == expected
+
+        def test_to_camel(self):
+            """Test camel case conversion."""
+            test_cases = [
+                ("hello world", "helloWorld"),
+                ("HELLO WORLD", "helloWorld"),
+                ("hello-world", "helloWorld"),
+                ("hello_world", "helloWorld"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_camel(input_str) == expected
+
+        def test_to_snake(self):
+            """Test snake case conversion."""
+            test_cases = [
+                ("hello world", "hello_world"),
+                ("HELLO WORLD", "hello_world"),
+                ("hello-world", "hello_world"),
+                ("HelloWorld", "helloworld"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_snake(input_str) == expected
+
+        def test_to_kebab(self):
+            """Test kebab case conversion."""
+            test_cases = [
+                ("hello world", "hello-world"),
+                ("HELLO WORLD", "hello-world"),
+                ("hello_world", "hello-world"),
+                ("HelloWorld", "helloworld"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_kebab(input_str) == expected
+
+        def test_to_pascal(self):
+            """Test pascal case conversion."""
+            test_cases = [
+                ("hello world", "HelloWorld"),
+                ("HELLO WORLD", "HelloWorld"),
+                ("hello-world", "HelloWorld"),
+                ("hello_world", "HelloWorld"),
+                ("", ""),
+            ]
+            for input_str, expected in test_cases:
+                with self.subTest(input_str=input_str):
+                    assert CaseHelper.to_pascal(input_str) == expected
+
+        def test_handle_empty_values(self):
+            """Test that empty values are handled correctly by the decorator."""
+            # Test None values
+            assert CaseHelper.to_train(None) == ""
+            assert CaseHelper.to_sentence(None) == ""
+            assert CaseHelper.to_camel(None) == ""
+            assert CaseHelper.to_snake(None) == ""
+            assert CaseHelper.to_kebab(None) == ""
+            assert CaseHelper.to_pascal(None) == ""
+
+            # Test empty strings
+            assert CaseHelper.to_train("") == ""
+            assert CaseHelper.to_sentence("") == ""
+            assert CaseHelper.to_camel("") == ""
+            assert CaseHelper.to_snake("") == ""
+            assert CaseHelper.to_kebab("") == ""
+            assert CaseHelper.to_pascal("") == ""
+
+            # Test whitespace-only strings (should not be considered empty)
+            assert CaseHelper.to_train("   ") == "---"
+            assert CaseHelper.to_sentence("   ") == "   "
+
+    '''
+    )
 
     transformer = UnittestToPytestCstTransformer(parametrize=True)
     out = transformer.transform_code(src)
