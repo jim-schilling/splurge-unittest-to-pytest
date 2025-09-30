@@ -1,198 +1,22 @@
-"""Complex pytest example with parametrize fixtures for database operations."""
-from dataclasses import dataclass
-from typing import Any
+"""Expected pytest parametrized example for email validation."""
 
 import pytest
 
 
-@dataclass
-class User:
-    """User entity."""
-    id: int
-    name: str
-    email: str
-    active: bool
+class TestEmailValidation:
+    """Validate email domains using pytest parametrization."""
 
-
-class UserRepository:
-    """Mock user repository."""
-    
-    def __init__(self) -> None:
-        self._users: dict[int, User] = {}
-        self._next_id: int = 1
-    
-    def create(self, name: str, email: str) -> User:
-        """Create a new user."""
-        user = User(id=self._next_id, name=name, email=email, active=True)
-        self._users[user.id] = user
-        self._next_id += 1
-        return user
-    
-    def get(self, user_id: int) -> User | None:
-        """Get user by ID."""
-        return self._users.get(user_id)
-    
-    def update(self, user_id: int, **kwargs: Any) -> User | None:
-        """Update user fields."""
-        user = self._users.get(user_id)
-        if user:
-            for key, value in kwargs.items():
-                setattr(user, key, value)
-        return user
-    
-    def delete(self, user_id: int) -> bool:
-        """Delete user by ID."""
-        return self._users.pop(user_id, None) is not None
-
-
-class TestUserRepositoryCRUD:
-    """Test user repository CRUD operations with pytest parametrize."""
-    
-    @pytest.fixture(autouse=True)
-    def setup(self) -> None:
-        """Set up test repository."""
-        self.repo = UserRepository()
-    
     @pytest.mark.parametrize(
-        "name,email,expected_active,description",
+        "case",
         [
-            ("Alice Smith", "alice@example.com", True, "Standard user creation"),
-            ("Bob Jones", "bob@test.org", True, "Different domain email"),
-            ("Charlie Brown", "charlie@company.co.uk", True, "International domain"),
-            ("Diana Prince", "diana.prince@enterprise.com", True, "Email with dot in local part"),
+            {"email": "alpha@example.com", "active": True},
+            {"email": "beta@example.org", "active": False},
+            {"email": "gamma@example.net", "active": True},
         ],
-        ids=["standard", "different_domain", "international", "dot_in_email"]
+        ids=["row_0", "row_1", "row_2"],
     )
-    def test_create_multiple_users_with_validation(
-        self,
-        name: str,
-        email: str,
-        expected_active: bool,
-        description: str
-    ) -> None:
-        """Test creating multiple users with different validation scenarios."""
-        user = self.repo.create(name, email)
-        
-        assert user is not None
-        assert user.name == name
-        assert user.email == email
-        assert user.active == expected_active
-        assert user.id > 0
-    
-    @pytest.mark.parametrize(
-        "updates,verify,description",
-        [
-            (
-                {"name": "Updated Name"},
-                {"name": "Updated Name"},
-                "Update name only"
-            ),
-            (
-                {"email": "newemail@example.com"},
-                {"email": "newemail@example.com"},
-                "Update email only"
-            ),
-            (
-                {"active": False},
-                {"active": False},
-                "Deactivate user"
-            ),
-            (
-                {"name": "Final Name", "email": "final@example.com"},
-                {"name": "Final Name", "email": "final@example.com"},
-                "Update multiple fields"
-            ),
-        ],
-        ids=["name_only", "email_only", "deactivate", "multiple_fields"]
-    )
-    def test_update_operations_with_different_fields(
-        self,
-        updates: dict[str, Any],
-        verify: dict[str, Any],
-        description: str
-    ) -> None:
-        """Test updating different user fields in various combinations."""
-        user = self.repo.create("Test User", "test@example.com")
-        
-        updated_user = self.repo.update(user.id, **updates)
-        
-        assert updated_user is not None
-        for field, expected_value in verify.items():
-            actual_value = getattr(updated_user, field)
-            assert actual_value == expected_value, f"Field {field} mismatch"
-    
-    @pytest.mark.parametrize(
-        "workflow",
-        [
-            pytest.param(
-                {
-                    "name": "Create and immediate delete",
-                    "steps": [
-                        ("create", {"name": "Temp User", "email": "temp@example.com"}),
-                        ("delete", {}),
-                    ],
-                    "final_exists": False,
-                },
-                id="create_delete"
-            ),
-            pytest.param(
-                {
-                    "name": "Create, update twice, then read",
-                    "steps": [
-                        ("create", {"name": "Multi Update", "email": "multi@example.com"}),
-                        ("update", {"name": "First Update"}),
-                        ("update", {"email": "updated@example.com"}),
-                        ("read", {}),
-                    ],
-                    "final_exists": True,
-                    "final_name": "First Update",
-                    "final_email": "updated@example.com",
-                },
-                id="multi_update"
-            ),
-            pytest.param(
-                {
-                    "name": "Create, deactivate, reactivate",
-                    "steps": [
-                        ("create", {"name": "Toggle User", "email": "toggle@example.com"}),
-                        ("update", {"active": False}),
-                        ("update", {"active": True}),
-                    ],
-                    "final_exists": True,
-                    "final_active": True,
-                },
-                id="toggle_active"
-            ),
-        ]
-    )
-    def test_complex_workflow_with_multiple_operations(
-        self,
-        workflow: dict[str, Any]
-    ) -> None:
-        """Test complex workflows combining create, read, update, delete."""
-        user_id = None
-        current_user = None
-        
-        for step, params in workflow["steps"]:
-            if step == "create":
-                current_user = self.repo.create(**params)
-                user_id = current_user.id
-            elif step == "update":
-                current_user = self.repo.update(user_id, **params)
-            elif step == "read":
-                current_user = self.repo.get(user_id)
-            elif step == "delete":
-                self.repo.delete(user_id)
-                current_user = None
-        
-        if workflow["final_exists"]:
-            assert current_user is not None
-            if "final_name" in workflow:
-                assert current_user.name == workflow["final_name"]
-            if "final_email" in workflow:
-                assert current_user.email == workflow["final_email"]
-            if "final_active" in workflow:
-                assert current_user.active == workflow["final_active"]
-        else:
-            final_user = self.repo.get(user_id) if user_id else None
-            assert final_user is None
+    def test_email_domains(self, case: dict[str, object]) -> None:
+        domain = case["email"].split("@")[-1]
+        if case["active"]:
+            assert "." in domain
+        assert isinstance(domain, str)

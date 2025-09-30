@@ -76,7 +76,10 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
 
             # Use full transform_code to include assertion replacements and imports
             transformer = UnittestToPytestCstTransformer(
-                test_prefixes=context.config.test_method_prefixes, parametrize=effective_parametrize
+                test_prefixes=context.config.test_method_prefixes,
+                parametrize=effective_parametrize,
+                parametrize_include_ids=context.config.parametrize_ids,
+                parametrize_add_annotations=context.config.parametrize_type_hints,
             )
             source_code: str = module.code
             transformed_code: str = transformer.transform_code(source_code)

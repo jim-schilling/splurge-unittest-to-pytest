@@ -107,7 +107,13 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         :mod:`fixture_transformer`, and :mod:`subtest_transformer`.
     """
 
-    def __init__(self, test_prefixes: list[str] | None = None, parametrize: bool = False) -> None:
+    def __init__(
+        self,
+        test_prefixes: list[str] | None = None,
+        parametrize: bool = False,
+        parametrize_include_ids: bool | None = None,
+        parametrize_add_annotations: bool | None = None,
+    ) -> None:
         self.needs_pytest_import = False
         # Track whether our transforms require `re` and any alias used in the file
         self.needs_re_import = False
@@ -135,6 +141,11 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         self.test_prefixes: list[str] = (test_prefixes or ["test"]) or ["test"]
         # Whether to attempt conservative subTest -> parametrize transforms
         self.parametrize = parametrize
+        # Parametrize configuration knobs exposed to helper modules
+        self.parametrize_include_ids = parametrize_include_ids if parametrize_include_ids is not None else False
+        self.parametrize_add_annotations = (
+            parametrize_add_annotations if parametrize_add_annotations is not None else False
+        )
         # Replacement registry for two-pass metadata-based replacements
         self.replacement_registry = ReplacementRegistry()
         # Debugging flag to enable verbose internal tracing
