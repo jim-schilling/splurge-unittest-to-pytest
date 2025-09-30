@@ -9,10 +9,10 @@ return ``None`` (or the original node) so callers can safely fall back
 to leaving the source unchanged.
 
 These helpers handle common parser shapes produced by ``libcst`` such
-as :class:`libcst.Comparison`, :class:`libcst.ParenthesizedExpression`,
-:class:`libcst.BooleanOperation`, and :class:`libcst.UnaryOperation`.
-They try to rewrite inner comparisons, walk into parenthesized or
-unary wrappers, and recursively visit boolean operations. Consumers
+as :class:`libcst.Comparison`, :class:`libcst.BooleanOperation`, and
+:class:`libcst.UnaryOperation`. They track explicit parentheses via
+``lpar``/``rpar`` metadata, rewrite inner comparisons, walk into
+parenthesized or unary wrappers, and recursively visit boolean operations. Consumers
 should prefer the conservative behavior: return ``None`` when a
 transformation cannot be performed precisely.
 
@@ -20,11 +20,269 @@ Only docstrings and comments were clarified in this module; no runtime
 behavior is changed by the updates in this patch.
 """
 
+from dataclasses import dataclass
 from typing import cast
 
 import libcst as cst
 
 # Debug collector removed; transformations should be silent in normal runs
+
+
+@dataclass(frozen=True)
+class AliasOutputAccess:
+    """Represents access to ``<alias>.output`` with optional subscripts."""
+
+    alias_name: str
+    slices: tuple[cst.SubscriptElement, ...]
+
+
+@dataclass(frozen=True)
+class ParenthesizedExpression:
+    """Capture parentheses metadata attached to an expression node."""
+
+    has_parentheses: bool
+    lpar: tuple[cst.LeftParen, ...]
+    rpar: tuple[cst.RightParen, ...]
+
+    def strip(self, expr: cst.BaseExpression) -> cst.BaseExpression:
+        """Return ``expr`` without wrapping parentheses when they were present."""
+
+        if not self.has_parentheses or not hasattr(expr, "with_changes"):
+            return expr
+
+        updates: dict[str, tuple[object, ...]] = {}
+        if hasattr(expr, "lpar"):
+            updates["lpar"] = ()
+        if hasattr(expr, "rpar"):
+            updates["rpar"] = ()
+
+        return expr.with_changes(**updates) if updates else expr
+
+    def restore(self, expr: cst.BaseExpression) -> cst.BaseExpression:
+        """Apply the original parentheses metadata to ``expr`` when desired."""
+
+        if not self.has_parentheses or not hasattr(expr, "with_changes"):
+            return expr
+
+        updates: dict[str, tuple[object, ...]] = {}
+        if hasattr(expr, "lpar"):
+            updates["lpar"] = self.lpar
+        if hasattr(expr, "rpar"):
+            updates["rpar"] = self.rpar
+
+        return expr.with_changes(**updates) if updates else expr
+
+
+def parenthesized_expression(expr: cst.BaseExpression) -> ParenthesizedExpression:
+    """Return a helper capturing parentheses metadata for ``expr``."""
+
+    lpar = tuple(getattr(expr, "lpar", ()))
+    rpar = tuple(getattr(expr, "rpar", ()))
+    return ParenthesizedExpression(has_parentheses=bool(lpar or rpar), lpar=lpar, rpar=rpar)
+
+
+def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
+    """Return alias/output access details when ``expr`` targets ``<alias>.output``."""
+
+    slices: list[cst.SubscriptElement] = []
+    current: cst.BaseExpression = expr
+
+    while isinstance(current, cst.Subscript):
+        slices.insert(0, current.slice)
+        current = cast(cst.BaseExpression, current.value)
+
+    if (
+        isinstance(current, cst.Attribute)
+        and isinstance(current.value, cst.Name)
+        and isinstance(current.attr, cst.Name)
+        and current.attr.value == "output"
+    ):
+        return AliasOutputAccess(alias_name=current.value.value, slices=tuple(slices))
+
+    return None
+
+
+def _build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
+    """Construct ``caplog.records`` expression with the original slices applied."""
+
+    base: cst.BaseExpression = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+    for slice_item in access.slices:
+        base = cst.Subscript(value=cast(cst.BaseExpression, base), slice=slice_item)
+    return base
+
+
+def _build_get_message_call(access: AliasOutputAccess) -> cst.Call:
+    """Construct ``caplog.records[...].getMessage()`` call for the provided access."""
+
+    return cst.Call(
+        func=cst.Attribute(value=_build_caplog_records_expr(access), attr=cst.Name(value="getMessage")),
+        args=[],
+    )
+
+
+def _rewrite_length_comparison(
+    comp_node: cst.Comparison,
+    alias_name: str,
+) -> cst.Comparison | None:
+    """Rewrite ``len(<alias>.output...)`` comparisons to ``len(caplog.records...)``."""
+
+    left = comp_node.left
+    if isinstance(left, cst.Call) and isinstance(left.func, cst.Name) and left.func.value == "len" and left.args:
+        arg0 = left.args[0].value
+        access = _extract_alias_output_slices(arg0)
+        if access is not None and access.alias_name == alias_name:
+            new_arg = _build_caplog_records_expr(access)
+            new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
+            return comp_node.with_changes(left=new_left)
+
+    return None
+
+
+def _rewrite_membership_comparison(
+    comp_node: cst.Comparison,
+    alias_name: str,
+) -> cst.Comparison | None:
+    """Rewrite membership checks against ``<alias>.output`` to ``getMessage()`` calls."""
+
+    new_targets: list[cst.ComparisonTarget] = []
+    changed = False
+
+    for target in comp_node.comparisons:
+        if isinstance(target.operator, cst.In):
+            access = _extract_alias_output_slices(cast(cst.BaseExpression, target.comparator))
+            if access is not None and access.alias_name == alias_name:
+                new_targets.append(
+                    cst.ComparisonTarget(operator=target.operator, comparator=_build_get_message_call(access))
+                )
+                changed = True
+                continue
+
+        new_targets.append(target)
+
+    if changed:
+        return comp_node.with_changes(comparisons=new_targets)
+
+    return None
+
+
+def _rewrite_equality_comparison(
+    comp_node: cst.Comparison,
+    alias_name: str,
+) -> cst.Comparison | None:
+    """Rewrite equality checks touching ``<alias>.output`` to pytest-friendly expressions."""
+
+    changed = False
+    new_left = comp_node.left
+    left_access = None
+
+    if isinstance(new_left, cst.Subscript | cst.Attribute):
+        left_access = _extract_alias_output_slices(cast(cst.BaseExpression, new_left))
+    if left_access is not None and left_access.alias_name == alias_name:
+        if isinstance(new_left, cst.Subscript):
+            new_left = _build_get_message_call(left_access)
+        else:
+            new_left = _build_caplog_records_expr(left_access)
+        changed = True
+
+    new_targets: list[cst.ComparisonTarget] = []
+    for target in comp_node.comparisons:
+        comparator = target.comparator
+        if isinstance(target.operator, cst.Equal) and isinstance(comparator, cst.Subscript | cst.Attribute):
+            access = _extract_alias_output_slices(cast(cst.BaseExpression, comparator))
+            if access is not None and access.alias_name == alias_name:
+                if isinstance(comparator, cst.Subscript):
+                    comparator = _build_get_message_call(access)
+                else:
+                    comparator = _build_caplog_records_expr(access)
+                target = target.with_changes(comparator=comparator)
+                changed = True
+        new_targets.append(target)
+
+    if changed:
+        return comp_node.with_changes(left=new_left, comparisons=new_targets)
+
+    return None
+
+
+def _rewrite_comparison(comp_node: cst.Comparison, alias_name: str) -> cst.Comparison | None:
+    """Apply all comparison rewrite helpers and return the updated node when changes occur."""
+
+    rewritten = comp_node
+    changed = False
+
+    for rewriter in (
+        _rewrite_length_comparison,
+        _rewrite_membership_comparison,
+        _rewrite_equality_comparison,
+    ):
+        candidate = rewriter(rewritten, alias_name)
+        if candidate is not None:
+            rewritten = candidate
+            changed = True
+
+    return rewritten if changed else None
+
+
+def _rewrite_unary_operation(unary: cst.UnaryOperation, alias_name: str) -> cst.UnaryOperation | None:
+    """Rewrite unary operations that reference ``<alias>.output`` inside their expressions."""
+
+    inner = unary.expression
+
+    try:
+        rewritten_inner = _rewrite_expression(inner, alias_name)
+    except Exception:
+        rewritten_inner = None
+
+    if rewritten_inner is not None:
+        if isinstance(inner, cst.Comparison):
+            parens = parenthesized_expression(inner)
+            comparison_result = cast(cst.Comparison, rewritten_inner)
+            if len(inner.comparisons) == 1 and isinstance(inner.comparisons[0].operator, cst.In):
+                comparator_expr = cast(cst.BaseExpression, comparison_result.comparisons[0].comparator)
+                return unary.with_changes(expression=parens.strip(comparator_expr))
+            rewritten_inner = parens.strip(comparison_result)
+        return unary.with_changes(expression=rewritten_inner)
+
+    if not isinstance(inner, cst.Comparison):
+        return None
+
+    rewritten_comp = _rewrite_comparison(inner, alias_name)
+    if rewritten_comp is None:
+        return None
+
+    parens = parenthesized_expression(inner)
+    if len(rewritten_comp.comparisons) == 1 and isinstance(rewritten_comp.comparisons[0].operator, cst.In):
+        comparator_expr = cast(cst.BaseExpression, rewritten_comp.comparisons[0].comparator)
+        return unary.with_changes(expression=parens.strip(comparator_expr))
+
+    stripped = parens.strip(rewritten_comp)
+    return unary.with_changes(expression=stripped)
+
+
+def _rewrite_expression(expr: cst.BaseExpression, alias_name: str) -> cst.BaseExpression | None:
+    """Recursively rewrite expressions that reference ``<alias>.output``."""
+
+    if isinstance(expr, cst.Comparison):
+        parens = parenthesized_expression(expr)
+        rewritten = _rewrite_comparison(expr, alias_name)
+        if rewritten is not None:
+            return parens.restore(rewritten)
+        return None
+
+    if isinstance(expr, cst.BooleanOperation):
+        new_left = _rewrite_expression(expr.left, alias_name)
+        new_right = _rewrite_expression(expr.right, alias_name)
+        if new_left is not None or new_right is not None:
+            return expr.with_changes(
+                left=new_left if new_left is not None else expr.left,
+                right=new_right if new_right is not None else expr.right,
+            )
+        return None
+
+    if isinstance(expr, cst.UnaryOperation):
+        return _rewrite_unary_operation(expr, alias_name)
+
+    return None
 
 
 def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
@@ -728,611 +986,12 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
     try:
         t = target_assert.test
 
-        # Helper: extract Attribute (alias.output) and list of Subscript slices from nested Subscript chains
-        def _extract_attr_and_slices(
-            expr: cst.BaseExpression,
-        ) -> tuple[cst.Attribute | None, list[cst.SubscriptElement]]:
-            slices: list[cst.SubscriptElement] = []
-            cur = expr
-            while isinstance(cur, cst.Subscript):
-                slices.insert(0, cur.slice)
-                cur = cur.value
-            if isinstance(cur, cst.Attribute):
-                return cast(cst.Attribute, cur), slices
-            return None, []
+        rewritten_test = _rewrite_expression(t, alias_name)
+        if rewritten_test is not None:
+            return target_assert.with_changes(test=rewritten_test)
 
-        # Build caplog.records with the collected slices re-applied
-        def _build_caplog_subscript(slices: list[cst.SubscriptElement]) -> cst.BaseExpression:
-            base: cst.BaseExpression = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-            for s in slices:
-                base = cst.Subscript(value=cast(cst.BaseExpression, base), slice=s)
-            return base
-
-        # Quick fallback: if test is `UnaryOperation(expression=Comparison(...))`
-        # try to rewrite the inner Comparison directly and preserve the UnaryOperation.
-        if isinstance(t, cst.UnaryOperation) and isinstance(t.expression, cst.Comparison):
-            inner_comp = t.expression
-            try:
-                # reuse comparison rewrite logic inline to avoid scoping issues
-                # len(...) on left
-                left = inner_comp.left
-                if (
-                    isinstance(left, cst.Call)
-                    and isinstance(left.func, cst.Name)
-                    and left.func.value == "len"
-                    and left.args
-                ):
-                    arg0 = left.args[0].value
-                    attr, slices = _extract_attr_and_slices(arg0)
-                    if (
-                        attr
-                        and isinstance(attr.value, cst.Name)
-                        and attr.value.value == alias_name
-                        and isinstance(attr.attr, cst.Name)
-                        and attr.attr.value == "output"
-                    ):
-                        new_arg = _build_caplog_subscript(slices)
-                        new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
-                        new_comp = inner_comp.with_changes(left=new_left)
-                        return target_assert.with_changes(test=t.with_changes(expression=new_comp))
-
-                # membership and equality
-                for comp in getattr(inner_comp, "comparisons", []):
-                    if isinstance(comp.operator, cst.In):
-                        comparator = comp.comparator
-                        attr, slices = _extract_attr_and_slices(comparator)
-                        if (
-                            attr
-                            and isinstance(attr.value, cst.Name)
-                            and attr.value.value == alias_name
-                            and isinstance(attr.attr, cst.Name)
-                            and attr.attr.value == "output"
-                        ):
-                            new_sub = _build_caplog_subscript(slices)
-                            getmsg = cst.Call(
-                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                            )
-                            new_inner = inner_comp.with_changes(
-                                comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
-                            )
-                            return target_assert.with_changes(test=t.with_changes(expression=new_inner))
-
-                # equality RHS/LHS
-                def _eq_inline(node: cst.CSTNode) -> cst.CSTNode | None:
-                    if isinstance(node, cst.Subscript):
-                        attr, slices = _extract_attr_and_slices(node)
-                        if (
-                            attr
-                            and isinstance(attr.value, cst.Name)
-                            and attr.value.value == alias_name
-                            and isinstance(attr.attr, cst.Name)
-                            and attr.attr.value == "output"
-                        ):
-                            new_sub = _build_caplog_subscript(slices)
-                            return cst.Call(
-                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                            )
-                    if isinstance(node, cst.Attribute):
-                        if (
-                            isinstance(node.value, cst.Name)
-                            and node.value.value == alias_name
-                            and isinstance(node.attr, cst.Name)
-                            and node.attr.value == "output"
-                        ):
-                            return cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                    return None
-
-                left_rewritten = _eq_inline(inner_comp.left)
-                if left_rewritten is not None:
-                    return target_assert.with_changes(
-                        test=t.with_changes(expression=inner_comp.with_changes(left=left_rewritten))
-                    )
-
-                for ct in getattr(inner_comp, "comparisons", []):
-                    if isinstance(ct.operator, cst.Equal):
-                        rhs_rewritten = _eq_inline(ct.comparator)
-                        if rhs_rewritten is not None:
-                            new_comparisons = [cst.ComparisonTarget(operator=ct.operator, comparator=rhs_rewritten)]
-                            return target_assert.with_changes(
-                                test=t.with_changes(expression=inner_comp.with_changes(comparisons=new_comparisons))
-                            )
-            except Exception:
-                pass
-
-        # Try to rewrite a single Comparison expression; returns new Comparison or None
-        def _rewrite_comparison_expr(comp_node: cst.Comparison) -> cst.Comparison | None:
-            # len(alias.output...) pattern
-            left = comp_node.left
-            if (
-                isinstance(left, cst.Call)
-                and isinstance(left.func, cst.Name)
-                and left.func.value == "len"
-                and left.args
-            ):
-                arg0 = left.args[0].value
-                attr, slices = _extract_attr_and_slices(arg0)
-                if (
-                    attr
-                    and isinstance(attr.value, cst.Name)
-                    and attr.value.value == alias_name
-                    and isinstance(attr.attr, cst.Name)
-                    and attr.attr.value == "output"
-                ):
-                    new_arg = _build_caplog_subscript(slices)
-                    new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
-                    return comp_node.with_changes(left=new_left)
-
-            # membership: 'x' in alias.output[...] pattern
-            for comp in getattr(comp_node, "comparisons", []):
-                if isinstance(comp.operator, cst.In):
-                    comparator = comp.comparator
-                    attr, slices = _extract_attr_and_slices(comparator)
-                    if (
-                        attr
-                        and isinstance(attr.value, cst.Name)
-                        and attr.value.value == alias_name
-                        and isinstance(attr.attr, cst.Name)
-                        and attr.attr.value == "output"
-                    ):
-                        new_sub = _build_caplog_subscript(slices)
-                        getmsg = cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                        return comp_node.with_changes(
-                            comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
-                        )
-
-            # equality comparisons: alias.output[...] == 'msg' or vice versa
-            def _rewrite_eq_node(node: cst.CSTNode) -> cst.CSTNode | None:
-                if isinstance(node, cst.Subscript):
-                    attr, slices = _extract_attr_and_slices(node)
-                    if (
-                        attr
-                        and isinstance(attr.value, cst.Name)
-                        and attr.value.value == alias_name
-                        and isinstance(attr.attr, cst.Name)
-                        and attr.attr.value == "output"
-                    ):
-                        new_sub = _build_caplog_subscript(slices)
-                        return cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                if isinstance(node, cst.Attribute):
-                    if (
-                        isinstance(node.value, cst.Name)
-                        and node.value.value == alias_name
-                        and isinstance(node.attr, cst.Name)
-                        and node.attr.value == "output"
-                    ):
-                        return cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                return None
-
-            left_rewritten = _rewrite_eq_node(comp_node.left)
-            if left_rewritten is not None:
-                return comp_node.with_changes(left=left_rewritten)
-
-            for ct in getattr(comp_node, "comparisons", []):
-                if isinstance(ct.operator, cst.Equal):
-                    rhs_rewritten = _rewrite_eq_node(ct.comparator)
-                    if rhs_rewritten is not None:
-                        new_comparisons = [cst.ComparisonTarget(operator=ct.operator, comparator=rhs_rewritten)]
-                        return comp_node.with_changes(comparisons=new_comparisons)
-
-            return None
-
-        # General recursive expression rewriter to support nested BooleanOperations,
-        # ParenthesizedExpressions and UnaryOperations (e.g., `not (...)`).
-        def rewrite_expr(expr: cst.BaseExpression) -> cst.BaseExpression | None:
-            # Comparison nodes: try to rewrite using existing comparison logic
-            if isinstance(expr, cst.Comparison):
-                rewritten = _rewrite_comparison_expr(expr)
-                return rewritten
-
-            # BooleanOperation: recurse into left/right and rebuild if any side changes
-            if isinstance(expr, cst.BooleanOperation):
-                left = expr.left
-                right = expr.right
-                new_left = rewrite_expr(left)
-                new_right = rewrite_expr(right)
-                if new_left is not None or new_right is not None:
-                    return expr.with_changes(
-                        left=new_left if new_left is not None else left,
-                        right=new_right if new_right is not None else right,
-                    )
-                return None
-
-            # ParenthesizedExpression: recurse into inner expression
-            if isinstance(expr, cst.ParenthesizedExpression):
-                inner = expr.expression
-                new_inner = rewrite_expr(inner)
-                if new_inner is not None:
-                    return expr.with_changes(expression=new_inner)
-                return None
-
-            # UnaryOperation: e.g., `not (<comparison>)`
-            if isinstance(expr, cst.UnaryOperation):
-                inner = expr.expression
-                new_inner = rewrite_expr(inner)
-                if new_inner is not None:
-                    return expr.with_changes(expression=new_inner)
-                return None
-
-            return None
-
-        # Unified UnaryOperation handling: the parser may produce either a
-        # Comparison directly on `t.expression` (with lpar metadata) or a
-        # ParenthesizedExpression wrapping a Comparison. Handle both shapes by
-        # extracting the Comparison and attempting a membership/equality
-        # rewrite against alias.output.
-        def _try_unary_comparison_rewrite(unary: cst.UnaryOperation) -> cst.Assert | None:
-            inner = unary.expression
-            comp_node = None
-            is_parenth = False
-            if isinstance(inner, cst.Comparison):
-                comp_node = inner
-            elif isinstance(inner, cst.ParenthesizedExpression) and isinstance(inner.expression, cst.Comparison):
-                comp_node = inner.expression
-                is_parenth = True
-
-            if comp_node is None:
-                return None
-
-            # Look for membership patterns: 'msg' in alias.output[...] -> getMessage()
-            for ct in getattr(comp_node, "comparisons", []):
-                if isinstance(ct.operator, cst.In):
-                    comparator = ct.comparator
-                    attr, slices = _extract_attr_and_slices(comparator)
-                    if (
-                        attr
-                        and isinstance(attr.value, cst.Name)
-                        and attr.value.value == alias_name
-                        and isinstance(attr.attr, cst.Name)
-                        and attr.attr.value == "output"
-                    ):
-                        new_sub = _build_caplog_subscript(slices)
-                        getmsg = cst.Call(func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[])
-                        new_comp = comp_node.with_changes(
-                            comparisons=[cst.ComparisonTarget(operator=ct.operator, comparator=getmsg)]
-                        )
-                        if is_parenth:
-                            new_inner = inner.with_changes(expression=new_comp)
-                            new_unary = unary.with_changes(expression=new_inner)
-                        else:
-                            new_unary = unary.with_changes(expression=new_comp)
-                        return target_assert.with_changes(test=new_unary)
-
-            return None
-
-        # Try to recursively rewrite the inner expression of a UnaryOperation
-        # (e.g., `not <expr>`). This reuses `rewrite_expr` which understands
-        # Comparison, BooleanOperation, ParenthesizedExpression and UnaryOperation
-        # shapes and should cover nested boolean cases.
-        if isinstance(t, cst.UnaryOperation):
-            try:
-                inner = t.expression
-                new_inner = rewrite_expr(inner)
-                if new_inner is not None:
-                    new_unary = t.with_changes(expression=new_inner)
-                    return target_assert.with_changes(test=new_unary)
-            except Exception:
-                # conservative: fall back to other explicit unary handlers below
-                pass
-
-            # Try the unary comparison-specific rewrite if recursive step didn't apply
-            rewritten_unary = _try_unary_comparison_rewrite(t)
-            if rewritten_unary is not None:
-                return rewritten_unary
-
-        # Handle case: UnaryOperation(expression=BooleanOperation(...)).
-        # Recurse into the BooleanOperation's left/right sides and attempt to
-        # rewrite any Comparison (or ParenthesizedExpression(Comparison)) that
-        # targets alias.output. This covers patterns like:
-        #   assert not (( 'err' in log.output[0]) and ('x' in log.output[1]))
-        if isinstance(t, cst.UnaryOperation) and isinstance(t.expression, cst.BooleanOperation):
-            bo = t.expression
-            left = bo.left
-            right = bo.right
-            new_left = None
-            new_right = None
-
-            # Local helper: mirror the comparison rewrite logic for a single
-            # Comparison node. This is slightly more permissive and will try
-            # to rewrite len(...), membership and equality patterns that
-            # reference alias.output.
-            def rewrite_comp_manual(comp_node: cst.Comparison) -> cst.Comparison | None:
-                try:
-                    # len(alias.output...) pattern
-                    left = comp_node.left
-                    if (
-                        isinstance(left, cst.Call)
-                        and isinstance(left.func, cst.Name)
-                        and left.func.value == "len"
-                        and left.args
-                    ):
-                        arg0 = left.args[0].value
-                        attr, slices = _extract_attr_and_slices(arg0)
-                        if (
-                            attr
-                            and isinstance(attr.value, cst.Name)
-                            and attr.value.value == alias_name
-                            and isinstance(attr.attr, cst.Name)
-                            and attr.attr.value == "output"
-                        ):
-                            new_arg = _build_caplog_subscript(slices)
-                            new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
-                            return comp_node.with_changes(left=new_left)
-
-                    # membership
-                    for comp in getattr(comp_node, "comparisons", []):
-                        if isinstance(comp.operator, cst.In):
-                            comparator = comp.comparator
-                            attr, slices = _extract_attr_and_slices(comparator)
-                            if (
-                                attr
-                                and isinstance(attr.value, cst.Name)
-                                and attr.value.value == alias_name
-                                and isinstance(attr.attr, cst.Name)
-                                and attr.attr.value == "output"
-                            ):
-                                new_sub = _build_caplog_subscript(slices)
-                                getmsg = cst.Call(
-                                    func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                                )
-                                return comp_node.with_changes(
-                                    comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
-                                )
-
-                    # equality LHS/RHS
-                    def _rewrite_eq_node_local(node: cst.CSTNode) -> cst.CSTNode | None:
-                        if isinstance(node, cst.Subscript):
-                            attr, slices = _extract_attr_and_slices(node)
-                            if (
-                                attr
-                                and isinstance(attr.value, cst.Name)
-                                and attr.value.value == alias_name
-                                and isinstance(attr.attr, cst.Name)
-                                and attr.attr.value == "output"
-                            ):
-                                new_sub = _build_caplog_subscript(slices)
-                                return cst.Call(
-                                    func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                                )
-                        if isinstance(node, cst.Attribute):
-                            if (
-                                isinstance(node.value, cst.Name)
-                                and node.value.value == alias_name
-                                and isinstance(node.attr, cst.Name)
-                                and node.attr.value == "output"
-                            ):
-                                return cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                        return None
-
-                    left_rewritten = _rewrite_eq_node_local(comp_node.left)
-                    if left_rewritten is not None:
-                        return comp_node.with_changes(left=left_rewritten)
-
-                    for ct in getattr(comp_node, "comparisons", []):
-                        if isinstance(ct.operator, cst.Equal):
-                            rhs_rewritten = _rewrite_eq_node_local(ct.comparator)
-                            if rhs_rewritten is not None:
-                                new_comparisons = [cst.ComparisonTarget(operator=ct.operator, comparator=rhs_rewritten)]
-                                return comp_node.with_changes(comparisons=new_comparisons)
-
-                except Exception:
-                    return None
-                return None
-
-            # Try to rewrite children using the explicit manual comparator rewriter
-            new_left = None
-            new_right = None
-            if isinstance(left, cst.Comparison):
-                new_left = rewrite_comp_manual(left)
-            elif isinstance(left, cst.ParenthesizedExpression) and isinstance(left.expression, cst.Comparison):
-                comp_new = rewrite_comp_manual(left.expression)
-                if comp_new is not None:
-                    new_left = left.with_changes(expression=comp_new)
-
-            if isinstance(right, cst.Comparison):
-                new_right = rewrite_comp_manual(right)
-            elif isinstance(right, cst.ParenthesizedExpression) and isinstance(right.expression, cst.Comparison):
-                comp_new = rewrite_comp_manual(right.expression)
-                if comp_new is not None:
-                    new_right = right.with_changes(expression=comp_new)
-
-            if new_left is not None or new_right is not None:
-                rebuilt = bo.with_changes(
-                    left=new_left if new_left is not None else left, right=new_right if new_right is not None else right
-                )
-                new_unary = t.with_changes(expression=rebuilt)
-                return target_assert.with_changes(test=new_unary)
-
-        # Robustly handle UnaryOperation wrapping comparisons (e.g., `not (<comp>)`)
-        if isinstance(t, cst.UnaryOperation):
-            inner = t.expression
-            # Unwrap parenthesis if present
-            if isinstance(inner, cst.ParenthesizedExpression):
-                inner_comp = inner.expression
-                comp_new = _rewrite_comparison_expr(inner_comp) if isinstance(inner_comp, cst.Comparison) else None
-                if comp_new is not None:
-                    new_parenth = inner.with_changes(expression=comp_new)
-                    new_unary = t.with_changes(expression=new_parenth)
-                    return target_assert.with_changes(test=new_unary)
-                # Fallback: try manual rebuild of Comparison by replacing targets referencing alias.output
-                try:
-                    changed = False
-                    left = inner_comp.left
-                    new_left = left
-                    # len(...) on left
-                    if (
-                        isinstance(left, cst.Call)
-                        and isinstance(left.func, cst.Name)
-                        and left.func.value == "len"
-                        and left.args
-                    ):
-                        arg0 = left.args[0].value
-                        attr, slices = _extract_attr_and_slices(arg0)
-                        if (
-                            attr
-                            and isinstance(attr.value, cst.Name)
-                            and attr.value.value == alias_name
-                            and isinstance(attr.attr, cst.Name)
-                            and attr.attr.value == "output"
-                        ):
-                            new_arg = _build_caplog_subscript(slices)
-                            new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
-                            changed = True
-
-                    new_comps: list[cst.ComparisonTarget] = []
-                    for ct in getattr(inner_comp, "comparisons", []):
-                        op = ct.operator
-                        comp = ct.comparator
-                        # membership
-                        if isinstance(op, cst.In):
-                            attr, slices = _extract_attr_and_slices(comp)
-                            if (
-                                attr
-                                and isinstance(attr.value, cst.Name)
-                                and attr.value.value == alias_name
-                                and isinstance(attr.attr, cst.Name)
-                                and attr.attr.value == "output"
-                            ):
-                                new_sub = _build_caplog_subscript(slices)
-                                getmsg = cst.Call(
-                                    func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                                )
-                                new_comps.append(cst.ComparisonTarget(operator=op, comparator=getmsg))
-                                changed = True
-                                continue
-
-                            # equality
-                            if isinstance(op, cst.Equal):
-                                # inline equality rewrite: if comparator is alias.output[...] rewrite to getMessage
-                                rhs_rewritten = None
-                                if isinstance(comp, cst.Subscript):
-                                    a_attr, a_slices = _extract_attr_and_slices(comp)
-                                    if (
-                                        a_attr
-                                        and isinstance(a_attr.value, cst.Name)
-                                        and a_attr.value.value == alias_name
-                                        and isinstance(a_attr.attr, cst.Name)
-                                        and a_attr.attr.value == "output"
-                                    ):
-                                        new_sub = _build_caplog_subscript(a_slices)
-                                        rhs_rewritten = cst.Call(
-                                            func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")),
-                                            args=[],
-                                        )
-                                elif isinstance(comp, cst.Attribute):
-                                    if (
-                                        isinstance(comp.value, cst.Name)
-                                        and comp.value.value == alias_name
-                                        and isinstance(comp.attr, cst.Name)
-                                        and comp.attr.value == "output"
-                                    ):
-                                        rhs_rewritten = cst.Attribute(
-                                            value=cst.Name(value="caplog"), attr=cst.Name(value="records")
-                                        )
-
-                                if rhs_rewritten is not None:
-                                    new_comps.append(cst.ComparisonTarget(operator=op, comparator=rhs_rewritten))
-                                    changed = True
-                                    continue
-                        # default: keep as-is
-                        new_comps.append(ct)
-
-                    if changed:
-                        rebuilt = inner_comp.with_changes(left=new_left, comparisons=new_comps)
-                        new_parenth = (
-                            inner.with_changes(expression=rebuilt)
-                            if isinstance(inner, cst.ParenthesizedExpression)
-                            else rebuilt
-                        )
-                        new_unary = t.with_changes(expression=new_parenth)
-                        return target_assert.with_changes(test=new_unary)
-                except Exception:
-                    pass
-            else:
-                comp_new = _rewrite_comparison_expr(inner) if isinstance(inner, cst.Comparison) else None
-                if comp_new is not None:
-                    new_unary = t.with_changes(expression=comp_new)
-                    return target_assert.with_changes(test=new_unary)
-
-        # Extra explicit fallback: sometimes the UnaryOperation wraps a
-        # ParenthesizedExpression where the comparison uses `in` against
-        # alias.output[...] and the direct path above may miss it. Handle
-        # that specific shape here to ensure membership checks inside
-        # parenthesized `not (...)` get rewritten to use caplog.getMessage().
-        if isinstance(t, cst.UnaryOperation) and isinstance(t.expression, cst.ParenthesizedExpression):
-            try:
-                inner = t.expression
-                inner_comp = inner.expression
-                if isinstance(inner_comp, cst.Comparison):
-                    for comp in getattr(inner_comp, "comparisons", []):
-                        if isinstance(comp.operator, cst.In):
-                            comparator = comp.comparator
-                            attr, slices = _extract_attr_and_slices(comparator)
-                            if (
-                                attr
-                                and isinstance(attr.value, cst.Name)
-                                and attr.value.value == alias_name
-                                and isinstance(attr.attr, cst.Name)
-                                and attr.attr.value == "output"
-                            ):
-                                new_sub = _build_caplog_subscript(slices)
-                                getmsg = cst.Call(
-                                    func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")),
-                                    args=[],
-                                )
-                                new_inner = inner_comp.with_changes(
-                                    comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
-                                )
-                                new_parenth = inner.with_changes(expression=new_inner)
-                                new_unary = t.with_changes(expression=new_parenth)
-                                return target_assert.with_changes(test=new_unary)
-            except Exception:
-                # conservative: ignore and continue
-                pass
-
-        # Attempt a general rewrite of the test expression
-        new_test = rewrite_expr(t)
-        if new_test is not None:
-            return target_assert.with_changes(test=new_test)
-
-        # Handle case where UnaryOperation.expression is a Comparison that
-        # carries parenthesis information (e.g., parsed as Comparison with
-        # lpar/rpar). This shape can appear for `not ( ... )` but where the
-        # parser attached parentheses onto the Comparison node rather than
-        # creating a ParenthesizedExpression. Detect that and try to rewrite
-        # membership targets referencing alias.output.
-        if (
-            isinstance(t, cst.UnaryOperation)
-            and isinstance(t.expression, cst.Comparison)
-            and getattr(t.expression, "lpar", None)
-        ):
-            inner_comp = t.expression
-            try:
-                for comp in getattr(inner_comp, "comparisons", []):
-                    if isinstance(comp.operator, cst.In):
-                        comparator = comp.comparator
-                        attr, slices = _extract_attr_and_slices(comparator)
-                        if (
-                            attr
-                            and isinstance(attr.value, cst.Name)
-                            and attr.value.value == alias_name
-                            and isinstance(attr.attr, cst.Name)
-                            and attr.attr.value == "output"
-                        ):
-                            new_sub = _build_caplog_subscript(slices)
-                            getmsg = cst.Call(
-                                func=cst.Attribute(value=new_sub, attr=cst.Name(value="getMessage")), args=[]
-                            )
-                            new_inner = inner_comp.with_changes(
-                                comparisons=[cst.ComparisonTarget(operator=comp.operator, comparator=getmsg)]
-                            )
-                            new_unary = t.with_changes(expression=new_inner)
-                            return target_assert.with_changes(test=new_unary)
-            except Exception:
-                pass
-
-        # Single Comparison fallback
         if isinstance(t, cst.Comparison):
-            comp_new = _rewrite_comparison_expr(t)
+            comp_new = _rewrite_comparison(t, alias_name)
             if comp_new is not None:
                 return target_assert.with_changes(test=comp_new)
 

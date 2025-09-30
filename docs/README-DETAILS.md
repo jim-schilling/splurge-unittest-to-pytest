@@ -251,6 +251,12 @@ Developer notes
 - Architecture: the pipeline is organized as Jobs → Tasks → Steps, each
 	with a single responsibility. See the source under ``splurge_unittest_to_pytest/`` for
 	concrete implementations.
+- Assertion transformer helpers: ``assert_transformer.py`` now exposes
+	plain functions such as ``_rewrite_expression`` and
+	``_rewrite_unary_operation`` backed by a metadata-aware
+	``parenthesized_expression`` helper. Focused tests in
+	``tests/unit/test_assert_transformer_expression_rewrites.py`` cover
+	positive, negative, and edge-case flows for these helpers.
 - Contributions: open a PR against the ``main`` branch and include tests
 	for new behavior. Keep changes small and run the full suite before
 	requesting review.
