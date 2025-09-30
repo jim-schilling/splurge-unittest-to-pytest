@@ -207,20 +207,7 @@ def _extract_iter_rows(
     loop_index: int,
     arity: int,
 ) -> tuple[tuple[tuple[cst.BaseExpression, ...], ...], tuple[int, ...]]:
-    values: Sequence[cst.BaseExpression] | None = _extract_literal_elements(iter_node)
-    removable_indexes: set[int] = set()
-
-    if values is None:
-        if _is_range_call(iter_node):
-            values = _range_values(iter_node)
-        elif isinstance(iter_node, cst.Name):
-            resolution = _resolve_name_reference(iter_node.value, statements, loop_index)
-            if resolution is None:
-                raise ParametrizeConversionError
-            values, removable_index = resolution
-            removable_indexes.add(removable_index)
-        else:
-            raise ParametrizeConversionError
+    values, removable_indexes = _resolve_rows_from_iterable(iter_node, statements, loop_index)
 
     rows: list[tuple[cst.BaseExpression, ...]] = []
     for value in values:
@@ -230,6 +217,51 @@ def _extract_iter_rows(
         rows.append(row)
 
     return tuple(rows), tuple(sorted(removable_indexes))
+
+
+def _resolve_rows_from_iterable(
+    iter_node: cst.BaseExpression,
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+    literal_values = _extract_literal_elements(iter_node)
+    if literal_values is not None:
+        return literal_values, ()
+
+    if _is_range_call(iter_node):
+        return _range_values(iter_node), ()
+
+    if isinstance(iter_node, cst.Name):
+        resolution = _resolve_name_reference(iter_node.value, statements, loop_index)
+        if resolution is None:
+            raise ParametrizeConversionError
+        values, removable_index = resolution
+        return values, (removable_index,)
+
+    if isinstance(iter_node, cst.Call):
+        call_result = _extract_call_iter_rows(iter_node, statements, loop_index)
+        if call_result is not None:
+            return call_result
+
+    raise ParametrizeConversionError
+
+
+def _extract_call_iter_rows(
+    call: cst.Call,
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]] | None:
+    func = call.func
+
+    if isinstance(func, cst.Name) and func.value == "enumerate":
+        return _build_enumerate_rows(call, statements, loop_index)
+
+    if isinstance(func, cst.Attribute):
+        method_name = func.attr.value if isinstance(func.attr, cst.Name) else None
+        if method_name in {"items", "keys", "values"}:
+            return _build_mapping_rows(func.value, method_name, call.args, statements, loop_index)
+
+    return None
 
 
 def _extract_literal_elements(node: cst.BaseExpression) -> tuple[cst.BaseExpression, ...] | None:
@@ -317,6 +349,162 @@ def _normalize_iter_value(value: cst.BaseExpression, arity: int) -> tuple[cst.Ba
         return tuple(extracted)
 
     return None
+
+
+def _build_enumerate_rows(
+    call: cst.Call,
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+    if not call.args:
+        raise ParametrizeConversionError
+
+    iterable_arg: cst.Arg | None = None
+    start_value = 0
+    removable_indexes: set[int] = set()
+
+    for arg in call.args:
+        if arg.keyword is None:
+            if iterable_arg is None:
+                iterable_arg = arg
+                continue
+            start_value = _evaluate_int_literal(arg.value)
+            continue
+
+        if not isinstance(arg.keyword, cst.Name) or arg.keyword.value != "start":
+            raise ParametrizeConversionError
+        start_value = _evaluate_int_literal(arg.value)
+
+    if iterable_arg is None or iterable_arg.value is None:
+        raise ParametrizeConversionError
+
+    base_values, indexes = _resolve_sequence_argument(iterable_arg.value, statements, loop_index)
+    removable_indexes.update(indexes)
+
+    rows: list[cst.BaseExpression] = []
+    current_index = start_value
+    for base_value in base_values:
+        rows.append(
+            cst.Tuple(
+                elements=[
+                    cst.Element(value=cst.Integer(value=str(current_index))),
+                    cst.Element(value=base_value.deep_clone()),
+                ]
+            )
+        )
+        current_index += 1
+
+    return tuple(rows), tuple(sorted(removable_indexes))
+
+
+def _build_mapping_rows(
+    base_expr: cst.BaseExpression,
+    method_name: str,
+    args: Sequence[cst.Arg],
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+    if args:
+        raise ParametrizeConversionError
+
+    pairs, removable_indexes = _resolve_mapping_argument(base_expr, statements, loop_index)
+
+    rows: list[cst.BaseExpression] = []
+    if method_name == "items":
+        for key, value in pairs:
+            rows.append(
+                cst.Tuple(
+                    elements=[
+                        cst.Element(value=key.deep_clone()),
+                        cst.Element(value=value.deep_clone()),
+                    ]
+                )
+            )
+    elif method_name == "keys":
+        for key, _ in pairs:
+            rows.append(key.deep_clone())
+    else:
+        for _, value in pairs:
+            rows.append(value.deep_clone())
+
+    return tuple(rows), tuple(sorted(removable_indexes))
+
+
+def _resolve_sequence_argument(
+    expr: cst.BaseExpression,
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+    literal_values = _extract_literal_elements(expr)
+    if literal_values is not None:
+        return literal_values, ()
+
+    if isinstance(expr, cst.Name):
+        resolution = _resolve_name_reference(expr.value, statements, loop_index)
+        if resolution is None:
+            raise ParametrizeConversionError
+        values, removable_index = resolution
+        return values, (removable_index,)
+
+    raise ParametrizeConversionError
+
+
+def _resolve_mapping_argument(
+    expr: cst.BaseExpression,
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> tuple[tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...], tuple[int, ...]]:
+    direct_pairs = _extract_dict_pairs(expr)
+    if direct_pairs is not None:
+        return direct_pairs, ()
+
+    if not isinstance(expr, cst.Name):
+        raise ParametrizeConversionError
+
+    name = expr.value
+    for idx in range(loop_index - 1, -1, -1):
+        stmt = statements[idx]
+        if not isinstance(stmt, cst.SimpleStatementLine):
+            continue
+        for small_stmt in stmt.body:
+            if not isinstance(small_stmt, cst.Assign):
+                continue
+            if len(small_stmt.targets) != 1:
+                continue
+            target = small_stmt.targets[0].target
+            if not isinstance(target, cst.Name) or target.value != name:
+                continue
+            pairs = _extract_dict_pairs(small_stmt.value)
+            if pairs is None:
+                raise ParametrizeConversionError
+            return pairs, (idx,)
+
+    raise ParametrizeConversionError
+
+
+def _extract_dict_pairs(
+    node: cst.BaseExpression,
+) -> tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...] | None:
+    if not isinstance(node, cst.Dict):
+        return None
+
+    pairs: list[tuple[cst.BaseExpression, cst.BaseExpression]] = []
+    for element in node.elements:
+        if not isinstance(element, cst.DictElement):
+            return None
+        pairs.append((element.key, element.value))
+
+    return tuple(pairs)
+
+
+def _evaluate_int_literal(expr: cst.BaseExpression) -> int:
+    if not isinstance(expr, cst.Integer):
+        raise ParametrizeConversionError
+
+    try:
+        return int(expr.value)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ParametrizeConversionError from exc
 
 
 def _build_decorator(

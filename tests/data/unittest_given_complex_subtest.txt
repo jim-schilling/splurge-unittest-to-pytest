@@ -1,0 +1,218 @@
+"""Comprehensive examples of unittest subTest() usage patterns.
+
+This module demonstrates various complex subTest() scenarios including:
+- Nested subTests
+- Dynamic parameter generation
+- Matrix testing
+- Conditional subTests
+- Combined with setUp/tearDown
+"""
+
+import unittest
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class Calculator:
+    """Simple calculator for demonstration."""
+    
+    def add(self, a: int | float, b: int | float) -> int | float:
+        """Add two numbers."""
+        return a + b
+    
+    def divide(self, a: int | float, b: int | float) -> float:
+        """Divide two numbers."""
+        if b == 0:
+            raise ValueError("Division by zero")
+        return a / b
+    
+    def power(self, base: int | float, exp: int) -> int | float:
+        """Raise base to exponent."""
+        return base ** exp
+
+
+class ComplexSubTestExamples(unittest.TestCase):
+    """Demonstrates various subTest() patterns."""
+    
+    def setUp(self) -> None:
+        """Set up test fixtures."""
+        self.calc = Calculator()
+    
+    def test_nested_subtests(self) -> None:
+        """Nested subTests for multi-dimensional test matrices."""
+        operations = {
+            'add': (self.calc.add, [(1, 2, 3), (5, 5, 10), (-1, 1, 0)]),
+            'multiply': (lambda x, y: x * y, [(2, 3, 6), (4, 5, 20), (0, 10, 0)]),
+        }
+        
+        for op_name, (func, test_cases) in operations.items():
+            with self.subTest(operation=op_name):
+                for idx, (a, b, expected) in enumerate(test_cases):
+                    with self.subTest(case=idx, a=a, b=b):
+                        result = func(a, b)
+                        self.assertEqual(result, expected)
+    
+    def test_matrix_testing_with_subtests(self) -> None:
+        """Test all combinations of inputs using nested subTests."""
+        bases = [2, 3, 5, 10]
+        exponents = [0, 1, 2, 3]
+        
+        for base in bases:
+            with self.subTest(base=base):
+                for exp in exponents:
+                    with self.subTest(exponent=exp):
+                        result = self.calc.power(base, exp)
+                        expected = base ** exp
+                        self.assertEqual(result, expected)
+    
+    def test_conditional_subtests(self) -> None:
+        """SubTests with conditional execution based on data."""
+        test_data = [
+            {'numerator': 10, 'denominator': 2, 'expected': 5.0, 'should_error': False},
+            {'numerator': 15, 'denominator': 3, 'expected': 5.0, 'should_error': False},
+            {'numerator': 10, 'denominator': 0, 'expected': None, 'should_error': True},
+            {'numerator': 7, 'denominator': 2, 'expected': 3.5, 'should_error': False},
+        ]
+        
+        for idx, data in enumerate(test_data):
+            with self.subTest(test_id=idx, **data):
+                if data['should_error']:
+                    with self.assertRaises(ValueError):
+                        self.calc.divide(data['numerator'], data['denominator'])
+                else:
+                    result = self.calc.divide(data['numerator'], data['denominator'])
+                    self.assertEqual(result, data['expected'])
+    
+    def test_dynamic_subtest_generation(self) -> None:
+        """Generate subTests dynamically from complex data structures."""
+        # Simulate loading test data from external source
+        test_scenarios = self._generate_test_scenarios()
+        
+        for scenario in test_scenarios:
+            with self.subTest(
+                scenario_id=scenario['id'],
+                description=scenario['description']
+            ):
+                for assertion in scenario['assertions']:
+                    with self.subTest(assertion_type=assertion['type']):
+                        actual = assertion['func']()
+                        expected = assertion['expected']
+                        
+                        if assertion['type'] == 'equal':
+                            self.assertEqual(actual, expected)
+                        elif assertion['type'] == 'greater':
+                            self.assertGreater(actual, expected)
+                        elif assertion['type'] == 'in_range':
+                            self.assertIn(actual, expected)
+    
+    def test_subtest_with_setup_per_iteration(self) -> None:
+        """SubTests with different setup for each iteration."""
+        configurations = [
+            {'name': 'small', 'multiplier': 1, 'offset': 0},
+            {'name': 'medium', 'multiplier': 10, 'offset': 5},
+            {'name': 'large', 'multiplier': 100, 'offset': 50},
+        ]
+        
+        base_value = 5
+        
+        for config in configurations:
+            with self.subTest(config=config['name']):
+                # Setup specific to this subTest
+                transformed = base_value * config['multiplier'] + config['offset']
+                
+                # Multiple assertions within this subTest
+                self.assertIsInstance(transformed, int)
+                self.assertGreater(transformed, 0)
+                
+                # Nested subTest for boundary conditions
+                with self.subTest(boundary='lower'):
+                    self.assertGreaterEqual(transformed, config['offset'])
+                
+                with self.subTest(boundary='upper'):
+                    expected_max = base_value * config['multiplier'] + config['offset']
+                    self.assertEqual(transformed, expected_max)
+    
+    def test_exception_handling_subtests(self) -> None:
+        """SubTests for various error conditions."""
+        error_cases = [
+            {'a': 10, 'b': 0, 'error': ValueError, 'msg': 'Division by zero'},
+            {'a': 'string', 'b': 2, 'error': TypeError, 'msg': 'Invalid type'},
+            {'a': None, 'b': 5, 'error': TypeError, 'msg': 'None input'},
+        ]
+        
+        for case_num, case in enumerate(error_cases):
+            with self.subTest(case=case_num, input_a=case['a'], input_b=case['b']):
+                with self.assertRaises(case['error']) as context:
+                    self.calc.divide(case['a'], case['b'])
+                
+                # Additional validation of exception
+                if case['error'] == ValueError:
+                    self.assertIn('zero', str(context.exception).lower())
+    
+    def test_aggregated_results_pattern(self) -> None:
+        """Pattern for collecting results across subTests."""
+        test_ranges = [(1, 10), (10, 100), (100, 1000)]
+        results: dict[str, list[float]] = {'passed': [], 'failed': []}
+        
+        for start, end in test_ranges:
+            with self.subTest(range=f"{start}-{end}"):
+                for num in range(start, min(start + 3, end)):
+                    with self.subTest(value=num):
+                        result = self.calc.power(2, num % 10)
+                        
+                        # Store results for later analysis
+                        if result > 0:
+                            results['passed'].append(result)
+                        else:
+                            results['failed'].append(result)
+                        
+                        self.assertGreater(result, 0)
+        
+        # Final assertion on aggregated results
+        self.assertGreater(len(results['passed']), 0)
+    
+    def _generate_test_scenarios(self) -> list[dict[str, Any]]:
+        """Generate complex test scenarios dynamically.
+        
+        Returns:
+            List of test scenario dictionaries.
+        """
+        return [
+            {
+                'id': 'scenario_1',
+                'description': 'Basic arithmetic',
+                'assertions': [
+                    {
+                        'type': 'equal',
+                        'func': lambda: self.calc.add(2, 3),
+                        'expected': 5
+                    },
+                    {
+                        'type': 'greater',
+                        'func': lambda: self.calc.add(5, 5),
+                        'expected': 9
+                    }
+                ]
+            },
+            {
+                'id': 'scenario_2',
+                'description': 'Power operations',
+                'assertions': [
+                    {
+                        'type': 'equal',
+                        'func': lambda: self.calc.power(2, 3),
+                        'expected': 8
+                    },
+                    {
+                        'type': 'in_range',
+                        'func': lambda: self.calc.power(3, 2),
+                        'expected': range(5, 15)
+                    }
+                ]
+            }
+        ]
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
