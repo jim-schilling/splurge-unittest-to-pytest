@@ -271,9 +271,7 @@ def test_convert_simple_subtests_enumerate_name_reference():
         ]
     )
     iter_call = cst.Call(func=cst.Name("enumerate"), args=[cst.Arg(value=cst.Name("cases"))])
-    loop_target = cst.Tuple(
-        [cst.Element(value=cst.Name("index")), cst.Element(value=cst.Name("case"))]
-    )
+    loop_target = cst.Tuple([cst.Element(value=cst.Name("index")), cst.Element(value=cst.Name("case"))])
     sub_call = cst.Call(
         func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("subTest")),
         args=[
@@ -400,9 +398,7 @@ def test_convert_simple_subtests_dict_items():
         func=cst.Attribute(value=cst.Name("operations"), attr=cst.Name("items")),
         args=[],
     )
-    loop_target = cst.Tuple(
-        [cst.Element(value=cst.Name("op_name")), cst.Element(value=cst.Name("payload"))]
-    )
+    loop_target = cst.Tuple([cst.Element(value=cst.Name("op_name")), cst.Element(value=cst.Name("payload"))])
     sub_call = cst.Call(
         func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("subTest")),
         args=[cst.Arg(keyword=cst.Name("operation"), value=cst.Name("op_name"))],
@@ -448,9 +444,7 @@ def test_convert_simple_subtests_dict_items():
 
     op_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "op_name")
     assert _annotation_code(op_param) == "str"
-    payload_param = next(
-        p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "payload"
-    )
+    payload_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "payload")
     assert payload_param.annotation is None
 
 
