@@ -154,8 +154,7 @@ def create_config(
     generate_report: bool = True,
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
-    parametrize: bool = False,
-    subtest: bool | None = None,
+    parametrize: bool | None = None,
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
@@ -181,7 +180,7 @@ def create_config(
         generate_report: Whether to produce a migration report.
         report_format: Format for the migration report (e.g. ``json``).
         test_method_prefixes: Allowed test method name prefixes (repeatable).
-        parametrize: Attempt conservative subTest -> parametrize conversions.
+        parametrize: Optional override for conservative subTest -> parametrize conversions.
         suffix: Suffix appended to the target filename stem.
         ext: Optional override for the target file extension.
 
@@ -195,6 +194,8 @@ def create_config(
     ext = sanitize_extension(ext)
 
     base = MigrationConfig()
+
+    effective_parametrize = base.parametrize if parametrize is None else parametrize
 
     return MigrationConfig(
         target_directory=target_directory,
@@ -214,8 +215,7 @@ def create_config(
         generate_report=generate_report,
         report_format=report_format,
         test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
-        parametrize=parametrize,
-        subtest=subtest,
+        parametrize=effective_parametrize,
         target_suffix=suffix,
         target_extension=ext,
     )
@@ -393,12 +393,6 @@ def migrate(
     test_method_prefixes: list[str] = typer.Option(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
-    parametrize: bool = typer.Option(
-        False,
-        "--parametrize",
-        help="(deprecated) Attempt conservative subTest -> parametrize conversions. Use --no-subtest or omit --subtest to parametrize.",
-        is_flag=True,
-    ),
     subtest: bool = typer.Option(
         False,
         "--subtest",
@@ -446,15 +440,10 @@ def migrate(
         typer.echo("Error: --info and --debug cannot be used together.")
         raise typer.Exit(code=2)
 
-    # Validate mutually exclusive transformation flags
-    if parametrize and subtest:
-        typer.echo("Error: --parametrize and --subtest are mutually exclusive. Pick one.")
-        raise typer.Exit(code=2)
-
     if debug or info:
         setup_logging(debug)
 
-    set_quiet_mode(debug or info)
+    set_quiet_mode(not (debug or info))
 
     try:
         # Create event bus
@@ -463,6 +452,8 @@ def migrate(
         attach_progress_handlers(event_bus, verbose=verbose)
 
         # Create configuration
+        effective_parametrize = not subtest
+
         config = create_config(
             target_directory=target_directory,
             root_directory=root_directory,
@@ -477,8 +468,7 @@ def migrate(
             generate_report=generate_report,
             report_format=report_format,
             test_method_prefixes=test_method_prefixes,
-            parametrize=parametrize,
-            subtest=subtest,
+            parametrize=effective_parametrize,
             suffix=suffix,
             ext=ext,
         )

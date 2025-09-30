@@ -5,7 +5,7 @@ from splurge_unittest_to_pytest.transformers.unittest_transformer import (
 )
 
 
-def test_parametrize_not_enabled_by_default():
+def test_parametrize_enabled_by_default():
     code = textwrap.dedent("""
     class MyTests(unittest.TestCase):
         def test_things(self):
@@ -14,11 +14,12 @@ def test_parametrize_not_enabled_by_default():
                     assert check(i)
     """)
     out = UnittestToPytestCstTransformer().transform_code(code)
-    # Without flag, we expect no @pytest.mark.parametrize decorator (conservative default)
-    assert "parametrize" not in out
+    # Default behavior should parametrize simple subTest loops
+    assert "@pytest.mark.parametrize" in out
+    assert "for i in" not in out
 
 
-def test_parametrize_enabled_converts_for_subtest():
+def test_parametrize_disabled_retains_subtest_loop():
     code = textwrap.dedent("""
     class MyTests(unittest.TestCase):
         def test_things(self):
@@ -26,7 +27,7 @@ def test_parametrize_enabled_converts_for_subtest():
                 with self.subTest(i):
                     assert check(i)
     """)
-    out = UnittestToPytestCstTransformer(parametrize=True).transform_code(code)
-    # When enabled, parametrize should be added conservatively
-    assert "@pytest.mark.parametrize" in out
-    assert "def test_things" in out
+    out = UnittestToPytestCstTransformer(parametrize=False).transform_code(code)
+    # When disabled, no parametrize decorator should be added
+    assert "@pytest.mark.parametrize" not in out
+    assert "for i in" in out

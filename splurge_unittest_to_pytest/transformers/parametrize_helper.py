@@ -15,7 +15,7 @@ All helpers in this module work purely with libcst nodes.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
 
@@ -36,6 +36,12 @@ class _SubtestLoop:
     with_stmt: cst.With
     call: cst.Call
     body: cst.IndentedBlock
+
+
+@dataclass(frozen=True)
+class _RemovalCandidate:
+    index: int
+    name: str | None
 
 
 def convert_subtest_loop_to_parametrize(
@@ -73,7 +79,7 @@ def convert_subtest_loop_to_parametrize(
         _validate_inner_body(subtest_loop.body)
         _validate_subtest_call(subtest_loop.call, param_names)
 
-        rows, removable_indexes = _extract_iter_rows(
+        rows, removal_candidates = _extract_iter_rows(
             subtest_loop.loop.iter,
             body_statements,
             subtest_loop.index,
@@ -82,22 +88,34 @@ def convert_subtest_loop_to_parametrize(
         if not rows:
             return None
 
+        removable_indexes = _filter_removal_candidates(removal_candidates, body_statements, subtest_loop)
+
         include_ids = getattr(transformer, "parametrize_include_ids", True)
         add_annotations = getattr(transformer, "parametrize_add_annotations", True)
 
-        decorator = _build_decorator(param_names, rows, include_ids)
         annotations = _infer_param_annotations(rows) if add_annotations else tuple(None for _ in param_names)
         new_params = _ensure_function_params(updated_func.params, param_names, annotations)
         new_body = _build_new_body(body_statements, subtest_loop, removable_indexes)
 
         existing_decorators = list(updated_func.decorators or [])
-        if any(_is_parametrize_decorator(deco) for deco in existing_decorators):
+        matching_index = _find_matching_parametrize_decorator(existing_decorators, param_names)
+
+        if matching_index is None and any(_is_parametrize_decorator(deco) for deco in existing_decorators):
             return None
 
         transformer.needs_pytest_import = True
 
+        if matching_index is not None:
+            target_decorator = existing_decorators[matching_index]
+            updated_decorator = _append_rows_to_decorator(target_decorator, rows, include_ids)
+            decorators = list(existing_decorators)
+            decorators[matching_index] = updated_decorator
+        else:
+            decorator = _build_decorator(param_names, rows, include_ids)
+            decorators = [decorator, *existing_decorators]
+
         return updated_func.with_changes(
-            decorators=[decorator, *existing_decorators],
+            decorators=tuple(decorators),
             params=new_params,
             body=cst.IndentedBlock(body=new_body),
         )
@@ -206,8 +224,8 @@ def _extract_iter_rows(
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
     arity: int,
-) -> tuple[tuple[tuple[cst.BaseExpression, ...], ...], tuple[int, ...]]:
-    values, removable_indexes = _resolve_rows_from_iterable(iter_node, statements, loop_index)
+) -> tuple[tuple[tuple[cst.BaseExpression, ...], ...], tuple[_RemovalCandidate, ...]]:
+    values, removal_candidates = _resolve_rows_from_iterable(iter_node, statements, loop_index)
 
     rows: list[tuple[cst.BaseExpression, ...]] = []
     for value in values:
@@ -216,14 +234,19 @@ def _extract_iter_rows(
             raise ParametrizeConversionError
         rows.append(row)
 
-    return tuple(rows), tuple(sorted(removable_indexes))
+    constants = _collect_constant_assignment_values(statements, loop_index)
+    _reject_rows_referencing_local_state(rows, statements, loop_index, constants)
+
+    normalized_rows = _inline_constant_rows(rows, constants)
+
+    return normalized_rows, tuple(removal_candidates)
 
 
 def _resolve_rows_from_iterable(
     iter_node: cst.BaseExpression,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
     literal_values = _extract_literal_elements(iter_node)
     if literal_values is not None:
         return literal_values, ()
@@ -236,7 +259,12 @@ def _resolve_rows_from_iterable(
         if resolution is None:
             raise ParametrizeConversionError
         values, removable_index = resolution
-        return values, (removable_index,)
+        candidate: tuple[_RemovalCandidate, ...]
+        if removable_index is None:
+            candidate = ()
+        else:
+            candidate = (_RemovalCandidate(index=removable_index, name=iter_node.value),)
+        return values, candidate
 
     if isinstance(iter_node, cst.Call):
         call_result = _extract_call_iter_rows(iter_node, statements, loop_index)
@@ -250,7 +278,7 @@ def _extract_call_iter_rows(
     call: cst.Call,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]] | None:
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]] | None:
     func = call.func
 
     if isinstance(func, cst.Name) and func.value == "enumerate":
@@ -318,7 +346,7 @@ def _resolve_name_reference(
     name: str,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], int] | None:
+) -> tuple[tuple[cst.BaseExpression, ...], int | None] | None:
     for idx in range(loop_index - 1, -1, -1):
         stmt = statements[idx]
         if isinstance(stmt, cst.SimpleStatementLine):
@@ -330,7 +358,8 @@ def _resolve_name_reference(
                     if isinstance(target, cst.Name) and target.value == name:
                         elements = _extract_literal_elements(small_stmt.value)
                         if elements is not None:
-                            return elements, idx
+                            removable_index: int | None = idx if len(stmt.body) == 1 else None
+                            return elements, removable_index
     return None
 
 
@@ -355,14 +384,12 @@ def _build_enumerate_rows(
     call: cst.Call,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
     if not call.args:
         raise ParametrizeConversionError
 
     iterable_arg: cst.Arg | None = None
     start_value = 0
-    removable_indexes: set[int] = set()
-
     for arg in call.args:
         if arg.keyword is None:
             if iterable_arg is None:
@@ -378,8 +405,7 @@ def _build_enumerate_rows(
     if iterable_arg is None or iterable_arg.value is None:
         raise ParametrizeConversionError
 
-    base_values, indexes = _resolve_sequence_argument(iterable_arg.value, statements, loop_index)
-    removable_indexes.update(indexes)
+    base_values, candidates = _resolve_sequence_argument(iterable_arg.value, statements, loop_index)
 
     rows: list[cst.BaseExpression] = []
     current_index = start_value
@@ -394,7 +420,7 @@ def _build_enumerate_rows(
         )
         current_index += 1
 
-    return tuple(rows), tuple(sorted(removable_indexes))
+    return tuple(rows), candidates
 
 
 def _build_mapping_rows(
@@ -403,11 +429,11 @@ def _build_mapping_rows(
     args: Sequence[cst.Arg],
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
     if args:
         raise ParametrizeConversionError
 
-    pairs, removable_indexes = _resolve_mapping_argument(base_expr, statements, loop_index)
+    pairs, removal_candidates = _resolve_mapping_argument(base_expr, statements, loop_index)
 
     rows: list[cst.BaseExpression] = []
     if method_name == "items":
@@ -427,14 +453,14 @@ def _build_mapping_rows(
         for _, value in pairs:
             rows.append(value.deep_clone())
 
-    return tuple(rows), tuple(sorted(removable_indexes))
+    return tuple(rows), removal_candidates
 
 
 def _resolve_sequence_argument(
     expr: cst.BaseExpression,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[int, ...]]:
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
     literal_values = _extract_literal_elements(expr)
     if literal_values is not None:
         return literal_values, ()
@@ -444,7 +470,9 @@ def _resolve_sequence_argument(
         if resolution is None:
             raise ParametrizeConversionError
         values, removable_index = resolution
-        return values, (removable_index,)
+        if removable_index is None:
+            return values, ()
+        return values, (_RemovalCandidate(index=removable_index, name=expr.value),)
 
     raise ParametrizeConversionError
 
@@ -453,7 +481,7 @@ def _resolve_mapping_argument(
     expr: cst.BaseExpression,
     statements: Sequence[cst.BaseStatement],
     loop_index: int,
-) -> tuple[tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...], tuple[int, ...]]:
+) -> tuple[tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...], tuple[_RemovalCandidate, ...]]:
     direct_pairs = _extract_dict_pairs(expr)
     if direct_pairs is not None:
         return direct_pairs, ()
@@ -477,7 +505,12 @@ def _resolve_mapping_argument(
             pairs = _extract_dict_pairs(small_stmt.value)
             if pairs is None:
                 raise ParametrizeConversionError
-            return pairs, (idx,)
+            removal: tuple[_RemovalCandidate, ...]
+            if len(stmt.body) == 1:
+                removal = (_RemovalCandidate(index=idx, name=name),)
+            else:
+                removal = ()
+            return pairs, removal
 
     raise ParametrizeConversionError
 
@@ -627,6 +660,333 @@ def _build_new_body(
         new_body.append(stmt)
 
     return new_body
+
+
+def _find_matching_parametrize_decorator(
+    decorators: Sequence[cst.Decorator],
+    param_names: Sequence[str],
+) -> int | None:
+    expected = ",".join(param_names)
+
+    for index, decorator in enumerate(decorators):
+        node = decorator.decorator
+        if not isinstance(node, cst.Call):
+            continue
+        func = node.func
+        if not (
+            isinstance(func, cst.Attribute) and isinstance(func.attr, cst.Name) and func.attr.value == "parametrize"
+        ):
+            continue
+        if not node.args:
+            continue
+        arg = node.args[0]
+        value = getattr(arg, "value", None)
+        if not isinstance(value, cst.SimpleString):
+            continue
+        normalized = ",".join(part.strip() for part in value.value.strip("\"'").split(","))
+        if normalized == expected:
+            return index
+
+    return None
+
+
+def _append_rows_to_decorator(
+    decorator: cst.Decorator,
+    rows: Sequence[tuple[cst.BaseExpression, ...]],
+    include_ids: bool,
+) -> cst.Decorator:
+    call = decorator.decorator
+    if not isinstance(call, cst.Call):
+        raise ParametrizeConversionError
+
+    args = list(call.args)
+    if len(args) < 2:
+        raise ParametrizeConversionError
+
+    data_arg = args[1]
+    data_value = getattr(data_arg, "value", None)
+    if not isinstance(data_value, cst.List):
+        raise ParametrizeConversionError
+
+    elements = list(data_value.elements)
+    for row in rows:
+        if len(row) == 1:
+            elements.append(cst.Element(value=row[0].deep_clone()))
+        else:
+            tuple_expr = cst.Tuple([cst.Element(value=item.deep_clone()) for item in row])
+            elements.append(cst.Element(value=tuple_expr))
+
+    updated_data = data_value.with_changes(elements=elements)
+    args[1] = data_arg.with_changes(value=updated_data)
+
+    if include_ids:
+        ids_index: int | None = None
+        for idx, arg in enumerate(args):
+            keyword = getattr(arg, "keyword", None)
+            if isinstance(keyword, cst.Name) and keyword.value == "ids":
+                ids_index = idx
+                break
+
+        if ids_index is None:
+            raise ParametrizeConversionError
+
+        ids_arg = args[ids_index]
+        ids_value = getattr(ids_arg, "value", None)
+        if not isinstance(ids_value, cst.List):
+            raise ParametrizeConversionError
+
+        id_elements = list(ids_value.elements)
+        start = len(id_elements)
+        for offset in range(len(rows)):
+            id_elements.append(cst.Element(value=cst.SimpleString(value=f'"row_{start + offset}"')))
+
+        updated_ids = ids_value.with_changes(elements=id_elements)
+        args[ids_index] = ids_arg.with_changes(value=updated_ids)
+
+    updated_call = call.with_changes(args=tuple(args))
+    return decorator.with_changes(decorator=updated_call)
+
+
+def _reject_rows_referencing_local_state(
+    rows: Sequence[tuple[cst.BaseExpression, ...]],
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+    constants: Mapping[str, cst.BaseExpression],
+) -> None:
+    if not rows:
+        return
+
+    local_names = _collect_local_assignment_names(statements, loop_index)
+    if not local_names:
+        return
+
+    blocked_names = local_names | {"self", "cls"}
+
+    for row in rows:
+        for expression in row:
+            referenced = _collect_expression_names(expression)
+            if not referenced:
+                continue
+            blocked_refs = referenced.intersection(blocked_names)
+            if not blocked_refs:
+                continue
+
+            remaining = {name for name in blocked_refs if name not in constants}
+            if remaining:
+                raise ParametrizeConversionError
+
+
+def _collect_local_assignment_names(
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> set[str]:
+    names: set[str] = set()
+
+    for index in range(loop_index):
+        stmt = statements[index]
+        if not isinstance(stmt, cst.SimpleStatementLine):
+            continue
+        for small_stmt in stmt.body:
+            if isinstance(small_stmt, cst.Assign):
+                for assign_target in small_stmt.targets:
+                    target = assign_target.target
+                    if isinstance(target, cst.Name):
+                        names.add(target.value)
+            elif isinstance(small_stmt, cst.AnnAssign):
+                target = small_stmt.target
+                if isinstance(target, cst.Name):
+                    names.add(target.value)
+
+    return names
+
+
+def _collect_constant_assignment_values(
+    statements: Sequence[cst.BaseStatement],
+    loop_index: int,
+) -> dict[str, cst.BaseExpression]:
+    constants: dict[str, cst.BaseExpression] = {}
+
+    for index in range(loop_index):
+        stmt = statements[index]
+        if not isinstance(stmt, cst.SimpleStatementLine):
+            continue
+        for small_stmt in stmt.body:
+            if isinstance(small_stmt, cst.Assign):
+                if len(small_stmt.targets) != 1:
+                    continue
+                target = small_stmt.targets[0].target
+                if not isinstance(target, cst.Name):
+                    continue
+                value_expr = small_stmt.value
+                if _expression_is_constant(value_expr):
+                    constants[target.value] = value_expr
+            elif isinstance(small_stmt, cst.AnnAssign):
+                target = small_stmt.target
+                if not isinstance(target, cst.Name):
+                    continue
+
+                value_node = small_stmt.value
+                if value_node is None:
+                    continue
+                value_expr = value_node
+                if _expression_is_constant(value_expr):
+                    constants[target.value] = value_expr
+
+    return constants
+
+
+def _inline_constant_rows(
+    rows: Sequence[tuple[cst.BaseExpression, ...]],
+    constants: Mapping[str, cst.BaseExpression],
+) -> tuple[tuple[cst.BaseExpression, ...], ...]:
+    """Inline compile-time constants referenced by parametrized rows.
+
+    Developer Note:
+        Parametrization decorators are evaluated during module import, before
+        the test function executes and establishes its local scope. When a row
+        references a loop-local constant (for example, ``size = 3`` declared
+        immediately before the loop), the decorator would otherwise raise a
+        ``NameError`` because that name is undefined at decoration time. By
+        substituting the literal value recorded in ``constants`` we keep the
+        generated code import-safe while preserving the author’s intent. If a
+        value cannot be resolved to a compile-time constant we refuse the
+        conversion instead of emitting a broken parametrization.
+    """
+    if not constants:
+        return tuple(tuple(expression for expression in row) for row in rows)
+
+    return tuple(tuple(_inline_constant_expression(expression, constants) for expression in row) for row in rows)
+
+
+def _inline_constant_expression(
+    expression: cst.BaseExpression,
+    constants: Mapping[str, cst.BaseExpression],
+) -> cst.BaseExpression:
+    class _ConstantInliner(cst.CSTTransformer):
+        def __init__(self, mapping: Mapping[str, cst.BaseExpression]) -> None:
+            self.mapping = mapping
+
+        def leave_Name(
+            self,
+            original_node: cst.Name,
+            updated_node: cst.Name,
+        ) -> cst.BaseExpression:  # noqa: D401 - libcst signature
+            replacement = self.mapping.get(original_node.value)
+            if replacement is None:
+                return updated_node
+            return replacement.deep_clone()
+
+    transformer = _ConstantInliner(constants)
+    updated = expression.visit(transformer)
+    return cast(cst.BaseExpression, updated)
+
+
+def _expression_is_constant(expression: cst.CSTNode) -> bool:
+    if isinstance(expression, cst.Integer | cst.Float | cst.SimpleString):
+        return True
+
+    if isinstance(expression, cst.Name):
+        return expression.value in {"True", "False", "None"}
+
+    if isinstance(expression, cst.UnaryOperation):
+        return _expression_is_constant(expression.expression)
+
+    if isinstance(expression, cst.List | cst.Tuple | cst.Set):
+        return all(
+            isinstance(element, cst.Element) and _expression_is_constant(element.value)
+            for element in expression.elements
+        )
+
+    if isinstance(expression, cst.Dict):
+        return all(
+            isinstance(element, cst.DictElement)
+            and element.key is not None
+            and _expression_is_constant(element.key)
+            and _expression_is_constant(element.value)
+            for element in expression.elements
+        )
+
+    if isinstance(expression, cst.BinaryOperation):
+        return _expression_is_constant(expression.left) and _expression_is_constant(expression.right)
+
+    if isinstance(expression, cst.Attribute):
+        return _expression_is_constant(expression.value)
+
+    return False
+
+
+def _collect_expression_names(expression: cst.CSTNode) -> set[str]:
+    ignored = {"True", "False", "None"}
+    collected: set[str] = set()
+
+    class _Collector(cst.CSTVisitor):
+        def visit_Name(self, node: cst.Name) -> bool:  # noqa: N802 - libcst naming
+            collected.add(node.value)
+            return True
+
+    expression.visit(_Collector())
+
+    return collected.difference(ignored)
+
+
+def _filter_removal_candidates(
+    candidates: Sequence[_RemovalCandidate],
+    statements: Sequence[cst.BaseStatement],
+    subtest_loop: _SubtestLoop,
+) -> tuple[int, ...]:
+    removable_indexes: set[int] = set()
+
+    for candidate in candidates:
+        if candidate.name is None:
+            continue
+        if _is_name_used_outside_loop(candidate.name, statements, subtest_loop, candidate.index):
+            continue
+        removable_indexes.add(candidate.index)
+
+    return tuple(sorted(removable_indexes))
+
+
+def _is_name_used_outside_loop(
+    name: str,
+    statements: Sequence[cst.BaseStatement],
+    subtest_loop: _SubtestLoop,
+    assignment_index: int,
+) -> bool:
+    for index, statement in enumerate(statements):
+        if index == assignment_index:
+            continue
+        if index == subtest_loop.index:
+            if _block_contains_name(subtest_loop.body, name):
+                return True
+            continue
+        if _node_contains_name(statement, name):
+            return True
+
+    return False
+
+
+def _block_contains_name(block: cst.IndentedBlock, name: str) -> bool:
+    for inner in block.body:
+        if _node_contains_name(inner, name):
+            return True
+    return False
+
+
+def _node_contains_name(node: cst.CSTNode, name: str) -> bool:
+    class _Visitor(cst.CSTVisitor):
+        def __init__(self, target: str) -> None:
+            self.target = target
+            self.found = False
+
+        def visit_Name(self, visit_node: cst.Name) -> bool:  # noqa: N802 - libcst naming
+            if visit_node.value == self.target:
+                self.found = True
+                return False
+            return True
+
+    visitor = _Visitor(name)
+    node.visit(visitor)
+    return visitor.found
 
 
 def _is_parametrize_decorator(decorator: cst.Decorator) -> bool:

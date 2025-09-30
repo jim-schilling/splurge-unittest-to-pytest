@@ -15,10 +15,9 @@ class TestMultiInherit(BaseTest):
         m.method.return_value = 42
         assert m.method() == 42
 
-    def test_with_subtests(self):
-        for i in range(3):
-            with subtests.test(i=i):
-                assert i < 5
+    @pytest.mark.parametrize("i", [0, 1, 2], ids=["row_0", "row_1", "row_2"])
+    def test_with_subtests(self, i: int):
+        assert i < 5
 
 
 def test_already_pytest_style():

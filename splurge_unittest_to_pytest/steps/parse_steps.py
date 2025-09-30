@@ -63,16 +63,11 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
             ``libcst.Module`` or a failure result with the exception.
         """
         try:
-            # Determine effective parametrize behavior. We introduce a
-            # tri-state `subtest` config: when `subtest` is None we fall back
-            # to `parametrize` for backward compatibility. When `subtest` is
-            # True we preserve unittest.subTest semantics (no parametrize),
-            # otherwise parametrize is used.
+            # Determine effective parametrize behavior directly from the
+            # configuration flag. When disabled we skip parametrize-specific
+            # rewrites and retain subTest semantics.
             cfg = context.config
-            # If the user explicitly requested subtest-preserving mode (cfg.subtest
-            # is True) do not parametrize. Otherwise fall back to the legacy
-            # `parametrize` config value (keeps previous conservative default).
-            effective_parametrize = False if bool(cfg.subtest) else bool(cfg.parametrize)
+            effective_parametrize = bool(cfg.parametrize)
 
             # Use full transform_code to include assertion replacements and imports
             transformer = UnittestToPytestCstTransformer(

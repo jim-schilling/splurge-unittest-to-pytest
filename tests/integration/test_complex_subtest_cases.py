@@ -22,10 +22,9 @@ def _read(path: pathlib.Path) -> str:
 def _run_conversion_and_get_outputs(given: pathlib.Path) -> str:
     # Use the public migrate API to convert a file path with dry_run so we
     # can capture the generated code from the returned Result metadata.
-    # Request a dry-run and explicitly set subtest=False so the pipeline
-    # will prefer parametrize-style pytest output. Do not pass `parametrize`
-    # here; the pipeline computes parametrize based on the subtest flag.
-    cfg = MigrationConfig().with_override(dry_run=True, subtest=False, parametrize=True)
+    # The migration defaults now prefer parametrize-style pytest output,
+    # so a dry-run override is sufficient.
+    cfg = MigrationConfig().with_override(dry_run=True)
 
     res = main.migrate(str(given), cfg)
     # Expect metadata.generated_code mapping to exist and contain one entry
