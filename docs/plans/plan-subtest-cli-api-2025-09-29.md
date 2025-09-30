@@ -4,12 +4,12 @@ Date: 2025-09-29
 
 Summary
 -------
-This proposal changes the CLI and public API surface for controlling how unittest `subTest()` blocks are converted to pytest tests. The default behavior remains converting `subTest` loops into isolated `@pytest.mark.parametrize` test invocations. A new flag, `--subtest`, will be added to opt *into* subTest-style conversion (using the pytest-subtests plugin or an equivalent mechanism). The project will not support the legacy `--parametrize` flag; new users should use `--subtest` to enable subtest-preserving behavior.
+This proposal changes the CLI and public API surface for controlling how unittest `subTest()` blocks are converted to pytest tests. The default behavior remains converting `subTest` loops into isolated `@pytest.mark.parametrize` test invocations. A new presence-only flag, `--subtest`, will be added to opt *into* subTest-style conversion (using the pytest-subtests plugin or an equivalent mechanism). When `--subtest` is not provided the converter will prefer parametrize behavior.
 
 Goals
 -----
 - Make the default conversion behavior explicit: convert `subTest` loops to `parametrize` (isolated test invocations).
-- Add `--subtest` CLI option to opt in to converting `subTest` loops into pytest tests that preserve the original `subTest` semantics (using `pytest-subtests` plugin or equivalent runtime behavior).
+-- Add `--subtest` presence-only CLI option to opt in to converting `subTest` loops into pytest tests that preserve the original `subTest` semantics (using `pytest-subtests` plugin or equivalent runtime behavior).
 - Simplify code paths: places that currently check `parametrize` should check `subtest` (or `not subtest`) to choose behavior.
 - Provide a clear deprecation path from `--parametrize` to `--subtest` and update API docs.
 

@@ -97,6 +97,10 @@ class MigrationConfig:
     # parallel_processing removed; library no longer exposes parallelism flag
     # Optional transforms
     parametrize: bool = False
+    # New option: explicit subtest behavior. When True preserve
+    # unittest.subTest semantics (use pytest-subtests). When False (default)
+    # prefer parametrize behavior.
+    subtest: bool = False
 
     # Reporting settings
     verbose: bool = False
