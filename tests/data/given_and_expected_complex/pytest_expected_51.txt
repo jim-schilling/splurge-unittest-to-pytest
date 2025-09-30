@@ -1,0 +1,22 @@
+"""Expected pytest parametrized example for email validation."""
+
+import pytest
+
+
+class TestEmailValidation:
+    """Validate email domains using pytest parametrization."""
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            {"email": "alpha@example.com", "active": True},
+            {"email": "beta@example.org", "active": False},
+            {"email": "gamma@example.net", "active": True},
+        ],
+        ids=["row_0", "row_1", "row_2"],
+    )
+    def test_email_domains(self, case: dict[str, object]) -> None:
+        domain = case["email"].split("@")[-1]
+        if case["active"]:
+            assert "." in domain
+        assert isinstance(domain, str)

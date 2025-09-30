@@ -1,0 +1,21 @@
+"""Expected pytest parametrized example for tuple loop targets."""
+
+import pytest
+
+
+class TestApiStatus:
+    """Ensure HTTP method to status mappings remain stable."""
+
+    @pytest.mark.parametrize(
+        "method,status",
+        [
+            ("GET", 200),
+            ("POST", 201),
+            ("DELETE", 204),
+        ],
+        ids=["row_0", "row_1", "row_2"],
+    )
+    def test_method_status(self, method: str, status: int) -> None:
+        response = {"method": method, "status": status}
+        assert response["status"] == status
+        assert response["method"].isupper()

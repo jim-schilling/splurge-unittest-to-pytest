@@ -1,0 +1,21 @@
+"""Trimmed unittest example focused on subTest parametrization."""
+
+import unittest
+
+
+class TestEmailValidation(unittest.TestCase):
+    """Validate email domains using subTest loops."""
+
+    def test_email_domains(self) -> None:
+        cases = [
+            {"email": "alpha@example.com", "active": True},
+            {"email": "beta@example.org", "active": False},
+            {"email": "gamma@example.net", "active": True},
+        ]
+
+        for case in cases:
+            with self.subTest(label=case["email"]):
+                domain = case["email"].split("@")[-1]
+                if case["active"]:
+                    self.assertIn(".", domain)
+                self.assertIsInstance(domain, str)

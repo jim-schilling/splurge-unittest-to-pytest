@@ -1,0 +1,14 @@
+"""Trimmed unittest example covering range-based subTest iteration."""
+
+import unittest
+
+
+class TestRetryLogic(unittest.TestCase):
+    """Validate simple retry delay calculations."""
+
+    def test_backoff_steps(self) -> None:
+        for step in range(1, 4):
+            with self.subTest(step=step):
+                delay = step * 2
+                self.assertGreaterEqual(delay, 2)
+                self.assertLessEqual(delay, 8)

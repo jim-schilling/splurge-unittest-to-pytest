@@ -48,6 +48,11 @@ def _build_simple_test_func(iter_node, arg_name="i", before_stmts=None, decorato
     return func
 
 
+def _annotation_code(param: cst.Param) -> str:
+    assert param.annotation is not None
+    return cst.Module(body=[]).code_for_node(param.annotation.annotation)
+
+
 def test_convert_simple_subtests_positional_list():
     transformer = types.SimpleNamespace(needs_pytest_import=False)
     iter_node = cst.List([cst.Element(cst.Integer("1")), cst.Element(cst.Integer("2"))])
@@ -63,6 +68,12 @@ def test_convert_simple_subtests_positional_list():
     f = deco.decorator.func
     assert isinstance(f, cst.Attribute)
     assert f.attr.value == "parametrize"
+    assert len(deco.decorator.args) == 3
+    ids_arg = deco.decorator.args[2]
+    assert isinstance(ids_arg.keyword, cst.Name)
+    assert ids_arg.keyword.value == "ids"
+    param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "i")
+    assert _annotation_code(param) == "int"
 
 
 def test_convert_simple_subtests_range_and_limit():
@@ -77,6 +88,9 @@ def test_convert_simple_subtests_range_and_limit():
     param_list = deco.decorator.args[1].value
     assert isinstance(param_list, cst.List)
     assert len(param_list.elements) == 3
+    ids_arg = deco.decorator.args[2]
+    assert isinstance(ids_arg.keyword, cst.Name)
+    assert ids_arg.keyword.value == "ids"
 
     # range too long should return None
     transformer2 = types.SimpleNamespace(needs_pytest_import=False)
@@ -92,23 +106,56 @@ def test_convert_simple_subtests_name_assignment_reference():
     assign = cst.SimpleStatementLine(
         body=[
             cst.Assign(
-                targets=[cst.AssignTarget(target=cst.Name("vals"))],
-                value=cst.List([cst.Element(cst.Integer("7")), cst.Element(cst.Integer("8"))]),
+                targets=[cst.AssignTarget(target=cst.Name("cases"))],
+                value=cst.List(
+                    [
+                        cst.Element(
+                            cst.Dict(
+                                elements=[
+                                    cst.DictElement(
+                                        cst.SimpleString('"email"'), cst.SimpleString('"alpha@example.com"')
+                                    ),
+                                    cst.DictElement(cst.SimpleString('"active"'), cst.Name("True")),
+                                ]
+                            )
+                        ),
+                        cst.Element(
+                            cst.Dict(
+                                elements=[
+                                    cst.DictElement(
+                                        cst.SimpleString('"email"'), cst.SimpleString('"beta@example.org"')
+                                    ),
+                                    cst.DictElement(cst.SimpleString('"active"'), cst.Name("False")),
+                                ]
+                            )
+                        ),
+                    ]
+                ),
             )
         ]
     )
-    func = _build_simple_test_func(cst.Name("vals"), before_stmts=[assign])
+    func = _build_simple_test_func(cst.Name("cases"), arg_name="case", before_stmts=[assign])
     out = st.convert_simple_subtests_to_parametrize(func, func, transformer)
-    # The transformer may conservatively return None if it cannot safely
-    # resolve the prior assignment; accept either outcome but if it
-    # succeeded, assert the decorator was added correctly.
-    if out is None:
-        assert out is None
-    else:
-        deco = out.decorators[0]
-        param_list = deco.decorator.args[1].value
-        assert isinstance(param_list, cst.List)
-        assert len(param_list.elements) == 2
+    assert out is not None
+    deco = out.decorators[0]
+    param_list = deco.decorator.args[1].value
+    assert isinstance(param_list, cst.List)
+    assert len(param_list.elements) == 2
+    # the prior assignment should be removed from the body
+    assert all(
+        not (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and any(
+                isinstance(small, cst.Assign)
+                and isinstance(small.targets[0].target, cst.Name)
+                and small.targets[0].target.value == "vals"
+                for small in stmt.body
+            )
+        )
+        for stmt in out.body.body
+    )
+    case_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "case")
+    assert _annotation_code(case_param) == "dict[str, object]"
 
 
 def test_convert_simple_subtests_existing_parametrize_decorator_blocks():
@@ -120,6 +167,285 @@ def test_convert_simple_subtests_existing_parametrize_decorator_blocks():
     func_with_deco = _build_simple_test_func(cst.List([cst.Element(cst.Integer("1"))]), decorators=[existing_deco])
     out = st.convert_simple_subtests_to_parametrize(func_with_deco, func_with_deco, transformer)
     assert out is None
+
+
+def test_convert_simple_subtests_tuple_target():
+    transformer = types.SimpleNamespace(needs_pytest_import=False)
+    iter_node = cst.List(
+        [
+            cst.Element(
+                value=cst.Tuple(
+                    [
+                        cst.Element(cst.SimpleString('"GET"')),
+                        cst.Element(cst.Integer("200")),
+                    ]
+                )
+            ),
+            cst.Element(
+                value=cst.Tuple(
+                    [
+                        cst.Element(cst.SimpleString('"POST"')),
+                        cst.Element(cst.Integer("201")),
+                    ]
+                )
+            ),
+        ]
+    )
+    for_target = cst.Tuple([cst.Element(value=cst.Name("left")), cst.Element(value=cst.Name("right"))])
+    sub_call = cst.Call(
+        func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("subTest")),
+        args=[cst.Arg(keyword=cst.Name("member"), value=cst.Name("left"))],
+    )
+    with_item = cst.WithItem(item=sub_call)
+    with_body = cst.IndentedBlock(
+        body=[
+            cst.SimpleStatementLine(
+                body=[
+                    cst.Assign(
+                        targets=[cst.AssignTarget(target=cst.Name("result"))],
+                        value=cst.Tuple(
+                            [
+                                cst.Element(cst.Name("left")),
+                                cst.Element(cst.Name("right")),
+                            ]
+                        ),
+                    )
+                ]
+            )
+        ]
+    )
+    with_node = cst.With(items=[with_item], body=with_body)
+    loop = cst.For(target=for_target, iter=iter_node, body=cst.IndentedBlock(body=[with_node]))
+    func = cst.FunctionDef(
+        name=cst.Name("test_pairs"),
+        params=cst.Parameters(params=[]),
+        body=cst.IndentedBlock(body=[loop]),
+    )
+    out = st.convert_simple_subtests_to_parametrize(func, func, transformer)
+    assert out is not None
+    decorator = out.decorators[0]
+    param_str = decorator.decorator.args[0].value
+    assert isinstance(param_str, cst.SimpleString)
+    assert param_str.value == '"left,right"'
+    data_list = decorator.decorator.args[1].value
+    assert isinstance(data_list, cst.List)
+    tuple_values = [element.value for element in data_list.elements]
+    assert all(isinstance(value, cst.Tuple) for value in tuple_values)
+    method_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "left")
+    assert _annotation_code(method_param) == "str"
+    status_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "right")
+    assert _annotation_code(status_param) == "int"
+
+
+def test_convert_simple_subtests_enumerate_name_reference():
+    transformer = types.SimpleNamespace(needs_pytest_import=False)
+    cases_assignment = cst.SimpleStatementLine(
+        body=[
+            cst.Assign(
+                targets=[cst.AssignTarget(target=cst.Name("cases"))],
+                value=cst.List(
+                    [
+                        cst.Element(
+                            value=cst.Dict(
+                                elements=[
+                                    cst.DictElement(
+                                        key=cst.SimpleString('"email"'), value=cst.SimpleString('"alpha@example.com"')
+                                    ),
+                                    cst.DictElement(key=cst.SimpleString('"active"'), value=cst.Name("True")),
+                                ]
+                            )
+                        ),
+                        cst.Element(
+                            value=cst.Dict(
+                                elements=[
+                                    cst.DictElement(
+                                        key=cst.SimpleString('"email"'), value=cst.SimpleString('"beta@example.org"')
+                                    ),
+                                    cst.DictElement(key=cst.SimpleString('"active"'), value=cst.Name("False")),
+                                ]
+                            )
+                        ),
+                    ]
+                ),
+            )
+        ]
+    )
+    iter_call = cst.Call(func=cst.Name("enumerate"), args=[cst.Arg(value=cst.Name("cases"))])
+    loop_target = cst.Tuple([cst.Element(value=cst.Name("index")), cst.Element(value=cst.Name("case"))])
+    sub_call = cst.Call(
+        func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("subTest")),
+        args=[
+            cst.Arg(keyword=cst.Name("index"), value=cst.Name("index")),
+            cst.Arg(keyword=cst.Name("case"), value=cst.Name("case")),
+        ],
+    )
+    with_node = cst.With(
+        items=[cst.WithItem(item=sub_call)],
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(cst.Name("case"))])]),
+    )
+    loop = cst.For(target=loop_target, iter=iter_call, body=cst.IndentedBlock(body=[with_node]))
+    func = cst.FunctionDef(
+        name=cst.Name("test_cases"),
+        params=cst.Parameters(params=[]),
+        body=cst.IndentedBlock(body=[cases_assignment, loop]),
+    )
+
+    out = st.convert_simple_subtests_to_parametrize(func, func, transformer)
+    assert out is not None
+    decorator = out.decorators[0]
+    param_arg = decorator.decorator.args[0].value
+    assert isinstance(param_arg, cst.SimpleString)
+    assert param_arg.value == '"index,case"'
+    data_arg = decorator.decorator.args[1].value
+    assert isinstance(data_arg, cst.List)
+    assert len(data_arg.elements) == 2
+    first_tuple = data_arg.elements[0].value
+    assert isinstance(first_tuple, cst.Tuple)
+    first_index = first_tuple.elements[0].value
+    assert isinstance(first_index, cst.Integer)
+    assert first_index.value == "0"
+    first_case = first_tuple.elements[1].value
+    assert isinstance(first_case, cst.Dict)
+
+    assert all(
+        not (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and any(
+                isinstance(small, cst.Assign)
+                and isinstance(small.targets[0].target, cst.Name)
+                and small.targets[0].target.value == "cases"
+                for small in stmt.body
+            )
+        )
+        for stmt in out.body.body
+    )
+
+    index_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "index")
+    assert _annotation_code(index_param) == "int"
+    case_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "case")
+    assert _annotation_code(case_param) == "dict[str, object]"
+
+
+def test_convert_simple_subtests_dict_items():
+    transformer = types.SimpleNamespace(needs_pytest_import=False)
+    operations_assignment = cst.SimpleStatementLine(
+        body=[
+            cst.Assign(
+                targets=[cst.AssignTarget(target=cst.Name("operations"))],
+                value=cst.Dict(
+                    elements=[
+                        cst.DictElement(
+                            key=cst.SimpleString('"add"'),
+                            value=cst.Tuple(
+                                [
+                                    cst.Element(value=cst.Name("add_fn")),
+                                    cst.Element(
+                                        value=cst.List(
+                                            [
+                                                cst.Element(
+                                                    value=cst.Tuple(
+                                                        [
+                                                            cst.Element(value=cst.Integer("1")),
+                                                            cst.Element(value=cst.Integer("2")),
+                                                            cst.Element(value=cst.Integer("3")),
+                                                        ]
+                                                    )
+                                                ),
+                                                cst.Element(
+                                                    value=cst.Tuple(
+                                                        [
+                                                            cst.Element(value=cst.Integer("2")),
+                                                            cst.Element(value=cst.Integer("3")),
+                                                            cst.Element(value=cst.Integer("5")),
+                                                        ]
+                                                    )
+                                                ),
+                                            ]
+                                        )
+                                    ),
+                                ]
+                            ),
+                        ),
+                        cst.DictElement(
+                            key=cst.SimpleString('"multiply"'),
+                            value=cst.Tuple(
+                                [
+                                    cst.Element(value=cst.Name("mul_fn")),
+                                    cst.Element(
+                                        value=cst.List(
+                                            [
+                                                cst.Element(
+                                                    value=cst.Tuple(
+                                                        [
+                                                            cst.Element(value=cst.Integer("2")),
+                                                            cst.Element(value=cst.Integer("4")),
+                                                            cst.Element(value=cst.Integer("8")),
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                        )
+                                    ),
+                                ]
+                            ),
+                        ),
+                    ]
+                ),
+            )
+        ]
+    )
+    iter_items = cst.Call(
+        func=cst.Attribute(value=cst.Name("operations"), attr=cst.Name("items")),
+        args=[],
+    )
+    loop_target = cst.Tuple([cst.Element(value=cst.Name("op_name")), cst.Element(value=cst.Name("payload"))])
+    sub_call = cst.Call(
+        func=cst.Attribute(value=cst.Name("self"), attr=cst.Name("subTest")),
+        args=[cst.Arg(keyword=cst.Name("operation"), value=cst.Name("op_name"))],
+    )
+    with_node = cst.With(
+        items=[cst.WithItem(item=sub_call)],
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(cst.Name("payload"))])]),
+    )
+    loop = cst.For(target=loop_target, iter=iter_items, body=cst.IndentedBlock(body=[with_node]))
+    func = cst.FunctionDef(
+        name=cst.Name("test_operations"),
+        params=cst.Parameters(params=[]),
+        body=cst.IndentedBlock(body=[operations_assignment, loop]),
+    )
+
+    out = st.convert_simple_subtests_to_parametrize(func, func, transformer)
+    assert out is not None
+
+    decorator = out.decorators[0]
+    param_arg = decorator.decorator.args[0].value
+    assert isinstance(param_arg, cst.SimpleString)
+    assert param_arg.value == '"op_name,payload"'
+    data_arg = decorator.decorator.args[1].value
+    assert isinstance(data_arg, cst.List)
+    assert len(data_arg.elements) == 2
+    first_tuple = data_arg.elements[0].value
+    assert isinstance(first_tuple, cst.Tuple)
+    assert isinstance(first_tuple.elements[0].value, cst.SimpleString)
+    assert isinstance(first_tuple.elements[1].value, cst.Tuple)
+
+    assert all(
+        not (
+            isinstance(stmt, cst.SimpleStatementLine)
+            and any(
+                isinstance(small, cst.Assign)
+                and isinstance(small.targets[0].target, cst.Name)
+                and small.targets[0].target.value == "operations"
+                for small in stmt.body
+            )
+        )
+        for stmt in out.body.body
+    )
+
+    op_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "op_name")
+    assert _annotation_code(op_param) == "str"
+    payload_param = next(p for p in out.params.params if isinstance(p.name, cst.Name) and p.name.value == "payload")
+    assert payload_param.annotation is None
 
 
 def test_convert_subtests_in_body_and_body_uses_subtests():

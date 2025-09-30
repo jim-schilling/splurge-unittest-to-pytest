@@ -1,0 +1,20 @@
+"""Trimmed unittest example covering tuple loop targets."""
+
+import unittest
+
+
+class TestApiStatus(unittest.TestCase):
+    """Ensure HTTP method to status mappings remain stable."""
+
+    def test_method_status(self) -> None:
+        pairs = [
+            ("GET", 200),
+            ("POST", 201),
+            ("DELETE", 204),
+        ]
+
+        for method, status in pairs:
+            with self.subTest(method=method):
+                response = {"method": method, "status": status}
+                self.assertEqual(response["status"], status)
+                self.assertTrue(response["method"].isupper())

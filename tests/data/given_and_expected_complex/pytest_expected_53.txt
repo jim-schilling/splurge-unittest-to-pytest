@@ -1,0 +1,13 @@
+"""Expected pytest parametrized example for range-based iteration."""
+
+import pytest
+
+
+class TestRetryLogic:
+    """Validate simple retry delay calculations."""
+
+    @pytest.mark.parametrize("step", [1, 2, 3], ids=["row_0", "row_1", "row_2"])
+    def test_backoff_steps(self, step: int) -> None:
+        delay = step * 2
+        assert delay >= 2
+        assert delay <= 8

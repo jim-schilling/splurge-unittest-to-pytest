@@ -155,6 +155,7 @@ def create_config(
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
     parametrize: bool = False,
+    subtest: bool | None = None,
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
@@ -214,6 +215,7 @@ def create_config(
         report_format=report_format,
         test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
         parametrize=parametrize,
+        subtest=subtest,
         target_suffix=suffix,
         target_extension=ext,
     )
@@ -392,7 +394,16 @@ def migrate(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
     parametrize: bool = typer.Option(
-        False, "--parametrize", help="Attempt conservative subTest -> parametrize conversions", is_flag=True
+        False,
+        "--parametrize",
+        help="(deprecated) Attempt conservative subTest -> parametrize conversions. Use --no-subtest or omit --subtest to parametrize.",
+        is_flag=True,
+    ),
+    subtest: bool = typer.Option(
+        False,
+        "--subtest",
+        help="Preserve unittest.subTest semantics using pytest-subtests when present; default behavior (no flag) is parametrize.",
+        is_flag=True,
     ),
     suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
     ext: str | None = typer.Option(
@@ -435,6 +446,11 @@ def migrate(
         typer.echo("Error: --info and --debug cannot be used together.")
         raise typer.Exit(code=2)
 
+    # Validate mutually exclusive transformation flags
+    if parametrize and subtest:
+        typer.echo("Error: --parametrize and --subtest are mutually exclusive. Pick one.")
+        raise typer.Exit(code=2)
+
     if debug or info:
         setup_logging(debug)
 
@@ -462,6 +478,7 @@ def migrate(
             report_format=report_format,
             test_method_prefixes=test_method_prefixes,
             parametrize=parametrize,
+            subtest=subtest,
             suffix=suffix,
             ext=ext,
         )

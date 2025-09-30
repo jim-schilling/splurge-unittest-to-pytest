@@ -149,7 +149,8 @@ All flags are available on the ``migrate`` command. Summary below; use
  - ``--list``: List files only in dry-run mode (presence-only flag).
  - ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
  - ``--fail-fast``: Stop on first error (presence-only flag).
- - ``--parametrize``: Attempt conservative subTest -> parametrize conversions (presence-only flag).
+ - ``--parametrize``: Attempt conservative subTest -> parametrize conversions (presence-only flag). NOTE: this flag is deprecated in favor of the clearer ``--subtest`` flag described below.
+ - ``--subtest``: Presence-only flag. When present the converter will attempt to generate pytest code that preserves ``unittest.subTest`` semantics using the ``subtests`` fixture (from ``pytest-subtests``) or a compatibility shim. When ``--subtest`` is not provided the tool defaults to parametrize-style conversions (i.e., generate ``@pytest.mark.parametrize`` when safe).
 - ``--report / --no-report``: Generate a migration report (default: on).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
 - ``--config FILE``: Load configuration from YAML file.
@@ -204,6 +205,21 @@ The function returns a :class:`Result` that contains migrated paths and
 optional metadata. When ``dry_run`` is enabled the result metadata often
 includes a ``generated_code`` mapping of target paths to code strings.
 
+Example: enable subtest-preserving mode programmatically
+
+```python
+from splurge_unittest_to_pytest import main
+from splurge_unittest_to_pytest.context import MigrationConfig
+
+config = MigrationConfig(dry_run=True, subtest=True)
+result = main.migrate(["tests/test_example.py"], config=config)
+if result.is_success():
+	gen_map = result.metadata.get("generated_code", {})
+	print(gen_map)
+else:
+	print("Migration failed:", result.error)
+```
+
 Safety and limitations
 ----------------------
 
@@ -235,6 +251,12 @@ Developer notes
 - Architecture: the pipeline is organized as Jobs → Tasks → Steps, each
 	with a single responsibility. See the source under ``splurge_unittest_to_pytest/`` for
 	concrete implementations.
+- Assertion transformer helpers: ``assert_transformer.py`` now exposes
+	plain functions such as ``_rewrite_expression`` and
+	``_rewrite_unary_operation`` backed by a metadata-aware
+	``parenthesized_expression`` helper. Focused tests in
+	``tests/unit/test_assert_transformer_expression_rewrites.py`` cover
+	positive, negative, and edge-case flows for these helpers.
 - Contributions: open a PR against the ``main`` branch and include tests
 	for new behavior. Keep changes small and run the full suite before
 	requesting review.
