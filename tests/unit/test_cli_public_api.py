@@ -15,6 +15,7 @@ def test_create_config_defaults():
     assert cfg.file_patterns == ["test_*.py"]
     # fixture_scope is no longer exposed as a CLI option; ensure config created
     assert hasattr(cfg, "line_length")
+    assert cfg.parametrize is True
 
 
 def test_validate_source_files_with_patterns(tmp_path):

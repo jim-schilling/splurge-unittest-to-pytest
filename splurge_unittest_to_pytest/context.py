@@ -96,13 +96,9 @@ class MigrationConfig:
     fail_fast: bool = False
     # parallel_processing removed; library no longer exposes parallelism flag
     # Optional transforms
-    parametrize: bool = False
+    parametrize: bool = True
     parametrize_ids: bool = True
     parametrize_type_hints: bool = True
-    # New option: explicit subtest behavior. When True preserve
-    # unittest.subTest semantics (use pytest-subtests). When False (default)
-    # prefer parametrize behavior.
-    subtest: bool = False
 
     # Reporting settings
     verbose: bool = False
@@ -400,18 +396,6 @@ class ContextManager:
 
         if config.report_format not in ["json", "html", "markdown"]:
             issues.append("report_format must be one of: json, html, markdown")
-
-        # Validate mutually exclusive flags: `parametrize` and `subtest` should
-        # not both be enabled. Historically both flags existed during a
-        # transitional period; require callers to pick one behavior to avoid
-        # ambiguous transformation semantics.
-        if getattr(config, "parametrize", False) and getattr(config, "subtest", False):
-            # This is a hard failure because the pipeline cannot deterministically
-            # decide which transformation strategy to apply when both are set.
-            return Result.failure(
-                ValueError("Configuration invalid: 'parametrize' and 'subtest' are mutually exclusive"),
-                {"parametrize": config.parametrize, "subtest": config.subtest},
-            )
 
         if issues:
             return Result.warning(config, [f"Configuration issues: {', '.join(issues)}"])

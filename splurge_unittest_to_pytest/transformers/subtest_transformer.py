@@ -51,7 +51,20 @@ def convert_simple_subtests_to_parametrize(
 ) -> cst.FunctionDef | None:
     """Delegate to the parametrization helper module."""
 
-    return convert_subtest_loop_to_parametrize(original_func, updated_func, transformer)
+    current = updated_func
+    changed = False
+
+    while True:
+        converted = convert_subtest_loop_to_parametrize(current, current, transformer)
+        if converted is None:
+            break
+        changed = True
+        current = converted
+
+    if not changed:
+        return None
+
+    return current
 
 
 def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.BaseStatement]:

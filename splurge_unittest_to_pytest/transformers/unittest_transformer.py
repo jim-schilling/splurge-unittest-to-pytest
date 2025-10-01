@@ -256,7 +256,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
     def __init__(
         self,
         test_prefixes: list[str] | None = None,
-        parametrize: bool = False,
+        parametrize: bool = True,
         parametrize_include_ids: bool | None = None,
         parametrize_add_annotations: bool | None = None,
     ) -> None:

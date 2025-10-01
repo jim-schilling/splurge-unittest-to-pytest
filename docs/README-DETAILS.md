@@ -82,7 +82,7 @@ Limitations and caveats
 -----------------------
 - Dynamic or metaprogrammed tests (tests generated at runtime, complex class factory patterns) are not reliably converted and are typically left unchanged.
 - Custom ``TestCase`` subclasses that override discovery, run logic, or implement non-trivial helpers may prevent safe automatic conversion.
-- Converting ``subTest`` to ``parametrize`` is conservative: the transformer only attempts this when the inputs are statically discoverable and the loop body is side-effect free.
+- Converting ``subTest`` to ``parametrize`` is conservative: the transformer only attempts this when the inputs are statically discoverable and the loop body is side-effect free. Parametrization is enabled by default; disable it with ``--no-parametrize``/``--subtest`` on the CLI or ``MigrationConfig(parametrize=False)`` in code.
 - Any conversion that may alter test ordering, scoping, or shared mutable state (for example, complex class-level fixtures) is avoided or flagged for manual review.
 - The semantics of ``expectedFailure`` differ slightly between ``unittest`` and ``pytest.xfail``; when a conversion is applied the tool documents the change in the migration report so users can verify intent.
 
@@ -149,8 +149,8 @@ All flags are available on the ``migrate`` command. Summary below; use
  - ``--list``: List files only in dry-run mode (presence-only flag).
  - ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
  - ``--fail-fast``: Stop on first error (presence-only flag).
- - ``--parametrize``: Attempt conservative subTest -> parametrize conversions (presence-only flag). NOTE: this flag is deprecated in favor of the clearer ``--subtest`` flag described below.
- - ``--subtest``: Presence-only flag. When present the converter will attempt to generate pytest code that preserves ``unittest.subTest`` semantics using the ``subtests`` fixture (from ``pytest-subtests``) or a compatibility shim. When ``--subtest`` is not provided the tool defaults to parametrize-style conversions (i.e., generate ``@pytest.mark.parametrize`` when safe).
+ - ``--parametrize / --no-parametrize``: Explicitly control conservative ``subTest`` → ``pytest.mark.parametrize`` conversions. By default the tool enables parametrization; pass ``--no-parametrize`` to keep ``subTest`` blocks as-is.
+ - ``--subtest``: Compatibility flag equivalent to ``--no-parametrize``. When present the converter preserves ``unittest.subTest`` semantics via the ``pytest-subtests`` fixture or compatibility shim instead of generating ``@pytest.mark.parametrize``.
 - ``--report / --no-report``: Generate a migration report (default: on).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
 - ``--config FILE``: Load configuration from YAML file.
@@ -205,13 +205,16 @@ The function returns a :class:`Result` that contains migrated paths and
 optional metadata. When ``dry_run`` is enabled the result metadata often
 includes a ``generated_code`` mapping of target paths to code strings.
 
-Example: enable subtest-preserving mode programmatically
+Example: disable parametrization programmatically
 
 ```python
 from splurge_unittest_to_pytest import main
 from splurge_unittest_to_pytest.context import MigrationConfig
 
-config = MigrationConfig(dry_run=True, subtest=True)
+config = MigrationConfig(
+    dry_run=True,
+    parametrize=False,
+)
 result = main.migrate(["tests/test_example.py"], config=config)
 if result.is_success():
 	gen_map = result.metadata.get("generated_code", {})

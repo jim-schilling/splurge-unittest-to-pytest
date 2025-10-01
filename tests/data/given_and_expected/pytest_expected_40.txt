@@ -2,7 +2,6 @@ import pytest
 
 
 class T:
-    def test_nested(self, subtests):
-        for i in [1, 2]:
-            with subtests.test(i=i):
-                assert str(i) == str(i)
+    @pytest.mark.parametrize("i", [1, 2], ids=["row_0", "row_1"])
+    def test_nested(self, i: int):
+        assert str(i) == str(i)
