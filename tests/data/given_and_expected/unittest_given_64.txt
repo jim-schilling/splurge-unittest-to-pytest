@@ -1,0 +1,14 @@
+import unittest
+
+
+class TestNestedSubtests(unittest.TestCase):
+    def test_nested(self):
+        prefix = 'p'
+        sizes = [1, 2]
+        flags = [True, False]
+        for s in sizes:
+            for f in flags:
+                with self.subTest(size=s, flag=f):
+                    value = f"{prefix}{s}"
+                    self.assertTrue(len(value) > 0)
+

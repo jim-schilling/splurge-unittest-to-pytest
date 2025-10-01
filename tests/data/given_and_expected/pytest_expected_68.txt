@@ -1,0 +1,10 @@
+import pytest
+
+
+class TestTupleTargets:
+    def test_tuple_target(self, subtests):
+        pairs = [(1, 2), (3, 4)]
+        for a, b in pairs:
+            # positional subTest with tuple targets (edge-case for conversion)
+            with subtests.test(a, b):
+                assert a < b

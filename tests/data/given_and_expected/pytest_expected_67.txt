@@ -1,0 +1,14 @@
+import pytest
+
+
+class Helper:
+    CONST = 7
+
+
+class TestAttributes:
+    def test_attr(self, subtests):
+        helper = Helper()
+        values = [helper.CONST]
+        for val in values:
+            with subtests.test(val=val):
+                assert val == 7

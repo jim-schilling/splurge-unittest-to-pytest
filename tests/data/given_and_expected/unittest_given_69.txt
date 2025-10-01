@@ -1,0 +1,14 @@
+import unittest
+
+
+class TestKeywordOnlySubtests(unittest.TestCase):
+    def test_kwonly(self):
+        for x in [0, 1]:
+            with self.subTest(x=x):
+                self.assertIn(x, (0, 1))
+
+    def test_kwonly_multiple(self):
+        for x in [2, 3]:
+            with self.subTest(**{"x": x}):
+                # Use dict-unpacking in subTest call to exercise keyword unpack handling
+                self.assertTrue(x >= 2)

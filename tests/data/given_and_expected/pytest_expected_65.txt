@@ -1,0 +1,12 @@
+import pytest
+
+
+class TestConstantsAndMapping:
+    @pytest.mark.parametrize("k,v", [("a", 42), ("b", 0)], ids=["row_0", "row_1"])
+    def test_constants(self, k: str, v: int):
+        CONST = 42
+        assert k is not None
+
+    @pytest.mark.parametrize("i,n", [(5, "x")], ids=["row_0"])
+    def test_enumerate(self, i: int, n: str):
+        assert isinstance(i, int)

@@ -1,0 +1,37 @@
+import unittest
+
+
+class TestCacheNested(unittest.TestCase):
+    def setUp(self):
+        self.cache = {}
+        self.manager = CacheManager(self.cache)
+
+    def tearDown(self):
+        self.manager.clear()
+        self.cache = None
+
+    def test_nested_loops(self):
+        pairs = [("a", 1), ("b", 2), ("c", 3)]
+        for key, val in pairs:
+            with self.subTest(key=key):
+                for i in range(2):
+                    compound = f"{key}_{i}"
+                    self.manager.set(compound, val)
+                    self.assertEqual(self.manager.get(compound), val)
+
+
+class CacheManager:
+    def __init__(self, cache):
+        self.cache = cache
+
+    def set(self, key, value):
+        self.cache[key] = value
+
+    def get(self, key):
+        return self.cache.get(key)
+
+    def exists(self, key):
+        return key in self.cache
+
+    def clear(self):
+        self.cache.clear()

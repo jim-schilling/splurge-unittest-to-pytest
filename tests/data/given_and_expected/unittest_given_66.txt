@@ -1,0 +1,17 @@
+import unittest
+
+
+class TestRejectCases(unittest.TestCase):
+    def test_dynamic_list(self):
+        def make():
+            return [1, 2]
+
+        vals = make()
+        for v in vals:
+            with self.subTest(v=v):
+                self.assertGreaterEqual(v, 0)
+
+    def test_large_range(self):
+        for i in range(0, 100):
+            with self.subTest(i=i):
+                self.assertLess(i, 1000)

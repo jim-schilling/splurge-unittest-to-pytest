@@ -1,0 +1,42 @@
+import pytest
+
+
+class TestCacheSkips:
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_class(cls):
+        cls.shared = {}
+        yield
+        cls.shared.clear()
+        cls.shared = None
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.manager = CacheManager(self.shared)
+        yield
+        self.manager.clear()
+
+    @pytest.mark.skip("demonstrate skip")
+    def test_skipped_behavior(self):
+        self.manager.set("a", 1)
+        assert self.manager.get("a") == 1
+
+    def test_exists_after_set(self):
+        self.manager.set("b", 2)
+        assert self.manager.exists("b")
+
+
+class CacheManager:
+    def __init__(self, cache):
+        self.cache = cache
+
+    def set(self, key, value):
+        self.cache[key] = value
+
+    def get(self, key):
+        return self.cache.get(key)
+
+    def exists(self, key):
+        return key in self.cache
+
+    def clear(self):
+        self.cache.clear()

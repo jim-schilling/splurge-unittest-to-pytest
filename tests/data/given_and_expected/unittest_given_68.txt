@@ -1,0 +1,10 @@
+import unittest
+
+
+class TestTupleTargets(unittest.TestCase):
+    def test_tuple_target(self):
+        pairs = [(1, 2), (3, 4)]
+        for a, b in pairs:
+            # positional subTest with tuple targets (edge-case for conversion)
+            with self.subTest(a, b):
+                self.assertLess(a, b)

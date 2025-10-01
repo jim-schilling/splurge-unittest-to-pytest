@@ -1,0 +1,14 @@
+import unittest
+
+
+class Helper:
+    CONST = 7
+
+
+class TestAttributes(unittest.TestCase):
+    def test_attr(self):
+        helper = Helper()
+        values = [helper.CONST]
+        for val in values:
+            with self.subTest(val=val):
+                self.assertEqual(val, 7)

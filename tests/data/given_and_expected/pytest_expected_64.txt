@@ -1,0 +1,13 @@
+import pytest
+
+
+class TestNestedSubtests:
+    def test_nested(self, subtests):
+        prefix = "p"
+        sizes = [1, 2]
+        flags = [True, False]
+        for s in sizes:
+            for f in flags:
+                with subtests.test(size=s, flag=f):
+                    value = f"{prefix}{s}"
+                    assert len(value) > 0
