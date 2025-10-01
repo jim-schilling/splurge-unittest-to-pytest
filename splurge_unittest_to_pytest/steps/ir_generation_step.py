@@ -5,6 +5,9 @@ This module provides a pipeline step that analyzes Python ``libcst`` modules
 to produce the project's intermediate representation (IR). The IR makes it
 easier for downstream transformers and validators to reason about test
 structures (imports, classes, fixtures, assertions).
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from pathlib import Path

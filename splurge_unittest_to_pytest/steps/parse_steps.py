@@ -4,6 +4,9 @@ This module exposes pipeline steps that parse source code into a libcst
 ``Module``, apply the unittest->pytest transformations at the CST level,
 and generate final source code strings for subsequent formatting and output
 steps.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import libcst as cst

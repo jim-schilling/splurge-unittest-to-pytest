@@ -6,6 +6,9 @@ modules to ensure ``pytest``/``re`` imports are present when needed and
 to remove unused ``unittest`` imports. Some helpers accept an optional
 ``transformer`` object to consult state such as whether an ``re`` import
 is required and what alias to use.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

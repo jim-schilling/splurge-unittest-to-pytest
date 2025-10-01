@@ -5,6 +5,9 @@ This module contains a small helper that converts decorators such as
 ``@pytest.mark.skip(...)`` and ``@pytest.mark.skipif(...)`` forms using
 libcst nodes. The transformation is conservative and preserves any
 decorators that it does not recognize.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

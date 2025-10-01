@@ -4,6 +4,9 @@ This module exposes a small programmatic entry point, ``migrate``, which
 is used by the CLI and tests. It delegates work to
 ``MigrationOrchestrator`` and returns a ``Result`` containing the list
 of written target paths.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

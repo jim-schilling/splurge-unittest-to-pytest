@@ -3,6 +3,9 @@
 This module provides the core pipeline architecture with ``Step``,
 ``Task``, and ``Job`` abstractions that enable functional composition of
 operations.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging

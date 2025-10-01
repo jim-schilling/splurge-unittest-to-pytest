@@ -6,6 +6,9 @@ This job performs the initial phases of the migration pipeline:
 - Analyze the code structure and extract test metadata using the pattern
     analyzer
 - Prepare transformed code for subsequent formatting and output steps
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging

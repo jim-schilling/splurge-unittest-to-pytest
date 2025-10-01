@@ -4,6 +4,9 @@ This module exposes pipeline steps that format and validate the generated
 Python code. The steps use the programmatic APIs of ``isort`` and ``black``
 when available and fall back to returning the unmodified code with a
 warning on failure.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import ast

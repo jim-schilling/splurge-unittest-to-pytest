@@ -4,6 +4,9 @@
 This module defines data structures that represent unittest code
 semantically, making transformations more reliable and testable than
 direct CST manipulation.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from dataclasses import dataclass, field

@@ -18,6 +18,9 @@ The transformer performs the following high-level steps:
 This module aims to preserve original formatting where possible and
 falls back to conservative string-level transformations when CST-based
 rewrites are not applicable.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

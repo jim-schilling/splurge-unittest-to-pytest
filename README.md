@@ -3,6 +3,8 @@
 
 [![Version](https://img.shields.io/badge/version-2025.0.0-blue.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![PyPI](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
+[![Development Status](https://img.shields.io/badge/Development%20Status-Alpha-lightgrey.svg)](#)
+
 [![CI (py3.13)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci-py313.yml/badge.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions)
 [![ruff](https://img.shields.io/badge/ruff-passing-brightgreen.svg)](https://github.com/charliermarsh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-passing-brightgreen.svg)](https://github.com/python/mypy)
@@ -42,8 +44,7 @@ an alternate location.
 - Conservative transformations: class-based tests inheriting from
   ``unittest.TestCase`` are preserved to maintain class-scoped fixtures and
   organization unless a conversion is explicitly desired.
-- Backups of originals are available via ``--backup``.
- - Backups of originals are available via ``--backup`` (off by default; pass ``--backup`` to enable).
+ - Backups of originals are created by default; pass ``--skip-backup`` to disable creating backup copies before writing. Note: if a ``.backup`` file already exists it will be preserved and not overwritten.
 - Configurable discovery patterns, test method prefixes, and other options
   via the CLI or a programmatic ``MigrationConfig``.
 
@@ -59,7 +60,7 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
  - ``--posix``: Force POSIX-style path output in dry-run mode (presence-only flag)
  - ``--quiet``: Suppress extras in dry-run output (presence-only flag)
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
- - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
+ - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
  - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
 - ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``)
@@ -90,10 +91,12 @@ Quiet dry-run with POSIX paths:
 python -m splurge_unittest_to_pytest.cli migrate -d tests --dry-run --posix --quiet
 ```
 
-Perform migration and write files to `converted/` (preserve extensions):
+Perform migration and write files to `converted/` (preserve extensions). Backups are created by default; to disable backups pass ``--skip-backup``:
 
 ```bash
 python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted
+# Disable backups when writing:
+python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted --skip-backup
 ```
 
 ## Programmatic usage (quick)

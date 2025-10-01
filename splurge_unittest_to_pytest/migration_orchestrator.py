@@ -3,6 +3,9 @@
 This module provides the high-level orchestration of the entire
 migration process, coordinating the collector, transformer, formatter,
 and output jobs.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging
