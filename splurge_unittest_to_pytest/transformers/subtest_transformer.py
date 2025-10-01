@@ -12,6 +12,9 @@ This module provides conservative, small helpers that inspect and rewrite
 All transforms are intentionally cautious: when a pattern is ambiguous
 or potentially unsafe to rewrite the helpers will return ``None`` or
 leave nodes unchanged.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 # mypy: ignore-errors

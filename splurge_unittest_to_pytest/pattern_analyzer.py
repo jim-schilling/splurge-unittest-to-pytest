@@ -5,6 +5,9 @@ This module analyzes ``unittest`` code patterns and identifies structures
 that should be transformed into pytest equivalents. The analyzer builds a
 lightweight IR (``TestModule``, ``TestClass``, ``TestMethod``, etc.) that
 downstream generators consume.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import libcst as cst

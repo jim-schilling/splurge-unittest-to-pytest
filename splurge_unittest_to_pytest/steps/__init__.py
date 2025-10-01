@@ -2,6 +2,9 @@
 
 Each step module contains the concrete implementations of individual
 pipeline steps that perform specific transformations.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from .format_steps import FormatCodeStep, ValidateGeneratedCodeStep

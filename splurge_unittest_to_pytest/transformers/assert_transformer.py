@@ -18,6 +18,9 @@ transformation cannot be performed precisely.
 
 Only docstrings and comments were clarified in this module; no runtime
 behavior is changed by the updates in this patch.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from dataclasses import dataclass

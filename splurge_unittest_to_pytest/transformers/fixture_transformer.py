@@ -13,6 +13,9 @@ Notes:
             cases that a full AST transform would handle.
         - Callers that can use libcst-based helpers should prefer those for
             more robust parsing and rewriting.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

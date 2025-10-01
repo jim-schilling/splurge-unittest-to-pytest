@@ -6,6 +6,9 @@ exposes ``MigrationConfig`` for transform options and ``PipelineContext``
 for passing runtime information (paths, run id, and metadata) between
 pipeline stages. Utility functions for loading and validating
 configuration are provided by ``ContextManager``.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import dataclasses

@@ -4,6 +4,9 @@ This module defines a small hierarchy of exceptions used by the
 migration pipeline. Each exception carries an optional ``details``
 mapping that contains structured context (for example source file and
 location) to help callers diagnose failures programmatically.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from typing import Any

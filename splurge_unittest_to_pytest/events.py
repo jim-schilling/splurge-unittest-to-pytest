@@ -5,6 +5,9 @@ mechanism and a set of strongly-typed event dataclasses used to
 observe pipeline execution. Callers may publish events to an
 ``EventBus`` and register handlers to respond to lifecycle, step,
 task, and error events.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging

@@ -3,6 +3,9 @@
 This job runs code formatting and basic validation steps on generated
 source code. It applies ``isort`` for import sorting followed by ``black``
 for code formatting and performs a syntax/import validation pass.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging

@@ -5,6 +5,9 @@ function-call argument lists, safe string-based replacements of ``self.*``
 calls, and simple filename/extension sanitizers. The functions are used
 by legacy string-based transformers in the project and are implemented to
 be conservative and robust against nested brackets and quoted strings.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from collections.abc import Callable

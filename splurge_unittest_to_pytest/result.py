@@ -3,6 +3,9 @@
 This module provides an immutable ``Result[T]`` type that encapsulates
 successful values, warnings, and errors. It enables functional-style
 composition with helper methods such as ``map`` and ``bind``.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from collections.abc import Callable

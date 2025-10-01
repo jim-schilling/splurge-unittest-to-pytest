@@ -2,6 +2,9 @@
 
 This module contains steps that write generated code to disk or prepare the
 generated artifacts for dry-run presentation to callers (for example the CLI).
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from pathlib import Path

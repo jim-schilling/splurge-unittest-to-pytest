@@ -11,6 +11,9 @@ with a new parametrization decorator, loop-target parameters added to the
 function signature, and the subTest body lifted into the function body.
 
 All helpers in this module work purely with libcst nodes.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

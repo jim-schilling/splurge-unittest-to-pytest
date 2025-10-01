@@ -12,6 +12,9 @@ transformations:
 These helpers are useful when a transformation pass needs to record
 that a later pass should replace a specific expression or statement,
 and object identity cannot be relied upon between passes.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 from __future__ import annotations

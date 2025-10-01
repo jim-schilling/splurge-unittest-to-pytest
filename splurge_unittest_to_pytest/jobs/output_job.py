@@ -3,6 +3,9 @@
 This job handles the final phase of the pipeline: writing the transformed
 and formatted code to disk, creating optional backups, and emitting the
 completion events used by callers.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging

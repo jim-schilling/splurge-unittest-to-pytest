@@ -133,7 +133,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``-r, --recurse / --no-recurse``: Recurse directories (default: recurse).
 - ``-t, --target-dir DIR``: Directory to write outputs.
 - ``--preserve-structure / --no-preserve-structure``: Preserve original directory layout (default: preserve).
- - ``--backup``: Create a ``.backup`` copy of originals when writing (presence-only flag; default: off).
+ - ``--skip-backup``: Skip creating a ``.backup`` copy of originals when writing (presence-only flag). By default the tool creates a ``.backup`` file next to the original when writing; if a ``.backup`` file already exists it will be preserved and not overwritten.
 - ``--line-length N``: Max line length used by formatters (default: 120).
 - ``--dry-run``: Do not write files; return or display generated output.
 	- With ``--dry-run --diff``: show unified diffs.
@@ -171,10 +171,12 @@ Show unified diffs for a directory:
 python -m splurge_unittest_to_pytest.cli migrate tests/ -r --dry-run --diff
 ```
 
-Write changes to a target directory with backups (formatting always applied):
+Write changes to a target directory (formatting always applied). Backups are created by default; to disable backups pass ``--skip-backup``:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted --backup
+python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted
+# To disable backups when writing:
+python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted --skip-backup
 ```
 
 Override extension (write `.txt` files instead of `.py`):

@@ -6,6 +6,9 @@ errors during test collection. Consumers and tests should import the
 submodules directly (for example: ``from
 splurge_unittest_to_pytest import main`` will import the
 ``splurge_unittest_to_pytest.main`` submodule on demand).
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 __version__ = "2025.0.0"

@@ -5,6 +5,9 @@ This module defines the public CLI commands and utility helpers used by the
 the program entrypoint while delegating the heavy-lifting to the programmatic
 API in :mod:`splurge_unittest_to_pytest.main` so the same logic can be used
 from Python code or the CLI.
+
+Copyright (c) 2025 Jim Schilling
+This software is released under the MIT License.
 """
 
 import logging
@@ -146,7 +149,7 @@ def create_config(
     file_patterns: list[str] | None = None,
     recurse_directories: bool = True,
     preserve_structure: bool = True,
-    backup_originals: bool = False,
+    backup_originals: bool = True,
     line_length: int | None = 120,
     dry_run: bool = False,
     fail_fast: bool = False,
@@ -365,12 +368,10 @@ def migrate(
     preserve_structure: bool = typer.Option(
         True, "--preserve-structure", help="Preserve original directory structure", is_flag=True
     ),
-    backup_originals: bool = typer.Option(
-        False, "--backup", "-b", help="Create backup of original files", is_flag=True
-    ),
+    skip_backup: bool = typer.Option(False, "--skip-backup", "-sb", help="Skip backup of original files", is_flag=True),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show what would be done without making changes", is_flag=True
+        False, "--dry-run", "-dry", help="Show what would be done without making changes", is_flag=True
     ),
     posix: bool = typer.Option(
         False, "--posix", help="Force POSIX-style path separators (use forward slashes) in CLI output", is_flag=True
@@ -460,7 +461,7 @@ def migrate(
             file_patterns=file_patterns,
             recurse_directories=recurse,
             preserve_structure=preserve_structure,
-            backup_originals=backup_originals,
+            backup_originals=not skip_backup,
             line_length=line_length,
             dry_run=dry_run,
             fail_fast=fail_fast,
