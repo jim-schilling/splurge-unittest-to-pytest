@@ -1,0 +1,17 @@
+import pytest
+
+
+class TestRejectCases:
+    def test_dynamic_list(self, subtests):
+        def make():
+            return [1, 2]
+
+        vals = make()
+        for v in vals:
+            with subtests.test(v=v):
+                assert v >= 0
+
+    def test_large_range(self, subtests):
+        for i in range(0, 100):
+            with subtests.test(i=i):
+                assert i < 1000

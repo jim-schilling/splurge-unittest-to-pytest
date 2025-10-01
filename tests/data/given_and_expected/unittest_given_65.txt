@@ -1,0 +1,16 @@
+import unittest
+
+
+class TestConstantsAndMapping(unittest.TestCase):
+    def test_constants(self):
+        CONST = 42
+        items = {'a': CONST, 'b': 0}
+        for k, v in items.items():
+            with self.subTest(key=k, val=v):
+                self.assertIsNotNone(k)
+
+    def test_enumerate(self):
+        names = ['x']
+        for i, n in enumerate(names, 5):
+            with self.subTest(i=i, name=n):
+                self.assertIsInstance(i, int)

@@ -1,0 +1,44 @@
+import unittest
+
+
+class TestCacheSkips(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.shared = {}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.shared.clear()
+        cls.shared = None
+
+    def setUp(self):
+        self.manager = CacheManager(self.shared)
+
+    def tearDown(self):
+        self.manager.clear()
+
+    @unittest.skip("demonstrate skip")
+    def test_skipped_behavior(self):
+        self.manager.set("a", 1)
+        self.assertEqual(self.manager.get("a"), 1)
+
+    def test_exists_after_set(self):
+        self.manager.set("b", 2)
+        self.assertTrue(self.manager.exists("b"))
+
+
+class CacheManager:
+    def __init__(self, cache):
+        self.cache = cache
+
+    def set(self, key, value):
+        self.cache[key] = value
+
+    def get(self, key):
+        return self.cache.get(key)
+
+    def exists(self, key):
+        return key in self.cache
+
+    def clear(self):
+        self.cache.clear()

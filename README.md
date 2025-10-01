@@ -3,7 +3,7 @@
 
 [![Version](https://img.shields.io/badge/version-2025.0.0-blue.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![PyPI](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
-[![CI](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci.yml/badge.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions)
+[![CI (py3.13)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci-py313.yml/badge.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions)
 [![ruff](https://img.shields.io/badge/ruff-passing-brightgreen.svg)](https://github.com/charliermarsh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-passing-brightgreen.svg)](https://github.com/python/mypy)
 
@@ -24,6 +24,8 @@ Run the CLI (module mode shown):
 
 ```bash
 python -m splurge_unittest_to_pytest.cli migrate [OPTIONS] [SOURCE_FILES...]
+ OR
+splurge-unittest-to-pytest migrate [OPTIONS] [SOURCE_FILES...]
 ```
 
 By default the tool preserves the original source file extensions and will
@@ -65,7 +67,7 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 For the full set of flags and detailed help, run:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate --help
+splurge-unittest-to-pytest migrate --help
 ```
 
 ## Examples
@@ -73,7 +75,7 @@ python -m splurge_unittest_to_pytest.cli migrate --help
 Preview conversion for a single file and print generated code:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate --dry-run tests/test_example.py
+splurge-unittest-to-pytest migrate --dry-run tests/test_example.py
 ```
 
 Show unified diff for a directory:

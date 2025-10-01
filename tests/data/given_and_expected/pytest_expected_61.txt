@@ -1,0 +1,56 @@
+import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_module():
+    global shared_cache
+    shared_cache = {}
+    yield
+    global shared_cache
+    shared_cache.clear()
+    shared_cache = None
+
+
+class TestCacheConstantSize:
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        self.cache_manager = CacheManager(shared_cache)
+        self.test_key = "test_key"
+        self.test_value = "test_value"
+        yield
+        self.cache_manager.clear()
+        self.cache_manager = None
+        self.test_key = None
+        self.test_value = None
+
+    def test_size_sensitive_cases(self, subtests):
+        size = 3
+        scenarios = [
+            {"name": "empty", "data": [""] * size},
+            {"name": "none", "data": [None] * size},
+        ]
+
+        for case in scenarios:
+            with subtests.test(case=case["name"]):
+                # exercise get/set with repeated values
+                for i, val in enumerate(case["data"]):
+                    key = f"{self.test_key}_{i}"
+                    self.cache_manager.set(key, val)
+                    assert self.cache_manager.get(key) == val
+
+
+class CacheManager:
+    def __init__(self, cache):
+        self.cache = cache
+
+    def set(self, key, value):
+        self.cache[key] = value
+
+    def get(self, key):
+        return self.cache.get(key)
+
+    def exists(self, key):
+        return key in self.cache
+
+    def clear(self):
+        self.cache.clear()

@@ -1,0 +1,12 @@
+import pytest
+
+
+class TestKeywordOnlySubtests:
+    @pytest.mark.parametrize("x", [0, 1], ids=["row_0", "row_1"])
+    def test_kwonly(self, x: int):
+        assert x in (0, 1)
+
+    @pytest.mark.parametrize("x", [2, 3], ids=["row_0", "row_1"])
+    def test_kwonly_multiple(self, x: int):
+        # Use dict-unpacking in subTest call to exercise keyword unpack handling
+        assert x >= 2
