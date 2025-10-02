@@ -11,6 +11,7 @@ def test_modular_architecture():
     orchestrator = MigrationOrchestrator()
 
     # Test that it has the expected jobs
+    assert hasattr(orchestrator, "decision_analysis_job")
     assert hasattr(orchestrator, "collector_job")
     assert hasattr(orchestrator, "formatter_job")
     assert hasattr(orchestrator, "output_job")
@@ -19,7 +20,7 @@ def test_modular_architecture():
     pipeline = orchestrator._create_migration_pipeline()
     assert pipeline.name == "migration"
     # Pipeline now includes collector, formatter and output jobs by default
-    assert len(pipeline.jobs) == 3
+    assert len(pipeline.jobs) == 4
 
     # Test basic config creation
     config = MigrationConfig()

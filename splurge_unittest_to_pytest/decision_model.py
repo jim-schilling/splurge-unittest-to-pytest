@@ -24,6 +24,7 @@ class Stats(TypedDict):
     evidence_rich_functions: int
     accumulator_detected: int
 
+
 __all__ = [
     "CaplogAliasMetadata",
     "FunctionProposal",
@@ -313,6 +314,15 @@ class DecisionModel:
                         stats["accumulator_detected"] += 1
 
         return stats
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert decision model to dictionary for serialization."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DecisionModel:
+        """Create decision model from dictionary."""
+        return cls(**data)
 
     def __str__(self) -> str:
         """String representation for debugging."""

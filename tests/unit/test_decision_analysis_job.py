@@ -281,7 +281,11 @@ class TestProposalReconcilerStep:
         result = step.execute(context, module)
 
         assert result.is_success()
-        decision_model = result.data
+        returned_code = result.data
+        assert isinstance(returned_code, str)
+
+        # DecisionModel should be stored in context metadata
+        decision_model = context.metadata.get("decision_model")
         assert isinstance(decision_model, DecisionModel)
         assert len(decision_model.module_proposals) == 1
 
@@ -330,9 +334,13 @@ class TestExample(unittest.TestCase):
 
         result = job.execute(context, source_code)
 
-        # Should succeed and return a DecisionModel
+        # Should succeed and return the source code (string)
         assert result.is_success()
-        decision_model = result.data
+        returned_code = result.data
+        assert isinstance(returned_code, str)
+
+        # DecisionModel should be stored in context metadata
+        decision_model = context.metadata.get("decision_model")
         assert isinstance(decision_model, DecisionModel)
 
         # Should have one module proposal
@@ -362,5 +370,9 @@ class TestExample(unittest.TestCase):
         result = job.execute(context, source_code)
 
         assert result.is_success()
-        decision_model = result.data
+        returned_code = result.data
+        assert isinstance(returned_code, str)
+
+        # DecisionModel should be stored in context metadata
+        decision_model = context.metadata.get("decision_model")
         assert isinstance(decision_model, DecisionModel)

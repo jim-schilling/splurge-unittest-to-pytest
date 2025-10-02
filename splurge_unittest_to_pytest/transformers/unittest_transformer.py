@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
@@ -262,6 +263,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         parametrize: bool = True,
         parametrize_include_ids: bool | None = None,
         parametrize_add_annotations: bool | None = None,
+        decision_model: Any | None = None,
     ) -> None:
         self._import_tracker = RegexImportTracker()
         self._fixture_state = FixtureCollectionState()
@@ -275,6 +277,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         self.parametrize_add_annotations = (
             parametrize_add_annotations if parametrize_add_annotations is not None else False
         )
+        # Decision model for enhanced transformation decisions
+        self.decision_model = decision_model
         # Replacement registry for two-pass metadata-based replacements
         self.replacement_registry = ReplacementRegistry()
         # Debugging flag to enable verbose internal tracing
@@ -655,10 +659,25 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
 
         try:
             current_node = node
-            if getattr(self, "parametrize", False):
-                decorated_node = convert_simple_subtests_to_parametrize(original_node, current_node, self)
-                if decorated_node is not None:
-                    current_node = decorated_node
+            function_name = original_node.name.value
+
+            # Use decision model for transformation guidance (always available)
+            if self.decision_model:
+                decision = self._get_function_decision(function_name)
+                if decision:
+                    current_node = self._apply_decision_model_transformation(original_node, current_node, decision)
+                else:
+                    # No decision for this function, fall back to current logic
+                    if getattr(self, "parametrize", False):
+                        decorated_node = convert_simple_subtests_to_parametrize(original_node, current_node, self)
+                        if decorated_node is not None:
+                            current_node = decorated_node
+            else:
+                # Fallback if decision model is somehow not available (shouldn't happen)
+                if getattr(self, "parametrize", False):
+                    decorated_node = convert_simple_subtests_to_parametrize(original_node, current_node, self)
+                    if decorated_node is not None:
+                        current_node = decorated_node
 
             body_with_subtests = convert_subtests_in_body(current_node.body.body)
             if body_uses_subtests(body_with_subtests):
@@ -667,6 +686,65 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             return current_node, body_with_subtests
         except Exception:
             return node, list(getattr(node.body, "body", []))
+
+    def _get_function_decision(self, function_name: str) -> Any | None:
+        """Get transformation decision for a specific function."""
+        if not self.decision_model or not self.current_class:
+            return None
+
+        try:
+            # Navigate through decision model hierarchy: Module -> Class -> Function
+            module_proposals = getattr(self.decision_model, "module_proposals", {})
+            if not module_proposals:
+                return None
+
+            # For simplicity, assume we're working with a single module
+            # In a more complete implementation, we'd need to determine the current module
+            module_name = next(iter(module_proposals.keys())) if module_proposals else None
+            if not module_name:
+                return None
+
+            module_proposal = module_proposals.get(module_name)
+            if not module_proposal:
+                return None
+
+            class_proposals = getattr(module_proposal, "class_proposals", {})
+            class_proposal = class_proposals.get(self.current_class)
+            if not class_proposal:
+                return None
+
+            function_proposals = getattr(class_proposal, "function_proposals", {})
+            return function_proposals.get(function_name)
+        except Exception:
+            return None
+
+    def _apply_decision_model_transformation(
+        self,
+        original_node: cst.FunctionDef,
+        node: cst.FunctionDef,
+        decision: Any,
+    ) -> cst.FunctionDef:
+        """Apply transformation based on decision model recommendation."""
+        try:
+            strategy = getattr(decision, "recommended_strategy", None)
+            if not strategy:
+                return node
+
+            if strategy == "parametrize":
+                # Use existing parametrize helper
+                parametrized = convert_simple_subtests_to_parametrize(original_node, node, self)
+                return parametrized if parametrized is not None else node
+            elif strategy == "subtests":
+                # Ensure subtests fixture and convert subTest calls
+                body_with_subtests = convert_subtests_in_body(node.body.body)
+                if body_uses_subtests(body_with_subtests):
+                    return ensure_subtests_param(node)
+                return node
+            else:  # 'keep-loop' or unknown strategy
+                # Keep the original loop structure
+                return node
+        except Exception:
+            return node
 
     def _ensure_fixture_parameters(
         self,

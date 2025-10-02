@@ -58,7 +58,7 @@ class MigrationOrchestrator:
 
         self._logger.info(f"Starting migration of {source_file}")
 
-         # Validate source file exists
+        # Validate source file exists
         if not Path(source_file).exists():
             return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
 
@@ -221,14 +221,11 @@ class MigrationOrchestrator:
         Returns:
             Configured migration ``Pipeline`` instance.
         """
-        # Build a pipeline that runs collector -> formatter -> output so the
-        # CLI and programmatic API produce written output files by default.
-        jobs: list[Any] = [self.collector_job, self.formatter_job, self.output_job]
-
-        # Optionally include decision analysis job if enabled
-        if config and config.enable_decision_analysis:
-            # Insert decision analysis job before collector job for analysis-first approach
-            jobs.insert(0, self.decision_analysis_job)
+        # Build a pipeline that runs decision analysis -> collector -> formatter -> output
+        # Decision analysis is now always enabled for improved transformation accuracy
+        # DecisionAnalysisJob: str -> str (analyzes source and stores DecisionModel in context)
+        # CollectorJob: str -> str (transforms using DecisionModel from context)
+        jobs: list[Any] = [self.decision_analysis_job, self.collector_job, self.formatter_job, self.output_job]
 
         return Pipeline("migration", jobs, self.event_bus)
 

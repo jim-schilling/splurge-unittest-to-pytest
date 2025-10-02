@@ -99,8 +99,8 @@ class MigrationConfig:
     fail_fast: bool = False
     # parallel_processing removed; library no longer exposes parallelism flag
 
-    # Analysis settings
-    enable_decision_analysis: bool = False
+    # Analysis settings - Decision model is now always enabled
+    enable_decision_analysis: bool = True
     """Enable standalone decision analysis job to build transformation decision model"""
 
     # Optional transforms
@@ -170,6 +170,7 @@ class PipelineContext:
     config: MigrationConfig
     run_id: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    decision_model: Any | None = None  # DecisionModel from analysis job
 
     def __post_init__(self) -> None:
         """Perform lightweight validation of the constructed context.
@@ -316,6 +317,7 @@ class PipelineContext:
             "config": self.config.to_dict(),
             "run_id": self.run_id,
             "metadata": self.metadata,
+            "decision_model": self.decision_model.to_dict() if self.decision_model else None,
         }
 
     def __str__(self) -> str:
@@ -339,7 +341,8 @@ class PipelineContext:
             f"target_file={repr(self.target_file)}, "
             f"config={repr(self.config)}, "
             f"run_id={repr(self.run_id)}, "
-            f"metadata={repr(self.metadata)}"
+            f"metadata={repr(self.metadata)}, "
+            f"decision_model={repr(self.decision_model)}"
             f")"
         )
 
