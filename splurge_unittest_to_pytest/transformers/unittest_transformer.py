@@ -62,6 +62,8 @@ from .assert_transformer import (
     transform_assert_set_equal,
     transform_assert_true,
     transform_assert_tuple_equal,
+    transform_assert_warns,
+    transform_assert_warns_regex,
     transform_caplog_alias_string_fallback,
     transform_fail,
     transform_skip_test,
@@ -1349,6 +1351,9 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     # raises / regex handled with lambdas so we can pass transformer context when needed
                     "assertRaises": transform_assert_raises,
                     "assertRaisesRegex": transform_assert_raises_regex,
+                    # warning assertions
+                    "assertWarns": transform_assert_warns,
+                    "assertWarnsRegex": transform_assert_warns_regex,
                     # numeric comparisons
                     "assertGreater": transform_assert_greater,
                     "assertGreaterEqual": transform_assert_greater_equal,

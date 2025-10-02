@@ -16,12 +16,13 @@ import libcst as cst
 
 
 def rewrite_skip_decorators(decorators: list[cst.Decorator] | None) -> list[cst.Decorator] | None:
-    """Convert unittest skip decorators into pytest mark decorators.
+    """Convert unittest skip and expected failure decorators into pytest mark decorators.
 
     This function inspects a list of :class:`libcst.Decorator` nodes and
     replaces occurrences of ``@unittest.skip(...)`` with
-    ``@pytest.mark.skip(...)`` and ``@unittest.skipIf(...)`` with
-    ``@pytest.mark.skipif(...)``. Arguments supplied to the original
+    ``@pytest.mark.skip(...)``, ``@unittest.skipIf(...)`` with
+    ``@pytest.mark.skipif(...)``, and ``@unittest.expectedFailure`` with
+    ``@pytest.mark.xfail``. Arguments supplied to the original
     decorator are preserved.
 
     Args:
@@ -41,8 +42,9 @@ def rewrite_skip_decorators(decorators: list[cst.Decorator] | None) -> list[cst.
     for d in decorators:
         try:
             dec = d.decorator
-            # We expect a Call: unittest.skip(...)
+            # Handle both Call and Attribute decorators
             if isinstance(dec, cst.Call) and isinstance(dec.func, cst.Attribute):
+                # We expect a Call: unittest.skip(...)
                 owner = dec.func.value
                 name = dec.func.attr
                 if isinstance(owner, cst.Name) and owner.value == "unittest" and isinstance(name, cst.Name):
@@ -60,6 +62,25 @@ def rewrite_skip_decorators(decorators: list[cst.Decorator] | None) -> list[cst.
                         new_call = cst.Call(
                             func=cst.Attribute(value=mark_attr, attr=cst.Name(value="skipif")), args=dec.args
                         )
+                        new_decorators.append(cst.Decorator(decorator=new_call))
+                        changed = True
+                        continue
+                    elif name.value == "expectedFailure":
+                        # Build @pytest.mark.xfail (no args needed for basic expectedFailure)
+                        mark_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                        new_call = cst.Call(func=cst.Attribute(value=mark_attr, attr=cst.Name(value="xfail")))
+                        new_decorators.append(cst.Decorator(decorator=new_call))
+                        changed = True
+                        continue
+            elif isinstance(dec, cst.Attribute):
+                # Handle simple Attribute decorators like @unittest.expectedFailure
+                owner = dec.value
+                name = dec.attr
+                if isinstance(owner, cst.Name) and owner.value == "unittest" and isinstance(name, cst.Name):
+                    if name.value == "expectedFailure":
+                        # Build @pytest.mark.xfail (no args needed for basic expectedFailure)
+                        mark_attr = cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark"))
+                        new_call = cst.Call(func=cst.Attribute(value=mark_attr, attr=cst.Name(value="xfail")))
                         new_decorators.append(cst.Decorator(decorator=new_call))
                         changed = True
                         continue

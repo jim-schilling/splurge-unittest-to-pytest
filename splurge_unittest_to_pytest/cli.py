@@ -19,6 +19,7 @@ import typer
 from . import main as main_module
 from .context import MigrationConfig
 from .events import (
+    ErrorEvent,
     EventBus,
     LoggingSubscriber,
     PipelineCompletedEvent,
@@ -121,26 +122,55 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
 
         try:
             src = Path(event.context.source_file)
-            tgt = Path(event.context.target_file)
-            typer.echo(f"Pipeline started: {src} -> {tgt} (run_id={event.run_id})")
+            filename = src.name
+            typer.echo(f"Starting migration: {filename}")
         except Exception:
-            typer.echo(f"Pipeline started (run_id={event.run_id})")
+            typer.echo(f"Starting migration (run_id={event.run_id})")
 
     def _on_step_started(event: StepStartedEvent) -> None:
-        typer.echo(f"  -> Step: {event.step_name} ({event.step_type})")
+        # Make step names more user-friendly
+        friendly_name = event.step_name.replace("_", " ").title()
+        if "decision" in event.step_name.lower():
+            typer.echo("  Analyzing code patterns...")
+        elif "parse" in event.step_name.lower():
+            typer.echo("  Parsing source code...")
+        elif "collect" in event.step_name.lower():
+            typer.echo("  Collecting test structures...")
+        elif "format" in event.step_name.lower():
+            typer.echo("  Formatting output code...")
+        elif "output" in event.step_name.lower():
+            typer.echo("  Writing converted file...")
+        else:
+            typer.echo(f"  Running {friendly_name}...")
 
     def _on_step_completed(event: StepCompletedEvent) -> None:
         status = event.result.status.name if hasattr(event.result, "status") else "UNKNOWN"
-        typer.echo(f"     Completed: {event.step_name} [{status}] in {event.duration_ms:.2f}ms")
+        if status == "SUCCESS":
+            status_icon = "[OK]"
+        elif status == "WARNING":
+            status_icon = "[WARN]"
+        else:
+            status_icon = "[ERROR]"
+
+        step_name = event.step_name.replace("_", " ").title()
+        typer.echo(f"  {status_icon} {step_name} completed in {event.duration_ms:.0f}ms")
 
     def _on_pipeline_completed(event: PipelineCompletedEvent) -> None:
         status = "SUCCESS" if event.final_result.is_success() else "FAILED"
-        typer.echo(f"Pipeline completed: {status} in {event.duration_ms:.2f}ms")
+        if status == "SUCCESS":
+            filename = Path(event.context.source_file).name
+            typer.echo(f"[SUCCESS] Migration completed successfully: {filename}")
+        else:
+            typer.echo(f"[FAILED] Migration failed in {event.duration_ms:.0f}ms")
+
+    def _on_error(event: ErrorEvent) -> None:
+        typer.echo(f"  [ERROR] Error in {event.component}: {event.error}")
 
     event_bus.subscribe(PipelineStartedEvent, _on_pipeline_started)
     event_bus.subscribe(StepStartedEvent, _on_step_started)
     event_bus.subscribe(StepCompletedEvent, _on_step_completed)
     event_bus.subscribe(PipelineCompletedEvent, _on_pipeline_completed)
+    event_bus.subscribe(ErrorEvent, _on_error)
 
 
 def create_config(
@@ -479,7 +509,7 @@ def migrate(
             for f in valid_files:
                 logger.info(f"  - {f}")
 
-        result = main_module.migrate(valid_files, config=config)
+        result = main_module.migrate(valid_files, config=config, event_bus=event_bus)
 
         if result.is_success():
             logger.info("Migration completed!")

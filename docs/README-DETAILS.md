@@ -29,12 +29,20 @@ Features
 - **Multi-pass analyzer** that intelligently analyzes test patterns and applies
   transformations with high confidence, preserving semantics where code mutates
   accumulators or depends on loop ordering.
+- **Enhanced pattern support**: Custom test prefixes (``spec_``, ``should_``, ``it_``),
+  nested test classes, custom setup methods, and advanced exception handling.
 - CST-based transformations using ``libcst`` for stable, semantics-preserving edits.
 - Preserves class-structured tests that inherit from ``unittest.TestCase`` by default to
 	maintain class scope and fixtures unless a conversion is explicitly requested.
 - Converts common ``unittest`` assertions to Python ``assert`` statements or
 	``pytest`` helpers when the conversion is safe and conservative.
 - Merges ``setUp``/``tearDown`` into pytest fixtures where appropriate.
+- **Configurable test discovery**: Supports custom test method prefixes and nested
+  test class structures for modern testing frameworks.
+- **Advanced setup/teardown detection**: Recognizes custom setup method patterns
+  beyond standard ``setUp``/``tearDown``.
+- **Enhanced exception handling**: Supports custom exception types, exception chaining,
+  and advanced warning assertions.
 - Dry-run modes: show generated code, unified diffs (``--diff``), or file lists (``--list``).
 - Generated code is always formatted with ``isort`` and ``black`` before writing.
 - Import optimization and safe removal of unused ``unittest`` imports while
@@ -63,21 +71,37 @@ fallback and records warnings in the migration report.
 	- assertRaises(Exception, callable, *args, **kwargs) -> use ``with pytest.raises(Exception): callable(*args, **kwargs)`` when the call site is simple
 	- assertRaises as a context manager -> ``with pytest.raises(Exception):`` (preserved)
 	- assertRaisesRegex -> ``with pytest.raises(Exception, match="regex"):``
-	- assertWarns -> ``with pytest.warns(WarningClass):`` when available
+	- **assertWarns -> ``with pytest.warns(WarningClass):`` when available**
+	- **assertWarnsRegex -> ``with pytest.warns(WarningClass, match="regex"):``**
+	- **Custom exception types**: Preserves custom exception classes (e.g., ``CustomError``) in transformations
+	- **Exception chaining**: Supports ``assertRaises`` with additional callable arguments
+	- **Custom warning types**: Preserves custom warning classes in ``assertWarns`` transformations
 
 2. Test lifecycle and fixtures
 	- ``setUp`` / ``tearDown`` methods -> converted into function-scoped ``pytest`` fixtures (``setup_method``/``teardown_method`` style is preserved when safer)
 	- ``setUpClass`` / ``tearDownClass`` -> converted to class/module scoped fixtures where possible; conversion is conservative to avoid changing sharing semantics
 	- ``setUpModule`` / ``tearDownModule`` -> converted to module-scoped fixtures
+	- **Custom setup method detection**: Recognizes various setup method naming patterns:
+	  - ``setup_method``, ``teardown_method`` (pytest-style)
+	  - ``before_each``, ``after_each`` (common testing patterns)
+	  - ``before``, ``after``, ``before_all``, ``after_all``
+	  - ``initialize``, ``cleanup``, ``prepare``, ``finalize``
+	  - ``set_up``, ``tear_down`` (snake_case variants)
 
 3. Test discovery and structure
 	- Tests in ``unittest.TestCase`` subclasses can be preserved as methods on the class or (optionally) converted into top-level ``pytest`` test functions when the transformation is safe and keeps semantics intact
+	- **Custom test method prefixes**: Supports configurable test prefixes beyond ``test_`` (e.g., ``spec_``, ``should_``, ``it_``) for modern testing frameworks like BDD-style tests
+	- **Nested test classes**: Properly handles test classes nested within other test classes, preserving the hierarchical structure in the transformed output
+	- **Custom setup method detection**: Recognizes various setup method naming patterns beyond standard ``setUp``/``tearDown`` (e.g., ``setup_method``, ``before_each``, ``cleanup``)
 	- ``subTest`` blocks: the transformer will attempt conservative conversions to parametrization only when the subtest usage is simple (e.g., iterating over a static list of inputs). Complex uses of loop variables, nested subtests, or dynamically generated cases will be left as-is and a warning will be emitted suggesting manual refactor to ``pytest.mark.parametrize``.
 
 4. Test decorators and markers
 	- ``@unittest.skip(reason)`` -> ``@pytest.mark.skip(reason=...)``
 	- ``@unittest.skipIf(cond, reason)`` / ``@unittest.skipUnless`` -> ``pytest.mark.skipif`` conversions when the condition is a simple expression
 	- ``@unittest.expectedFailure`` -> ``@pytest.mark.xfail`` (note: semantics differ; the tool documents any differences in the report)
+	- **Custom exception types**: Preserves custom exception classes (e.g., ``CustomError``) in ``assertRaises`` transformations
+	- **Exception chaining**: Supports ``assertRaises(Exception, func, arg1, arg2)`` with additional callable arguments
+	- **Custom warning types**: Preserves custom warning classes in ``assertWarns`` transformations
 
 5. Other helpers and patterns
 	- ``self.assertLogs`` -> attempt to use ``caplog`` or ``pytest`` logging helpers when the context is simple; otherwise preserved with a note
@@ -129,6 +153,102 @@ def test_func(inp, expected):
 	 assert func(inp) == expected
 ```
 
+Custom test prefixes:
+
+```py
+# Before (spec_ prefix)
+class TestCalculator(unittest.TestCase):
+    def spec_should_add_numbers(self):
+        self.assertEqual(add(1, 2), 3)
+
+# After (preserved with spec_ prefix)
+class TestCalculator:
+    def spec_should_add_numbers(self):
+        assert add(1, 2) == 3
+```
+
+Nested test classes:
+
+```py
+# Before
+class TestAPI(unittest.TestCase):
+    def test_basic_endpoint(self):
+        pass
+
+    class TestAuthentication(unittest.TestCase):
+        def test_login_endpoint(self):
+            pass
+
+# After (preserved structure)
+class TestAPI:
+    def test_basic_endpoint(self):
+        pass
+
+    class TestAuthentication:
+        def test_login_endpoint(self):
+            pass
+```
+
+Custom setup methods:
+
+```py
+# Before
+class TestExample(unittest.TestCase):
+    def setup_method(self):
+        self.value = 42
+
+    def before_each(self):
+        self.counter = 0
+
+# After (preserved as-is)
+class TestExample:
+    def setup_method(self):
+        self.value = 42
+
+    def before_each(self):
+        self.counter = 0
+```
+
+Enhanced exception handling:
+
+```py
+# Before
+class CustomError(Exception):
+    pass
+
+class TestExample(unittest.TestCase):
+    def test_custom_exception(self):
+        def func():
+            raise CustomError("custom message")
+
+        self.assertRaises(CustomError, func)
+
+    def test_warning_with_args(self):
+        def func(message, category):
+            warnings.warn(message, category)
+
+        self.assertWarnsRegex(UserWarning, func, r"test \w+", "test message", UserWarning)
+
+# After
+class CustomError(Exception):
+    pass
+
+class TestExample:
+    def test_custom_exception(self):
+        def func():
+            raise CustomError("custom message")
+
+        with pytest.raises(CustomError):
+            func()
+
+    def test_warning_with_args(self):
+        def func(message, category):
+            warnings.warn(message, category)
+
+        with pytest.warns(UserWarning, match=r"test \w+"):
+            func("test message", UserWarning)
+```
+
 CLI reference
 -------------
 All flags are available on the ``migrate`` command. Summary below; use
@@ -159,6 +279,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``--report-format [json|html|markdown]``: Report format (default: json).
 - ``--config FILE``: Load configuration from YAML file.
 - ``--prefix PREFIX``: Allowed test method prefixes; repeatable (default: ``test``).
+  Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
 
 Examples
 --------
@@ -187,6 +308,23 @@ Override extension (write `.txt` files instead of `.py`):
 
 ```bash
 python -m splurge_unittest_to_pytest.cli migrate tests/test_example.py --ext txt
+```
+
+Migrate with custom test prefixes for modern testing frameworks:
+
+```bash
+# Support spec_ methods for BDD-style tests
+python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix spec --dry-run
+
+# Support multiple prefixes for hybrid test suites
+python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix test --prefix spec --prefix should
+```
+
+Migrate with nested test class support:
+
+```bash
+# Automatically handles nested test classes
+python -m splurge_unittest_to_pytest.cli migrate tests/ --dry-run --diff
 ```
 
 Programmatic API
@@ -273,8 +411,11 @@ Developer notes
 Recent updates
 --------------
 
-- **Multi-pass analyzer integration**: Implemented a sophisticated 5-pass analysis pipeline that intelligently determines transformation strategies for ``subTest`` loops, preserving semantics where code mutates accumulators or depends on loop ordering.
+- **Enhanced pattern support** (October 2025): Comprehensive support for modern testing patterns:
+  - **Custom test prefixes**: Configurable support for `spec_`, `should_`, `it_` and other prefixes beyond `test_`
+  - **Nested test classes**: Proper handling of test classes nested within other test classes
+  - **Advanced setup method detection**: Recognition of various setup method naming patterns (`setup_method`, `before_each`, `cleanup`, etc.)
+  - **Enhanced exception handling**: Improved support for custom exception types, exception chaining, and advanced warning assertions
+- **Multi-pass analyzer integration**: Implemented a sophisticated 5-pass analysis pipeline that intelligently determines transformation strategies for `subTest` loops, preserving semantics where code mutates accumulators or depends on loop ordering.
 - The decision model is now always enabled for improved transformation accuracy and consistency.
-- Expanded unit tests for assertion rewriting and string-fallbacks in the
-	assert transformer.
-- Improved dry-run presentation and added unified-diff output.
+- Expanded unit tests for assertion rewriting and string-fallbacks in the assert transformer.

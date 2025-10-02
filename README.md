@@ -41,6 +41,8 @@ an alternate location.
 - **Multi-pass analyzer** that intelligently analyzes test patterns and applies
   transformations with high confidence, preserving semantics where code mutates
   accumulators or depends on loop ordering.
+- **Enhanced pattern support**: Custom test prefixes (``spec_``, ``should_``, ``it_``),
+  nested test classes, custom setup methods, and advanced exception handling.
 - Safe CST-based transformations using `libcst` to preserve formatting and
   minimize behavior changes.
 - Dry-run preview modes: print converted code, show unified diffs
@@ -49,9 +51,10 @@ an alternate location.
 - Conservative transformations: class-based tests inheriting from
   ``unittest.TestCase`` are preserved to maintain class-scoped fixtures and
   organization unless a conversion is explicitly desired.
- - Backups of originals are created by default; pass ``--skip-backup`` to disable creating backup copies before writing. Note: if a ``.backup`` file already exists it will be preserved and not overwritten.
-- Configurable discovery patterns, test method prefixes, and other options
-  via the CLI or a programmatic ``MigrationConfig``.
+- Backups of originals are created by default; pass ``--skip-backup`` to disable creating backup copies before writing. Note: if a ``.backup`` file already exists it will be preserved and not overwritten.
+- **Configurable discovery patterns**: Custom test method prefixes (``--prefix``),
+  nested class support, and enhanced setup method detection via the CLI or
+  a programmatic ``MigrationConfig``.
 
 See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 
@@ -67,7 +70,8 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
  - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
  - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
-- ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``)
+- ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``).
+  Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
 
 For the full set of flags and detailed help, run:
 
@@ -101,6 +105,16 @@ Perform migration and write files to `converted/` (preserve extensions). Backups
 python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted
 # Disable backups when writing:
 python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted --skip-backup
+```
+
+Migrate with custom test prefixes for modern testing frameworks:
+
+```bash
+# Support spec_ methods for BDD-style tests
+python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix spec --dry-run
+
+# Support multiple prefixes for hybrid test suites
+python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix test --prefix spec --prefix should
 ```
 
 ## Programmatic usage (quick)

@@ -23,7 +23,7 @@ def test_main_migrate_file_success(monkeypatch, tmp_path: Path):
         def migrate_file(self, source_file, config=None):
             return DummyResult()
 
-    monkeypatch.setattr("splurge_unittest_to_pytest.main.MigrationOrchestrator", lambda: DummyOrch())
+    monkeypatch.setattr("splurge_unittest_to_pytest.main.MigrationOrchestrator", lambda event_bus=None: DummyOrch())
 
     res = main_module.migrate([str(f)])
     assert res.is_success()
@@ -46,7 +46,7 @@ def test_main_migrate_file_failure(monkeypatch, tmp_path: Path):
         def migrate_file(self, source_file, config=None):
             return DummyResult()
 
-    monkeypatch.setattr("splurge_unittest_to_pytest.main.MigrationOrchestrator", lambda: DummyOrch())
+    monkeypatch.setattr("splurge_unittest_to_pytest.main.MigrationOrchestrator", lambda event_bus=None: DummyOrch())
 
     res = main_module.migrate([str(f)])
     assert res.is_error()

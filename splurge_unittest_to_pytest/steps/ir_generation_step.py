@@ -50,8 +50,8 @@ class UnittestToIRStep(Step[cst.Module, TestModule]):
             # Get the source code from the module
             source_code = module.code
 
-            # Create pattern analyzer
-            analyzer = UnittestPatternAnalyzer()
+            # Create pattern analyzer with configurable test prefixes
+            analyzer = UnittestPatternAnalyzer(test_prefixes=context.config.test_method_prefixes)
 
             # Analyze the module
             ir_module = analyzer.analyze_module(source_code)

@@ -7,12 +7,12 @@ class TestWarnings:
         def f():
             warnings.warn("hey", UserWarning)
 
-        with self.assertWarns(UserWarning):
+        with pytest.warns(UserWarning):
             f()
 
     def test_warns_regex(self):
         def g():
             warnings.warn("match-me-123", UserWarning)
 
-        with self.assertWarnsRegex(UserWarning, r"match-me-\d+"):
+        with pytest.warns(UserWarning, match=r"match-me-\d+"):
             g()
