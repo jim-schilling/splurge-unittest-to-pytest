@@ -1,0 +1,9 @@
+[INFO] Starting analysis of 1 files...
+
+[FILE] Analyzing: tests\data\given_and_expected\unittest_given_*.txt
+[ERROR] Error analyzing tests\data\given_and_expected\unittest_given_*.txt: [Errno 22] Invalid argument: 'tests\\data\\given_and_expected\\unittest_given_*.txt'
+
+[COMPLETE] Analysis Complete!
+   [SUCCESS] Successful: 0
+   [FAILED] Failed: 1
+   [TOTAL] Total: 1

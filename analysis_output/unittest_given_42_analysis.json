@@ -1,0 +1,32 @@
+{
+  "module_proposals": {
+    "tests\\data\\given_and_expected\\unittest_given_42.txt": {
+      "module_name": "tests\\data\\given_and_expected\\unittest_given_42.txt",
+      "class_proposals": {
+        "T": {
+          "class_name": "T",
+          "function_proposals": {
+            "T.test_regex": {
+              "function_name": "T.test_regex",
+              "recommended_strategy": "parametrize",
+              "loop_var_name": "a",
+              "iterable_origin": "literal",
+              "accumulator_mutated": false,
+              "evidence": [
+                "Found literal list/tuple iterable"
+              ]
+            }
+          },
+          "class_fixtures": [],
+          "class_setup_methods": []
+        }
+      },
+      "module_fixtures": [],
+      "module_imports": [
+        "import unittest",
+        "import re"
+      ],
+      "top_level_assignments": {}
+    }
+  }
+}

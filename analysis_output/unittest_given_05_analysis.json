@@ -1,0 +1,52 @@
+{
+  "module_proposals": {
+    "tests\\data\\given_and_expected\\unittest_given_05.txt": {
+      "module_name": "tests\\data\\given_and_expected\\unittest_given_05.txt",
+      "class_proposals": {
+        "TestValidation": {
+          "class_name": "TestValidation",
+          "function_proposals": {
+            "TestValidation.test_valid_email": {
+              "function_name": "TestValidation.test_valid_email",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            },
+            "TestValidation.test_invalid_email": {
+              "function_name": "TestValidation.test_invalid_email",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            }
+          },
+          "class_fixtures": [],
+          "class_setup_methods": [
+            "setUpClass",
+            "tearDownClass",
+            "setUp",
+            "tearDown"
+          ]
+        },
+        "EmailValidator": {
+          "class_name": "EmailValidator",
+          "function_proposals": {},
+          "class_fixtures": [],
+          "class_setup_methods": []
+        }
+      },
+      "module_fixtures": [],
+      "module_imports": [
+        "import unittest"
+      ],
+      "top_level_assignments": {}
+    }
+  }
+}

@@ -15,6 +15,7 @@ from typing import Any
 from .context import MigrationConfig, PipelineContext
 from .events import EventBus, LoggingSubscriber
 from .jobs import CollectorJob, FormatterJob, OutputJob
+from .jobs.decision_analysis_job import DecisionAnalysisJob
 from .pipeline import Pipeline
 from .result import Result
 
@@ -37,6 +38,7 @@ class MigrationOrchestrator:
         self.collector_job = CollectorJob(self.event_bus)
         self.formatter_job = FormatterJob(self.event_bus)
         self.output_job = OutputJob(self.event_bus)
+        self.decision_analysis_job = DecisionAnalysisJob(self.event_bus)
 
         self._logger.info("Migration orchestrator initialized")
 
@@ -55,6 +57,10 @@ class MigrationOrchestrator:
             config = MigrationConfig()
 
         self._logger.info(f"Starting migration of {source_file}")
+
+         # Validate source file exists
+        if not Path(source_file).exists():
+            return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
 
         # Determine target file path. If a target_directory is provided in
         # the config, use it while preserving the original filename and
@@ -97,12 +103,8 @@ class MigrationOrchestrator:
         # Create pipeline context
         context = PipelineContext.create(source_file=source_file, target_file=target_file, config=config)
 
-        # Validate source file exists
-        if not Path(source_file).exists():
-            return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
-
         # Create the main migration pipeline
-        pipeline = self._create_migration_pipeline()
+        pipeline = self._create_migration_pipeline(config)
 
         # Read source file content for initial input
         try:
@@ -210,8 +212,11 @@ class MigrationOrchestrator:
 
         return Result.success(successful_migrations)
 
-    def _create_migration_pipeline(self) -> Pipeline[str, str]:
+    def _create_migration_pipeline(self, config: MigrationConfig | None = None) -> Pipeline[str, str]:
         """Create the main migration pipeline.
+
+        Args:
+            config: Optional migration configuration to control pipeline composition.
 
         Returns:
             Configured migration ``Pipeline`` instance.
@@ -219,6 +224,11 @@ class MigrationOrchestrator:
         # Build a pipeline that runs collector -> formatter -> output so the
         # CLI and programmatic API produce written output files by default.
         jobs: list[Any] = [self.collector_job, self.formatter_job, self.output_job]
+
+        # Optionally include decision analysis job if enabled
+        if config and config.enable_decision_analysis:
+            # Insert decision analysis job before collector job for analysis-first approach
+            jobs.insert(0, self.decision_analysis_job)
 
         return Pipeline("migration", jobs, self.event_bus)
 

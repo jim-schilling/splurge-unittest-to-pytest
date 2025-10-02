@@ -1,0 +1,41 @@
+{
+  "module_proposals": {
+    "tests\\data\\given_and_expected\\unittest_given_61.txt": {
+      "module_name": "tests\\data\\given_and_expected\\unittest_given_61.txt",
+      "class_proposals": {
+        "TestCacheConstantSize": {
+          "class_name": "TestCacheConstantSize",
+          "function_proposals": {
+            "TestCacheConstantSize.test_size_sensitive_cases": {
+              "function_name": "TestCacheConstantSize.test_size_sensitive_cases",
+              "recommended_strategy": "parametrize",
+              "loop_var_name": "case",
+              "iterable_origin": "name",
+              "accumulator_mutated": false,
+              "evidence": [
+                "Found name reference: scenarios",
+                "Variable scenarios is not mutated - can parametrize"
+              ]
+            }
+          },
+          "class_fixtures": [],
+          "class_setup_methods": [
+            "setUp",
+            "tearDown"
+          ]
+        },
+        "CacheManager": {
+          "class_name": "CacheManager",
+          "function_proposals": {},
+          "class_fixtures": [],
+          "class_setup_methods": []
+        }
+      },
+      "module_fixtures": [],
+      "module_imports": [
+        "import unittest"
+      ],
+      "top_level_assignments": {}
+    }
+  }
+}

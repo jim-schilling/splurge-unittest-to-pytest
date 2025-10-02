@@ -147,9 +147,7 @@ def test_eventbus_publish_handler_raises_but_others_receive():
 
 def test_migrate_file_missing_source_returns_failure():
     orch = MigrationOrchestrator()
-    # PipelineContext.create validates the source and raises ValueError for missing file
-    try:
-        orch.migrate_file("this_file_does_not_exist_12345.py")
-        raise AssertionError("Expected migrate_file to raise ValueError for missing source")
-    except ValueError as e:
-        assert "Source file does not exist" in str(e)
+    # migrate_file validates the source and returns Result.failure for missing file
+    result = orch.migrate_file("this_file_does_not_exist_12345.py")
+    assert not result.is_success()
+    assert "Source file not found" in str(result.error)

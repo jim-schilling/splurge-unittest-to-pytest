@@ -1,0 +1,53 @@
+{
+  "module_proposals": {
+    "tests\\data\\given_and_expected\\unittest_given_31.txt": {
+      "module_name": "tests\\data\\given_and_expected\\unittest_given_31.txt",
+      "class_proposals": {
+        "TestMixed": {
+          "class_name": "TestMixed",
+          "function_proposals": {
+            "TestMixed.test_unittest_style": {
+              "function_name": "TestMixed.test_unittest_style",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            },
+            "TestMixed.test_pytest_style": {
+              "function_name": "TestMixed.test_pytest_style",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            },
+            "TestMixed.test_logs_and_warnings": {
+              "function_name": "TestMixed.test_logs_and_warnings",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            }
+          },
+          "class_fixtures": [
+            "setup_method"
+          ],
+          "class_setup_methods": []
+        }
+      },
+      "module_fixtures": [],
+      "module_imports": [
+        "import pytest"
+      ],
+      "top_level_assignments": {}
+    }
+  }
+}
