@@ -28,9 +28,13 @@ class MigrationOrchestrator:
     internal event bus.
     """
 
-    def __init__(self) -> None:
-        """Initialize the migration orchestrator."""
-        self.event_bus = EventBus()
+    def __init__(self, event_bus: EventBus | None = None) -> None:
+        """Initialize the migration orchestrator.
+
+        Args:
+            event_bus: Optional external event bus to use. If None, creates a new one.
+        """
+        self.event_bus = event_bus or EventBus()
         self.logger_subscriber = LoggingSubscriber(self.event_bus)
         self._logger = logging.getLogger(__name__)
 

@@ -16,6 +16,7 @@ from splurge_unittest_to_pytest.steps.ir_generation_step import UnittestToIRStep
 class DummyContext:
     def __init__(self, source_file: str | None = None):
         self.source_file = source_file
+        self.config = MigrationConfig()
 
 
 def test_execute_parses_various_imports_and_sets_module_name():

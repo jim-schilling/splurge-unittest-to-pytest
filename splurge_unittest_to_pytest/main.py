@@ -14,16 +14,20 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .context import MigrationConfig
+from .events import EventBus
 from .migration_orchestrator import MigrationOrchestrator
 from .result import Result
 
 
-def migrate(source_files: Iterable[str] | str, config: MigrationConfig | None = None) -> Result[list[str]]:
+def migrate(
+    source_files: Iterable[str] | str, config: MigrationConfig | None = None, event_bus: EventBus | None = None
+) -> Result[list[str]]:
     """Migrate one or more source files programmatically.
 
     Args:
         source_files: Iterable of file paths (or single path string).
         config: Optional ``MigrationConfig`` to control migration behavior.
+        event_bus: Optional event bus to use for publishing events.
 
     Returns:
         ``Result`` containing a list of written target file paths on
@@ -37,7 +41,7 @@ def migrate(source_files: Iterable[str] | str, config: MigrationConfig | None = 
     if config is None:
         config = MigrationConfig()
 
-    orchestrator = MigrationOrchestrator()
+    orchestrator = MigrationOrchestrator(event_bus)
     written: list[str] = []
     # Collect per-file generated code when running in dry-run so callers
     # (CLI) can display the converted code without writing files.

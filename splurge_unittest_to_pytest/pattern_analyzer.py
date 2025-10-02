@@ -31,13 +31,16 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
     exposes the parsed ``TestModule`` via ``analyze_module``.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, test_prefixes: list[str] | None = None) -> None:
         self.needs_pytest_import = False
         self.current_class: TestClass | None = None
         self.current_method: TestMethod | None = None
         self.ir_module: TestModule | None = None
         self._class_bases: dict[str, list[str]] = {}
         self._classes: dict[str, TestClass] = {}
+        self.test_prefixes = test_prefixes or ["test"]
+        # Track class hierarchy for nested test classes
+        self._class_stack: list[TestClass] = []
 
     def _normalize_base_name(self, value: cst.BaseExpression) -> str:
         """Normalize a base expression to a dotted name string if possible.
@@ -123,7 +126,8 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         """Handle a class definition and record test-class information.
 
         This method records base classes, detects ``unittest.TestCase``
-        inheritance, and collects methods for later processing.
+        inheritance, and collects methods for later processing. Also handles
+        nested test classes by maintaining a class hierarchy stack.
         """
         class_name = node.name.value
 
@@ -133,7 +137,7 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         # Normalize base names
         bases_norm = [self._normalize_base_name(base.value) for base in node.bases]
 
-        # Create IR class
+        # Create IR class with enhanced metadata
         test_class = TestClass(
             name=class_name,
             base_classes=bases_norm,
@@ -145,6 +149,9 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         self._class_bases[class_name] = bases_norm
         self._classes[class_name] = test_class
 
+        # Handle nested classes by pushing to stack
+        self._class_stack.append(test_class)
+
         # Store current class for method analysis
         old_class = self.current_class
         self.current_class = test_class
@@ -153,8 +160,11 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         for item in node.body.body:
             item.visit(self)
 
-        # Restore previous class
+        # Metadata about custom setup methods is tracked in the visit_FunctionDef method
+
+        # Restore previous class and pop from stack
         self.current_class = old_class
+        self._class_stack.pop()
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """Handle a function definition to classify test methods and fixtures.
@@ -234,17 +244,57 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
     def _is_test_method(self, method_name: str) -> bool:
         """Return True when the method name follows pytest/unittest test naming.
 
-        Currently this uses the ``test_`` prefix heuristic.
+        Uses configurable test prefixes to support various naming conventions
+        like 'test_', 'spec_', 'should_', 'it_', etc.
         """
-        return method_name.startswith("test_")
+        return any(method_name.startswith(prefix) for prefix in self.test_prefixes)
 
     def _is_setup_method(self, method_name: str) -> bool:
         """Check if a method is a setup method."""
-        return method_name in ["setUp", "setUpClass"]
+        # Standard unittest setup methods
+        standard_setup = method_name in ["setUp", "setUpClass"]
+        if standard_setup:
+            return True
+
+        # Custom setup method patterns
+        setup_patterns = [
+            "setup",
+            "set_up",
+            "setup_method",
+            "setup_class",
+            "before",
+            "before_each",
+            "before_all",
+            "initialize",
+            "init_test",
+            "prepare",
+        ]
+
+        return any(method_name.lower().startswith(pattern) for pattern in setup_patterns)
 
     def _is_teardown_method(self, method_name: str) -> bool:
         """Check if a method is a teardown method."""
-        return method_name in ["tearDown", "tearDownClass"]
+        # Standard unittest teardown methods
+        standard_teardown = method_name in ["tearDown", "tearDownClass"]
+        if standard_teardown:
+            return True
+
+        # Custom teardown method patterns
+        teardown_patterns = [
+            "teardown",
+            "tear_down",
+            "teardown_method",
+            "teardown_class",
+            "cleanup",
+            "clean_up",
+            "after",
+            "after_each",
+            "after_all",
+            "destroy",
+            "finalize",
+        ]
+
+        return any(method_name.lower().startswith(pattern) for pattern in teardown_patterns)
 
     def _get_assertion_type(self, method_name: str) -> AssertionType | None:
         """Convert unittest assertion method name to ``AssertionType``.
