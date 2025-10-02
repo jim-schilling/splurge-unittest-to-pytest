@@ -57,6 +57,24 @@ class TestDecisionAnalysisJob:
         ]
         assert step_names == expected_names
 
+    def test_job_execution_error_handling(self, mocker):
+        """Test job handles errors properly during execution."""
+        event_bus = EventBus()
+        job = DecisionAnalysisJob(event_bus)
+
+        # Mock the task execution to raise an exception
+        mock_task = mocker.Mock()
+        mock_task.execute.side_effect = Exception("Test error")
+        job.tasks = [mock_task]
+
+        # Create a basic context
+        config = MigrationConfig()
+        context = PipelineContext.create("test.py", "test_out.py", config)
+
+        # Execute job - should propagate the error from the task
+        with pytest.raises(Exception, match="Test error"):
+            job.execute(context, "invalid source")
+
 
 class TestParseSourceForAnalysisStep:
     """Test ParseSourceForAnalysisStep."""
@@ -136,6 +154,34 @@ class TestModuleScannerStep:
 
         proposal = context.metadata["module_proposal"]
         assert proposal.module_name == "test.py"
+
+    def test_module_scanner_error_handling(self, mocker):
+        """Test module scanner handles errors properly."""
+        import libcst as cst
+
+        # Create a step
+        step = ModuleScannerStep("test_module_scan", EventBus())
+
+        # Create a context
+        context = PipelineContext(
+            source_file="test.py",
+            target_file=None,
+            config=MigrationConfig(),
+            run_id="test-run",
+            metadata={},
+        )
+
+        # Mock the _collect_imports method to raise an exception
+        mocker.patch.object(step, "_collect_imports", side_effect=Exception("Test error"))
+
+        # Create a simple CST module
+        module = cst.parse_module("import unittest")
+
+        result = step.execute(context, module)
+
+        # Should return a failure result
+        assert not result.is_success()
+        assert "Failed to scan module" in str(result.error)
 
 
 class TestClassScannerStep:
@@ -376,3 +422,80 @@ class TestExample(unittest.TestCase):
         # DecisionModel should be stored in context metadata
         decision_model = context.metadata.get("decision_model")
         assert isinstance(decision_model, DecisionModel)
+
+
+class TestDecisionAnalysisJobErrorConditions:
+    """Test error condition handling in decision analysis job components."""
+
+    def test_module_scanner_import_collection_error(self, mocker):
+        """Test ModuleScannerStep handles _collect_imports errors properly."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
+        from splurge_unittest_to_pytest.jobs.decision_analysis_job import ModuleScannerStep
+
+        step = ModuleScannerStep("test_scanner", mocker.Mock())
+        context = PipelineContext.create("test.py", None, MigrationConfig())
+
+        module = cst.parse_module("import unittest\nclass Test(unittest.TestCase): pass")
+
+        # Mock _collect_imports to raise an exception (covers lines 172-173)
+        mocker.patch.object(step, "_collect_imports", side_effect=RuntimeError("Import collection failed"))
+
+        result = step.execute(context, module)
+        # Should return error result when scanning fails
+        assert result.is_error()
+        assert "Failed to scan module" in str(result.error)
+
+    def test_module_scanner_assignment_collection_error(self, mocker):
+        """Test ModuleScannerStep handles _collect_top_level_assignments errors."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
+        from splurge_unittest_to_pytest.jobs.decision_analysis_job import ModuleScannerStep
+
+        step = ModuleScannerStep("test_scanner", mocker.Mock())
+        context = PipelineContext.create("test.py", None, MigrationConfig())
+
+        module = cst.parse_module("x = 1\ny = 'test'")
+
+        # Mock _collect_top_level_assignments to raise an exception (covers lines 203-204)
+        mocker.patch.object(
+            step, "_collect_top_level_assignments", side_effect=ValueError("Assignment collection failed")
+        )
+
+        result = step.execute(context, module)
+        # Should return error result when scanning fails
+        assert result.is_error()
+        assert "Failed to scan module" in str(result.error)
+
+    def test_function_scanner_variable_analysis_error(self, mocker):
+        """Test FunctionScannerStep handles variable analysis errors."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
+        from splurge_unittest_to_pytest.jobs.decision_analysis_job import FunctionScannerStep
+
+        step = FunctionScannerStep("test_scanner", mocker.Mock())
+        context = PipelineContext.create("test.py", None, MigrationConfig())
+
+        # Set up required metadata
+        from splurge_unittest_to_pytest.decision_model import ClassProposal, ModuleProposal
+
+        class_prop = ClassProposal("TestClass", {})
+        module_prop = ModuleProposal("test.py", {"TestClass": class_prop})
+        context.metadata["module_proposal"] = module_prop
+
+        module = cst.parse_module("""
+class TestClass:
+    def test_method(self):
+        x = []
+        x.append(1)
+""")
+
+        # Mock _is_variable_mutated to raise an exception
+        mocker.patch.object(step, "_is_variable_mutated", side_effect=Exception("Mutation check failed"))
+
+        result = step.execute(context, module)
+        # Should succeed despite the error
+        assert result.is_success()

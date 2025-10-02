@@ -80,6 +80,7 @@ class MigrationConfig:
     recurse_directories: bool = True
     preserve_structure: bool = True
     backup_originals: bool = True
+    backup_root: str | None = None
     # Suffix appended to target filename stem (default: '')
     target_suffix: str = ""
     # If set, override the extension on target files (e.g. '.py' or 'txt').

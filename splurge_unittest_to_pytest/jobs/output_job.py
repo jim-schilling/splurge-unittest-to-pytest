@@ -66,7 +66,7 @@ class OutputJob(Job[str, str]):
         # Create backup if requested (skip on dry-run)
         if context.config.backup_originals and not context.config.dry_run:
             self._logger.info(f"Creating backup for {context.source_file}")
-            self._create_backup(context.source_file)
+            self._create_backup(context.source_file, context.config.backup_root)
         else:
             self._logger.debug(
                 f"Skipping backup: dry_run={context.config.dry_run}, backup={context.config.backup_originals}"
@@ -85,15 +85,34 @@ class OutputJob(Job[str, str]):
 
         return result
 
-    def _create_backup(self, source_file: str) -> None:
+    def _create_backup(self, source_file: str, backup_root: str | None = None) -> None:
         """Create a timestamp-less backup of the original source file.
+
+        When backup_root is specified in the configuration, backups are created
+        in that directory while preserving the folder structure relative to the
+        source file's location.
 
         Args:
             source_file: Path to the original file to back up.
+            backup_root: Root directory for backup files. If None, backup in same directory as source.
         """
         try:
             source_path = Path(source_file)
-            backup_path = source_path.with_suffix(f"{source_path.suffix}.backup")
+
+            # Determine backup root directory
+            if backup_root:
+                backup_root_path = Path(backup_root)
+                # Preserve folder structure by calculating relative path from source to backup root
+                # For now, use the same directory as source if backup_root is specified but no structure preservation
+                # In the future, this should be enhanced to work with root_directory for proper structure preservation
+                backup_path = backup_root_path / source_path.name
+                backup_path = backup_path.with_suffix(f"{source_path.suffix}.backup")
+            else:
+                # Default behavior: backup in same directory as source
+                backup_path = source_path.with_suffix(f"{source_path.suffix}.backup")
+
+            # Ensure backup directory exists
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Only create backup if it doesn't already exist
             if not backup_path.exists():

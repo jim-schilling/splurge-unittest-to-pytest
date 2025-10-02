@@ -11,7 +11,7 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
-__version__ = "2025.0.1"
+__version__ = "2025.0.2"
 __author__ = "Jim Schilling"
 __description__ = "Automated unittest to pytest migration tool"
 
@@ -91,15 +91,4 @@ def __getattr__(name: str):
 
 
 def __dir__():
-    return sorted(
-        list(globals().keys())
-        + [
-            "main",
-            "cli",
-            "MigrationOrchestrator",
-            "PipelineContext",
-            "MigrationConfig",
-            "Result",
-            "EventBus",
-        ]
-    )
+    return sorted(list(globals().keys()) + __all__)
