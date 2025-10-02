@@ -685,7 +685,11 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     result_node = result_node.with_changes(params=result_node.params.with_changes(params=params))
 
             # Detection for caplog usage is retained for parity with previous behavior.
-            self._uses_caplog_at_level(body_statements)
+            if self._uses_caplog_at_level(body_statements):
+                params = list(result_node.params.params)
+                if not any(isinstance(param.name, cst.Name) and param.name.value == "caplog" for param in params):
+                    params.append(cst.Param(name=cst.Name(value="caplog")))
+                    result_node = result_node.with_changes(params=result_node.params.with_changes(params=params))
         except Exception:
             return node
 
@@ -693,11 +697,12 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
 
     def _uses_caplog_at_level(self, statements: Sequence[cst.CSTNode]) -> bool:
         """Detect `caplog.at_level` usage within the provided statements."""
-
         try:
-            for stmt in statements:
-                if isinstance(stmt, cst.With):
-                    for item in stmt.items:
+
+            def walk(node: cst.CSTNode) -> bool:
+                # Check current node for a caplog.at_level with-call
+                if isinstance(node, cst.With):
+                    for item in node.items:
                         ctx = getattr(item, "item", None)
                         if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
                             attr = ctx.func
@@ -708,6 +713,28 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                                 and attr.attr.value == "at_level"
                             ):
                                 return True
+                    # Recurse into the with-body
+                    for stmt in getattr(node.body, "body", []):
+                        if walk(stmt):
+                            return True
+
+                # Recurse into common container attributes (body, orelse, finalbody, handlers)
+                for child_name in ("body", "orelse", "finalbody", "handlers"):
+                    child = getattr(node, child_name, None)
+                    if isinstance(child, cst.IndentedBlock):
+                        for stmt in getattr(child, "body", []):
+                            if walk(stmt):
+                                return True
+                    elif isinstance(child, list):
+                        for stmt in child:
+                            if isinstance(stmt, cst.CSTNode) and walk(stmt):
+                                return True
+
+                return False
+
+            for stmt in statements:
+                if walk(stmt):
+                    return True
             return False
         except Exception:
             return False

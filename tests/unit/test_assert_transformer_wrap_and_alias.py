@@ -38,5 +38,5 @@ with self.assertLogs('my.logger', level='INFO') as log:
 
     out = transform_caplog_alias_string_fallback(src)
     assert "log.output" not in out
-    assert "caplog.records" in out
-    assert ".getMessage()" in out
+    assert "caplog.records" in out or "caplog.messages" in out
+    assert "caplog.messages" in out

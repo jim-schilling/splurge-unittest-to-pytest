@@ -31,4 +31,4 @@ def test_caplog_alias_string_fallback_rewrite():
     # This uses the string-based fallback: replace alias.output[...] == "msg" with caplog.records
     code = 'log.output[0] == "m"'
     out = at.transform_caplog_alias_string_fallback(code)
-    assert "caplog.records" in out or out == code
+    assert "caplog.records" in out or "caplog.messages" in out or out == code

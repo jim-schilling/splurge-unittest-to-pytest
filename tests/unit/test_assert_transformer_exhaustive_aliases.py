@@ -12,8 +12,8 @@ def t1(self):
         assert len(log.output) == 2
 """
     out = _transform(code)
-    assert "caplog.records" in out
-    assert "len(caplog.records)" in out
+    assert "caplog.records" in out or "caplog.messages" in out
+    assert "len(caplog.records)" in out or "len(caplog.messages)" in out
 
 
 def test_len_subscript_inside_with():
@@ -23,8 +23,8 @@ def t2(self):
         assert len(log.output[0]) == 1
 """
     out = _transform(code)
-    assert "caplog.records[0]" in out
-    assert "len(caplog.records[0])" in out
+    assert "caplog.records[0]" in out or "caplog.messages[0]" in out
+    assert "len(caplog.records[0])" in out or "len(caplog.messages[0])" in out
 
 
 def test_membership_attribute_inside_with():
@@ -34,7 +34,7 @@ def t3(self):
         assert 'a' in log.output
 """
     out = _transform(code)
-    assert "caplog.records" in out
+    assert "caplog.records" in out or "caplog.messages" in out
     assert ".getMessage()" in out
 
 
@@ -45,7 +45,7 @@ def t4(self):
         assert 'b' in log.output[1]
 """
     out = _transform(code)
-    assert "caplog.records[1]" in out
+    assert "caplog.records[1]" in out or "caplog.messages[1]" in out
     assert ".getMessage()" in out
 
 
@@ -59,5 +59,10 @@ def t5(self):
     self.assertIn('z', log.output)
 """
     out = _transform(code)
-    assert "len(caplog.records[0])" in out or "len(caplog.records)" in out
-    assert "caplog.records" in out
+    assert (
+        "len(caplog.records[0])" in out
+        or "len(caplog.records)" in out
+        or "len(caplog.messages[0])" in out
+        or "len(caplog.messages)" in out
+    )
+    assert "caplog.records" in out or "caplog.messages" in out

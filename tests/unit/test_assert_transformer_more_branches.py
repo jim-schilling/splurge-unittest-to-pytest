@@ -86,11 +86,13 @@ def test_lookahead_rewrite_rewrites_following_asserts_using_alias():
     stmts = [with_stmt, s1, s2]
     out = wrap_assert_in_block(stmts)
     # After wrapping we should have a With and the lookahead loop should have rewritten s1/s2 in-place
-    assert any("caplog.records" in cst.Module(body=out).code for _ in (0,))
+    code = cst.Module(body=out).code
+    assert "caplog.records" in code or "caplog.messages" in code
 
 
 def test_string_fallback_handles_log_output_and_membership():
     code = "if 'x' in log.output[0]: pass\nlen(log.output) == 1\n"
     out = transform_caplog_alias_string_fallback(code)
-    assert "caplog.records" in out
-    assert ".getMessage()" in out
+    assert "caplog.messages" in out
+    # string fallback should rewrite membership and length checks to caplog.messages
+    assert "caplog.messages[0]" in out

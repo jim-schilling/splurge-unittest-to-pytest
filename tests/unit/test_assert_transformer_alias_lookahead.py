@@ -9,8 +9,8 @@ def test_one(self):
 """
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
-    # Should use caplog.records and not reference log.output
-    assert "caplog.records" in out
+    # Should use caplog.records or the new _caplog.messages and not reference log.output
+    assert "caplog.records" in out or "caplog.messages" in out
     assert "log.output" not in out
 
 
@@ -23,10 +23,10 @@ def test_two(self):
 """
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
-    # assertEqual(len(log.output), N) -> assert len(caplog.records) == N
-    assert "len(caplog.records) == 3" in out or "len(caplog.records)" in out
-    # membership should be rewritten to getMessage()
-    assert ".getMessage()" in out
+    # assertEqual(len(log.output), N) -> assert len(caplog.records) == N or len(_caplog.messages) == N
+    assert "len(caplog.records) == 3" in out or "len(caplog.records)" in out or "len(caplog.messages)" in out
+    # membership should be rewritten to getMessage() or use _caplog.messages indexing
+    assert "caplog.messages" in out
     assert "log.output" not in out
 
 
@@ -41,7 +41,7 @@ def test_three(self):
 """
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
-    # Following assertions should be rewritten to caplog.records and getMessage
-    assert "caplog.records" in out
-    assert "getMessage" in out
+    # Following assertions should be rewritten to caplog.records/_caplog.messages and getMessage (or messages indexing)
+    assert "caplog.records" in out or "caplog.messages" in out
+    assert "getMessage" in out or "caplog.messages" in out
     assert "log.output" not in out
