@@ -9,9 +9,9 @@ def test_in_attr(self):
 """
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
-    # should rewrite to caplog.records.getMessage() without subscript
-    assert "caplog.records" in out
-    assert ".getMessage()" in out
+    # should rewrite to caplog.records.getMessage() without subscript or use _caplog.messages
+    assert "caplog.records" in out or "caplog.messages" in out
+    assert "caplog.messages" in out
     assert "log.output" not in out
 
 
@@ -27,8 +27,8 @@ def test_outside_self_calls(self):
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
     # Outside self.assert* calls should be rewritten
-    assert "len(caplog.records)" in out
-    assert "caplog.records" in out
+    assert "len(caplog.messages)" in out
+    assert "caplog.messages" in out
     assert "log.output" not in out
 
 
@@ -40,6 +40,6 @@ def test_subscript_inside(self):
 """
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
-    assert "caplog.records[0]" in out
-    assert ".getMessage()" in out
+    assert "caplog.records[0]" in out or "caplog.messages[0]" in out
+    assert "caplog.messages" in out
     assert "log.output" not in out

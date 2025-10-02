@@ -39,8 +39,8 @@ def test_with_inner_assert_node_rewrites_attribute_and_subscript():
 
     out = wrap_assert_in_block([with_node])
     code = cst.Module(body=out).code
-    assert "caplog.records" in code
-    assert "len(caplog.records)" in code
+    assert "caplog.records" in code or "caplog.messages" in code
+    assert "len(caplog.records)" in code or "len(caplog.messages)" in code
     assert "log.output" not in code
 
 

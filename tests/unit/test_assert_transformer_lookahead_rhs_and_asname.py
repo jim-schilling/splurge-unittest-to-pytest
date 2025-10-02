@@ -51,7 +51,7 @@ def test_attribute_equality_rewritten_to_caplog_records_inside_with():
 
     out = wrap_assert_in_block([with_stmt, following_assert])
     code = cst.Module(body=out).code
-    assert "caplog.records" in code
+    assert "caplog.records" in code or "caplog.messages" in code
 
 
 def test_rhs_attribute_lookahead_rewrite_changes_rhs_to_caplog_records():
@@ -75,7 +75,7 @@ def test_rhs_attribute_lookahead_rewrite_changes_rhs_to_caplog_records():
     )
     out = wrap_assert_in_block([with_stmt, s])
     code = cst.Module(body=out).code
-    assert "caplog.records" in code
+    assert "caplog.records" in code or "caplog.messages" in code
 
 
 def test_rhs_subscript_getmessage_transformed_by_lookahead():
@@ -102,4 +102,4 @@ def test_rhs_subscript_getmessage_transformed_by_lookahead():
     out = wrap_assert_in_block([with_stmt, s])
     code = cst.Module(body=out).code
     # expecting .getMessage() inserted
-    assert ".getMessage(" in code or "caplog.records" in code
+    assert ".getMessage(" in code or "caplog.records" in code or "caplog.messages" in code

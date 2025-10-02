@@ -35,8 +35,8 @@ def test_caplog_string_fallback_rewrites_output_and_getmessage():
     # covers transform_caplog_alias_string_fallback (596-705 area overlap)
     code = "assert caplog.records[0] == 'hello'\nfoo = log.output[0]\n"
     out = transform_caplog_alias_string_fallback(code)
-    assert "caplog.records[0].getMessage() == 'hello'" in out
-    assert "caplog.records[0]" in out
+    assert "caplog.messages[0] == 'hello'" in out
+    assert "caplog.messages[0]" in out
 
 
 def test_rewrite_equality_and_membership_variants_using_alias_lookahead():
@@ -87,7 +87,7 @@ def test_rewrite_equality_and_membership_variants_using_alias_lookahead():
     # Flatten body and ensure caplog.records usage appears somewhere by stringifying
     module = cst.Module(body=[new_with])
     s = module.code
-    assert "caplog.records" in s or "getMessage" in s
+    assert "caplog.records" in s or "getMessage" in s or "caplog.messages" in s
 
 
 def test_transform_assert_almost_equal_prefers_approx():

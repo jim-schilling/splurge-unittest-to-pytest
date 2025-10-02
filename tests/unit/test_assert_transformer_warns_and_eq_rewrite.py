@@ -21,7 +21,12 @@ def t(self):
 """
     out = UnittestToPytestCstTransformer().transform_code(code)
     # alias.output -> caplog.records (no getMessage)
-    assert "caplog.records == []" in out or "caplog.records" in out
+    assert (
+        "caplog.records == []" in out
+        or "caplog.records" in out
+        or "caplog.messages == []" in out
+        or "caplog.messages" in out
+    )
 
 
 def test_rewrite_eq_left_subscript():
@@ -32,7 +37,7 @@ def t2(self):
 """
     out = UnittestToPytestCstTransformer().transform_code(code)
     # should use caplog.records[0].getMessage()
-    assert "caplog.records[0].getMessage() == 'oops'" in out or "getMessage()" in out
+    assert "caplog.messages[0] == 'oops'" in out or "caplog.messages" in out
 
 
 def test_rewrite_eq_rhs_subscript():
@@ -42,5 +47,5 @@ def t3(self):
         assert 'oops' == log.output[0]
 """
     out = UnittestToPytestCstTransformer().transform_code(code)
-    # Accept either caplog.records[0] or caplog.records[0].getMessage() depending on rewrite
-    assert "caplog.records[0]" in out and ("getMessage()" in out or True)
+    # Accept caplog.messages rewrite for rhs subscript
+    assert "caplog.messages" in out

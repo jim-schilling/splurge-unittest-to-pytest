@@ -33,13 +33,12 @@ def test_with_items(self):
     transformer = UnittestToPytestCstTransformer()
     out = transformer.transform_code(code)
 
-    # Should use caplog.at_level and not keep 'log' alias references
+    # Should use caplog.at_level and reference the caplog fixture
     assert "caplog.at_level" in out
-    # alias.output should be replaced by caplog.records usage
+    assert "as _caplog" not in out
+    # original alias.output should be gone and use caplog.messages
     assert "log.output" not in out
-    assert "caplog.records" in out
-    # getMessage() calls should be present for membership checks
-    assert ".getMessage()" in out
+    assert "caplog.messages" in out
 
 
 def test_string_fallback_caplog_rewrites():
@@ -58,5 +57,5 @@ if caplog.records[0] == 'oops':
 
     out = transform_caplog_alias_string_fallback(src)
     assert "log.output" not in out
-    assert "caplog.records[0].getMessage()" in out
-    assert "caplog.records[0].getMessage() == 'oops'" in out
+    assert "caplog.messages[0]" in out
+    assert "caplog.records[0].getMessage() == 'oops'" in out or "caplog.messages[0] == 'oops'" in out

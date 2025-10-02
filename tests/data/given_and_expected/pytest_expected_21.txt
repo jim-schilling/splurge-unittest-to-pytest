@@ -113,7 +113,7 @@ class TestCalculatorComplete:
 
         with pytest.raises(ValueError) as context:
             self.calculator.divide(10, 0)
-        assert str(context.exception) == "Cannot divide by zero"
+        assert str(context.value) == "Cannot divide by zero"
 
         with pytest.raises(ValueError):
             self.calculator.divide(10, 0)
@@ -128,15 +128,14 @@ class TestCalculatorComplete:
         with pytest.warns(UserWarning, match=r"test warning"):
             warn_function()
 
-    def test_log_assertions(self) -> None:
+    def test_log_assertions(self, caplog) -> None:
         logger = logging.getLogger("test_logger")
-
         with caplog.at_level("INFO"):
             logger.info("Test log message")
             logger.error("Test error message")
 
-        assert len(caplog.records) == 2
-        assert "Test log message" in caplog.records[0].getMessage()
+        assert len(caplog.messages) == 2
+        assert "Test log message" in caplog.messages[0]
 
     def test_mock_assertions(self) -> None:
         mock_obj = Mock()
