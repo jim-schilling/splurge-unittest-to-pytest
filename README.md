@@ -68,8 +68,8 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
  - ``--posix``: Force POSIX-style path output in dry-run mode (presence-only flag)
  - ``--quiet``: Suppress extras in dry-run output (presence-only flag)
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
- - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
- - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
+- ``--backup-root DIR``: Root directory for backup files when recursing. When specified, backups preserve folder structure. By default, backups are created next to the original files.
+- ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
 - ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``).
   Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
 
@@ -105,6 +105,13 @@ Perform migration and write files to `converted/` (preserve extensions). Backups
 python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted
 # Disable backups when writing:
 python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted --skip-backup
+```
+
+Redirect backups to a custom directory while preserving folder structure:
+
+```bash
+# Create backups in a centralized location when processing multiple directories:
+python -m splurge_unittest_to_pytest.cli migrate -d tests --backup-root ./backups
 ```
 
 Migrate with custom test prefixes for modern testing frameworks:

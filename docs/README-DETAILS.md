@@ -258,8 +258,8 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``-f, --file PATTERN``: Glob pattern(s) to select files (repeatable). Default: ``test_*.py``.
 - ``-r, --recurse / --no-recurse``: Recurse directories (default: recurse).
 - ``-t, --target-dir DIR``: Directory to write outputs.
-- ``--preserve-structure / --no-preserve-structure``: Preserve original directory layout (default: preserve).
- - ``--skip-backup``: Skip creating a ``.backup`` copy of originals when writing (presence-only flag). By default the tool creates a ``.backup`` file next to the original when writing; if a ``.backup`` file already exists it will be preserved and not overwritten.
+- ``--backup-root DIR``: Root directory for backup files when recursing. When specified, backups preserve folder structure. By default, backups are created next to the original files.
+- ``--skip-backup``: Skip creating a ``.backup`` copy of originals when writing (presence-only flag). By default the tool creates a ``.backup`` file next to the original when writing; if a ``.backup`` file already exists it will be preserved and not overwritten.
 - ``--line-length N``: Max line length used by formatters (default: 120).
 - ``--dry-run``: Do not write files; return or display generated output.
 	- With ``--dry-run --diff``: show unified diffs.
@@ -267,7 +267,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``--ext EXT``: Override the target file extension.
 - ``--suffix SUFFIX``: Append suffix to target filename stem when writing.
 - ``--fail-fast``: Stop on first error (default: off).
- - ``-v, --verbose``: Verbose logging (presence-only flag). Note: ``--verbose`` and ``--quiet`` are mutually exclusive; do not pass both.
+ - ``-v, --verbose``: Verbose logging (presence-only flag).
  - ``--dry-run``: Do not write files; return or display generated output (presence-only flag).
 	 - With ``--dry-run --diff``: show unified diffs (``--diff`` is presence-only).
 	 - With ``--dry-run --list``: list files only (``--list`` is presence-only).
@@ -277,7 +277,6 @@ All flags are available on the ``migrate`` command. Summary below; use
  - ``--fail-fast``: Stop on first error (presence-only flag).
 - ``--report / --no-report``: Generate a migration report (default: on).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
-- ``--config FILE``: Load configuration from YAML file.
 - ``--prefix PREFIX``: Allowed test method prefixes; repeatable (default: ``test``).
   Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
 
@@ -302,6 +301,13 @@ Write changes to a target directory (formatting always applied). Backups are cre
 python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted
 # To disable backups when writing:
 python -m splurge_unittest_to_pytest.cli migrate tests/ -r -t converted --skip-backup
+```
+
+Redirect backups to a custom directory while preserving folder structure:
+
+```bash
+# Create backups in a centralized location when processing multiple directories:
+python -m splurge_unittest_to_pytest.cli migrate tests/ -r --backup-root ./backups
 ```
 
 Override extension (write `.txt` files instead of `.py`):

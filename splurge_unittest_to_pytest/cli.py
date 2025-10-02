@@ -178,7 +178,6 @@ def create_config(
     root_directory: str | None = None,
     file_patterns: list[str] | None = None,
     recurse_directories: bool = True,
-    preserve_structure: bool = True,
     backup_originals: bool = True,
     backup_root: str | None = None,
     line_length: int | None = 120,
@@ -204,7 +203,6 @@ def create_config(
         root_directory: Optional root directory used when searching by patterns.
         file_patterns: Glob patterns used to locate input files.
         recurse_directories: Whether to recursively search subdirectories.
-        preserve_structure: Preserve original directory structure in output.
         backup_originals: Create backup copies of original files before writing.
         backup_root: Root directory for backup files. When specified, backups preserve folder structure.
         line_length: Maximum line length for code formatting (passed to black).
@@ -233,7 +231,6 @@ def create_config(
         root_directory=root_directory,
         file_patterns=file_patterns or base.file_patterns,
         recurse_directories=recurse_directories,
-        preserve_structure=preserve_structure,
         backup_originals=backup_originals,
         backup_root=backup_root,
         line_length=line_length,
@@ -389,9 +386,6 @@ def migrate(
     ),
     recurse: bool = typer.Option(True, "--recurse", "-r", help="Recurse directories when searching for files"),
     target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
-    preserve_structure: bool = typer.Option(
-        True, "--preserve-structure", help="Preserve original directory structure", is_flag=True
-    ),
     skip_backup: bool = typer.Option(False, "--skip-backup", "-sb", help="Skip backup of original files", is_flag=True),
     backup_root: str | None = typer.Option(
         None, "--backup-root", help="Root directory for backup files (preserves folder structure when recursing)"
@@ -440,7 +434,6 @@ def migrate(
         file_patterns: Glob patterns used to discover input files.
         recurse: Recurse directories when searching for files.
         target_directory: Directory where converted files will be written.
-        preserve_structure: Preserve the original directory layout when writing output.
         backup_originals: When True create backups of original files prior to overwriting.
         backup_root: Root directory for backup files. When specified, backups preserve folder structure.
         line_length: Maximum line length used by code formatters.
@@ -480,7 +473,6 @@ def migrate(
             root_directory=root_directory,
             file_patterns=file_patterns,
             recurse_directories=recurse,
-            preserve_structure=preserve_structure,
             backup_originals=not skip_backup,
             backup_root=backup_root,
             line_length=line_length,
@@ -646,7 +638,6 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "# You can override these settings using command-line flags.": None,
         "# Output settings": None,
         "target_directory": default_config.get("target_directory"),
-        "preserve_structure": default_config.get("preserve_structure"),
         "backup_originals": default_config.get("backup_originals"),
         "backup_root": default_config.get("backup_root"),
         "# Transformation settings": None,

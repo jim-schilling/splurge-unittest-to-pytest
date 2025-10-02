@@ -236,7 +236,6 @@ class TestCLIInitConfigCommand:
             with open(config_file) as f:
                 content = f.read()
                 # Check for some expected configuration keys
-                assert "preserve_structure:" in content
                 assert "backup_originals:" in content
                 assert "line_length:" in content
                 assert "dry_run:" in content
