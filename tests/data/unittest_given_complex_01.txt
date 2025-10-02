@@ -1,0 +1,64 @@
+import unittest
+import logging
+from unittest.mock import patch
+
+
+class MyService:
+    """Example service that logs and raises errors."""
+    
+    def __init__(self, logger: logging.Logger) -> None:
+        self.logger = logger
+    
+    def process_invalid_data(self, value: int) -> None:
+        """Process data and raise error for invalid values.
+        
+        Args:
+            value: The value to process.
+            
+        Raises:
+            ValueError: When value is negative.
+            TypeError: When value is not an integer type.
+        """
+        self.logger.info(f"Processing value: {value}")
+        if not isinstance(value, int):
+            self.logger.error(f"Invalid type: expected int, got {type(value).__name__}")
+            raise TypeError("Value must be an integer")
+        if value < 0:
+            self.logger.error("Invalid value: cannot be negative")
+            raise ValueError("Value cannot be negative")
+        self.logger.info("Processing complete")
+
+
+class TestMyService(unittest.TestCase):
+    """Test cases for MyService."""
+    
+    def test_process_invalid_data_multiple_scenarios(self) -> None:
+        """Should raise appropriate errors and log messages for invalid inputs."""
+        logger = logging.getLogger("test_logger")
+        service = MyService(logger)
+        
+        test_cases = [
+            (-5, ValueError, "cannot be negative", "Invalid value"),
+            ("invalid", TypeError, "must be an integer", "Invalid type"),
+            (-100, ValueError, "cannot be negative", "Invalid value"),
+        ]
+        
+        for value, expected_exception, exc_msg, log_msg in test_cases:
+            with self.subTest(value=value, expected_exception=expected_exception):
+                with (
+						self.assertRaises(expected_exception) as exc_ctx, 
+                        self.assertLogs(logger, level=logging.ERROR) as log_ctx
+				):
+                    service.process_invalid_data(value)
+                
+                # Assert exception message
+                self.assertIn(exc_msg, str(exc_ctx.exception))
+                
+                # Assert log contents
+                self.assertEqual(len(log_ctx.records), 1)
+                self.assertIn(log_msg, log_ctx.output[0])
+                self.assertEqual(log_ctx.records[0].levelname, "ERROR")
+
+
+if __name__ == "__main__":
+    unittest.main()
