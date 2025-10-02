@@ -157,7 +157,6 @@ def create_config(
     generate_report: bool = True,
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
-    parametrize: bool | None = None,
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
@@ -183,7 +182,6 @@ def create_config(
         generate_report: Whether to produce a migration report.
         report_format: Format for the migration report (e.g. ``json``).
         test_method_prefixes: Allowed test method name prefixes (repeatable).
-        parametrize: Optional override for conservative subTest -> parametrize conversions.
         suffix: Suffix appended to the target filename stem.
         ext: Optional override for the target file extension.
 
@@ -198,8 +196,6 @@ def create_config(
 
     base = MigrationConfig()
 
-    effective_parametrize = base.parametrize if parametrize is None else parametrize
-
     return MigrationConfig(
         target_directory=target_directory,
         root_directory=root_directory,
@@ -207,10 +203,6 @@ def create_config(
         recurse_directories=recurse_directories,
         preserve_structure=preserve_structure,
         backup_originals=backup_originals,
-        # Legacy transformation flags are intentionally not exposed via the CLI.
-        # Keep the MigrationConfig minimal here and let defaults apply.
-        # Legacy flags are intentionally not exposed in the CLI and default
-        # behavior is used. Keep config minimal here.
         line_length=line_length,
         dry_run=dry_run,
         fail_fast=fail_fast,
@@ -218,7 +210,6 @@ def create_config(
         generate_report=generate_report,
         report_format=report_format,
         test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
-        parametrize=effective_parametrize,
         target_suffix=suffix,
         target_extension=ext,
     )
@@ -394,12 +385,6 @@ def migrate(
     test_method_prefixes: list[str] = typer.Option(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
-    subtest: bool = typer.Option(
-        False,
-        "--subtest",
-        help="Preserve unittest.subTest semantics using pytest-subtests when present; default behavior (no flag) is parametrize.",
-        is_flag=True,
-    ),
     suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
     ext: str | None = typer.Option(
         None,
@@ -452,9 +437,7 @@ def migrate(
         # Attach lightweight progress handlers that print to stdout when not quiet
         attach_progress_handlers(event_bus, verbose=verbose)
 
-        # Create configuration
-        effective_parametrize = not subtest
-
+        # Create configuration (decision model always enabled, parametrize always enabled by default)
         config = create_config(
             target_directory=target_directory,
             root_directory=root_directory,
@@ -469,7 +452,6 @@ def migrate(
             generate_report=generate_report,
             report_format=report_format,
             test_method_prefixes=test_method_prefixes,
-            parametrize=effective_parametrize,
             suffix=suffix,
             ext=ext,
         )

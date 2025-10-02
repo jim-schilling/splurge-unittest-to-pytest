@@ -9,13 +9,7 @@ def test_create_config_defaults():
     # basic sanity checks on returned MigrationConfig
     assert cfg is not None
     assert hasattr(cfg, "target_directory")
-    assert cfg.parametrize is True
-
-
-def test_create_config_allows_disabling_parametrize():
-    cfg = cli.create_config(parametrize=False)
-
-    assert cfg.parametrize is False
+    assert cfg.enable_decision_analysis is True
 
 
 def test_validate_source_files_with_patterns(tmp_path: Path):

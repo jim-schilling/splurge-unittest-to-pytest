@@ -72,12 +72,16 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
             cfg = context.config
             effective_parametrize = bool(cfg.parametrize)
 
+            # Get DecisionModel from context (always available since decision analysis is now mandatory)
+            decision_model = context.metadata.get("decision_model")
+
             # Use full transform_code to include assertion replacements and imports
             transformer = UnittestToPytestCstTransformer(
                 test_prefixes=context.config.test_method_prefixes,
                 parametrize=effective_parametrize,
                 parametrize_include_ids=context.config.parametrize_ids,
                 parametrize_add_annotations=context.config.parametrize_type_hints,
+                decision_model=decision_model,
             )
             source_code: str = module.code
             transformed_code: str = transformer.transform_code(source_code)

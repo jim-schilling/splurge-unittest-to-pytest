@@ -18,11 +18,17 @@ Overview
 --------
 ``splurge-unittest-to-pytest`` converts Python ``unittest``-style tests to
 ``pytest``-style tests using conservative, AST/CST-based transformations
-implemented with ``libcst``. The project aims to preserve test semantics and
+implemented with ``libcst``. The project features a **multi-pass analyzer**
+that intelligently analyzes test patterns and applies transformations with
+high confidence, preserving semantics where code mutates accumulators or
+depends on loop ordering. The project aims to preserve test semantics and
 readability while offering convenient preview and reporting options.
 
 Features
 --------
+- **Multi-pass analyzer** that intelligently analyzes test patterns and applies
+  transformations with high confidence, preserving semantics where code mutates
+  accumulators or depends on loop ordering.
 - CST-based transformations using ``libcst`` for stable, semantics-preserving edits.
 - Preserves class-structured tests that inherit from ``unittest.TestCase`` by default to
 	maintain class scope and fixtures unless a conversion is explicitly requested.
@@ -82,7 +88,7 @@ Limitations and caveats
 -----------------------
 - Dynamic or metaprogrammed tests (tests generated at runtime, complex class factory patterns) are not reliably converted and are typically left unchanged.
 - Custom ``TestCase`` subclasses that override discovery, run logic, or implement non-trivial helpers may prevent safe automatic conversion.
-- Converting ``subTest`` to ``parametrize`` is conservative: the transformer only attempts this when the inputs are statically discoverable and the loop body is side-effect free. Parametrization is enabled by default; disable it with ``--no-parametrize``/``--subtest`` on the CLI or ``MigrationConfig(parametrize=False)`` in code.
+- The **multi-pass analyzer** intelligently handles ``subTest`` conversions: it uses sophisticated pattern analysis to determine when to apply ``parametrize`` vs ``subtests`` transformations, preserving semantics where code mutates accumulators or depends on loop ordering.
 - Any conversion that may alter test ordering, scoping, or shared mutable state (for example, complex class-level fixtures) is avoided or flagged for manual review.
 - The semantics of ``expectedFailure`` differ slightly between ``unittest`` and ``pytest.xfail``; when a conversion is applied the tool documents the change in the migration report so users can verify intent.
 
@@ -149,8 +155,6 @@ All flags are available on the ``migrate`` command. Summary below; use
  - ``--list``: List files only in dry-run mode (presence-only flag).
  - ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
  - ``--fail-fast``: Stop on first error (presence-only flag).
- - ``--parametrize / --no-parametrize``: Explicitly control conservative ``subTest`` → ``pytest.mark.parametrize`` conversions. By default the tool enables parametrization; pass ``--no-parametrize`` to keep ``subTest`` blocks as-is.
- - ``--subtest``: Compatibility flag equivalent to ``--no-parametrize``. When present the converter preserves ``unittest.subTest`` semantics via the ``pytest-subtests`` fixture or compatibility shim instead of generating ``@pytest.mark.parametrize``.
 - ``--report / --no-report``: Generate a migration report (default: on).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
 - ``--config FILE``: Load configuration from YAML file.
@@ -207,7 +211,7 @@ The function returns a :class:`Result` that contains migrated paths and
 optional metadata. When ``dry_run`` is enabled the result metadata often
 includes a ``generated_code`` mapping of target paths to code strings.
 
-Example: disable parametrization programmatically
+Example: configure migration programmatically
 
 ```python
 from splurge_unittest_to_pytest import main
@@ -215,7 +219,7 @@ from splurge_unittest_to_pytest.context import MigrationConfig
 
 config = MigrationConfig(
     dry_run=True,
-    parametrize=False,
+    enable_decision_analysis=True,  # Multi-pass analyzer is always enabled
 )
 result = main.migrate(["tests/test_example.py"], config=config)
 if result.is_success():
@@ -269,7 +273,8 @@ Developer notes
 Recent updates
 --------------
 
+- **Multi-pass analyzer integration**: Implemented a sophisticated 5-pass analysis pipeline that intelligently determines transformation strategies for ``subTest`` loops, preserving semantics where code mutates accumulators or depends on loop ordering.
+- The decision model is now always enabled for improved transformation accuracy and consistency.
 - Expanded unit tests for assertion rewriting and string-fallbacks in the
 	assert transformer.
 - Improved dry-run presentation and added unified-diff output.
-

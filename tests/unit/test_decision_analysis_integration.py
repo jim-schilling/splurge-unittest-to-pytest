@@ -212,7 +212,8 @@ class TestWithMetadata(unittest.TestCase):
             result = job.execute(context, source_code)
             assert result.is_success()
 
-            return result.data
+            # DecisionModel is now stored in context metadata
+            return context.metadata["decision_model"]
 
         finally:
             Path(temp_file).unlink(missing_ok=True)

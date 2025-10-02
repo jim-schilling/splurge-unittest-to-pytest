@@ -43,7 +43,7 @@ class DecisionAnalysisJob(Job[str, DecisionModel]):
         super().__init__("decision_analysis", [self._create_analysis_task(event_bus)], event_bus)
         self._logger = logging.getLogger(f"{__name__}.{self.name}")
 
-    def _create_analysis_task(self, event_bus: EventBus) -> Task[str, DecisionModel]:
+    def _create_analysis_task(self, event_bus: EventBus) -> Task[str, str]:
         """Create and return the analysis task for this job."""
         from ..pipeline import Task
 
@@ -125,6 +125,7 @@ class ModuleScannerStep(Step[cst.Module, cst.Module]):
 
     def _collect_imports(self, module: cst.Module) -> list[str]:
         """Collect import statements from the module."""
+
         def _extract_name_value(obj: Any) -> str | None:
             """Return the .value for a cst.Name or None."""
             if isinstance(obj, cst.Name) and getattr(obj, "value", None):
@@ -222,7 +223,12 @@ class ModuleScannerStep(Step[cst.Module, cst.Module]):
                             if isinstance(func, cst.Attribute):
                                 func_val = getattr(func, "value", None)
                                 func_attr = getattr(func, "attr", None)
-                                if isinstance(func_val, cst.Name) and getattr(func_val, "value", None) == "pytest" and isinstance(func_attr, cst.Name) and getattr(func_attr, "value", None) == "fixture":
+                                if (
+                                    isinstance(func_val, cst.Name)
+                                    and getattr(func_val, "value", None) == "pytest"
+                                    and isinstance(func_attr, cst.Name)
+                                    and getattr(func_attr, "value", None) == "fixture"
+                                ):
                                     fixtures.append(node.name.value)
                         elif isinstance(dec, cst.Name) and getattr(dec, "value", None) == "fixture":
                             # Handle @fixture decorator (pytest style)
@@ -249,23 +255,18 @@ class ClassScannerStep(Step[cst.Module, cst.Module]):
                 return Result.failure(ctx_error, {"step": self.name, "context": context.run_id})
 
             module_proposal = context.metadata.get("module_proposal")
-            # If the key exists but the value is None, and we have a CST module,
-            # synthesize a ModuleProposal for in-memory analysis (tests do this).
+            # If the key exists but the value is None, synthesize a ModuleProposal
+            # for in-memory analysis (tests do this).
             if module_proposal is None:
-                cst_mod = context.metadata.get("cst_module")
-                if cst_mod is not None:
-                    module_name = context.source_file or "unknown"
-                    module_proposal = ModuleProposal(
-                        module_name=module_name,
-                        class_proposals={},
-                        module_fixtures=[],
-                        module_imports=[],
-                        top_level_assignments={},
-                    )
-                    context.metadata["module_proposal"] = module_proposal
-                else:
-                    ctx_error = ContextError("No module proposal found in context", "module_proposal", self.name)
-                    return Result.failure(ctx_error, {"step": self.name, "context": context.run_id})
+                module_name = context.source_file or "unknown"
+                module_proposal = ModuleProposal(
+                    module_name=module_name,
+                    class_proposals={},
+                    module_fixtures=[],
+                    module_imports=[],
+                    top_level_assignments={},
+                )
+                context.metadata["module_proposal"] = module_proposal
 
             # Scan all classes in the module
             for node in input_data.body:
@@ -276,7 +277,9 @@ class ClassScannerStep(Step[cst.Module, cst.Module]):
 
         except Exception as e:
             self._logger.error(f"Failed to scan classes: {e}")
-            analysis_error = AnalysisStepError(f"Failed to scan classes: {e}", "class_scanner", module_name=context.source_file)
+            analysis_error = AnalysisStepError(
+                f"Failed to scan classes: {e}", "class_scanner", module_name=context.source_file
+            )
             return Result.failure(analysis_error, {"step": self.name, "context": context.run_id})
 
     def _scan_class(self, class_node: cst.ClassDef, module_proposal: ModuleProposal) -> None:
@@ -350,20 +353,15 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
 
             module_proposal = context.metadata.get("module_proposal")
             if module_proposal is None:
-                cst_mod = context.metadata.get("cst_module")
-                if cst_mod is not None:
-                    module_name = context.source_file or "unknown"
-                    module_proposal = ModuleProposal(
-                        module_name=module_name,
-                        class_proposals={},
-                        module_fixtures=[],
-                        module_imports=[],
-                        top_level_assignments={},
-                    )
-                    context.metadata["module_proposal"] = module_proposal
-                else:
-                    ctx_error = ContextError("No module proposal found in context", "module_proposal", self.name)
-                    return Result.failure(ctx_error, {"step": self.name, "context": context.run_id})
+                module_name = context.source_file or "unknown"
+                module_proposal = ModuleProposal(
+                    module_name=module_name,
+                    class_proposals={},
+                    module_fixtures=[],
+                    module_imports=[],
+                    top_level_assignments={},
+                )
+                context.metadata["module_proposal"] = module_proposal
 
             # Scan all functions in the module
             for node in input_data.body:
@@ -448,10 +446,10 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
     ) -> FunctionProposal | None:
         """Analyze a for loop for subTest patterns.
 
-    Note: This function has complex isinstance checks against libcst union
-    node types which can trigger mypy false-positives about unreachable
-    branches. The implementation uses explicit runtime guards.
-    """
+        Note: This function has complex isinstance checks against libcst union
+        node types which can trigger mypy false-positives about unreachable
+        branches. The implementation uses explicit runtime guards.
+        """
         try:
             # Check if this is a subTest loop pattern
             body = for_node.body
@@ -484,7 +482,7 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
             loop_var_name = loop_var_names[0]
 
             # Analyze the loop iterable to determine strategy
-            strategy, evidence = self._analyze_loop_iterable(
+            strategy, evidence, accumulator_mutated = self._analyze_loop_iterable(
                 for_node.iter, body_statements, loop_index, class_name, func_name
             )
 
@@ -493,6 +491,7 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
                 recommended_strategy=strategy,
                 loop_var_name=loop_var_name,
                 iterable_origin=self._determine_iterable_origin(for_node.iter),
+                accumulator_mutated=accumulator_mutated,
                 evidence=evidence,
             )
 
@@ -530,14 +529,15 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
 
     def _analyze_loop_iterable(
         self, iterable: cst.BaseExpression, body_statements: list, loop_index: int, class_name: str, func_name: str
-    ) -> tuple[Literal["parametrize", "subtests", "keep-loop"], list[str]]:
+    ) -> tuple[Literal["parametrize", "subtests", "keep-loop"], list[str], bool]:
         """Analyze the loop iterable to determine transformation strategy."""
         evidence = []
+        accumulator_mutated = False
 
         # Check for literal lists/tuples (can be parametrized)
         if isinstance(iterable, cst.List | cst.Tuple):
             evidence.append("Found literal list/tuple iterable")
-            return "parametrize", evidence
+            return "parametrize", evidence, accumulator_mutated
 
         # Check for simple name references (can be parametrized if not mutated)
         if isinstance(iterable, cst.Name):
@@ -547,21 +547,22 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
             # Check if this variable is mutated in the function (accumulator pattern)
             if self._is_variable_mutated(var_name, body_statements, loop_index):
                 evidence.append(f"Variable {var_name} is mutated - use subtests")
-                return "subtests", evidence
+                accumulator_mutated = True
+                return "subtests", evidence, accumulator_mutated
             else:
                 evidence.append(f"Variable {var_name} is not mutated - can parametrize")
-                return "parametrize", evidence
+                return "parametrize", evidence, accumulator_mutated
 
         # Check for range() calls (can be parametrized)
         if isinstance(iterable, cst.Call):
             func = getattr(iterable, "func", None)
             if isinstance(func, cst.Name) and getattr(func, "value", None) == "range":
                 evidence.append("Found range() call - can parametrize")
-                return "parametrize", evidence
+                return "parametrize", evidence, accumulator_mutated
 
         # Default to conservative approach
         evidence.append("Unknown iterable type - use subtests")
-        return "subtests", evidence
+        return "subtests", evidence, accumulator_mutated
 
     def _is_variable_mutated(self, var_name: str, body_statements: list, loop_index: int) -> bool:
         """Check if a variable is mutated before the loop."""
@@ -596,7 +597,12 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
                     if isinstance(func, cst.Attribute):
                         func_val = getattr(func, "value", None)
                         func_attr = getattr(func, "attr", None)
-                        if isinstance(func_val, cst.Name) and getattr(func_val, "value", None) == var_name and getattr(func_attr, "value", None) in ("append", "extend", "insert", "update", "pop", "remove"):
+                        if (
+                            isinstance(func_val, cst.Name)
+                            and getattr(func_val, "value", None) == var_name
+                            and getattr(func_attr, "value", None)
+                            in ("append", "extend", "insert", "update", "pop", "remove")
+                        ):
                             return True
         except Exception:
             pass
@@ -633,16 +639,19 @@ class FunctionScannerStep(Step[cst.Module, cst.Module]):
         return None
 
 
-class ProposalReconcilerStep(Step[cst.Module, DecisionModel]):
+class ProposalReconcilerStep(Step[cst.Module, str]):
     """Reconcile and aggregate function proposals into final decisions."""
 
     def __init__(self, name: str, event_bus: EventBus) -> None:
         super().__init__(name, event_bus)
 
-    def execute(self, context: PipelineContext, input_data: cst.Module) -> Result[DecisionModel]:
-        """Reconcile proposals and create final decision model."""
+    def execute(self, context: PipelineContext, input_data: cst.Module) -> Result[str]:
+        """Reconcile proposals and create final decision model, return source code for next step."""
         try:
             self._logger.debug("Reconciling proposals into decision model")
+
+            # Get the source code from the CST module
+            source_code = input_data.code
 
             # Require the metadata key to be present; synthesize if key exists but value is None
             if "module_proposal" not in context.metadata:
@@ -674,7 +683,11 @@ class ProposalReconcilerStep(Step[cst.Module, DecisionModel]):
             decision_model = DecisionModel(module_proposals={})
             decision_model.add_module_proposal(module_proposal)
 
-            return Result.success(decision_model)
+            # Store the decision model in context metadata for downstream steps
+            context.metadata["decision_model"] = decision_model
+
+            # Return the original source code for the next step in the pipeline
+            return Result.success(source_code)
 
         except Exception as e:
             self._logger.error(f"Failed to reconcile proposals: {e}")

@@ -1,7 +1,7 @@
 
 # splurge-unittest-to-pytest
 
-[![Version](https://img.shields.io/badge/version-2025.0.0-blue.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
+[![Version](https://img.shields.io/badge/version-2025.0.1-blue.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![PyPI](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![Development Status](https://img.shields.io/badge/Development%20Status-Alpha-lightgrey.svg)](#)
 
@@ -10,9 +10,11 @@
 [![mypy](https://img.shields.io/badge/mypy-passing-brightgreen.svg)](https://github.com/python/mypy)
 
 A practical toolset to migrate Python unittest-based tests into idiomatic
-pytest style. The project exposes both a command-line interface and a
-programmatic API built around libcst-based transformations to preserve
-semantics while producing readable pytest code.
+pytest style. The project features a **multi-pass analyzer** that intelligently
+analyzes test patterns and applies transformations with high confidence.
+The project exposes both a command-line interface and a programmatic API
+built around libcst-based transformations to preserve semantics while
+producing readable pytest code.
 
 ## Quick start
 
@@ -36,6 +38,9 @@ an alternate location.
 
 ## At-a-glance features
 
+- **Multi-pass analyzer** that intelligently analyzes test patterns and applies
+  transformations with high confidence, preserving semantics where code mutates
+  accumulators or depends on loop ordering.
 - Safe CST-based transformations using `libcst` to preserve formatting and
   minimize behavior changes.
 - Dry-run preview modes: print converted code, show unified diffs
@@ -61,7 +66,6 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
  - ``--quiet``: Suppress extras in dry-run output (presence-only flag)
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
  - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
- - ``--suffix SUFFIX``: Append a suffix to converted filenames
  - ``--backup``: Create backup copies of originals when writing (presence-only flag; default: off)
 - ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``)
 
