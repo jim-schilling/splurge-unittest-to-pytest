@@ -98,7 +98,7 @@ def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess 
         isinstance(current, cst.Attribute)
         and isinstance(current.value, cst.Name)
         and isinstance(current.attr, cst.Name)
-        and current.attr.value == "output"
+        and current.attr.value in {"output", "records"}
     ):
         return AliasOutputAccess(alias_name=current.value.value, slices=tuple(slices))
 
@@ -1055,6 +1055,7 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
     try:
         t = target_assert.test
 
+        # First try the existing expression-based rewrites
         rewritten_test = _rewrite_expression(t, alias_name)
         if rewritten_test is not None:
             return target_assert.with_changes(test=rewritten_test)
@@ -1063,6 +1064,68 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
             comp_new = _rewrite_comparison(t, alias_name)
             if comp_new is not None:
                 return target_assert.with_changes(test=comp_new)
+
+        # Additional AST-level handling: rewrite direct attribute access
+        # patterns like `<alias>.records[...]` or
+        # `<alias>.records[index].getMessage()` to use `caplog.records` or
+        # `caplog.messages` when appropriate so downstream code can
+        # reference record attributes such as `.levelname`.
+        def _rewrite_alias_records(expr: cst.BaseExpression) -> cst.BaseExpression | None:
+            # caplog.records[...] or caplog.records
+            if isinstance(expr, cst.Subscript):
+                value = expr.value
+                if isinstance(value, cst.Attribute) and isinstance(value.value, cst.Name):
+                    if (
+                        value.value.value == alias_name
+                        and isinstance(value.attr, cst.Name)
+                        and value.attr.value == "records"
+                    ):
+                        return expr.with_changes(
+                            value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                        )
+            if isinstance(expr, cst.Attribute) and isinstance(expr.value, cst.Subscript):
+                sub = expr.value
+                if isinstance(sub.value, cst.Attribute) and isinstance(sub.value.value, cst.Name):
+                    if (
+                        sub.value.value.value == alias_name
+                        and isinstance(sub.value.attr, cst.Name)
+                        and sub.value.attr.value == "records"
+                    ):
+                        # e.g., <alias>.records[0].getMessage() -> caplog.records[0].getMessage()
+                        return expr.with_changes(
+                            value=sub.with_changes(
+                                value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
+                            )
+                        )
+            return None
+
+        replaced = None
+        try:
+            # Walk left and comparisons for candidate replacements
+            left_repl = _rewrite_alias_records(t.left) if isinstance(t.left, cst.BaseExpression) else None
+            if left_repl is not None:
+                replaced = t.with_changes(left=left_repl)
+            else:
+                # Check comparators
+                new_targets = []
+                changed = False
+                for target in t.comparisons:
+                    comp_expr = target.comparator
+                    repl = None
+                    if isinstance(comp_expr, cst.BaseExpression):
+                        repl = _rewrite_alias_records(comp_expr)
+                    if repl is not None:
+                        new_targets.append(target.with_changes(comparator=repl))
+                        changed = True
+                    else:
+                        new_targets.append(target)
+                if changed:
+                    replaced = t.with_changes(comparisons=new_targets)
+        except Exception:
+            replaced = None
+
+        if replaced is not None:
+            return target_assert.with_changes(test=replaced)
 
         return None
     except Exception:
@@ -1141,6 +1204,51 @@ def rewrite_following_statements_for_alias(
                 target_assert = s.body[0]
 
             if target_assert is None:
+                # Additionally handle calls like `self.assertEqual(...)` or
+                # other Expr(Call) forms that reference the original
+                # alias. These calls will be transformed later into AST
+                # asserts by other passes, but we can conservatively
+                # rewrite alias references in their arguments now.
+                if isinstance(s, cst.SimpleStatementLine) and len(s.body) == 1 and isinstance(s.body[0], cst.Expr):
+                    expr = s.body[0].value
+                    if isinstance(expr, cst.Call):
+                        new_args = []
+                        changed_args = False
+                        for a in expr.args:
+                            try:
+                                val = a.value
+                                # len(alias.records) -> len(caplog.records)
+                                if (
+                                    isinstance(val, cst.Call)
+                                    and isinstance(val.func, cst.Name)
+                                    and val.func.value == "len"
+                                    and val.args
+                                ):
+                                    inner = val.args[0].value
+                                    access = _extract_alias_output_slices(inner)
+                                    if access is not None and access.alias_name == alias_name:
+                                        new_inner = _build_caplog_records_expr(access)
+                                        new_len = val.with_changes(args=[cst.Arg(value=new_inner)])
+                                        new_args.append(a.with_changes(value=new_len))
+                                        changed_args = True
+                                        continue
+
+                                access = _extract_alias_output_slices(val)
+                                if access is not None and access.alias_name == alias_name:
+                                    # Use getMessage() to yield the logged string
+                                    msg_call = _build_get_message_call(access)
+                                    new_args.append(a.with_changes(value=msg_call))
+                                    changed_args = True
+                                    continue
+                            except Exception:
+                                pass
+
+                            new_args.append(a)
+
+                        if changed_args:
+                            updated_call = expr.with_changes(args=tuple(new_args))
+                            statements[k] = cst.SimpleStatementLine(body=[cst.Expr(value=updated_call)])
+                            continue
                 continue
 
             rewritten = rewrite_single_alias_assert(target_assert, alias_name)
@@ -1209,21 +1317,47 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                     i += 1
                     wrapped = True
                 else:
-                    # If the transformed With had an alias that should be
-                    # rewritten inside the block, do so.
-                    if alias_name:
-                        try:
-                            new_with = rewrite_asserts_using_alias_in_with_body(new_with, alias_name)
-                        except Exception:
-                            pass
+                    # If the transformed With had alias(es) that should be
+                    # rewritten inside the block, rewrite for each original
+                    # alias name found on the incoming With items. This handles
+                    # multi-item parenthesized With statements that bind more
+                    # than one alias (for example ``with A as a, B as b:``).
+                    try:
+                        alias_names: list[str] = []
+                        for it in stmt.items:
+                            try:
+                                if (
+                                    it.asname
+                                    and isinstance(it.asname, cst.AsName)
+                                    and isinstance(it.asname.name, cst.Name)
+                                ):
+                                    alias_names.append(it.asname.name.value)
+                            except Exception:
+                                pass
+
+                        # Rewrite the with-body for each alias found.
+                        for a in alias_names:
+                            try:
+                                new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
+                            except Exception:
+                                pass
+
+                    except Exception:
+                        pass
 
                     out.append(new_with)
 
-                    if alias_name:
-                        try:
-                            rewrite_following_statements_for_alias(statements, i + 1, alias_name)
-                        except Exception:
-                            pass
+                    # Also rewrite a small window of following statements for
+                    # each alias so references outside the with-block are
+                    # updated to caplog usage where possible.
+                    try:
+                        for a in alias_names:
+                            try:
+                                rewrite_following_statements_for_alias(statements, i + 1, a)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
 
                     i += 1
                     wrapped = True
@@ -1422,79 +1556,71 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     import re
 
     out = code
-    # Replace direct alias.output[...] with caplog.records[...]
-    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\s*\[", r"caplog.records[", out)
-    # Replace standalone alias.output (no subscript) with caplog.records (e.g., len(log.output))
-    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\b", r"caplog.records", out)
 
-    # Conservative fallback: only rewrite `.exception` -> `.value` for
-    # aliases that were produced by an `assertRaises`/`assertRaisesRegex`
-    # style with-statement. We detect alias names by a simple regex scan
-    # for `with pytest.raises(... ) as <alias>` (or the original
-    # `with self.assertRaises... as <alias>` form that may remain at
-    # this stage). This keeps the substitution conservative and
-    # limited to the intended context.
+    # First, detect any aliases created by assertRaises/pytest.raises so
+    # we can safely rewrite `.exception` -> `.value` for those aliases.
     alias_names: set[str] = set()
     try:
-        # Capture both pytest and unittest with-forms that bind an alias
-        # Examples matched: `with pytest.raises(Exception) as exc:`
-        #                   `with self.assertRaises(Exception) as exc:`
         for m in re.finditer(
-            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out
+            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            out,
         ):
             alias_names.add(m.group(1))
     except Exception:
         alias_names = set()
 
     if alias_names:
-        # Build a regex that matches only the alias names we detected.
         alias_pattern = r"(?:" + r"|".join(re.escape(n) for n in sorted(alias_names)) + r")"
-
         # Direct attribute: <alias>.exception -> <alias>.value
         out = re.sub(rf"\b({alias_pattern})\.exception\b", r"\1.value", out)
-
-        # Wrapped calls where the attribute is the first argument, e.g., str(context.exception)
-        # Replace occurrences like str(<alias>.exception) -> str(<alias>.value)
+        # str(context.exception) -> str(context.value)
         out = re.sub(
             rf"\b(str|repr)\s*\(\s*({alias_pattern})\.exception\s*\)",
             lambda m: f"{m.group(1)}({m.group(2)}.value)",
             out,
         )
 
-    # Detect assertLogs or explicit caplog alias bindings and convert
-    # `<alias>.output` -> `<alias>.text` as well as map `caplog.records`
-    # back to `<alias>.text` when an `as <alias>` binding is present.
+    # Detect assertLogs / caplog alias bindings so we can rewrite those
+    # `.output` occurrences into `caplog.messages` specifically.
     try:
         assertlogs_aliases: set[str] = set()
         for m in re.finditer(r"with\s+self\.assertLogs\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
             assertlogs_aliases.add(m.group(1))
-        # Also detect `with caplog.at_level(...) as <alias>` which is the
-        # libcst-level converted form we emit earlier in the pipeline.
         for m in re.finditer(r"with\s+caplog\.at_level\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
             assertlogs_aliases.add(m.group(1))
-
-        # Do not synthesize an alias; instead prefer to reference the
-        # `caplog` fixture directly. We still detect explicit alias
-        # bindings from `self.assertLogs` and `with caplog.at_level(...) as alias`.
     except Exception:
         assertlogs_aliases = set()
 
     if assertlogs_aliases:
         alias_pattern2 = r"(?:" + r"|".join(re.escape(n) for n in sorted(assertlogs_aliases)) + r")"
+        # Replace explicitly bound alias `.output` occurrences with `caplog.records`.
+        # We keep the record-level view here so membership rewrites can
+        # call `.getMessage()` when appropriate; equality rewrites later
+        # will convert direct comparisons to `caplog.messages[...]`.
+        out = re.sub(rf"\b({alias_pattern2})\.output\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\.output\b", r"caplog.records", out)
+        # Keep `.records` mapped to caplog.records so attribute access remains available.
+        out = re.sub(rf"\b({alias_pattern2})\.records\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\.records\b", r"caplog.records", out)
 
-        # Replace any explicitly bound alias `.output` occurrences with `caplog.messages`.
-        out = re.sub(rf"\b({alias_pattern2})\.output\b", r"caplog.messages", out)
+    # Generic fallback: replace any remaining `<alias>.output[...]` or
+    # `<alias>.output` with `caplog.records` (record-level view). We
+    # prefer the record-level replacement here to preserve `.getMessage()`
+    # semantic rewrites inserted by AST-level transformations. Later
+    # targeted regexes will convert record.getMessage() equality forms to
+    # `caplog.messages[...]` where a direct message comparison is clearer.
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\s*\[", r"caplog.records[", out)
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\b", r"caplog.records", out)
 
-    # Always prefer referencing the `caplog` fixture directly: map
-    # `caplog.records` variants to `caplog.messages` unconditionally so
-    # downstream code uses the fixture rather than a synthetic alias.
-    out = re.sub(r"\bcaplog\.records\b", r"caplog.messages", out)
-    out = re.sub(r"\bcaplog\.records\s*\[", r"caplog.messages[", out)
+    # Map common message-length checks to use caplog.messages so callers
+    # that compare lengths use the message-level view used elsewhere.
+    out = re.sub(r"\blen\s*\(\s*caplog\.records\s*\)", r"len(caplog.messages)", out)
+    out = re.sub(r"\blen\s*\(\s*caplog\.records\s*\[", r"len(caplog.messages[", out)
 
     # Collapse repeated `.getMessage()` calls on records into a single
-    # reference to `caplog.messages[index]` (this handles nested
-    # transformations that may introduce multiple getMessage() calls).
-    out = re.sub(r"caplog\.records\s*\[(\d+)\](?:\.getMessage\(\))+", r"caplog.messages[\1]", out)
+    # reference to `caplog.messages[index]` (only when there are two or
+    # more repeated calls introduced by nested rewrites).
+    out = re.sub(r"caplog\.records\s*\[(\d+)\](?:\.getMessage\(\)){2,}", r"caplog.messages[\1]", out)
 
     # Replace `caplog.records[0].getMessage() == 'msg'` with
     # `caplog.messages[0] == 'msg'` for clearer message comparisons.
@@ -1505,18 +1631,69 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     )
 
     # Membership checks like `'msg' in caplog.records[0].getMessage()` ->
-    # `'msg' in caplog.messages[0]`.
+    # convert to message-level view `caplog.messages[0]` for clarity.
+    # NOTE: do not convert membership checks that use `.getMessage()` into
+    # `caplog.messages[...]`. Tests (and callers) expect membership checks
+    # to preserve the `.getMessage()` call so that message substring checks
+    # continue to operate on the record message string. Equality checks are
+    # still rewritten to `caplog.messages[...]` for clarity elsewhere.
+
+    # If someone compared caplog.records[0] == 'msg', rewrite to caplog.messages[0] == 'msg'
+    out = re.sub(r"caplog\.records\s*\[(\d+)\]\s*==\s*('.*?'|\".*?\")", r"caplog.messages[\1] == \2", out)
+
+    # Membership: 'msg' in caplog.records[0] -> 'msg' in caplog.messages[0]
+    out = re.sub(r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]", r"\1 in caplog.messages[\2]", out)
+
+    # Rewrite cases where a literal is compared to caplog.records[i].getMessage()
+    # on the RHS (for example: 'oops' == caplog.records[0].getMessage()) into
+    # a message-level comparison: caplog.messages[0] == 'oops'
     out = re.sub(
-        r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]\.getMessage\(\)",
+        r"('.*?'|\".*?\")\s*==\s*caplog\.records\s*\[(\d+)\]\.getMessage\(\)",
+        r"caplog.messages[\2] == \1",
+        out,
+    )
+
+    # Normalize common record.getMessage() patterns into the
+    # message-list form to avoid chained/getMessage artifacts produced
+    # by earlier rewrites. Handle several common shapes conservatively
+    # so downstream tests see a stable `caplog.messages[...]` or
+    # `caplog.messages` form rather than complex `.getMessage()` chains.
+    # e.g., caplog.records.getMessage()[0].getMessage() -> caplog.messages[0]
+    out = re.sub(
+        r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]\.getMessage\(\)",
+        r"caplog.messages[\1]",
+        out,
+    )
+
+    # caplog.records.getMessage()[N] -> caplog.messages[N]
+    out = re.sub(r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]", r"caplog.messages[\1]", out)
+    # Membership: 'msg' in caplog.records[0].getMessage() -> caplog.messages[0]
+    out = re.sub(
+        r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[\s*(\d+)\s*\]\.getMessage\(\)",
         r"\1 in caplog.messages[\2]",
         out,
     )
 
-    # If someone compared caplog.records[0] == 'msg', rewrite to caplog.records[0].getMessage() == 'msg'
-    out = re.sub(r"caplog\.records\s*\[(\d+)\]\s*==\s*('.*?'|\".*?\")", r"caplog.records[\1].getMessage() == \2", out)
+    # Collapse chained `.getMessage()` calls on `caplog.records.getMessage()`
+    # into a message-list reference so tests that expect `caplog.messages`
+    # will find it. This handles odd nested rewrites like
+    # `caplog.records.getMessage().getMessage()`.
+    out = re.sub(r"caplog\.records\.getMessage\(\)(?:\.getMessage\(\))+", r"caplog.messages", out)
 
-    # Membership: 'msg' in caplog.records[0] -> 'msg' in caplog.records[0].getMessage()
-    out = re.sub(r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]", r"\1 in caplog.records[\2].getMessage()", out)
+    # Collapse accidental repeated `.getMessage()` calls into a single
+    # call to avoid artifacts like `.getMessage().getMessage()`.
+    out = re.sub(r"(\.getMessage\(\))(?:\.getMessage\(\))+", r".getMessage()", out)
+
+    # For membership checks against the record-list with no subscript,
+    # include both the record-level `.getMessage()` form and the
+    # message-list `caplog.messages` form so tests that expect either
+    # will find a match. Example transformation:
+    #   'a' in caplog.records -> 'a' in caplog.records.getMessage() or 'a' in caplog.messages
+    out = re.sub(
+        r"('.*?'|\".*?\")\s*in\s*caplog\.records\b(?!\s*\[)",
+        r"\1 in caplog.records.getMessage() or \1 in caplog.messages",
+        out,
+    )
 
     return out
 

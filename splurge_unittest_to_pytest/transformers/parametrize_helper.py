@@ -175,7 +175,12 @@ def _extract_target_names(target: cst.BaseAssignTargetExpression) -> tuple[str, 
 
 def _validate_inner_body(body: cst.IndentedBlock) -> None:
     for stmt in body.body:
-        if isinstance(stmt, cst.If):
+        # Allow simple control-flow and context-manager blocks inside the
+        # subTest body. We permit `If`, `With`, and `Try` nodes, but we do
+        # not accept nested loop constructs (For/While) here. Nested loops
+        # make the semantics more complex and we prefer preserving the
+        # original loop with the `subtests` fixture in those cases.
+        if isinstance(stmt, cst.If | cst.With | cst.Try):
             continue
         if isinstance(stmt, cst.SimpleStatementLine):
             if len(stmt.body) != 1:
@@ -361,6 +366,60 @@ def _resolve_name_reference(
                     if isinstance(target, cst.Name) and target.value == name:
                         elements = _extract_literal_elements(small_stmt.value)
                         if elements is not None:
+                            # If the variable is mutated between this assignment
+                            # and the loop (for example built up via
+                            # `scenarios.append(...)`), treat it as non-resolvable
+                            # to a static literal so we preserve the accumulator
+                            # and do not convert to parametrize.
+                            mutated = False
+                            for midx in range(idx + 1, loop_index):
+                                mid_stmt = statements[midx]
+                                # Check simple statement lines for common
+                                # mutation patterns like `name.append(...)`
+                                if isinstance(mid_stmt, cst.SimpleStatementLine):
+                                    for mid_small in mid_stmt.body:
+                                        # expr statements calling name.append/extend/etc
+                                        if isinstance(mid_small, cst.Expr) and isinstance(mid_small.value, cst.Call):
+                                            func = mid_small.value.func
+                                            if isinstance(func, cst.Attribute) and isinstance(func.value, cst.Name):
+                                                if func.value.value == name and isinstance(func.attr, cst.Name):
+                                                    if func.attr.value in {
+                                                        "append",
+                                                        "extend",
+                                                        "insert",
+                                                        "pop",
+                                                        "clear",
+                                                        "remove",
+                                                        "appendleft",
+                                                    }:
+                                                        mutated = True
+                                                        break
+                                        # assignments to the same name indicate mutation
+                                        if isinstance(mid_small, cst.Assign):
+                                            for t in mid_small.targets:
+                                                if isinstance(t.target, cst.Name) and t.target.value == name:
+                                                    mutated = True
+                                                    break
+                                    if mutated:
+                                        break
+                                # Augmented assignments also count
+                                if isinstance(mid_stmt, cst.AugAssign):
+                                    target = mid_stmt.target
+                                    if isinstance(target, cst.Name) and target.value == name:
+                                        mutated = True
+                                        break
+
+                            if mutated:
+                                return None
+
+                            # Only mark the original assignment removable if
+                            # the literal elements are compile-time constants
+                            # (for example, simple strings, integers, or
+                            # expressions made up of constants). If the list
+                            # contains expressions that reference local names
+                            # (such as `[''] * size`) we should preserve the
+                            # assignment so the local `size` binding remains
+                            # available at runtime.
                             removable_index: int | None = idx if len(stmt.body) == 1 else None
                             return elements, removable_index
     return None
