@@ -1,0 +1,31 @@
+{
+  "module_proposals": {
+    "tests\\data\\given_and_expected\\unittest_given_64.txt": {
+      "module_name": "tests\\data\\given_and_expected\\unittest_given_64.txt",
+      "class_proposals": {
+        "TestNestedSubtests": {
+          "class_name": "TestNestedSubtests",
+          "function_proposals": {
+            "TestNestedSubtests.test_nested": {
+              "function_name": "TestNestedSubtests.test_nested",
+              "recommended_strategy": "keep-loop",
+              "loop_var_name": null,
+              "iterable_origin": null,
+              "accumulator_mutated": false,
+              "evidence": [
+                "No subTest loops detected"
+              ]
+            }
+          },
+          "class_fixtures": [],
+          "class_setup_methods": []
+        }
+      },
+      "module_fixtures": [],
+      "module_imports": [
+        "import unittest"
+      ],
+      "top_level_assignments": {}
+    }
+  }
+}

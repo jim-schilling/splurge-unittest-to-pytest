@@ -98,6 +98,11 @@ class MigrationConfig:
     dry_run: bool = False
     fail_fast: bool = False
     # parallel_processing removed; library no longer exposes parallelism flag
+
+    # Analysis settings
+    enable_decision_analysis: bool = False
+    """Enable standalone decision analysis job to build transformation decision model"""
+
     # Optional transforms
     parametrize: bool = True
     parametrize_ids: bool = True
@@ -175,7 +180,15 @@ class PipelineContext:
         early in the pipeline.
         """
         if not Path(self.source_file).exists():
-            raise ValueError(f"Source file does not exist: {self.source_file}")
+            # Do not raise here to allow tests and in-memory analysis to
+            # construct PipelineContext objects without an on-disk file.
+            # Steps that require a real file should validate existence as
+            # appropriate and return errors.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "PipelineContext created with non-existent source_file: %s", self.source_file
+            )
 
     @classmethod
     def create(
