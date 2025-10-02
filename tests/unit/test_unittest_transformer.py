@@ -401,3 +401,59 @@ class DerivedTest(BaseTest):
         assert "class BaseTest:" in result
         assert "class DerivedTest(BaseTest):" in result
         assert "unittest.TestCase" not in result
+
+
+class TestUnittestTransformerErrorConditions:
+    """Test error condition handling in unittest transformer."""
+
+    def test_normalize_class_bases_normal_operation(self):
+        """Test _NormalizeClassBases normal operation."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.transformers.unittest_transformer import _NormalizeClassBases
+
+        # Create a class with valid base classes
+        class_node = cst.ClassDef(
+            name=cst.Name("TestClass"),
+            bases=[
+                cst.Arg(value=cst.Name("unittest")),
+                cst.Arg(value=cst.Name("TestCase")),
+            ],
+            body=cst.IndentedBlock([]),
+        )
+
+        transformer = _NormalizeClassBases()
+        result = class_node.visit(transformer)
+        assert isinstance(result, cst.ClassDef)
+
+    def test_unittest_transformer_normal_operation(self):
+        """Test UnittestToPytestCstTransformer normal operation."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
+
+        transformer = UnittestToPytestCstTransformer()
+        module = cst.parse_module("import unittest\nclass Test(unittest.TestCase): pass")
+
+        # Use the transformer as a CST visitor
+        result = module.visit(transformer)
+        assert isinstance(result, cst.Module)
+
+    def test_unittest_transformer_with_decorators(self):
+        """Test UnittestToPytestCstTransformer handles decorators."""
+        import libcst as cst
+
+        from splurge_unittest_to_pytest.transformers.unittest_transformer import UnittestToPytestCstTransformer
+
+        transformer = UnittestToPytestCstTransformer()
+
+        # Create a function with decorators
+        func_node = cst.FunctionDef(
+            name=cst.Name("test_func"),
+            params=cst.Parameters(),
+            body=cst.IndentedBlock([cst.SimpleStatementLine([cst.Expr(cst.Name("pass"))])]),
+            decorators=[cst.Decorator(decorator=cst.Name("staticmethod"))],
+        )
+
+        result = func_node.visit(transformer)
+        assert isinstance(result, cst.FunctionDef)

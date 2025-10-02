@@ -180,6 +180,7 @@ def create_config(
     recurse_directories: bool = True,
     preserve_structure: bool = True,
     backup_originals: bool = True,
+    backup_root: str | None = None,
     line_length: int | None = 120,
     dry_run: bool = False,
     fail_fast: bool = False,
@@ -205,6 +206,7 @@ def create_config(
         recurse_directories: Whether to recursively search subdirectories.
         preserve_structure: Preserve original directory structure in output.
         backup_originals: Create backup copies of original files before writing.
+        backup_root: Root directory for backup files. When specified, backups preserve folder structure.
         line_length: Maximum line length for code formatting (passed to black).
         dry_run: If True do not write files; return generated code in metadata.
         fail_fast: Stop processing on the first encountered error.
@@ -233,6 +235,7 @@ def create_config(
         recurse_directories=recurse_directories,
         preserve_structure=preserve_structure,
         backup_originals=backup_originals,
+        backup_root=backup_root,
         line_length=line_length,
         dry_run=dry_run,
         fail_fast=fail_fast,
@@ -390,6 +393,9 @@ def migrate(
         True, "--preserve-structure", help="Preserve original directory structure", is_flag=True
     ),
     skip_backup: bool = typer.Option(False, "--skip-backup", "-sb", help="Skip backup of original files", is_flag=True),
+    backup_root: str | None = typer.Option(
+        None, "--backup-root", help="Root directory for backup files (preserves folder structure when recursing)"
+    ),
     line_length: int | None = typer.Option(120, "--line-length", help="Maximum line length for formatting"),
     dry_run: bool = typer.Option(
         False, "--dry-run", "-dry", help="Show what would be done without making changes", is_flag=True
@@ -436,6 +442,7 @@ def migrate(
         target_directory: Directory where converted files will be written.
         preserve_structure: Preserve the original directory layout when writing output.
         backup_originals: When True create backups of original files prior to overwriting.
+        backup_root: Root directory for backup files. When specified, backups preserve folder structure.
         line_length: Maximum line length used by code formatters.
         dry_run: When True, do not write files; return generated code in result metadata.
         debug: Enable debug-level logging output.
@@ -475,6 +482,7 @@ def migrate(
             recurse_directories=recurse,
             preserve_structure=preserve_structure,
             backup_originals=not skip_backup,
+            backup_root=backup_root,
             line_length=line_length,
             dry_run=dry_run,
             fail_fast=fail_fast,
@@ -640,6 +648,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "target_directory": default_config.get("target_directory"),
         "preserve_structure": default_config.get("preserve_structure"),
         "backup_originals": default_config.get("backup_originals"),
+        "backup_root": default_config.get("backup_root"),
         "# Transformation settings": None,
         # Legacy/removed transformation settings intentionally omitted
         "# Code quality settings": None,

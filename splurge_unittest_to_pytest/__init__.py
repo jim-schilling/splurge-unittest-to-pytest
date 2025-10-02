@@ -91,15 +91,4 @@ def __getattr__(name: str):
 
 
 def __dir__():
-    return sorted(
-        list(globals().keys())
-        + [
-            "main",
-            "cli",
-            "MigrationOrchestrator",
-            "PipelineContext",
-            "MigrationConfig",
-            "Result",
-            "EventBus",
-        ]
-    )
+    return sorted(list(globals().keys()) + __all__)

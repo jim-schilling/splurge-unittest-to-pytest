@@ -10,6 +10,7 @@ tests/tmp/
 tests/data/tmp/
 
 tmp*/
+backups/
 
 # Distribution / packaging
 .Python
