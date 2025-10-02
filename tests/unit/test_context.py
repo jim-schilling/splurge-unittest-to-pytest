@@ -13,7 +13,6 @@ def test_migration_config_creation():
 
     # Basic defaults
     assert config.line_length == 120
-    assert config.preserve_structure is True
     assert config.parametrize is True
 
 
@@ -40,7 +39,6 @@ def test_migration_config_to_dict():
     config_dict = config.to_dict()
 
     assert config_dict["line_length"] == 100
-    assert config_dict["preserve_structure"] is True
 
 
 def test_migration_config_from_dict_ignores_legacy_subtest():

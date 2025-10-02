@@ -78,7 +78,6 @@ class MigrationConfig:
     root_directory: str | None = None
     file_patterns: list[str] = field(default_factory=lambda: ["test_*.py"])
     recurse_directories: bool = True
-    preserve_structure: bool = True
     backup_originals: bool = True
     backup_root: str | None = None
     # Suffix appended to target filename stem (default: '')
