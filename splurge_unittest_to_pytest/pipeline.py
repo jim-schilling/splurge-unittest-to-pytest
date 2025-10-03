@@ -352,9 +352,9 @@ class Pipeline(Generic[T, R]):
             self._logger.debug(f"Executing job {i + 1}/{len(self.jobs)}: {job.name}")
 
             try:
-                # Use circuit breaker if configured
+                # Use circuit breaker recovery if configured
                 if self.circuit_breaker:
-                    result = self.circuit_breaker.call(job.execute, current_context, current_input)
+                    result = self.circuit_breaker.attempt_recovery(job.execute, current_context, current_input)
                 else:
                     result = job.execute(current_context, current_input)
 
@@ -397,9 +397,9 @@ class Pipeline(Generic[T, R]):
         # Return successful result with combined warnings
         final_result = job_results[-1]
         if all_warnings:
-            return Result.warning(final_result.data, all_warnings, final_result.metadata)  # type: ignore
+            return Result.warning(final_result.data, all_warnings, final_result.metadata)
 
-        return Result.success(final_result.data, final_result.metadata)  # type: ignore
+        return Result.success(final_result.data, final_result.metadata)
 
     def add_job(self, job: Job) -> None:
         """Add a job to the pipeline.

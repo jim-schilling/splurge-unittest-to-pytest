@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .config_validation import validate_migration_config_object
+from .degradation import DegradationManager
 from .result import Result
 
 
@@ -117,6 +118,10 @@ class MigrationConfig:
     # Test discovery / naming
     test_method_prefixes: list[str] = field(default_factory=lambda: ["test"])
 
+    # Degradation settings for gradual transformation failure handling
+    degradation_enabled: bool = True
+    degradation_tier: str = "advanced"  # "essential", "advanced", "experimental"
+
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
         """Return a new ``MigrationConfig`` with specified overrides.
 
@@ -188,6 +193,7 @@ class PipelineContext:
     run_id: str
     metadata: dict[str, Any] = field(default_factory=dict)
     decision_model: Any | None = None  # DecisionModel from analysis job
+    degradation_manager: DegradationManager | None = None
 
     def __post_init__(self) -> None:
         """Perform lightweight validation of the constructed context.

@@ -62,6 +62,7 @@ class CircuitBreakerConfig:
     recovery_timeout: float = 60.0  # Seconds to wait before trying half-open
     success_threshold: int = 2  # Successes needed to close from half-open
     timeout: float | None = None  # Max time for individual operations
+    max_retries: int = 0  # Number of retry attempts for recovery
 
 
 class CircuitBreakerOpenException(Exception):
@@ -205,6 +206,73 @@ class CircuitBreaker:
         except Exception:
             self._record_failure()
             raise
+
+    def attempt_recovery(self, operation_func, *args, **kwargs):
+        """Attempt to recover from a failed operation with fallback strategies.
+
+        Args:
+            operation_func: The operation to attempt
+            *args, **kwargs: Arguments to pass to the operation
+
+        Returns:
+            Result of the operation or recovery attempt
+
+        Raises:
+            CircuitBreakerOpenException: If circuit breaker is open
+            Exception: If all recovery attempts fail
+        """
+        if self.state == CircuitState.OPEN:
+            raise CircuitBreakerOpenException(self.name, self.stats)
+
+        try:
+            return operation_func(*args, **kwargs)
+        except Exception as e:
+            self._record_failure()
+
+            # Attempt recovery strategies
+            recovery_result = self._attempt_recovery_strategies(operation_func, e, *args, **kwargs)
+            if recovery_result is not None:
+                self._record_success()  # Recovery succeeded
+                return recovery_result
+
+            raise e
+
+    def _attempt_recovery_strategies(self, operation_func, original_error, *args, **kwargs):
+        """Attempt various recovery strategies for failed operations.
+
+        Args:
+            operation_func: The original operation that failed
+            original_error: The exception that was raised
+            *args, **kwargs: Arguments to pass to recovery attempts
+
+        Returns:
+            Recovered result if successful, None if all strategies failed
+        """
+        # Strategy 1: Retry with exponential backoff (if configured)
+        if hasattr(self.config, "max_retries") and self.config.max_retries > 0:
+            for attempt in range(self.config.max_retries):
+                try:
+                    return operation_func(*args, **kwargs)
+                except Exception:
+                    if attempt < self.config.max_retries - 1:
+                        time.sleep(2**attempt * 0.1)  # Exponential backoff
+                    continue
+
+        # Strategy 2: Fallback to simpler operation (if available)
+        if hasattr(operation_func, "_fallback"):
+            try:
+                return operation_func._fallback(*args, **kwargs)
+            except Exception:
+                pass
+
+        # Strategy 3: Return partial result (if operation supports it)
+        if hasattr(operation_func, "_partial_result"):
+            try:
+                return operation_func._partial_result(original_error, *args, **kwargs)
+            except Exception:
+                pass
+
+        return None
 
 
 # Global registry of circuit breakers

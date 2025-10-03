@@ -62,6 +62,14 @@ class ValidatedMigrationConfig(BaseModel):
     parametrize_ids: bool = Field(default=False, description="Whether to add ids to parametrize")
     parametrize_type_hints: bool = Field(default=False, description="Whether to add type hints to parametrize")
 
+    # Degradation settings
+    degradation_enabled: bool = Field(
+        default=True, description="Whether to enable degradation for failed transformations"
+    )
+    degradation_tier: str = Field(
+        default="advanced", description="Degradation tier (essential, advanced, experimental)"
+    )
+
     @field_validator("file_patterns")
     @classmethod
     def validate_file_patterns(cls, v):

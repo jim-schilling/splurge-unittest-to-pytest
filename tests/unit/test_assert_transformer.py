@@ -28,6 +28,7 @@ def _code_of_call(node: cst.Call) -> str:
     ],
 )
 def test_transform_assert_equal_and_dict(src: str, expected: str):
+    """Test basic assertEqual and assertDictEqual transformations."""
     call = _call_from_code(src)
     out = (
         at.transform_assert_equal(call)
@@ -139,3 +140,149 @@ def test_transform_list_equal_specific():
     call = _call_from_code("self.assertListEqual(list_a, list_b)")
     out = at.transform_assert_list_equal(call)
     assert _code_of_call(out) == "assert list_a == list_b"
+
+
+# Edge case tests for transformation robustness
+@pytest.mark.parametrize(
+    "src, expected",
+    [
+        # Complex expressions
+        ("self.assertEqual(a + b, c * d)", "assert a + b == c * d"),
+        ("self.assertEqual(func(x, y), obj.method(z))", "assert func(x, y) == obj.method(z)"),
+        ("self.assertTrue(a and b or c)", "assert a and b or c"),
+        ("self.assertFalse(not x)", "assert not not x"),
+        # Nested calls
+        ("self.assertEqual(len(items), count)", "assert len(items) == count"),
+        ("self.assertEqual(sum(values), total)", "assert sum(values) == total"),
+        # String and numeric literals
+        ("self.assertEqual(x, 42)", "assert x == 42"),
+        ("self.assertEqual(name, 'test')", "assert name == 'test'"),
+        ("self.assertEqual(flag, True)", "assert flag == True"),
+        ("self.assertEqual(value, None)", "assert value == None"),
+    ],
+)
+def test_transform_assert_edge_cases_complex_expressions(src: str, expected: str):
+    """Test assert transformations with complex expressions."""
+    call = _call_from_code(src)
+
+    # Determine which transformer to use based on the assertion type
+    if "assertEqual" in src:
+        out = at.transform_assert_equal(call)
+    elif "assertTrue" in src:
+        out = at.transform_assert_true(call)
+    elif "assertFalse" in src:
+        out = at.transform_assert_false(call)
+    else:
+        pytest.fail(f"No transformer found for {src}")
+
+    assert _code_of_call(out) == expected
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        # Missing arguments
+        "self.assertEqual(x)",
+        "self.assertEqual()",
+        "self.assertTrue()",
+        "self.assertFalse(y, z)",  # Too many args
+        # Wrong argument types (should not crash)
+        "self.assertEqual(123, 'string')",  # Valid but unusual
+        "self.assertTrue(None)",
+        "self.assertFalse(0)",
+    ],
+)
+def test_transform_assert_edge_cases_argument_variations(src: str):
+    """Test assert transformations handle unusual argument patterns gracefully."""
+    try:
+        call = _call_from_code(src)
+
+        # Try to transform - should not crash even with unusual arguments
+        if "assertEqual" in src:
+            result = at.transform_assert_equal(call)
+        elif "assertTrue" in src:
+            result = at.transform_assert_true(call)
+        elif "assertFalse" in src:
+            result = at.transform_assert_false(call)
+        else:
+            pytest.fail(f"No transformer found for {src}")
+
+        # Result should be a valid CST node (either transformed Assert or original Call)
+        assert isinstance(result, cst.Assert | cst.Call)
+
+    except Exception as e:
+        # If parsing fails, that's acceptable for malformed input
+        if "Unable to parse call from src" in str(e):
+            pytest.skip(f"Cannot parse malformed input: {src}")
+        else:
+            # Unexpected error - re-raise
+            raise
+
+
+def test_transform_assert_boundary_conditions():
+    """Test assert transformations at boundary conditions."""
+
+    # Empty strings and zero values
+    test_cases = [
+        ("self.assertEqual('', '')", "assert '' == ''"),
+        ("self.assertEqual(0, 0)", "assert 0 == 0"),
+        ("self.assertEqual([], [])", "assert [] == []"),
+        ("self.assertEqual({}, {})", "assert {} == {}"),
+        ("self.assertTrue(True)", "assert True"),
+        ("self.assertFalse(False)", "assert not False"),
+    ]
+
+    for src, expected in test_cases:
+        call = _call_from_code(src)
+
+        if "assertEqual" in src:
+            out = at.transform_assert_equal(call)
+        elif "assertTrue" in src:
+            out = at.transform_assert_true(call)
+        elif "assertFalse" in src:
+            out = at.transform_assert_false(call)
+        else:
+            continue
+
+        assert _code_of_call(out) == expected
+
+
+def test_transform_assert_malformed_input_handling():
+    """Test that transformers handle malformed CST input gracefully."""
+
+    # Create a malformed CST node (missing required attributes)
+    malformed_call = cst.Call(
+        func=cst.Name("assertEqual"),
+        args=[],  # Missing required arguments
+    )
+
+    # Should not crash, should return the original call
+    result = at.transform_assert_equal(malformed_call)
+    assert result == malformed_call  # Should return unchanged
+
+
+def test_transform_assert_none_values():
+    """Test assert transformations with None values."""
+
+    test_cases = [
+        ("self.assertIsNone(x)", "assert x is None"),
+        ("self.assertIsNotNone(y)", "assert y is not None"),
+        ("self.assertEqual(a, None)", "assert a == None"),
+        ("self.assertTrue(x is None)", "assert x is None"),
+    ]
+
+    for src, expected in test_cases:
+        call = _call_from_code(src)
+
+        if "assertIsNone" in src:
+            out = at.transform_assert_is_none(call)
+        elif "assertIsNotNone" in src:
+            out = at.transform_assert_is_not_none(call)
+        elif "assertEqual" in src:
+            out = at.transform_assert_equal(call)
+        elif "assertTrue" in src:
+            out = at.transform_assert_true(call)
+        else:
+            continue
+
+        assert _code_of_call(out) == expected
