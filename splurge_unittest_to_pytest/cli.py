@@ -21,6 +21,8 @@ from .context import ContextManager, MigrationConfig
 from .events import (
     ErrorEvent,
     EventBus,
+    JobCompletedEvent,
+    JobStartedEvent,
     LoggingSubscriber,
     PipelineCompletedEvent,
     PipelineStartedEvent,
@@ -149,10 +151,32 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
         try:
             src = Path(event.context.source_file)
             filename = src.name
-            typer.echo(f"Starting migration: {filename}")
+            typer.echo(f"Starting migration pipeline: {filename}")
         except (AttributeError, TypeError, ValueError) as e:
             # Context or source_file is malformed
             typer.echo(f"Starting migration (run_id={event.run_id}) - Warning: {e}")
+
+    def _on_job_started(event: JobStartedEvent) -> None:
+        from pathlib import Path
+
+        try:
+            src = Path(event.context.source_file)
+            filename = src.name
+            typer.echo(f"Starting job: {event.job_name} {filename}")
+        except (AttributeError, TypeError, ValueError) as e:
+            # Context or source_file is malformed
+            typer.echo(f"Starting job: {event.job_name} - Warning: {e}")
+
+    def _on_job_completed(event: JobCompletedEvent) -> None:
+        from pathlib import Path
+
+        try:
+            src = Path(event.context.source_file)
+            filename = src.name
+            typer.echo(f"Job completed: {event.job_name} {filename}")
+        except (AttributeError, TypeError, ValueError) as e:
+            # Context or source_file is malformed
+            typer.echo(f"Job completed: {event.job_name} - Warning: {e}")
 
     def _on_step_started(event: StepStartedEvent) -> None:
         # Make step names more user-friendly
@@ -194,6 +218,8 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
         typer.echo(f"  [ERROR] Error in {event.component}: {event.error}")
 
     event_bus.subscribe(PipelineStartedEvent, _on_pipeline_started)
+    event_bus.subscribe(JobStartedEvent, _on_job_started)
+    event_bus.subscribe(JobCompletedEvent, _on_job_completed)
     event_bus.subscribe(StepStartedEvent, _on_step_started)
     event_bus.subscribe(StepCompletedEvent, _on_step_completed)
     event_bus.subscribe(PipelineCompletedEvent, _on_pipeline_completed)
@@ -646,6 +672,9 @@ def migrate(
     create_source_map: bool = typer.Option(
         False, "--source-map", help="Create source mapping for debugging transformations (advanced users)", is_flag=True
     ),
+    max_depth: int = typer.Option(
+        7, "--max-depth", help="Maximum depth to traverse nested control flow structures (3-15, default: 7)"
+    ),
 ) -> None:
     """Migrate unittest files to pytest format with comprehensive configuration options.
 
@@ -816,6 +845,7 @@ def migrate(
     config_kwargs["cache_analysis_results"] = final_cache_analysis
     config_kwargs["preserve_file_encoding"] = final_preserve_encoding
     config_kwargs["create_source_map"] = create_source_map
+    config_kwargs["max_depth"] = max_depth
 
     config = base_config.with_override(**config_kwargs)
 
@@ -1021,6 +1051,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "# Advanced options": None,
         "preserve_file_encoding": default_config.get("preserve_file_encoding"),
         "create_source_map": default_config.get("create_source_map"),
+        "max_depth": default_config.get("max_depth"),
         "# Degradation settings": None,
         "degradation_enabled": default_config.get("degradation_enabled"),
         "degradation_tier": default_config.get("degradation_tier"),

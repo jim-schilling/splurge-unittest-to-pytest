@@ -304,6 +304,8 @@ class LoggingSubscriber(EventSubscriber):
         """
         self.event_bus.subscribe(PipelineStartedEvent, self._on_pipeline_started)
         self.event_bus.subscribe(PipelineCompletedEvent, self._on_pipeline_completed)
+        self.event_bus.subscribe(JobStartedEvent, self._on_job_started)
+        self.event_bus.subscribe(JobCompletedEvent, self._on_job_completed)
         self.event_bus.subscribe(StepStartedEvent, self._on_step_started)
         self.event_bus.subscribe(StepCompletedEvent, self._on_step_completed)
         self.event_bus.subscribe(ErrorEvent, self._on_error)
@@ -315,6 +317,8 @@ class LoggingSubscriber(EventSubscriber):
         """
         self.event_bus.unsubscribe(PipelineStartedEvent, self._on_pipeline_started)
         self.event_bus.unsubscribe(PipelineCompletedEvent, self._on_pipeline_completed)
+        self.event_bus.unsubscribe(JobStartedEvent, self._on_job_started)
+        self.event_bus.unsubscribe(JobCompletedEvent, self._on_job_completed)
         self.event_bus.unsubscribe(StepStartedEvent, self._on_step_started)
         self.event_bus.unsubscribe(StepCompletedEvent, self._on_step_completed)
         self.event_bus.unsubscribe(ErrorEvent, self._on_error)
@@ -351,6 +355,21 @@ class LoggingSubscriber(EventSubscriber):
         """
         status = event.result.status.value.upper()
         self.event_bus._logger.debug(f"Step completed in {event.duration_ms:.2f}ms: {event.step_name} ({status})")
+
+    def _on_job_started(self, event: JobStartedEvent) -> None:
+        """Handle job started event.
+
+        Logs a debug message that includes the job name and task count.
+        """
+        self.event_bus._logger.debug(f"Job started: {event.job_name} ({event.task_count} tasks)")
+
+    def _on_job_completed(self, event: JobCompletedEvent) -> None:
+        """Handle job completed event.
+
+        Logs the job duration and status at debug level.
+        """
+        status = event.final_result.status.value.upper()
+        self.event_bus._logger.debug(f"Job completed in {event.duration_ms:.2f}ms: {event.job_name} ({status})")
 
     def _on_error(self, event: ErrorEvent) -> None:
         """Handle error event.

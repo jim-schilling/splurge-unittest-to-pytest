@@ -1,0 +1,98 @@
+import unittest
+from unittest.mock import Mock, patch
+
+
+class TestDeeplyNestedControlFlow(unittest.TestCase):
+    """Test case with deeply nested control flow structures to validate AST transformation robustness."""
+
+    def setUp(self):
+        self.mock_conn = Mock()
+        self.mock_something = Mock()
+
+    def test_deeply_nested_try_with_assert(self):
+        """Test with try -> try -> with -> try -> with -> assert nesting."""
+        try:
+            # First level try
+            try:
+                # Second level try
+                with self.mock_conn as conn:
+                    # With block containing try
+                    try:
+                        # Third level try
+                        with self.mock_something as something:
+                            # Deepest with block with assert
+                            assert something.is_valid()
+                            assert conn.is_connected()
+                    except ValueError:
+                        # Exception handler in deepest try
+                        pass
+            except ConnectionError:
+                # Exception handler in second try
+                pass
+        except Exception:
+            # Exception handler in outermost try
+            pass
+
+        # Verification outside the nested structure
+        self.mock_conn.__enter__.assert_called_once()
+        self.mock_something.__enter__.assert_called_once()
+
+    def test_mixed_nesting_patterns(self):
+        """Test various nesting patterns to ensure robustness."""
+        # Pattern: try -> with -> try -> with -> assert
+        try:
+            with self.mock_conn:
+                try:
+                    with self.mock_something:
+                        assert True
+                        assert 1 + 1 == 2
+                except AssertionError:
+                    pass
+        except Exception:
+            pass
+
+        # Pattern: with -> try -> with -> try -> assert
+        with self.mock_conn:
+            try:
+                with self.mock_something:
+                    try:
+                        assert False, "This should not fail the test"
+                    except AssertionError:
+                        pass  # Expected to catch the assertion
+            except Exception:
+                pass
+
+    def test_complex_error_handling_nesting(self):
+        """Test complex error handling with deep nesting."""
+        try:
+            try:
+                with self.mock_conn as conn:
+                    try:
+                        with self.mock_something as something:
+                            try:
+                                # Simulate an operation that might fail
+                                if not conn.is_connected():
+                                    raise ConnectionError("Not connected")
+                                if not something.is_ready():
+                                    raise ValueError("Not ready")
+                                assert conn.process_data(something.get_data())
+                            except ValueError as ve:
+                                # Handle ValueError in innermost try
+                                print(f"Value error: {ve}")
+                                raise
+                            except AssertionError as ae:
+                                # Handle AssertionError in innermost try
+                                print(f"Assertion error: {ae}")
+                                raise
+                    except ValueError:
+                        # Handle ValueError from inner with
+                        pass
+                    except AssertionError:
+                        # Handle AssertionError from inner with
+                        pass
+            except ConnectionError:
+                # Handle ConnectionError from outer with
+                pass
+        except Exception:
+            # Handle any remaining exceptions
+            pass
