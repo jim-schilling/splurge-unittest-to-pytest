@@ -1,6 +1,19 @@
-(# Changelog)
+# Changelog
 
-All notable changes to this project will be documented in this file.
+## Unreleased (chore/improvement-plan)
+
+### Added
+- Extracted caplog alias detection and AST construction into `splurge_unittest_to_pytest.transformers._caplog_helpers`.
+- Added `splurge_unittest_to_pytest.transformers.debug` for `SPLURGE_TRANSFORM_DEBUG` debug gating and a `maybe_reraise` helper.
+- Added unit tests:
+	- `tests/unit/test_caplog_helpers_basic.py` for caplog helper behavior.
+	- `tests/unit/test_debug_gate_basic.py` for debug gate behavior.
+
+### Changed
+- `splurge_unittest_to_pytest.transformers.assert_transformer` now delegates caplog-related behavior to `_caplog_helpers` and re-exports thin compatibility shims to preserve public APIs.
+
+### Notes
+- Full test-suite run: 945 passed locally. Recommend enabling a CI job that runs the suite once with `SPLURGE_TRANSFORM_DEBUG=1` for PR verification.
 
 ## [2025.0.4] 2025-10-03
 

@@ -33,19 +33,39 @@ import libcst as cst
 try:
     from ..helpers.error_reporting import report_transformation_error
 except ImportError:
-    # Fallback if error reporting not available
+
     def report_transformation_error(error, component, operation, **kwargs):
         pass
+
+
+# Caplog helpers extracted to a small module to remove duplication
+from ._caplog_helpers import (
+    AliasOutputAccess,
+    build_caplog_records_expr,
+    build_get_message_call,
+    extract_alias_output_slices,
+)
+
+__all__ = ["AliasOutputAccess"]
+
+
+# Backwards-compatible underscored API used by tests and other modules
+def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
+    return extract_alias_output_slices(expr)
+
+
+def _build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
+    return build_caplog_records_expr(access)
+
+
+def _build_get_message_call(access: AliasOutputAccess) -> cst.Call:
+    return build_get_message_call(access)
+
 
 # Debug collector removed; transformations should be silent in normal runs
 
 
-@dataclass(frozen=True)
-class AliasOutputAccess:
-    """Represents access to ``<alias>.output`` with optional subscripts."""
-
-    alias_name: str
-    slices: tuple[cst.SubscriptElement, ...]
+# AliasOutputAccess moved to transformers._caplog_helpers
 
 
 @dataclass(frozen=True)
@@ -93,43 +113,10 @@ def parenthesized_expression(expr: cst.BaseExpression) -> ParenthesizedExpressio
     return ParenthesizedExpression(has_parentheses=bool(lpar or rpar), lpar=lpar, rpar=rpar)
 
 
-def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
-    """Return alias/output access details when ``expr`` targets ``<alias>.output``."""
-
-    slices: list[cst.SubscriptElement] = []
-    current: cst.BaseExpression = expr
-
-    while isinstance(current, cst.Subscript):
-        slices.insert(0, current.slice)
-        current = cast(cst.BaseExpression, current.value)
-
-    if (
-        isinstance(current, cst.Attribute)
-        and isinstance(current.value, cst.Name)
-        and isinstance(current.attr, cst.Name)
-        and current.attr.value in {"output", "records"}
-    ):
-        return AliasOutputAccess(alias_name=current.value.value, slices=tuple(slices))
-
-    return None
-
-
-def _build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
-    """Construct ``caplog.records`` expression with the original slices applied."""
-
-    base: cst.BaseExpression = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-    for slice_item in access.slices:
-        base = cst.Subscript(value=cast(cst.BaseExpression, base), slice=slice_item)
-    return base
-
-
-def _build_get_message_call(access: AliasOutputAccess) -> cst.Call:
-    """Construct ``caplog.records[...].getMessage()`` call for the provided access."""
-
-    return cst.Call(
-        func=cst.Attribute(value=_build_caplog_records_expr(access), attr=cst.Name(value="getMessage")),
-        args=[],
-    )
+# The detailed logic for extracting alias access and building caplog
+# expressions lives in `transformers/_caplog_helpers.py` and is imported
+# above as `extract_alias_output_slices`, `build_caplog_records_expr`,
+# and `build_get_message_call`.
 
 
 def _rewrite_length_comparison(
@@ -141,9 +128,9 @@ def _rewrite_length_comparison(
     left = comp_node.left
     if isinstance(left, cst.Call) and isinstance(left.func, cst.Name) and left.func.value == "len" and left.args:
         arg0 = left.args[0].value
-        access = _extract_alias_output_slices(arg0)
+        access = extract_alias_output_slices(arg0)
         if access is not None and access.alias_name == alias_name:
-            new_arg = _build_caplog_records_expr(access)
+            new_arg = build_caplog_records_expr(access)
             new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
             return comp_node.with_changes(left=new_left)
 
@@ -161,10 +148,10 @@ def _rewrite_membership_comparison(
 
     for target in comp_node.comparisons:
         if isinstance(target.operator, cst.In):
-            access = _extract_alias_output_slices(cast(cst.BaseExpression, target.comparator))
+            access = extract_alias_output_slices(cast(cst.BaseExpression, target.comparator))
             if access is not None and access.alias_name == alias_name:
                 new_targets.append(
-                    cst.ComparisonTarget(operator=target.operator, comparator=_build_get_message_call(access))
+                    cst.ComparisonTarget(operator=target.operator, comparator=build_get_message_call(access))
                 )
                 changed = True
                 continue
@@ -188,12 +175,12 @@ def _rewrite_equality_comparison(
     left_access = None
 
     if isinstance(new_left, cst.Subscript | cst.Attribute):
-        left_access = _extract_alias_output_slices(cast(cst.BaseExpression, new_left))
+        left_access = extract_alias_output_slices(cast(cst.BaseExpression, new_left))
     if left_access is not None and left_access.alias_name == alias_name:
         if isinstance(new_left, cst.Subscript):
-            new_left = _build_get_message_call(left_access)
+            new_left = build_get_message_call(left_access)
         else:
-            new_left = _build_caplog_records_expr(left_access)
+            new_left = build_caplog_records_expr(left_access)
         changed = True
 
     # Also handle the pattern where callers reference the exception alias
@@ -234,12 +221,12 @@ def _rewrite_equality_comparison(
         comparator = target.comparator
         # First handle caplog output patterns as before
         if isinstance(target.operator, cst.Equal) and isinstance(comparator, cst.Subscript | cst.Attribute):
-            access = _extract_alias_output_slices(cast(cst.BaseExpression, comparator))
+            access = extract_alias_output_slices(cast(cst.BaseExpression, comparator))
             if access is not None and access.alias_name == alias_name:
                 if isinstance(comparator, cst.Subscript):
-                    comparator = _build_get_message_call(access)
+                    comparator = build_get_message_call(access)
                 else:
-                    comparator = _build_caplog_records_expr(access)
+                    comparator = build_caplog_records_expr(access)
                 target = target.with_changes(comparator=comparator)
                 changed = True
                 new_targets.append(target)
@@ -1468,18 +1455,18 @@ def rewrite_following_statements_for_alias(
                                     and val.args
                                 ):
                                     inner = val.args[0].value
-                                    access = _extract_alias_output_slices(inner)
+                                    access = extract_alias_output_slices(inner)
                                     if access is not None and access.alias_name == alias_name:
-                                        new_inner = _build_caplog_records_expr(access)
+                                        new_inner = build_caplog_records_expr(access)
                                         new_len = val.with_changes(args=[cst.Arg(value=new_inner)])
                                         new_args.append(a.with_changes(value=new_len))
                                         changed_args = True
                                         continue
 
-                                access = _extract_alias_output_slices(val)
+                                access = extract_alias_output_slices(val)
                                 if access is not None and access.alias_name == alias_name:
                                     # Use getMessage() to yield the logged string
-                                    msg_call = _build_get_message_call(access)
+                                    msg_call = build_get_message_call(access)
                                     new_args.append(a.with_changes(value=msg_call))
                                     changed_args = True
                                     continue
