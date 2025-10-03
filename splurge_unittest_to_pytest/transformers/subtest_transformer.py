@@ -25,7 +25,7 @@ from collections.abc import Sequence
 
 import libcst as cst
 
-from .parametrize_helper import convert_subtest_loop_to_parametrize
+from .parametrize_helper import ParametrizeOptions, convert_subtest_loop_to_parametrize
 
 
 def _extract_from_list_or_tuple(node: cst.BaseExpression) -> list[cst.BaseExpression] | None:
@@ -58,11 +58,25 @@ def convert_simple_subtests_to_parametrize(
     changed = False
 
     while True:
-        converted = convert_subtest_loop_to_parametrize(current, current, transformer)
+        options = ParametrizeOptions(
+            parametrize_include_ids=getattr(transformer, "parametrize_include_ids", True),
+            parametrize_add_annotations=getattr(transformer, "parametrize_add_annotations", True),
+        )
+        converted = convert_subtest_loop_to_parametrize(current, current, options)
         if converted is None:
             break
         changed = True
         current = converted
+        # Maintain the previous behaviour where the transformer's
+        # `needs_pytest_import` flag was set by the converter. When callers
+        # use explicit options the converter cannot set transformer state,
+        # so set it here to preserve behaviour.
+        try:
+            transformer.needs_pytest_import = True
+        except Exception:
+            # Be conservative: if transformer doesn't support attribute set,
+            # ignore and continue (keeps previous conservative behaviour).
+            pass
 
     if not changed:
         return None

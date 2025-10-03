@@ -128,10 +128,21 @@ class _RemovalCandidate:
     name: str | None
 
 
+@dataclass(frozen=True)
+class ParametrizeOptions:
+    """Explicit options controlling parametrize conversion behaviour.
+
+    This dataclass allows callers to opt into explicit, testable options
+    rather than relying on attributes on the transformer object.
+    """
+    parametrize_include_ids: bool = True
+    parametrize_add_annotations: bool = True
+
+
 def convert_subtest_loop_to_parametrize(
     original_func: cst.FunctionDef,
     updated_func: cst.FunctionDef,
-    transformer,
+    transformer_or_options,
 ) -> cst.FunctionDef | None:
     """Return a parametrized ``FunctionDef`` when a simple subTest loop is detected.
 
@@ -174,8 +185,18 @@ def convert_subtest_loop_to_parametrize(
 
         removable_indexes = _filter_removal_candidates(removal_candidates, body_statements, subtest_loop)
 
-        include_ids = getattr(transformer, "parametrize_include_ids", True)
-        add_annotations = getattr(transformer, "parametrize_add_annotations", True)
+        # Support two calling conventions for backward compatibility:
+        # 1) Pass the transformer object (existing callers) and read attributes
+        # 2) Pass an explicit ParametrizeOptions instance
+        if isinstance(transformer_or_options, ParametrizeOptions):
+            options = transformer_or_options
+            include_ids = options.parametrize_include_ids
+            add_annotations = options.parametrize_add_annotations
+            transformer = None
+        else:
+            transformer = transformer_or_options
+            include_ids = getattr(transformer, "parametrize_include_ids", True)
+            add_annotations = getattr(transformer, "parametrize_add_annotations", True)
 
         annotations = _infer_param_annotations(rows) if add_annotations else tuple(None for _ in param_names)
         new_params = _ensure_function_params(updated_func.params, param_names, annotations)
@@ -187,7 +208,8 @@ def convert_subtest_loop_to_parametrize(
         if matching_index is None and any(_is_parametrize_decorator(deco) for deco in existing_decorators):
             return None
 
-        transformer.needs_pytest_import = True
+        if transformer is not None:
+            transformer.needs_pytest_import = True
 
         if matching_index is not None:
             target_decorator = existing_decorators[matching_index]
