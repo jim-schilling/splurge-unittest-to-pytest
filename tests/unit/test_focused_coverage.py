@@ -150,4 +150,6 @@ def test_migrate_file_missing_source_returns_failure():
     # migrate_file validates the source and returns Result.failure for missing file
     result = orch.migrate_file("this_file_does_not_exist_12345.py")
     assert not result.is_success()
-    assert "Source file not found" in str(result.error)
+    # Enhanced error reporting provides more detailed error messages
+    assert "No such file or directory" in str(result.error)
+    assert "this_file_does_not_exist_12345.py" in str(result.error)

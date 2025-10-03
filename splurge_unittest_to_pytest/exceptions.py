@@ -52,14 +52,27 @@ class TransformationError(MigrationError):
         message: Human-readable description of the failure.
         pattern_type: Optional transformation pattern identifier.
         node_type: Optional AST/CST node type that caused the error.
+        context: Optional ErrorContext for enhanced debugging information.
+        suggestions: Optional list of suggested fixes.
     """
 
-    def __init__(self, message: str, pattern_type: str | None = None, node_type: str | None = None):
+    def __init__(
+        self,
+        message: str,
+        pattern_type: str | None = None,
+        node_type: str | None = None,
+        context: Any | None = None,
+        suggestions: list[str] | None = None,
+    ):
         details: dict[str, Any] = {}
         if pattern_type:
             details["pattern_type"] = pattern_type
         if node_type:
             details["node_type"] = node_type
+        if context:
+            details["context"] = context
+        if suggestions:
+            details["suggestions"] = suggestions
         super().__init__(message, details)
 
 

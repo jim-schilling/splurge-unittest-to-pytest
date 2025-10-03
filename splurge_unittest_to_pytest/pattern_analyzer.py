@@ -38,7 +38,7 @@ class UnittestPatternAnalyzer(cst.CSTVisitor):
         self.ir_module: TestModule | None = None
         self._class_bases: dict[str, list[str]] = {}
         self._classes: dict[str, TestClass] = {}
-        self.test_prefixes = test_prefixes or ["test"]
+        self.test_prefixes = test_prefixes or ["test", "spec", "should", "it"]
         # Track class hierarchy for nested test classes
         self._class_stack: list[TestClass] = []
 

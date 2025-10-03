@@ -82,6 +82,7 @@ class TransformUnittestStep(Step[cst.Module, cst.Module]):
                 parametrize_include_ids=context.config.parametrize_ids,
                 parametrize_add_annotations=context.config.parametrize_type_hints,
                 decision_model=decision_model,
+                config=context.config,
             )
             source_code: str = module.code
             transformed_code: str = transformer.transform_code(source_code)

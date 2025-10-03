@@ -96,6 +96,18 @@ class MigrationConfig:
     # Code quality flags removed: format_code, optimize_imports, add_type_hints
     line_length: int | None = 120  # Use black default (120) if None
 
+    # Transformation precision settings
+    assert_almost_equal_places: int = 7
+    """Default number of decimal places for assertAlmostEqual transformations (1-15)"""
+
+    # Logging and reporting settings
+    log_level: str = "INFO"
+    """Default logging level (DEBUG, INFO, WARNING, ERROR)"""
+
+    # Performance settings
+    max_file_size_mb: int = 10
+    """Maximum file size in MB to process (larger files may cause memory issues)"""
+
     # Behavior settings
     dry_run: bool = False
     fail_fast: bool = False
@@ -116,11 +128,47 @@ class MigrationConfig:
     report_format: str = "json"  # json, html, markdown
 
     # Test discovery / naming
-    test_method_prefixes: list[str] = field(default_factory=lambda: ["test"])
+    test_method_prefixes: list[str] = field(default_factory=lambda: ["test", "spec", "should", "it"])
 
     # Degradation settings for gradual transformation failure handling
     degradation_enabled: bool = True
     degradation_tier: str = "advanced"  # "essential", "advanced", "experimental"
+
+    # Output formatting control
+    format_output: bool = True
+    """Whether to format output code with black and isort"""
+
+    # Import handling options
+    remove_unused_imports: bool = True
+    """Whether to remove unused unittest imports after transformation"""
+    preserve_import_comments: bool = True
+    """Whether to preserve comments in import sections"""
+
+    # Transform selection options
+    transform_assertions: bool = True
+    """Whether to transform unittest assertions to pytest assertions"""
+    transform_setup_teardown: bool = True
+    """Whether to convert setUp/tearDown methods to pytest fixtures"""
+    transform_subtests: bool = True
+    """Whether to attempt conversion of subTest loops to parametrize"""
+    transform_skip_decorators: bool = True
+    """Whether to convert unittest skip decorators to pytest skip decorators"""
+    transform_imports: bool = True
+    """Whether to transform unittest imports to pytest imports"""
+
+    # Processing options
+    continue_on_error: bool = False
+    """Whether to continue processing other files when one fails"""
+    max_concurrent_files: int = 1
+    """Maximum number of files to process concurrently (1 = sequential)"""
+    cache_analysis_results: bool = True
+    """Whether to cache analysis results between runs for improved performance"""
+
+    # Advanced options
+    preserve_file_encoding: bool = True
+    """Whether to preserve original file encoding when writing output"""
+    create_source_map: bool = False
+    """Whether to create source mapping for debugging transformations"""
 
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
         """Return a new ``MigrationConfig`` with specified overrides.
@@ -395,7 +443,7 @@ class ContextManager:
             success or an error describing the problem.
         """
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml  # type: ignore
 
             with open(config_file, encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)

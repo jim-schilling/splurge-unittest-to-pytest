@@ -18,7 +18,9 @@ def test_migrate_file_missing_source_raises_validation():
     # migrate_file validates the source and returns Result.failure for missing file
     result = orch.migrate_file("this_file_does_not_exist_12345.py")
     assert not result.is_success()
-    assert "Source file not found" in str(result.error)
+    # Enhanced error reporting provides more detailed error messages
+    assert "No such file or directory" in str(result.error)
+    assert "this_file_does_not_exist_12345.py" in str(result.error)
 
 
 def test_migrate_file_read_error(tmp_path):
@@ -68,7 +70,9 @@ def test_migrate_directory_nonexistent_path():
 
     result = orch.migrate_directory("/nonexistent/directory/path")
     assert result.is_error()
-    assert "Source directory not found" in str(result.error)
+    # Enhanced error reporting provides more detailed error messages
+    assert "Path is not a directory" in str(result.error)
+    assert "/nonexistent/directory/path" in str(result.error)
 
 
 def test_migrate_directory_with_mixed_files(tmp_path, mocker):
