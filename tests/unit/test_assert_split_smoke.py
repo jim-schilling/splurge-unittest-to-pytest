@@ -22,7 +22,10 @@ def test_caplog_alias_extraction_shim():
     # Build a simple attribute access like `alias.output[0]` and ensure the
     # shim delegating to the original helper returns an AliasOutputAccess-like
     # object with the expected alias name.
-    alias_attr = cst.Subscript(value=cst.Attribute(value=cst.Name(value="alias"), attr=cst.Name(value="output")), slice=(cst.SubscriptElement(slice=cst.Index(value=cst.Integer(value="0"))),))
+    alias_attr = cst.Subscript(
+        value=cst.Attribute(value=cst.Name(value="alias"), attr=cst.Name(value="output")),
+        slice=(cst.SubscriptElement(slice=cst.Index(value=cst.Integer(value="0"))),),
+    )
     access = assert_with_rewrites._extract_alias_output_slices(alias_attr)
     assert access is not None
     assert access.alias_name == "alias"
