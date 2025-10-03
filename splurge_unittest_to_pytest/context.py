@@ -134,6 +134,42 @@ class MigrationConfig:
     degradation_enabled: bool = True
     degradation_tier: str = "advanced"  # "essential", "advanced", "experimental"
 
+    # Output formatting control
+    format_output: bool = True
+    """Whether to format output code with black and isort"""
+
+    # Import handling options
+    remove_unused_imports: bool = True
+    """Whether to remove unused unittest imports after transformation"""
+    preserve_import_comments: bool = True
+    """Whether to preserve comments in import sections"""
+
+    # Transform selection options
+    transform_assertions: bool = True
+    """Whether to transform unittest assertions to pytest assertions"""
+    transform_setup_teardown: bool = True
+    """Whether to convert setUp/tearDown methods to pytest fixtures"""
+    transform_subtests: bool = True
+    """Whether to attempt conversion of subTest loops to parametrize"""
+    transform_skip_decorators: bool = True
+    """Whether to convert unittest skip decorators to pytest skip decorators"""
+    transform_imports: bool = True
+    """Whether to transform unittest imports to pytest imports"""
+
+    # Processing options
+    continue_on_error: bool = False
+    """Whether to continue processing other files when one fails"""
+    max_concurrent_files: int = 1
+    """Maximum number of files to process concurrently (1 = sequential)"""
+    cache_analysis_results: bool = True
+    """Whether to cache analysis results between runs for improved performance"""
+
+    # Advanced options
+    preserve_file_encoding: bool = True
+    """Whether to preserve original file encoding when writing output"""
+    create_source_map: bool = False
+    """Whether to create source mapping for debugging transformations"""
+
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
         """Return a new ``MigrationConfig`` with specified overrides.
 

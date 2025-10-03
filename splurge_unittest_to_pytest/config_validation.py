@@ -59,6 +59,29 @@ class ValidatedMigrationConfig(BaseModel):
     dry_run: bool = Field(default=False, description="Whether to perform a dry run")
     fail_fast: bool = Field(default=False, description="Whether to fail on first error")
 
+    # Output formatting control
+    format_output: bool = Field(default=True, description="Whether to format output code with black and isort")
+
+    # Import handling options
+    remove_unused_imports: bool = Field(default=True, description="Whether to remove unused unittest imports")
+    preserve_import_comments: bool = Field(default=True, description="Whether to preserve comments in import sections")
+
+    # Transform selection options
+    transform_assertions: bool = Field(default=True, description="Whether to transform unittest assertions")
+    transform_setup_teardown: bool = Field(default=True, description="Whether to convert setUp/tearDown methods")
+    transform_subtests: bool = Field(default=True, description="Whether to attempt subTest conversions")
+    transform_skip_decorators: bool = Field(default=True, description="Whether to convert skip decorators")
+    transform_imports: bool = Field(default=True, description="Whether to transform unittest imports")
+
+    # Processing options
+    continue_on_error: bool = Field(default=False, description="Whether to continue on individual file errors")
+    max_concurrent_files: int = Field(default=1, ge=1, le=50, description="Maximum concurrent file processing")
+    cache_analysis_results: bool = Field(default=True, description="Whether to cache analysis results")
+
+    # Advanced options
+    preserve_file_encoding: bool = Field(default=True, description="Whether to preserve original file encoding")
+    create_source_map: bool = Field(default=False, description="Whether to create source mapping for debugging")
+
     # Test method patterns
     test_method_prefixes: list[str] = Field(
         default_factory=lambda: ["test", "spec", "should", "it"], description="Prefixes for test methods"

@@ -17,7 +17,7 @@ from typing import cast
 import typer
 
 from . import main as main_module
-from .context import MigrationConfig
+from .context import ContextManager, MigrationConfig
 from .events import (
     ErrorEvent,
     EventBus,
@@ -276,6 +276,20 @@ def create_config(
     max_file_size: int = 10,
     suffix: str = "",
     ext: str | None = None,
+    # New configuration options
+    format_output: bool = True,
+    remove_unused_imports: bool = True,
+    preserve_import_comments: bool = True,
+    transform_assertions: bool = True,
+    transform_setup_teardown: bool = True,
+    transform_subtests: bool = True,
+    transform_skip_decorators: bool = True,
+    transform_imports: bool = True,
+    continue_on_error: bool = False,
+    max_concurrent_files: int = 1,
+    cache_analysis_results: bool = True,
+    preserve_file_encoding: bool = True,
+    create_source_map: bool = False,
 ) -> MigrationConfig:
     """Build a :class:`MigrationConfig` from CLI options.
 
@@ -332,6 +346,20 @@ def create_config(
         test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
         target_suffix=suffix,
         target_extension=ext,
+        # New configuration options
+        format_output=format_output,
+        remove_unused_imports=remove_unused_imports,
+        preserve_import_comments=preserve_import_comments,
+        transform_assertions=transform_assertions,
+        transform_setup_teardown=transform_setup_teardown,
+        transform_subtests=transform_subtests,
+        transform_skip_decorators=transform_skip_decorators,
+        transform_imports=transform_imports,
+        continue_on_error=continue_on_error,
+        max_concurrent_files=max_concurrent_files,
+        cache_analysis_results=cache_analysis_results,
+        preserve_file_encoding=preserve_file_encoding,
+        create_source_map=create_source_map,
     )
 
     # Validate the configuration
@@ -523,8 +551,125 @@ def migrate(
         "--ext",
         help="Override target file extension (e.g. 'py' or '.txt'). Defaults to preserving the original extension.",
     ),
+    # Configuration file support
+    config_file: str | None = typer.Option(
+        None, "--config", "-c", help="YAML configuration file to load settings from (overrides CLI defaults)"
+    ),
+    # Output formatting control
+    format_output: bool = typer.Option(
+        True, "--format", help="Format output code with black and isort (recommended for consistency)", is_flag=True
+    ),
+    no_format_output: bool = typer.Option(
+        False,
+        "--no-format",
+        help="Disable output code formatting (faster but may produce inconsistent style)",
+        is_flag=True,
+    ),
+    # Import handling options
+    remove_unused_imports: bool = typer.Option(
+        True, "--remove-imports", help="Remove unused unittest imports after transformation (recommended)", is_flag=True
+    ),
+    no_remove_unused_imports: bool = typer.Option(
+        False, "--no-remove-imports", help="Keep unused unittest imports (may leave redundant imports)", is_flag=True
+    ),
+    preserve_import_comments: bool = typer.Option(
+        True, "--preserve-import-comments", help="Preserve comments in import sections", is_flag=True
+    ),
+    no_preserve_import_comments: bool = typer.Option(
+        False, "--no-preserve-import-comments", help="Remove comments in import sections", is_flag=True
+    ),
+    # Transform selection options
+    transform_assertions: bool = typer.Option(
+        True,
+        "--transform-assertions",
+        help="Transform unittest assertions (assertEqual, assertTrue, etc.) to pytest assertions",
+        is_flag=True,
+    ),
+    no_transform_assertions: bool = typer.Option(
+        False,
+        "--no-transform-assertions",
+        help="Keep unittest assertions unchanged (may require manual conversion)",
+        is_flag=True,
+    ),
+    transform_setup_teardown: bool = typer.Option(
+        True, "--transform-setup", help="Convert setUp/tearDown methods to pytest fixtures", is_flag=True
+    ),
+    no_transform_setup_teardown: bool = typer.Option(
+        False, "--no-transform-setup", help="Keep setUp/tearDown methods unchanged", is_flag=True
+    ),
+    transform_subtests: bool = typer.Option(
+        True, "--transform-subtests", help="Convert subTest loops to pytest.mark.parametrize", is_flag=True
+    ),
+    no_transform_subtests: bool = typer.Option(
+        False,
+        "--no-transform-subtests",
+        help="Keep subTest loops unchanged (may require manual conversion)",
+        is_flag=True,
+    ),
+    transform_skip_decorators: bool = typer.Option(
+        True, "--transform-skips", help="Convert unittest skip decorators to pytest skip decorators", is_flag=True
+    ),
+    no_transform_skip_decorators: bool = typer.Option(
+        False, "--no-transform-skips", help="Keep unittest skip decorators unchanged", is_flag=True
+    ),
+    transform_imports: bool = typer.Option(
+        True, "--transform-imports", help="Transform unittest imports to pytest imports", is_flag=True
+    ),
+    no_transform_imports: bool = typer.Option(
+        False, "--no-transform-imports", help="Keep unittest imports unchanged", is_flag=True
+    ),
+    # Processing options
+    continue_on_error: bool = typer.Option(
+        False,
+        "--continue-on-error",
+        help="Continue processing when individual files fail (useful for large codebases)",
+        is_flag=True,
+    ),
+    max_concurrent: int = typer.Option(
+        1,
+        "--max-concurrent",
+        help="Maximum files to process concurrently (1-50, use higher values for better performance on multi-core systems)",
+    ),
+    cache_analysis: bool = typer.Option(
+        True, "--cache-analysis", help="Cache analysis results for better performance on repeated runs", is_flag=True
+    ),
+    no_cache_analysis: bool = typer.Option(
+        False, "--no-cache-analysis", help="Disable analysis result caching (slower but uses less memory)", is_flag=True
+    ),
+    # Advanced options
+    preserve_encoding: bool = typer.Option(
+        True, "--preserve-encoding", help="Preserve original file encoding when writing output", is_flag=True
+    ),
+    no_preserve_encoding: bool = typer.Option(
+        False, "--no-preserve-encoding", help="Use default encoding for output files", is_flag=True
+    ),
+    create_source_map: bool = typer.Option(
+        False, "--source-map", help="Create source mapping for debugging transformations (advanced users)", is_flag=True
+    ),
 ) -> None:
-    """Migrate unittest files to pytest format using the orchestrator.
+    """Migrate unittest files to pytest format with comprehensive configuration options.
+
+    This command provides extensive control over the migration process including:
+
+    • **File Discovery**: Configurable patterns, directories, and recursion
+    • **Transform Selection**: Choose which unittest features to convert
+    • **Output Control**: Formatting, encoding, and file handling options
+    • **Performance**: Concurrent processing and caching options
+    • **Error Handling**: Continue on errors and graceful degradation
+    • **YAML Configuration**: Load settings from configuration files
+
+    Examples:
+        # Basic usage with custom config file
+        splurge-unittest-to-pytest migrate --config my-config.yaml tests/
+
+        # Disable specific transforms
+        splurge-unittest-to-pytest migrate --no-transform-assertions tests/
+
+        # Continue processing despite errors
+        splurge-unittest-to-pytest migrate --continue-on-error tests/
+
+        # Use multiple prefixes for modern testing
+        splurge-unittest-to-pytest migrate --prefix test --prefix spec tests/
 
     The CLI command serves as a thin wrapper that prepares the application
     configuration, validates inputs, creates the application event bus, and
@@ -554,11 +699,42 @@ def migrate(
         parametrize: Attempt conservative subTest -> parametrize conversions.
         suffix: Suffix appended to target filename stem.
         ext: Optional override for output file extension.
+        config_file: YAML configuration file to load settings from.
+        format_output: Whether to format output code with black and isort.
+        remove_unused_imports: Whether to remove unused unittest imports.
+        preserve_import_comments: Whether to preserve comments in import sections.
+        transform_assertions: Whether to transform unittest assertions to pytest.
+        transform_setup_teardown: Whether to convert setUp/tearDown to pytest fixtures.
+        transform_subtests: Whether to convert subTest loops to parametrize.
+        transform_skip_decorators: Whether to convert unittest skip decorators.
+        transform_imports: Whether to transform unittest imports to pytest.
+        continue_on_error: Whether to continue processing when individual files fail.
+        max_concurrent: Maximum files to process concurrently.
+        cache_analysis: Whether to cache analysis results for performance.
+        preserve_encoding: Whether to preserve original file encoding.
+        create_source_map: Whether to create source mapping for debugging.
     """
     # Validate mutually exclusive flags: verbose and debug cannot be used together
     if info and debug:
         typer.echo("Error: --info and --debug cannot be used together.")
         raise typer.Exit(code=2)
+
+    # Load configuration from YAML file if provided
+    base_config = MigrationConfig()
+    if config_file is not None:
+        # Convert OptionInfo to string if needed
+        config_file_path = str(config_file) if hasattr(config_file, "__str__") else config_file
+        try:
+            config_result = ContextManager.load_config_from_file(config_file_path)
+            if config_result.is_success():
+                base_config = config_result.data
+                logger.info(f"Loaded configuration from: {config_file_path}")
+            else:
+                typer.echo(f"Error loading configuration file: {config_result.error}")
+                raise typer.Exit(code=1)
+        except Exception as e:
+            typer.echo(f"Error loading configuration file: {e}")
+            raise typer.Exit(code=1) from e
 
     # Validate source files first to get valid_files for prefix detection
     valid_files = cast(
@@ -573,28 +749,75 @@ def migrate(
             logger.info(f"Auto-detected test prefixes: {detected_prefixes}")
             effective_prefixes = detected_prefixes
 
+    # Resolve boolean flag conflicts (negative flags override positive ones)
+    final_format_output = format_output and not no_format_output
+    final_remove_unused_imports = remove_unused_imports and not no_remove_unused_imports
+    final_preserve_import_comments = preserve_import_comments and not no_preserve_import_comments
+    final_transform_assertions = transform_assertions and not no_transform_assertions
+    final_transform_setup_teardown = transform_setup_teardown and not no_transform_setup_teardown
+    final_transform_subtests = transform_subtests and not no_transform_subtests
+    final_transform_skip_decorators = transform_skip_decorators and not no_transform_skip_decorators
+    final_transform_imports = transform_imports and not no_transform_imports
+    final_cache_analysis = cache_analysis and not no_cache_analysis
+    final_preserve_encoding = preserve_encoding and not no_preserve_encoding
+
     # Create configuration (decision model always enabled, parametrize always enabled by default)
-    config = create_config(
-        target_root=target_root,
-        root_directory=root_directory,
-        file_patterns=file_patterns,
-        recurse_directories=recurse,
-        backup_originals=not skip_backup,
-        backup_root=backup_root,
-        line_length=line_length,
-        dry_run=dry_run,
-        fail_fast=fail_fast,
-        verbose=verbose,
-        generate_report=generate_report,
-        report_format=report_format,
-        test_method_prefixes=effective_prefixes,
-        detect_prefixes=detect_prefixes,
-        assert_places=assert_places,
-        log_level=log_level,
-        max_file_size=max_file_size,
-        suffix=suffix,
-        ext=ext,
-    )
+    # Use base_config as the foundation and override with CLI parameters
+    config_kwargs = {}
+
+    # Only add CLI parameters that were explicitly provided (not None)
+    if target_root is not None:
+        config_kwargs["target_root"] = target_root
+    if root_directory is not None:
+        config_kwargs["root_directory"] = root_directory
+    if file_patterns is not None:
+        config_kwargs["file_patterns"] = file_patterns
+    if recurse is not None:
+        config_kwargs["recurse_directories"] = recurse
+    config_kwargs["backup_originals"] = not skip_backup
+    if backup_root is not None:
+        config_kwargs["backup_root"] = backup_root
+    if line_length is not None:
+        config_kwargs["line_length"] = line_length
+    if dry_run is not None:
+        config_kwargs["dry_run"] = dry_run
+    if fail_fast is not None:
+        config_kwargs["fail_fast"] = fail_fast
+    if verbose is not None:
+        config_kwargs["verbose"] = verbose
+    if generate_report is not None:
+        config_kwargs["generate_report"] = generate_report
+    if report_format is not None:
+        config_kwargs["report_format"] = report_format
+    if effective_prefixes is not None:
+        config_kwargs["test_method_prefixes"] = effective_prefixes
+    if assert_places is not None:
+        config_kwargs["assert_almost_equal_places"] = assert_places
+    if log_level is not None:
+        config_kwargs["log_level"] = log_level
+    if max_file_size is not None:
+        config_kwargs["max_file_size_mb"] = max_file_size
+    if suffix is not None:
+        config_kwargs["target_suffix"] = str(suffix)
+    if ext is not None:
+        config_kwargs["target_extension"] = str(ext)
+
+    # Add new configuration options
+    config_kwargs["format_output"] = final_format_output
+    config_kwargs["remove_unused_imports"] = final_remove_unused_imports
+    config_kwargs["preserve_import_comments"] = final_preserve_import_comments
+    config_kwargs["transform_assertions"] = final_transform_assertions
+    config_kwargs["transform_setup_teardown"] = final_transform_setup_teardown
+    config_kwargs["transform_subtests"] = final_transform_subtests
+    config_kwargs["transform_skip_decorators"] = final_transform_skip_decorators
+    config_kwargs["transform_imports"] = final_transform_imports
+    config_kwargs["continue_on_error"] = continue_on_error
+    config_kwargs["max_concurrent_files"] = max_concurrent
+    config_kwargs["cache_analysis_results"] = final_cache_analysis
+    config_kwargs["preserve_file_encoding"] = final_preserve_encoding
+    config_kwargs["create_source_map"] = create_source_map
+
+    config = base_config.with_override(**config_kwargs)
 
     # Set up logging based on configuration
     if debug or info:
@@ -602,7 +825,11 @@ def migrate(
     elif hasattr(config, "log_level"):
         # Set logging level based on configuration
         config_log_level = getattr(config, "log_level", "INFO")
-        setup_logging_with_level(config_log_level)
+        # Ensure log_level is a string, not an OptionInfo object
+        if hasattr(config_log_level, "upper"):
+            setup_logging_with_level(str(config_log_level))
+        else:
+            setup_logging_with_level("INFO")
 
     set_quiet_mode(not (debug or info))
 
@@ -758,19 +985,45 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "target_root": default_config.get("target_root"),
         "backup_originals": default_config.get("backup_originals"),
         "backup_root": default_config.get("backup_root"),
+        "target_suffix": default_config.get("target_suffix"),
+        "target_extension": default_config.get("target_extension"),
         "# Transformation settings": None,
-        # Legacy/removed transformation settings intentionally omitted
-        "# Code quality settings": None,
-        # Code quality settings: only include supported options
         "line_length": default_config.get("line_length"),
+        "assert_almost_equal_places": default_config.get("assert_almost_equal_places"),
+        "log_level": default_config.get("log_level"),
+        "max_file_size_mb": default_config.get("max_file_size_mb"),
         "# Behavior settings": None,
         "dry_run": default_config.get("dry_run"),
         "fail_fast": default_config.get("fail_fast"),
-        # Note: worker count configuration removed from CLI surface
+        "continue_on_error": default_config.get("continue_on_error"),
+        "max_concurrent_files": default_config.get("max_concurrent_files"),
         "# Reporting settings": None,
         "verbose": default_config.get("verbose"),
         "generate_report": default_config.get("generate_report"),
         "report_format": default_config.get("report_format"),
+        "# Test discovery settings": None,
+        "file_patterns": default_config.get("file_patterns"),
+        "recurse_directories": default_config.get("recurse_directories"),
+        "test_method_prefixes": default_config.get("test_method_prefixes"),
+        "# Output formatting control": None,
+        "format_output": default_config.get("format_output"),
+        "# Import handling options": None,
+        "remove_unused_imports": default_config.get("remove_unused_imports"),
+        "preserve_import_comments": default_config.get("preserve_import_comments"),
+        "# Transform selection options": None,
+        "transform_assertions": default_config.get("transform_assertions"),
+        "transform_setup_teardown": default_config.get("transform_setup_teardown"),
+        "transform_subtests": default_config.get("transform_subtests"),
+        "transform_skip_decorators": default_config.get("transform_skip_decorators"),
+        "transform_imports": default_config.get("transform_imports"),
+        "# Processing options": None,
+        "cache_analysis_results": default_config.get("cache_analysis_results"),
+        "# Advanced options": None,
+        "preserve_file_encoding": default_config.get("preserve_file_encoding"),
+        "create_source_map": default_config.get("create_source_map"),
+        "# Degradation settings": None,
+        "degradation_enabled": default_config.get("degradation_enabled"),
+        "degradation_tier": default_config.get("degradation_tier"),
     }
 
     try:

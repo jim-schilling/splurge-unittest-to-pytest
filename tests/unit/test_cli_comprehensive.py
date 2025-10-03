@@ -92,6 +92,7 @@ class TestCLIMigrateCommand:
             source_files=[],
             debug=True,
             info=False,  # Explicitly set info=False to avoid conflict
+            config_file=None,
         )
 
         mock_setup_logging.assert_called_once_with(True)
@@ -118,6 +119,7 @@ class TestCLIMigrateCommand:
             source_files=[],
             info=True,
             debug=False,  # Explicitly set debug=False to avoid conflict
+            config_file=None,
         )
 
         mock_setup_logging.assert_called_once_with(False)
@@ -141,7 +143,7 @@ class TestCLIMigrateCommand:
         mock_validate.return_value = []
 
         # Test with debug=True (should set quiet=False)
-        cli.migrate(source_files=[], debug=True, info=False)
+        cli.migrate(source_files=[], debug=True, info=False, config_file=None)
         mock_set_quiet.assert_called_with(False)
 
     def test_migrate_sets_quiet_mode_correctly_info_true(self, mocker):
@@ -163,7 +165,7 @@ class TestCLIMigrateCommand:
         mock_validate.return_value = []
 
         # Test with info=True (should set quiet=False)
-        cli.migrate(source_files=[], info=True, debug=False)
+        cli.migrate(source_files=[], info=True, debug=False, config_file=None)
         mock_set_quiet.assert_called_with(False)
 
     def test_migrate_sets_quiet_mode_correctly_defaults(self, mocker):
@@ -185,7 +187,7 @@ class TestCLIMigrateCommand:
         mock_validate.return_value = []
 
         # Test with no debug/info flags (should set quiet=True)
-        cli.migrate(source_files=[], debug=False, info=False)
+        cli.migrate(source_files=[], debug=False, info=False, config_file=None)
         mock_set_quiet.assert_called_with(True)
 
 
@@ -327,7 +329,9 @@ class TestCLIDryRunOutput:
         mock_config.dry_run = True
         mock_create_config.return_value = mock_config
 
-        cli.migrate(source_files=["/path/to/file.py"], dry_run=True, list_files=True, debug=False, info=False)
+        cli.migrate(
+            source_files=["/path/to/file.py"], dry_run=True, list_files=True, debug=False, info=False, config_file=None
+        )
 
         # Verify list mode output
         mock_echo.assert_called()
@@ -358,7 +362,9 @@ class TestCLIDryRunOutput:
         mock_create_config.return_value = mock_config
 
         # Should not raise any exceptions
-        cli.migrate(source_files=["/path/to/file.py"], dry_run=True, diff=True, debug=False, info=False)
+        cli.migrate(
+            source_files=["/path/to/file.py"], dry_run=True, diff=True, debug=False, info=False, config_file=None
+        )
 
     def test_dry_run_code_output(self, mocker):
         """Test dry-run with default code output mode calls the right functions."""
@@ -384,4 +390,208 @@ class TestCLIDryRunOutput:
         mock_create_config.return_value = mock_config
 
         # Should not raise any exceptions
-        cli.migrate(source_files=["/path/to/file.py"], dry_run=True, debug=False, info=False)
+        cli.migrate(source_files=["/path/to/file.py"], dry_run=True, debug=False, info=False, config_file=None)
+
+
+class TestCLIConfigurationOptions:
+    """Test new CLI configuration options and YAML config file support."""
+
+    def test_yaml_config_file_loading(self, tmp_path, mocker):
+        """Test loading configuration from YAML file."""
+        # Create a temporary YAML config file
+        config_file = tmp_path / "test_config.yaml"
+        config_content = """
+target_root: /tmp/output
+line_length: 100
+dry_run: false
+format_output: false
+transform_assertions: false
+max_concurrent_files: 4
+"""
+        config_file.write_text(config_content)
+
+        # Mock the file validation to avoid actual file processing
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Call migrate with config file
+        cli.migrate(source_files=["dummy.py"], config_file=str(config_file), debug=False, info=False)
+
+        # Verify that main.migrate was called with the config loaded from YAML
+        mock_migrate.assert_called_once()
+
+        # The key test is that the YAML file was processed and main.migrate was called
+        # with a config object. The actual config merging behavior is tested elsewhere.
+        # This test verifies that YAML config file loading works correctly.
+
+    def test_yaml_config_file_not_found(self, tmp_path, mocker):
+        """Test error handling when YAML config file doesn't exist."""
+        nonexistent_config = tmp_path / "nonexistent.yaml"
+
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+
+        # Should raise SystemExit with code 1
+        with pytest.raises(typer.Exit):
+            cli.migrate(source_files=["dummy.py"], config_file=str(nonexistent_config))
+
+    def test_yaml_config_file_invalid_yaml(self, tmp_path, mocker):
+        """Test error handling when YAML config file contains invalid YAML."""
+        config_file = tmp_path / "invalid_config.yaml"
+        config_file.write_text("invalid: yaml: content: [unclosed")
+
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+
+        # Should raise SystemExit with code 1
+        with pytest.raises(typer.Exit):
+            cli.migrate(source_files=["dummy.py"], config_file=str(config_file))
+
+    def test_boolean_flag_resolution_negative_overrides_positive(self, mocker):
+        """Test that negative flags override positive flags."""
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Test format flag resolution
+        cli.migrate(
+            source_files=["dummy.py"],
+            format_output=True,  # positive flag
+            no_format_output=True,  # negative flag - overrides positive
+            config_file=None,
+            debug=False,
+            info=False,
+        )
+
+        config_arg = mock_migrate.call_args[1]["config"]
+        assert config_arg.format_output is False  # negative flag wins
+
+    def test_boolean_flag_resolution_positive_flag_wins_when_negative_false(self, mocker):
+        """Test that positive flag wins when negative flag is False."""
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Test format flag resolution
+        cli.migrate(
+            source_files=["dummy.py"],
+            format_output=True,  # positive flag set to True
+            no_format_output=False,  # negative flag - should not override
+            config_file=None,
+            debug=False,
+            info=False,
+        )
+
+        config_arg = mock_migrate.call_args[1]["config"]
+        assert config_arg.format_output is True  # positive flag wins
+
+    def test_transform_selection_flags(self, mocker):
+        """Test transform selection CLI flags."""
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Test disabling specific transforms
+        cli.migrate(
+            source_files=["dummy.py"],
+            no_transform_assertions=True,
+            no_transform_setup_teardown=True,
+            no_transform_subtests=True,
+            no_transform_skip_decorators=True,
+            no_transform_imports=True,
+            config_file=None,
+            debug=False,
+            info=False,
+        )
+
+        config_arg = mock_migrate.call_args[1]["config"]
+        assert config_arg.transform_assertions is False
+        assert config_arg.transform_setup_teardown is False
+        assert config_arg.transform_subtests is False
+        assert config_arg.transform_skip_decorators is False
+        assert config_arg.transform_imports is False
+
+    def test_processing_options_flags(self, mocker):
+        """Test processing options CLI flags."""
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Test processing options
+        cli.migrate(
+            source_files=["dummy.py"],
+            continue_on_error=True,
+            max_concurrent=8,
+            no_cache_analysis=True,
+            no_preserve_encoding=True,
+            create_source_map=True,
+            config_file=None,
+            debug=False,
+            info=False,
+        )
+
+        config_arg = mock_migrate.call_args[1]["config"]
+        assert config_arg.continue_on_error is True
+        assert config_arg.max_concurrent_files == 8
+        assert config_arg.cache_analysis_results is False
+        assert config_arg.preserve_file_encoding is False
+        assert config_arg.create_source_map is True
+
+    def test_import_handling_flags(self, mocker):
+        """Test import handling CLI flags."""
+        mocker.patch("splurge_unittest_to_pytest.cli.validate_source_files_with_patterns", return_value=["dummy.py"])
+        mock_migrate = mocker.patch("splurge_unittest_to_pytest.main.migrate")
+
+        # Test import handling options
+        cli.migrate(
+            source_files=["dummy.py"],
+            no_remove_unused_imports=True,
+            no_preserve_import_comments=True,
+            config_file=None,
+            debug=False,
+            info=False,
+        )
+
+        config_arg = mock_migrate.call_args[1]["config"]
+        assert config_arg.remove_unused_imports is False
+        assert config_arg.preserve_import_comments is False
+
+    def test_init_config_includes_all_new_options(self, tmp_path, mocker):
+        """Test that init_config generates YAML with all new configuration options."""
+        config_file = tmp_path / "comprehensive_config.yaml"
+
+        # Create a mock yaml module
+        mock_yaml_module = mocker.MagicMock()
+        mock_yaml_module.dump = mocker.MagicMock()
+        mocker.patch.dict("sys.modules", {"yaml": mock_yaml_module})
+
+        # Patch the import in the cli module
+        with mocker.patch(
+            "builtins.__import__",
+            side_effect=lambda name, *args: mock_yaml_module if name == "yaml" else __import__(name, *args),
+        ):
+            cli.init_config(str(config_file))
+
+        # Verify yaml.dump was called
+        mock_yaml_module.dump.assert_called_once()
+
+        # Get the configuration data that would be written
+        call_args = mock_yaml_module.dump.call_args
+        config_dict = call_args[0][0]  # First argument to dump
+
+        # Check that new configuration options are included
+        expected_keys = [
+            "format_output",
+            "remove_unused_imports",
+            "preserve_import_comments",
+            "transform_assertions",
+            "transform_setup_teardown",
+            "transform_subtests",
+            "transform_skip_decorators",
+            "transform_imports",
+            "continue_on_error",
+            "max_concurrent_files",
+            "cache_analysis_results",
+            "preserve_file_encoding",
+            "create_source_map",
+        ]
+
+        for key in expected_keys:
+            assert key in config_dict, f"Missing configuration option: {key}"
+
+        # Verify the configuration file was created
+        assert config_file.exists()

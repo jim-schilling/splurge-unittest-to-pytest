@@ -9,6 +9,7 @@ Table of contents
 - Features
 - Supported unittest to pytest conversion candidates
 - CLI reference
+- YAML Configuration File Format
 - Examples (CLI and programmatic)
 - Programmatic API
 - Safety and limitations
@@ -254,31 +255,168 @@ CLI reference
 All flags are available on the ``migrate`` command. Summary below; use
 ``--help`` for the authoritative list.
 
+## File Discovery and Input
 - ``-d, --dir DIR``: Root directory for input discovery.
 - ``-f, --file PATTERN``: Glob pattern(s) to select files (repeatable). Default: ``test_*.py``.
 - ``-r, --recurse / --no-recurse``: Recurse directories (default: recurse).
+
+## Output and File Handling
 - ``-t, --target-root DIR``: Root directory to write outputs.
 - ``--backup-root DIR``: Root directory for backup files when recursing. When specified, backups preserve folder structure. By default, backups are created next to the original files.
 - ``--skip-backup``: Skip creating a ``.backup`` copy of originals when writing (presence-only flag). By default the tool creates a ``.backup`` file next to the original when writing; if a ``.backup`` file already exists it will be preserved and not overwritten.
+- ``--ext EXT``: Override the target file extension (e.g. ``.py`` or ``.txt``). Defaults to preserving the original extension.
+- ``--suffix SUFFIX``: Append suffix to target filename stem when writing (default: empty string).
+- ``--preserve-encoding / --no-preserve-encoding``: Preserve original file encoding when writing output (default: preserve).
+
+## Formatting and Code Quality
 - ``--line-length N``: Max line length used by formatters (default: 120).
-- ``--dry-run``: Do not write files; return or display generated output.
-	- With ``--dry-run --diff``: show unified diffs.
-	- With ``--dry-run --list``: list files only.
-- ``--ext EXT``: Override the target file extension.
-- ``--suffix SUFFIX``: Append suffix to target filename stem when writing.
-- ``--fail-fast``: Stop on first error (default: off).
- - ``-v, --verbose``: Verbose logging (presence-only flag).
- - ``--dry-run``: Do not write files; return or display generated output (presence-only flag).
-	 - With ``--dry-run --diff``: show unified diffs (``--diff`` is presence-only).
-	 - With ``--dry-run --list``: list files only (``--list`` is presence-only).
- - ``--diff``: Show unified diffs in dry-run mode (presence-only flag).
- - ``--list``: List files only in dry-run mode (presence-only flag).
- - ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
- - ``--fail-fast``: Stop on first error (presence-only flag).
-- ``--report / --no-report``: Generate a migration report (default: on).
+- ``--format / --no-format``: Format output code with black and isort (default: format).
+
+## Import Handling
+- ``--remove-imports / --no-remove-imports``: Remove unused unittest imports after transformation (default: remove).
+- ``--preserve-import-comments / --no-preserve-import-comments``: Preserve comments in import sections (default: preserve).
+
+## Transform Selection
+- ``--transform-assertions / --no-transform-assertions``: Transform unittest assertions to pytest assertions (default: transform).
+- ``--transform-setup / --no-transform-setup``: Convert setUp/tearDown methods to pytest fixtures (default: transform).
+- ``--transform-subtests / --no-transform-subtests``: Convert subTest loops to pytest.mark.parametrize (default: transform).
+- ``--transform-skips / --no-transform-skips``: Convert unittest skip decorators to pytest skip decorators (default: transform).
+- ``--transform-imports / --no-transform-imports``: Transform unittest imports to pytest imports (default: transform).
+
+## Processing and Performance
+- ``--continue-on-error``: Continue processing when individual files fail (useful for large codebases) (presence-only flag).
+- ``--max-concurrent N``: Maximum files to process concurrently (1-50, default: 1). Note: Concurrent file processing is not currently supported and this flag is reserved for future implementation.
+- ``--cache-analysis / --no-cache-analysis``: Cache analysis results for better performance on repeated runs (default: cache).
+
+## Analysis and Discovery
+- ``--prefix PREFIX``: Allowed test method prefixes; repeatable (default: ``test``, ``spec``, ``should``, ``it``). Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
+- ``--detect-prefixes``: Auto-detect test method prefixes from source files (presence-only flag).
+- ``--assert-places N``: Default decimal places for assertAlmostEqual transformations (1-15, default: 7).
+- ``--max-file-size N``: Maximum file size in MB to process (1-100, default: 10).
+
+## Logging and Output
+- ``-v, --verbose``: Verbose logging (presence-only flag).
+- ``--info``: Enable info logging output (presence-only flag).
+- ``--debug``: Enable debug logging output (presence-only flag).
+- ``--log-level LEVEL``: Set logging level (DEBUG, INFO, WARNING, ERROR) (default: INFO).
+
+## Dry-run and Preview
+- ``--dry-run``: Do not write files; return or display generated output (presence-only flag).
+  - With ``--dry-run --diff``: show unified diffs (``--diff`` is presence-only).
+  - With ``--dry-run --list``: list files only (``--list`` is presence-only).
+- ``--diff``: Show unified diffs in dry-run mode (presence-only flag).
+- ``--list``: List files only in dry-run mode (presence-only flag).
+- ``--posix``: Format displayed file paths using POSIX separators when True (presence-only flag).
+
+## Error Handling
+- ``--fail-fast``: Stop on first error (presence-only flag).
+
+## Reporting
+- ``--report``: Generate a migration report (presence-only flag).
 - ``--report-format [json|html|markdown]``: Report format (default: json).
-- ``--prefix PREFIX``: Allowed test method prefixes; repeatable (default: ``test``).
-  Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
+
+## Configuration Files
+- ``-c, --config FILE``: YAML configuration file to load settings from (overrides CLI defaults).
+
+## Advanced Options
+- ``--source-map``: Create source mapping for debugging transformations (advanced users) (presence-only flag).
+
+YAML Configuration File Format
+-------------------------------
+
+You can use a YAML configuration file to store migration settings and avoid specifying them on the command line each time. Use the ``--config`` or ``-c`` flag to specify the configuration file path.
+
+### Configuration File Structure
+
+The YAML configuration file supports all CLI options with their corresponding parameter names. Here's a comprehensive example:
+
+```yaml
+# File Discovery and Input
+target_root: /path/to/output/directory
+root_directory: /path/to/source/directory
+file_patterns:
+  - "test_*.py"
+  - "spec_*.py"
+recurse_directories: true
+
+# Output and File Handling
+backup_originals: true
+backup_root: /path/to/backup/directory
+target_suffix: "_migrated"
+target_extension: ".py"
+preserve_file_encoding: true
+
+# Formatting and Code Quality
+line_length: 120
+format_output: true
+
+# Import Handling
+remove_unused_imports: true
+preserve_import_comments: true
+
+# Transform Selection (all enabled by default)
+transform_assertions: true
+transform_setup_teardown: true
+transform_subtests: true
+transform_skip_decorators: true
+transform_imports: true
+
+# Processing and Performance
+continue_on_error: false
+max_concurrent_files: 1  # Note: Concurrent processing not currently supported
+cache_analysis_results: true
+
+# Analysis and Discovery
+test_method_prefixes:
+  - "test"
+  - "spec"
+  - "should"
+  - "it"
+assert_almost_equal_places: 7
+max_file_size_mb: 10
+
+# Logging and Output
+log_level: "INFO"
+verbose: false
+
+# Error Handling
+fail_fast: false
+
+# Reporting
+generate_report: true
+report_format: "json"
+
+# Advanced Options
+create_source_map: false
+```
+
+### Configuration File Usage
+
+Create a configuration file (e.g., `migrate-config.yaml`):
+
+```bash
+# Generate a default configuration file
+python -m splurge_unittest_to_pytest.cli init-config migrate-config.yaml
+
+# Use the configuration file
+python -m splurge_unittest_to_pytest.cli migrate --config migrate-config.yaml tests/
+
+# Override specific settings from the config file
+python -m splurge_unittest_to_pytest.cli migrate --config migrate-config.yaml --dry-run tests/
+```
+
+### Configuration Precedence
+
+Settings are applied in this order of precedence (highest to lowest):
+
+1. **CLI flags**: Command-line arguments override all other settings
+2. **YAML configuration file**: Settings from the `--config` file
+3. **Default values**: Built-in defaults for any unspecified options
+
+This allows you to:
+- Store common settings in a configuration file
+- Override specific settings for one-off runs using CLI flags
+- Share configuration files across team members or CI/CD pipelines
 
 Examples
 --------
@@ -333,6 +471,58 @@ Migrate with nested test class support:
 python -m splurge_unittest_to_pytest.cli migrate tests/ --dry-run --diff
 ```
 
+Use YAML configuration files:
+
+```bash
+# Generate a default configuration file
+python -m splurge_unittest_to_pytest.cli init-config my-config.yaml
+
+# Migrate using a configuration file
+python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml tests/
+
+# Override specific settings from config file with CLI flags
+python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml --dry-run --no-transform-assertions tests/
+```
+
+Selectively disable specific transformations:
+
+```bash
+# Keep unittest assertions unchanged but convert everything else
+python -m splurge_unittest_to_pytest.cli migrate --no-transform-assertions tests/
+
+# Convert only assertions and imports, skip setup/teardown conversion
+python -m splurge_unittest_to_pytest.cli migrate --transform-assertions --transform-imports --no-transform-setup tests/
+
+# Continue processing even if some files fail
+python -m splurge_unittest_to_pytest.cli migrate --continue-on-error tests/
+```
+
+Control output formatting and imports:
+
+```bash
+# Skip code formatting (faster but may produce inconsistent style)
+python -m splurge_unittest_to_pytest.cli migrate --no-format tests/
+
+# Keep unused unittest imports (may leave redundant imports)
+python -m splurge_unittest_to_pytest.cli migrate --no-remove-imports tests/
+
+# Preserve comments in import sections
+python -m splurge_unittest_to_pytest.cli migrate --preserve-import-comments tests/
+```
+
+Advanced analysis and discovery:
+
+```bash
+# Auto-detect test method prefixes from source files
+python -m splurge_unittest_to_pytest.cli migrate --detect-prefixes tests/
+
+# Support multiple custom test prefixes
+python -m splurge_unittest_to_pytest.cli migrate --prefix test --prefix spec --prefix should --prefix it tests/
+
+# Set precision for floating-point assertions
+python -m splurge_unittest_to_pytest.cli migrate --assert-places 10 tests/
+```
+
 Programmatic API
 -----------------
 
@@ -383,6 +573,18 @@ Safety and limitations
 	project tests after migration. The tool aims to be conservative and
 	preserve behavior, but automated transformations require manual
 	verification in complex cases.
+
+Enhanced robustness and reliability
+----------------------------------
+
+The tool includes comprehensive error handling, cross-platform path support,
+and intelligent fallback mechanisms:
+
+- **Cross-platform compatibility**: Enhanced Windows path handling with length validation (260 char limit) and invalid character detection
+- **Robust configuration validation**: Improved error messages with specific guidance for fixing configuration issues
+- **Graceful error handling**: Comprehensive fallback mechanisms prevent tool failures on edge cases
+- **Deprecated API support**: Handles legacy unittest method names (`assertAlmostEquals`, `assertNotAlmostEquals`) for maximum compatibility
+- **Intelligent transformation**: Complex transformation logic broken into focused, maintainable functions with enhanced error reporting
 
 Note on top-level __main__ guards and runtime test invocations
 ------------------------------------------------------------

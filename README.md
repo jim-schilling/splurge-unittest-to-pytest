@@ -16,6 +16,10 @@ The project exposes both a command-line interface and a programmatic API
 built around libcst-based transformations to preserve semantics while
 producing readable pytest code.
 
+**Enhanced robustness**: Comprehensive error handling, cross-platform path support,
+and intelligent fallback mechanisms ensure reliable operation across diverse
+codebases and environments.
+
 ## Quick start
 
 Install (recommended using a virtual environment):
