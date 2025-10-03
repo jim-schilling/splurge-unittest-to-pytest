@@ -1,0 +1,34 @@
+backup_originals: true
+target_suffix: ''
+line_length: 120
+assert_almost_equal_places: 7
+log_level: INFO
+max_file_size_mb: 10
+dry_run: false
+fail_fast: false
+continue_on_error: false
+max_concurrent_files: 1
+verbose: false
+generate_report: true
+report_format: json
+file_patterns:
+- test_*.py
+recurse_directories: true
+test_method_prefixes:
+- test
+- spec
+- should
+- it
+format_output: true
+remove_unused_imports: true
+preserve_import_comments: true
+transform_assertions: true
+transform_setup_teardown: true
+transform_subtests: true
+transform_skip_decorators: true
+transform_imports: true
+cache_analysis_results: true
+preserve_file_encoding: true
+create_source_map: false
+degradation_enabled: true
+degradation_tier: advanced

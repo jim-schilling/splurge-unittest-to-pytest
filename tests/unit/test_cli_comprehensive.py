@@ -550,35 +550,43 @@ max_concurrent_files: 4
         assert config_arg.remove_unused_imports is False
         assert config_arg.preserve_import_comments is False
 
-    def test_init_config_includes_all_new_options(self, tmp_path):
+    def test_init_config_includes_all_new_options(self, mocker):
         """Test that init_config generates YAML with all new configuration options."""
-        config_file = tmp_path / "comprehensive_config.yaml"
+        try:
+            import yaml
+        except ImportError:
+            pytest.skip("PyYAML not available")
 
-        # Call init_config to generate the file
-        cli.init_config(str(config_file))
+        mocker.patch("typer.echo")
 
-        # Verify the configuration file was created
-        assert config_file.exists()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "comprehensive_config.yaml"
 
-        # Read and verify the content contains expected keys
-        content = config_file.read_text()
+            cli.init_config(str(config_file))
 
-        # Check that new configuration options are included in the generated YAML
-        expected_keys = [
-            "format_output",
-            "remove_unused_imports",
-            "preserve_import_comments",
-            "transform_assertions",
-            "transform_setup_teardown",
-            "transform_subtests",
-            "transform_skip_decorators",
-            "transform_imports",
-            "continue_on_error",
-            "max_concurrent_files",
-            "cache_analysis_results",
-            "preserve_file_encoding",
-            "create_source_map",
-        ]
+            # Verify the configuration file was created
+            assert config_file.exists()
 
-        for key in expected_keys:
-            assert key in content, f"Missing configuration option: {key} in generated YAML"
+            # Read and verify the content contains expected keys
+            with open(config_file) as f:
+                content = f.read()
+
+            # Check that new configuration options are included in the generated YAML
+            expected_keys = [
+                "format_output",
+                "remove_unused_imports",
+                "preserve_import_comments",
+                "transform_assertions",
+                "transform_setup_teardown",
+                "transform_subtests",
+                "transform_skip_decorators",
+                "transform_imports",
+                "continue_on_error",
+                "max_concurrent_files",
+                "cache_analysis_results",
+                "preserve_file_encoding",
+                "create_source_map",
+            ]
+
+            for key in expected_keys:
+                assert key in content, f"Missing configuration option: {key} in generated YAML"
