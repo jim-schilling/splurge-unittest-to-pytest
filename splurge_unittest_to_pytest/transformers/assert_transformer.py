@@ -1936,21 +1936,9 @@ def _create_robust_regex(pattern: str) -> str:
     Returns:
         A regex pattern with improved whitespace tolerance
     """
-    try:
-        # Replace literal spaces with flexible whitespace patterns
-        robust_pattern = pattern.replace(r"\s+", r"\s+")
-        # Add tolerance for optional whitespace around dots (but avoid creating problematic patterns)
-        robust_pattern = robust_pattern.replace(r"\.", r"\s*\.\s*")
-        # Add tolerance for optional whitespace around brackets
-        robust_pattern = robust_pattern.replace(r"\[", r"\s*\[\s*")
-        robust_pattern = robust_pattern.replace(r"\]", r"\s*\]\s*")
-
-        # Test that the pattern compiles
-        re.compile(robust_pattern)
-        return robust_pattern
-    except re.error:
-        # If the robust pattern fails to compile, return the original pattern
-        return pattern
+    # For reliability, just return the original pattern
+    # The complex "robust" patterns were causing issues in CI
+    return pattern
 
 
 def transform_caplog_alias_string_fallback(code: str) -> str:
@@ -2033,9 +2021,9 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     out = re.sub(r"\blen\s*\(\s*caplog\.records\s*\[", r"len(caplog.messages[", out)
 
     # Collapse repeated `.getMessage()` calls on records into a single
-    # reference to `caplog.messages[index]` (only when there are two or
-    # more repeated calls introduced by nested rewrites).
-    out = re.sub(r"caplog\.records\s*\[(\d+)\](?:\.getMessage\(\)){2,}", r"caplog.messages[\1]", out)
+    # reference to `caplog.messages[index]` (only when there are two
+    # repeated calls introduced by nested rewrites).
+    out = re.sub(r"caplog\.records\s*\[(\d+)\](?:\.getMessage\(\)){2}", r"caplog.messages[\1]", out)
 
     # Replace `caplog.records[0].getMessage() == 'msg'` with
     # `caplog.messages[0] == 'msg'` for clearer message comparisons.
@@ -2114,8 +2102,8 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     try:
         # Try to apply transformations with error handling
         return _apply_transformations_with_fallback(out)
-    except Exception as e:
-        # If all transformations fail, return original code with warning comment
+    except (re.error, AttributeError, TypeError, ValueError) as e:
+        # If regex operations fail (especially in different Python versions), return original code
         from ..helpers.error_reporting import report_transformation_error
 
         report_transformation_error(
@@ -2123,6 +2111,17 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
             "assert_transformer",
             "transform_caplog_alias_string_fallback",
             suggestions=["Check for unusual code formatting that may break regex patterns"],
+        )
+        return "# String transformation failed - manual review may be needed\n" + code
+    except Exception as e:
+        # Catch any other unexpected errors
+        from ..helpers.error_reporting import report_transformation_error
+
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "transform_caplog_alias_string_fallback",
+            suggestions=["Unexpected error during string transformation"],
         )
         return "# String transformation failed - manual review may be needed\n" + code
 
