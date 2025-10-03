@@ -16,6 +16,7 @@ from .circuit_breaker import CircuitBreakerConfig
 from .context import MigrationConfig, PipelineContext
 from .detectors import UnittestFileDetector
 from .events import EventBus, LoggingSubscriber
+from .helpers.path_utils import PathValidationError, validate_source_path, validate_target_path
 from .jobs import CollectorJob, FormatterJob, OutputJob
 from .jobs.decision_analysis_job import DecisionAnalysisJob
 from .pipeline import Pipeline
@@ -69,9 +70,11 @@ class MigrationOrchestrator:
 
         self._logger.info(f"Starting migration of {source_file}")
 
-        # Validate source file exists
-        if not Path(source_file).exists():
-            return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
+        # Validate and normalize source file path
+        try:
+            validated_source = validate_source_path(source_file)
+        except PathValidationError as e:
+            return Result.failure(e)
 
         # Determine target file path. If a target_root is provided in
         # the config, use it while preserving the original filename and
@@ -82,9 +85,15 @@ class MigrationOrchestrator:
         suffix = config.target_suffix if config else ""
 
         if config and config.target_root:
-            src_path = Path(source_file)
+            # Use validated source path
+            src_path = validated_source
             dest_dir = Path(config.target_root)
-            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            # Validate and prepare target directory
+            try:
+                validated_target_dir = validate_target_path(dest_dir, create_parent=True)
+            except PathValidationError as e:
+                return Result.failure(e)
 
             # Determine extension to use (override if provided)
             ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
@@ -95,7 +104,7 @@ class MigrationOrchestrator:
                 # No suffix: preserve full stem and set extension (may be same as original)
                 new_name = f"{src_path.stem}{ext_to_use}"
 
-            target_file = str(dest_dir.joinpath(new_name))
+            target_file = str(validated_target_dir.joinpath(new_name))
         else:
             # No explicit target_directory; if a suffix is provided, apply
             # it to the filename stem. We construct a tentative target and
@@ -117,21 +126,30 @@ class MigrationOrchestrator:
         # Create the main migration pipeline
         pipeline = self._create_migration_pipeline(config)
 
-        # Read source file content for initial input
+        # Read source file content for initial input with enhanced error handling
         try:
-            with open(source_file, encoding="utf-8") as f:
+            # Use validated source path for consistency
+            source_file_path = str(validated_source)
+            with open(source_file_path, encoding="utf-8") as f:
                 source_code = f.read()
             self._logger.debug(f"Read source code: {len(source_code)} characters")
-        except FileNotFoundError:
-            return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
-        except PermissionError:
-            return Result.failure(PermissionError(f"Permission denied reading file: {source_file}"))
-        except UnicodeDecodeError as e:
-            return Result.failure(
-                UnicodeDecodeError(e.encoding, e.object, e.start, e.end, f"Cannot decode file {source_file} as UTF-8")
+        except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError) as e:
+            # Enhanced error reporting for file operations
+            from .helpers.error_reporting import report_transformation_error
+
+            suggestions = [
+                f"Check if the file exists and is readable: {source_file}",
+                "Verify file permissions",
+                "Ensure the file is not open in another program",
+            ]
+            if isinstance(e, UnicodeDecodeError):
+                suggestions.append("Check if the file is encoded as UTF-8")
+                suggestions.append("Try specifying a different encoding if needed")
+
+            report_transformation_error(
+                e, "migration_orchestrator", "read_source_file", source_file=source_file, suggestions=suggestions
             )
-        except OSError as e:
-            return Result.failure(OSError(f"OS error reading file {source_file}: {e}"))
+            return Result.failure(e)
 
         # Execute the pipeline with source code as initial input
         result = pipeline.execute(context, source_code)
@@ -177,11 +195,25 @@ class MigrationOrchestrator:
         if config is None:
             config = MigrationConfig()
 
-        source_path = Path(source_dir)
-        if not source_path.exists():
-            return Result.failure(FileNotFoundError(f"Source directory not found: {source_dir}"))
+        # Validate source directory path
+        try:
+            source_path = validate_source_path(source_dir)
+        except PathValidationError as e:
+            return Result.failure(e)
 
         if not source_path.is_dir():
+            from .helpers.path_utils import suggest_path_fixes
+
+            suggestions = suggest_path_fixes(ValueError("Path is not a directory"), source_dir)
+            from .helpers.error_reporting import report_transformation_error
+
+            report_transformation_error(
+                ValueError(f"Path is not a directory: {source_dir}"),
+                "migration_orchestrator",
+                "migrate_directory",
+                source_file=source_dir,
+                suggestions=suggestions,
+            )
             return Result.failure(ValueError(f"Path is not a directory: {source_dir}"))
 
         self._logger.info(f"Starting migration of directory {source_dir}")
