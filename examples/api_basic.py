@@ -35,9 +35,28 @@ class TestMath(unittest.TestCase):
 
     if result.is_success():
         meta = getattr(result, "metadata", {}) or {}
-        gen = meta.get("generated_code") or {}
+        gen_map = {}
+        gen = meta.get("generated_code")
         if isinstance(gen, dict):
-            for path, code in gen.items():
+            # Coerce keys to plain strings (Path objects may be present)
+            from pathlib import Path as _P
+            for k, v in gen.items():
+                try:
+                    gen_map[str(_P(k))] = v
+                except Exception:
+                    gen_map[str(k)] = v
+        elif isinstance(gen, str):
+            # Single-string fallback - map the single target path
+            # reported in result.data to the code
+            path = result.data[0] if isinstance(result.data, list) and result.data else (result.data or "")
+            try:
+                from pathlib import Path as _P
+                gen_map[str(_P(path))] = gen
+            except Exception:
+                gen_map[str(path)] = gen
+
+        if gen_map:
+            for path, code in gen_map.items():
                 print(f"=== Generated: {path} ===")
                 print(code)
         else:
