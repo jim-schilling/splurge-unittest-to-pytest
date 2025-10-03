@@ -49,6 +49,61 @@ def test_migration_config_from_dict_ignores_legacy_subtest():
     assert not hasattr(config, "subtest")
 
 
+def test_migration_config_validation_success():
+    """Test that valid configuration passes validation."""
+    config = MigrationConfig(line_length=100, target_root="/tmp", file_patterns=["test_*.py"])
+
+    # Should not raise any exception
+    config.validate()
+
+
+def test_migration_config_validation_invalid_line_length():
+    """Test that invalid line length fails validation."""
+    config = MigrationConfig(line_length=50)  # Too low
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_validation_invalid_file_patterns():
+    """Test that empty file patterns fail validation."""
+    config = MigrationConfig(file_patterns=[])  # Empty list
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_validation_invalid_file_patterns():
+    """Test that invalid file patterns fail validation."""
+    config = MigrationConfig(file_patterns=[])
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_from_dict_validates():
+    """Test that from_dict validates configurations."""
+    # Valid config should work
+    config = MigrationConfig.from_dict({"line_length": 100})
+    assert config.line_length == 100
+
+    # Invalid config should fail
+    try:
+        MigrationConfig.from_dict({"line_length": 30})  # Too low
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
 def test_pipeline_context_creation():
     """Test creating pipeline context."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:

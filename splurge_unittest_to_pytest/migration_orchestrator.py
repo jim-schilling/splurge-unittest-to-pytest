@@ -12,7 +12,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .circuit_breaker import CircuitBreakerConfig
 from .context import MigrationConfig, PipelineContext
+from .detectors import UnittestFileDetector
 from .events import EventBus, LoggingSubscriber
 from .jobs import CollectorJob, FormatterJob, OutputJob
 from .jobs.decision_analysis_job import DecisionAnalysisJob
@@ -28,15 +30,20 @@ class MigrationOrchestrator:
     internal event bus.
     """
 
-    def __init__(self, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self, event_bus: EventBus | None = None, circuit_breaker_config: CircuitBreakerConfig | None = None
+    ) -> None:
         """Initialize the migration orchestrator.
 
         Args:
             event_bus: Optional external event bus to use. If None, creates a new one.
+            circuit_breaker_config: Optional circuit breaker configuration for pipeline protection.
         """
         self.event_bus = event_bus or EventBus()
         self.logger_subscriber = LoggingSubscriber(self.event_bus)
         self._logger = logging.getLogger(__name__)
+        self._detector = UnittestFileDetector()
+        self.circuit_breaker_config = circuit_breaker_config
 
         # Create job instances
         self.collector_job = CollectorJob(self.event_bus)
@@ -115,8 +122,16 @@ class MigrationOrchestrator:
             with open(source_file, encoding="utf-8") as f:
                 source_code = f.read()
             self._logger.debug(f"Read source code: {len(source_code)} characters")
-        except Exception as e:
-            return Result.failure(e)
+        except FileNotFoundError:
+            return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
+        except PermissionError:
+            return Result.failure(PermissionError(f"Permission denied reading file: {source_file}"))
+        except UnicodeDecodeError as e:
+            return Result.failure(
+                UnicodeDecodeError(e.encoding, e.object, e.start, e.end, f"Cannot decode file {source_file} as UTF-8")
+            )
+        except OSError as e:
+            return Result.failure(OSError(f"OS error reading file {source_file}: {e}"))
 
         # Execute the pipeline with source code as initial input
         result = pipeline.execute(context, source_code)
@@ -127,22 +142,21 @@ class MigrationOrchestrator:
             # can be printed to stdout. This avoids relying on the final
             # pipeline metadata propagation which may vary across steps.
             if config.dry_run:
-                try:
-                    preview_jobs: list[Any] = [self.collector_job, self.formatter_job]
-                    preview_pipeline: Pipeline[str, str] = Pipeline("dryrun_preview", preview_jobs, self.event_bus)
-                    preview_result = preview_pipeline.execute(context, source_code)
-                    if preview_result.is_success():
-                        gen_code = preview_result.data
-                        # Return a success Result that includes the generated
-                        # code in metadata so callers (CLI) can access and
-                        # print it. Ensure we return a str for the primary data
-                        # (path) to satisfy Result[str].
-                        primary = getattr(result, "data", "")
-                        primary_str = primary if isinstance(primary, str) else str(primary)
-                        return Result.success(primary_str, metadata={"generated_code": gen_code})
-                except Exception:
-                    # Fall back to returning the original result
-                    pass
+                preview_jobs: list[Any] = [self.collector_job, self.formatter_job]
+                preview_pipeline: Pipeline[str, str] = Pipeline("dryrun_preview", preview_jobs, self.event_bus)
+                preview_result = preview_pipeline.execute(context, source_code)
+                if preview_result.is_success():
+                    gen_code = preview_result.data
+                    # Return a success Result that includes the generated
+                    # code in metadata so callers (CLI) can access and
+                    # print it. Ensure we return a str for the primary data
+                    # (path) to satisfy Result[str].
+                    primary = getattr(result, "data", "")
+                    primary_str = primary if isinstance(primary, str) else str(primary)
+                    return Result.success(primary_str, metadata={"generated_code": gen_code})
+                else:
+                    # Preview failed, return the original result with error
+                    return preview_result
         else:
             self._logger.error(f"Migration failed for {source_file}: {result.error}")
 
@@ -178,11 +192,16 @@ class MigrationOrchestrator:
             self._logger.warning(f"No Python files found in {source_dir}")
             return Result.success([])
 
-        # Filter for unittest files (basic heuristic)
+        # Filter for unittest files using AST analysis
         unittest_files = []
         for py_file in python_files:
-            if self._is_unittest_file(py_file):
-                unittest_files.append(str(py_file))
+            try:
+                if self._detector.is_unittest_file(py_file):
+                    unittest_files.append(str(py_file))
+            except (FileNotFoundError, UnicodeDecodeError, SyntaxError):
+                # Skip files that can't be analyzed (corrupt, binary, etc.)
+                self._logger.debug(f"Skipping unreadable file: {py_file}")
+                continue
 
         if not unittest_files:
             self._logger.warning(f"No unittest files found in {source_dir}")
@@ -231,32 +250,4 @@ class MigrationOrchestrator:
         # CollectorJob: str -> str (transforms using DecisionModel from context)
         jobs: list[Any] = [self.decision_analysis_job, self.collector_job, self.formatter_job, self.output_job]
 
-        return Pipeline("migration", jobs, self.event_bus)
-
-    def _is_unittest_file(self, file_path: Path) -> bool:
-        """Check heuristically whether a Python file contains unittest code.
-
-        Args:
-            file_path: Path to the Python file.
-
-        Returns:
-            ``True`` if the file likely contains ``unittest`` patterns,
-            otherwise ``False``.
-        """
-        try:
-            content = file_path.read_text(encoding="utf-8")
-
-            # Look for common unittest patterns
-            unittest_indicators = [
-                "import unittest",
-                "from unittest import",
-                "unittest.TestCase",
-                "self.assertEqual",
-                "self.assertTrue",
-                "self.assertFalse",
-            ]
-
-            return any(indicator in content for indicator in unittest_indicators)
-        except Exception:
-            # If we can't read the file, assume it's not a unittest file
-            return False
+        return Pipeline("migration", jobs, self.event_bus, self.circuit_breaker_config)

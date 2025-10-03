@@ -102,7 +102,7 @@ class ReplacementApplier(cst.CSTTransformer):
             repl = self.registry.get(pos)
             if repl is not None and isinstance(repl, cst.BaseExpression):
                 return repl  # replace the call expression
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             pass
         return updated_node
 
@@ -119,6 +119,6 @@ class ReplacementApplier(cst.CSTTransformer):
                     repl = self.registry.get(pos)
                     if repl is not None and isinstance(repl, cst.BaseStatement):
                         return repl
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             pass
         return updated_node

@@ -86,7 +86,7 @@ def rewrite_skip_decorators(decorators: list[cst.Decorator] | None) -> list[cst.
                         continue
             # Otherwise keep as-is
             new_decorators.append(d)
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             new_decorators.append(d)
 
     return new_decorators if changed else decorators

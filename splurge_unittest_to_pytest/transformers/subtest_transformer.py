@@ -116,7 +116,7 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                 # updated body (works for If, For, While, Try, with the
                 # exception of Try handlers which we handle below).
                 new_stmt = stmt.with_changes(body=new_block)  # type: ignore[arg-type]
-            except Exception:
+            except (AttributeError, TypeError, IndexError):
                 new_stmt = stmt
 
             # Special-case Try: we must also convert handler bodies,
@@ -155,7 +155,7 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                     )
                     out.append(new_try)
                     continue
-                except Exception:
+                except (AttributeError, TypeError, IndexError):
                     out.append(new_stmt)
                     continue
 

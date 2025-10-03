@@ -18,6 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .config_validation import validate_migration_config_object
 from .result import Result
 
 
@@ -129,6 +130,17 @@ class MigrationConfig:
         """
         return dataclasses.replace(self, **kwargs)
 
+    def validate(self) -> None:
+        """Validate the configuration.
+
+        Raises:
+            ValueError: If configuration is invalid.
+        """
+        try:
+            validate_migration_config_object(self)
+        except Exception as e:
+            raise ValueError(f"Invalid configuration: {e}") from e
+
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> "MigrationConfig":
         """Create config from dictionary.
@@ -138,12 +150,17 @@ class MigrationConfig:
 
         Returns:
             New ``MigrationConfig`` instance.
+
+        Raises:
+            ValueError: If configuration is invalid.
         """
         # NOTE: legacy keys for removed flags are silently ignored. This allows
         # loading older configuration files without failing when they still
         # contain retired options.
         filtered = {k: v for k, v in config_dict.items() if k in cls.__dataclass_fields__}
-        return cls(**filtered)
+        config = cls(**filtered)
+        config.validate()
+        return config
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary.

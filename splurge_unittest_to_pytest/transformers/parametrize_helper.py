@@ -24,12 +24,10 @@ from typing import cast
 
 import libcst as cst
 
+from ..exceptions import ParametrizeConversionError
+
 DOMAINS = ["transformers", "parametrize"]
 __all__ = ["convert_subtest_loop_to_parametrize"]
-
-
-class ParametrizeConversionError(Exception):
-    """Raised when a subTest loop cannot be safely converted."""
 
 
 @dataclass(frozen=True)

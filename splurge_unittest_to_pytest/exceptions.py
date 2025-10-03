@@ -230,3 +230,26 @@ class ContextError(DecisionAnalysisError):
         # Initialize parent with message and complete details
         super().__init__(message)
         self.details = details
+
+
+class TransformationValidationError(TransformationError):
+    """Raised when the final transformed code fails CST validation.
+
+    This exception is raised during the final validation phase of transformation
+    to ensure that generated code can be successfully parsed by libcst.
+    """
+
+    def __init__(self, message: str):
+        super().__init__(message, pattern_type="validation")
+
+
+class ParametrizeConversionError(TransformationError):
+    """Raised when a subTest loop cannot be safely converted to parametrize.
+
+    This exception indicates that the subTest pattern in the source code cannot
+    be automatically converted to pytest.mark.parametrize due to structural
+    or semantic complexities.
+    """
+
+    def __init__(self, message: str = "Cannot safely convert subTest loop to parametrize"):
+        super().__init__(message, pattern_type="parametrize")

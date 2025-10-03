@@ -31,6 +31,19 @@ __all__ = [
     "ResultStatus",
     "FixtureScope",
     "AssertionType",
+    # Exceptions
+    "MigrationError",
+    "ParseError",
+    "TransformationError",
+    "ValidationError",
+    "ConfigurationError",
+    "DecisionAnalysisError",
+    "AnalysisStepError",
+    "PatternDetectionError",
+    "ReconciliationError",
+    "ContextError",
+    "TransformationValidationError",
+    "ParametrizeConversionError",
 ]
 
 
@@ -71,6 +84,19 @@ def __getattr__(name: str):
         "Assertion": "splurge_unittest_to_pytest.ir",
         "Fixture": "splurge_unittest_to_pytest.ir",
         "Expression": "splurge_unittest_to_pytest.ir",
+        # Exceptions
+        "MigrationError": "splurge_unittest_to_pytest.exceptions",
+        "ParseError": "splurge_unittest_to_pytest.exceptions",
+        "TransformationError": "splurge_unittest_to_pytest.exceptions",
+        "ValidationError": "splurge_unittest_to_pytest.exceptions",
+        "ConfigurationError": "splurge_unittest_to_pytest.exceptions",
+        "DecisionAnalysisError": "splurge_unittest_to_pytest.exceptions",
+        "AnalysisStepError": "splurge_unittest_to_pytest.exceptions",
+        "PatternDetectionError": "splurge_unittest_to_pytest.exceptions",
+        "ReconciliationError": "splurge_unittest_to_pytest.exceptions",
+        "ContextError": "splurge_unittest_to_pytest.exceptions",
+        "TransformationValidationError": "splurge_unittest_to_pytest.exceptions",
+        "ParametrizeConversionError": "splurge_unittest_to_pytest.exceptions",
     }
 
     if name not in mapping:
