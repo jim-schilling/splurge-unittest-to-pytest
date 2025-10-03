@@ -11,9 +11,13 @@
  - Added additional unit tests for path utilities:
     - `tests/unit/test_path_utils_basic.py` (basic validation and ensure_parent_dir)
     - `tests/unit/test_path_utils_edgecases.py` (empty path, invalid chars, Windows long-path, permission error simulation)
+- Added parametrize decorator helper factory and tests:
+	- `splurge_unittest_to_pytest.transformers.parametrize_helper._make_parametrize_call` for centralized decorator construction
+	- `tests/unit/test_parametrize_decorator_helper.py` (basic decorator creation and ids kwarg handling)
 
 ### Changed
 - `splurge_unittest_to_pytest.transformers.assert_transformer` now delegates caplog-related behavior to `_caplog_helpers` and re-exports thin compatibility shims to preserve public APIs.
+- `splurge_unittest_to_pytest.transformers.parametrize_helper` now delegates parametrize decorator construction to a centralized `_make_parametrize_call` helper to improve testability and consistency.
 
 ### Notes
 - Full test-suite run: 945 passed locally. Recommend enabling a CI job that runs the suite once with `SPLURGE_TRANSFORM_DEBUG=1` for PR verification.
