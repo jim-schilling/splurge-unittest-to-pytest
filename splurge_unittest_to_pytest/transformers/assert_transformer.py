@@ -49,6 +49,27 @@ from ._caplog_helpers import (
 __all__ = ["AliasOutputAccess"]
 
 
+# Backwards-compatible re-exports: during the staged refactor we provide
+# thin wrappers that delegate to the new modules. This keeps the public
+# API stable while allowing reviewers to see the code moves incrementally.
+try:  # pragma: no cover - import-time shim
+    from . import assert_ast_rewrites as _ast_rewrites
+    from . import assert_fallbacks as _fallbacks
+    from . import assert_with_rewrites as _with_rewrites
+
+    # Expose the most commonly used helpers via the original module
+    # name so callers don't need to update imports immediately.
+    parenthesized_expression = _ast_rewrites.parenthesized_expression
+    ParenthesizedExpression = _ast_rewrites.ParenthesizedExpression
+    _extract_alias_output_slices = _with_rewrites._extract_alias_output_slices
+    _build_caplog_records_expr = _with_rewrites._build_caplog_records_expr
+    parenthesized_expression_shim = _fallbacks.parenthesized_expression_shim
+except Exception:
+    # If imports fail for some reason keep original definitions; this
+    # branch will rarely run in normal test runs but is safe to keep.
+    pass
+
+
 # Backwards-compatible underscored API used by tests and other modules
 def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
     return extract_alias_output_slices(expr)

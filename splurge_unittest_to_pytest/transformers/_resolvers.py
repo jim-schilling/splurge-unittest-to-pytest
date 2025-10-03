@@ -3,6 +3,7 @@
 These helpers are pure functions operating on sequences of libcst statements
 and are safe to unit test in isolation.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

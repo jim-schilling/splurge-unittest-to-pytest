@@ -61,4 +61,6 @@ def build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
 
 def build_get_message_call(access: AliasOutputAccess) -> cst.Call:
     """Construct `caplog.records[...].getMessage()` call for the provided access."""
-    return cst.Call(func=cst.Attribute(value=build_caplog_records_expr(access), attr=cst.Name(value="getMessage")), args=[])
+    return cst.Call(
+        func=cst.Attribute(value=build_caplog_records_expr(access), attr=cst.Name(value="getMessage")), args=[]
+    )

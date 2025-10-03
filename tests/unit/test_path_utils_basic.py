@@ -2,6 +2,7 @@
 
 Covers validate_target_path (pure) and ensure_parent_dir (side-effect).
 """
+
 from __future__ import annotations
 
 import os

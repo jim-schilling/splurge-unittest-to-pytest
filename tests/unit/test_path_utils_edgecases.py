@@ -48,11 +48,9 @@ def test_ensure_parent_dir_permission_error(monkeypatch, tmp_path):
 
     original_mkdir = Path.mkdir
 
-
     def fake_mkdir(self, parents=False, exist_ok=False):
-        called['raised'] = True
+        called["raised"] = True
         raise PermissionError("simulated")
-
 
     monkeypatch.setattr(Path, "mkdir", fake_mkdir)
 

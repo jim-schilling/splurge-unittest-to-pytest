@@ -11,9 +11,27 @@ def _make_simple_subtest_func():
     #     for i in [1,2]:
     #         with self.subTest(i=i):
     #             pass
-    inner_with = cst.With(items=[cst.WithItem(cst.Call(func=cst.Attribute(value=cst.Name(value='self'), attr=cst.Name(value='subTest')), args=[cst.Arg(keyword=cst.Name('i'), value=cst.Name('i'))]))], body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])]))
-    for_node = cst.For(target=cst.Name('i'), iter=cst.List([cst.Element(cst.Integer('1')), cst.Element(cst.Integer('2'))]), body=cst.IndentedBlock(body=[inner_with]))
-    func = cst.FunctionDef(name=cst.Name('test_one'), params=cst.Parameters(params=[cst.Param(name=cst.Name('self'))]), body=cst.IndentedBlock(body=[for_node]))
+    inner_with = cst.With(
+        items=[
+            cst.WithItem(
+                cst.Call(
+                    func=cst.Attribute(value=cst.Name(value="self"), attr=cst.Name(value="subTest")),
+                    args=[cst.Arg(keyword=cst.Name("i"), value=cst.Name("i"))],
+                )
+            )
+        ],
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])]),
+    )
+    for_node = cst.For(
+        target=cst.Name("i"),
+        iter=cst.List([cst.Element(cst.Integer("1")), cst.Element(cst.Integer("2"))]),
+        body=cst.IndentedBlock(body=[inner_with]),
+    )
+    func = cst.FunctionDef(
+        name=cst.Name("test_one"),
+        params=cst.Parameters(params=[cst.Param(name=cst.Name("self"))]),
+        body=cst.IndentedBlock(body=[for_node]),
+    )
     return func
 
 

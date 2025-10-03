@@ -109,6 +109,7 @@ def _resolve_mapping_argument(
     converted = tuple(_RemovalCandidate(index=c.index, name=c.name) for c in candidates)
     return pairs, converted
 
+
 DOMAINS = ["transformers", "parametrize"]
 __all__ = ["convert_subtest_loop_to_parametrize"]
 
@@ -135,6 +136,7 @@ class ParametrizeOptions:
     This dataclass allows callers to opt into explicit, testable options
     rather than relying on attributes on the transformer object.
     """
+
     parametrize_include_ids: bool = True
     parametrize_add_annotations: bool = True
 
@@ -402,6 +404,7 @@ def _extract_call_iter_rows(
 
     return None
 
+
 # `_extract_literal_elements` is delegated to `transformers._resolvers` via the
 # small wrapper defined near the top of this module. The original inline
 # implementation has been removed to avoid duplication.
@@ -503,7 +506,10 @@ def _make_parametrize_call(
         ids_arg = cst.Arg(keyword=cst.Name(value="ids"), value=cst.List(elements=tuple(id_elements)))
         args.append(ids_arg)
 
-    func = cst.Attribute(value=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark")), attr=cst.Name(value="parametrize"))
+    func = cst.Attribute(
+        value=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark")),
+        attr=cst.Name(value="parametrize"),
+    )
     call = cst.Call(func=func, args=tuple(args))
     return cst.Decorator(decorator=call)
 
