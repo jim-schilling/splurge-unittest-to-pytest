@@ -30,7 +30,9 @@ from .events import (
 from .pipeline import PipelineFactory
 
 # Initialize typer app
-app = typer.Typer(name="splurge-unittest-to-pytest", help="Migrate unittest test suites to pytest format", add_completion=False)
+app = typer.Typer(
+    name="splurge-unittest-to-pytest", help="Migrate unittest test suites to pytest format", add_completion=False
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
