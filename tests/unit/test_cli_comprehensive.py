@@ -550,30 +550,20 @@ max_concurrent_files: 4
         assert config_arg.remove_unused_imports is False
         assert config_arg.preserve_import_comments is False
 
-    def test_init_config_includes_all_new_options(self, tmp_path, mocker):
+    def test_init_config_includes_all_new_options(self, tmp_path):
         """Test that init_config generates YAML with all new configuration options."""
         config_file = tmp_path / "comprehensive_config.yaml"
 
-        # Create a mock yaml module
-        mock_yaml_module = mocker.MagicMock()
-        mock_yaml_module.dump = mocker.MagicMock()
-        mocker.patch.dict("sys.modules", {"yaml": mock_yaml_module})
+        # Call init_config to generate the file
+        cli.init_config(str(config_file))
 
-        # Patch the import in the cli module
-        with mocker.patch(
-            "builtins.__import__",
-            side_effect=lambda name, *args: mock_yaml_module if name == "yaml" else __import__(name, *args),
-        ):
-            cli.init_config(str(config_file))
+        # Verify the configuration file was created
+        assert config_file.exists()
 
-        # Verify yaml.dump was called
-        mock_yaml_module.dump.assert_called_once()
+        # Read and verify the content contains expected keys
+        content = config_file.read_text()
 
-        # Get the configuration data that would be written
-        call_args = mock_yaml_module.dump.call_args
-        config_dict = call_args[0][0]  # First argument to dump
-
-        # Check that new configuration options are included
+        # Check that new configuration options are included in the generated YAML
         expected_keys = [
             "format_output",
             "remove_unused_imports",
@@ -591,7 +581,4 @@ max_concurrent_files: 4
         ]
 
         for key in expected_keys:
-            assert key in config_dict, f"Missing configuration option: {key}"
-
-        # Verify the configuration file was created
-        assert config_file.exists()
+            assert key in content, f"Missing configuration option: {key} in generated YAML"
