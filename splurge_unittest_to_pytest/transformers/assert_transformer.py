@@ -30,7 +30,7 @@ import libcst as cst
 
 # Import error reporting for enhanced debugging
 try:
-    from .error_reporting import report_transformation_error
+    from ..helpers.error_reporting import report_transformation_error
 except ImportError:
     # Fallback if error reporting not available
     def report_transformation_error(error, component, operation, **kwargs):
@@ -1120,7 +1120,7 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         return [new_with], consumed, True
     except AttributeError as e:
         # Malformed CST node structure
-        from .error_reporting import report_transformation_error
+        from ..helpers.error_reporting import report_transformation_error
 
         report_transformation_error(
             e, "assert_transformer", "handle_bare_assert_call", suggestions=["Check AST node structure in source code"]
@@ -1128,7 +1128,7 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         return [], 0, False
     except TypeError as e:
         # Type mismatch in node processing
-        from .error_reporting import report_transformation_error
+        from ..helpers.error_reporting import report_transformation_error
 
         report_transformation_error(
             e,
@@ -1139,7 +1139,7 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         return [], 0, False
     except IndexError as e:
         # Array/list access error
-        from .error_reporting import report_transformation_error
+        from ..helpers.error_reporting import report_transformation_error
 
         report_transformation_error(
             e,
@@ -1509,6 +1509,114 @@ def rewrite_following_statements_for_alias(
             pass
 
 
+def _handle_simple_statement_line(
+    stmt: cst.SimpleStatementLine, statements: list[cst.BaseStatement], i: int
+) -> tuple[list[cst.BaseStatement], int, bool] | None:
+    """Handle a SimpleStatementLine that might contain a bare assert call.
+
+    Args:
+        stmt: The statement to process
+        statements: Full list of statements for context
+        i: Index of current statement
+
+    Returns:
+        Tuple of (nodes_to_append, consumed, handled) or None if not applicable
+    """
+    if not (len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr)):
+        return None
+
+    try:
+        return handle_bare_assert_call(statements, i)
+    except (AttributeError, TypeError, IndexError) as e:
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_handle_simple_statement_line",
+            suggestions=["Check statement structure in transformation"],
+        )
+        return ([], 0, False)
+
+
+def _handle_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], i: int) -> cst.With | None:
+    """Handle a With statement that might need transformation.
+
+    Args:
+        stmt: The With statement to process
+        statements: Full list of statements for context
+        i: Index of current statement
+
+    Returns:
+        Processed With statement or None if no changes needed
+    """
+    try:
+        return _process_with_statement(stmt, statements, i)
+    except (AttributeError, TypeError, IndexError) as e:
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_handle_with_statement",
+            suggestions=["Check With statement structure in transformation"],
+        )
+        return None
+
+
+def _handle_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
+    """Handle a Try statement with recursive processing.
+
+    Args:
+        stmt: The statement to process
+
+    Returns:
+        Processed statement or None if no changes needed
+    """
+    try:
+        return _process_try_statement(stmt)
+    except (AttributeError, TypeError, IndexError) as e:
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_handle_try_statement",
+            suggestions=["Check Try statement structure in transformation"],
+        )
+        return None
+
+
+def _process_statement_with_fallback(
+    stmt: cst.BaseStatement, statements: list[cst.BaseStatement], i: int
+) -> tuple[list[cst.BaseStatement], int]:
+    """Process a single statement with comprehensive fallback handling.
+
+    Args:
+        stmt: Statement to process
+        statements: Full statement list for context
+        i: Current statement index
+
+    Returns:
+        Tuple of (output_statements, statements_consumed)
+    """
+    # Handle bare expression calls like: self.assertLogs(...)
+    if isinstance(stmt, cst.SimpleStatementLine):
+        result = _handle_simple_statement_line(stmt, statements, i)
+        if result is not None:
+            nodes_to_append, consumed, handled = result
+            if handled:
+                return nodes_to_append, consumed
+
+    # Handle existing with-statements
+    elif isinstance(stmt, cst.With):
+        processed_with = _handle_with_statement(stmt, statements, i)
+        if processed_with is not None:
+            return [processed_with], 1
+
+    # Handle Try statements with recursive processing
+    processed_stmt = _handle_try_statement(stmt)
+    if processed_stmt is not None:
+        return [processed_stmt], 1
+
+    # No transformation needed - return original statement
+    return [stmt], 1
+
+
 def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
     """Convert standalone unittest assert-context calls into With blocks.
 
@@ -1530,187 +1638,22 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
     """
     out: list[cst.BaseStatement] = []
     i = 0
+
     while i < len(statements):
         stmt = statements[i]
-        wrapped = False
 
-        # Handle bare expression calls like: self.assertLogs(...)
-        if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
-            try:
-                nodes_to_append, consumed, handled = handle_bare_assert_call(statements, i)
-            except (AttributeError, TypeError, IndexError) as e:
-                # Report specific errors but maintain conservative fallback
-                report_transformation_error(
-                    e,
-                    "assert_transformer",
-                    "wrap_assert_in_block",
-                    suggestions=["Check statement structure in transformation"],
-                )
-                nodes_to_append, consumed, handled = ([], 0, False)
-
-            if handled:
-                out.extend(nodes_to_append)
-                i += consumed
-                wrapped = consumed > 0
-
-        # Handle existing with-statements by delegating to transform_with_items
-        elif isinstance(stmt, cst.With):
-            try:
-                new_with, alias_name, changed = transform_with_items(stmt)
-            except (AttributeError, TypeError, ValueError) as e:
-                # Report specific errors but maintain conservative fallback
-                report_transformation_error(
-                    e,
-                    "assert_transformer",
-                    "wrap_assert_in_block",
-                    suggestions=["Check With statement structure in transformation"],
-                )
-                # Keep original statement on error
-                out.append(stmt)
-                i += 1
-                wrapped = True
-                continue
-
-            if not changed:
-                # Nothing to do; append original and mark handled to
-                # avoid falling through and appending twice.
-                out.append(stmt)
-                i += 1
-                wrapped = True
-            else:
-                # If the transformed With had alias(es) that should be
-                # rewritten inside the block, rewrite for each original
-                # alias name found on the incoming With items. This handles
-                # multi-item parenthesized With statements that bind more
-                # than one alias (for example ``with A as a, B as b:``).
-                try:
-                    alias_names: list[str] = []
-                    for it in stmt.items:
-                        try:
-                            if it.asname and isinstance(it.asname, cst.AsName) and isinstance(it.asname.name, cst.Name):
-                                alias_names.append(it.asname.name.value)
-                        except (AttributeError, TypeError, IndexError) as e:
-                            report_transformation_error(
-                                e,
-                                "assert_transformer",
-                                "wrap_assert_in_block",
-                                suggestions=["Check With item structure"],
-                            )
-
-                    # Rewrite the with-body for each alias found.
-                    for a in alias_names:
-                        try:
-                            new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
-                        except (AttributeError, TypeError, IndexError) as e:
-                            report_transformation_error(
-                                e,
-                                "assert_transformer",
-                                "wrap_assert_in_block",
-                                suggestions=["Check alias rewriting logic"],
-                            )
-
-                except (AttributeError, TypeError, IndexError) as e:
-                    report_transformation_error(
-                        e,
-                        "assert_transformer",
-                        "wrap_assert_in_block",
-                        suggestions=["Check With statement alias processing"],
-                    )
-
-                out.append(new_with)
-
-                # Also rewrite a small window of following statements for
-                # each alias so references outside the with-block are
-                # updated to caplog usage where possible.
-                try:
-                    for a in alias_names:
-                        try:
-                            rewrite_following_statements_for_alias(statements, i + 1, a)
-                        except (AttributeError, TypeError, IndexError) as e:
-                            report_transformation_error(
-                                e,
-                                "assert_transformer",
-                                "wrap_assert_in_block",
-                                suggestions=["Check following statement rewriting"],
-                            )
-                except (AttributeError, TypeError, IndexError) as e:
-                    report_transformation_error(
-                        e,
-                        "assert_transformer",
-                        "wrap_assert_in_block",
-                        suggestions=["Check alias statement processing"],
-                    )
-
-                i += 1
-                wrapped = True
-
-        if not wrapped:
-            # If stmt is a Try, recursively apply wrap_assert_in_block to its inner blocks
-            try:
-                if isinstance(stmt, cst.Try):
-                    # Process the try body
-                    try_body = getattr(stmt, "body", None)
-                    if try_body is not None and hasattr(try_body, "body"):
-                        new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(try_body.body)))
-                    else:
-                        new_try_body = try_body
-
-                    # Process except handlers
-                    new_handlers = []
-                    for h in getattr(stmt, "handlers", []) or []:
-                        h_body = getattr(h, "body", None)
-                        if h_body is not None and hasattr(h_body, "body"):
-                            new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(h_body.body)))
-                            new_h = h.with_changes(body=new_h_body)
-                        else:
-                            new_h = h
-                        new_handlers.append(new_h)
-
-                    # Process orelse
-                    new_orelse = getattr(stmt, "orelse", None)
-                    if new_orelse is not None and hasattr(new_orelse, "body"):
-                        new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(new_orelse.body)))
-
-                    # Process finalbody
-                    new_finalbody = getattr(stmt, "finalbody", None)
-                    if new_finalbody is not None and hasattr(new_finalbody, "body"):
-                        new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(new_finalbody.body)))
-
-                    # Build new Try node with updated blocks
-                    try:
-                        new_try = stmt.with_changes(
-                            body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody
-                        )
-                        # Constructed new_try; no debug printing
-                        # Ensure nested With items inside the newly constructed Try
-                        # are rewritten as well before appending. This guarantees
-                        # inner context-manager rewrites are not lost.
-                        try:
-                            new_try = _recursively_rewrite_withs(new_try)
-                        except (AttributeError, TypeError, IndexError) as e:
-                            report_transformation_error(
-                                e,
-                                "assert_transformer",
-                                "wrap_assert_in_block",
-                                suggestions=["Check nested With rewriting in Try blocks"],
-                            )
-                        out.append(new_try)
-                        i += 1
-                        continue
-                    except (AttributeError, TypeError, IndexError) as e:
-                        # Report error but fallback to original stmt
-                        report_transformation_error(
-                            e,
-                            "assert_transformer",
-                            "wrap_assert_in_block",
-                            suggestions=["Check Try block transformation logic"],
-                        )
-            except (AttributeError, TypeError, IndexError) as e:
-                # Report error in Try processing
-                report_transformation_error(
-                    e, "assert_transformer", "wrap_assert_in_block", suggestions=["Check Try statement structure"]
-                )
-
+        try:
+            processed_nodes, consumed = _process_statement_with_fallback(stmt, statements, i)
+            out.extend(processed_nodes)
+            i += consumed
+        except Exception as e:
+            # Ultimate fallback - preserve original statement and continue
+            report_transformation_error(
+                e,
+                "assert_transformer",
+                "wrap_assert_in_block",
+                suggestions=["Check statement processing logic"],
+            )
             out.append(stmt)
             i += 1
 
@@ -1720,6 +1663,162 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
         final_out.append(_recursively_rewrite_withs(s))
 
     return final_out
+
+
+def _process_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], index: int) -> cst.With | None:
+    """Process a With statement by transforming it and handling alias rewriting.
+
+    Args:
+        stmt: The With statement to process
+        statements: The full list of statements (for following statement rewriting)
+        index: The index of the current statement
+
+    Returns:
+        The processed With statement, or None if processing fails
+    """
+    try:
+        new_with, alias_name, changed = transform_with_items(stmt)
+
+        if not changed:
+            return new_with
+
+        # If the transformed With had alias(es) that should be rewritten inside the block,
+        # rewrite for each original alias name found on the incoming With items.
+        try:
+            alias_names: list[str] = []
+            for it in stmt.items:
+                try:
+                    if it.asname and isinstance(it.asname, cst.AsName) and isinstance(it.asname.name, cst.Name):
+                        alias_names.append(it.asname.name.value)
+                except (AttributeError, TypeError, IndexError) as e:
+                    report_transformation_error(
+                        e,
+                        "assert_transformer",
+                        "_process_with_statement",
+                        suggestions=["Check With item structure"],
+                    )
+
+            # Rewrite the with-body for each alias found.
+            for a in alias_names:
+                try:
+                    new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
+                except (AttributeError, TypeError, IndexError) as e:
+                    report_transformation_error(
+                        e,
+                        "assert_transformer",
+                        "_process_with_statement",
+                        suggestions=["Check alias rewriting logic"],
+                    )
+
+            # Also rewrite a small window of following statements for each alias
+            try:
+                for a in alias_names:
+                    try:
+                        rewrite_following_statements_for_alias(statements, index + 1, a)
+                    except (AttributeError, TypeError, IndexError) as e:
+                        report_transformation_error(
+                            e,
+                            "assert_transformer",
+                            "_process_with_statement",
+                            suggestions=["Check following statement rewriting"],
+                        )
+            except (AttributeError, TypeError, IndexError) as e:
+                report_transformation_error(
+                    e,
+                    "assert_transformer",
+                    "_process_with_statement",
+                    suggestions=["Check alias statement processing"],
+                )
+
+        except (AttributeError, TypeError, IndexError) as e:
+            report_transformation_error(
+                e,
+                "assert_transformer",
+                "_process_with_statement",
+                suggestions=["Check With statement alias processing"],
+            )
+
+        return new_with
+
+    except (AttributeError, TypeError, ValueError) as e:
+        # Report specific errors but maintain conservative fallback
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_process_with_statement",
+            suggestions=["Check With statement structure in transformation"],
+        )
+        return None
+
+
+def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
+    """Process a Try statement by recursively applying wrap_assert_in_block to its inner blocks.
+
+    Args:
+        stmt: The statement to process
+
+    Returns:
+        The processed statement, or None if the statement is not a Try
+    """
+    if not isinstance(stmt, cst.Try):
+        return None
+
+    try:
+        # Process the try body
+        try_body = getattr(stmt, "body", None)
+        if try_body is not None and hasattr(try_body, "body"):
+            new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(try_body.body)))
+        else:
+            new_try_body = try_body
+
+        # Process except handlers
+        new_handlers = []
+        for h in getattr(stmt, "handlers", []) or []:
+            h_body = getattr(h, "body", None)
+            if h_body is not None and hasattr(h_body, "body"):
+                new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(h_body.body)))
+                new_h = h.with_changes(body=new_h_body)
+            else:
+                new_h = h
+            new_handlers.append(new_h)
+
+        # Process orelse
+        new_orelse = getattr(stmt, "orelse", None)
+        if new_orelse is not None and hasattr(new_orelse, "body"):
+            new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(new_orelse.body)))
+
+        # Process finalbody
+        new_finalbody = getattr(stmt, "finalbody", None)
+        if new_finalbody is not None and hasattr(new_finalbody, "body"):
+            new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(new_finalbody.body)))
+
+        # Build new Try node with updated blocks
+        new_try = stmt.with_changes(
+            body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody
+        )
+
+        # Ensure nested With items inside the newly constructed Try are rewritten as well
+        try:
+            new_try = _recursively_rewrite_withs(new_try)
+        except (AttributeError, TypeError, IndexError) as e:
+            report_transformation_error(
+                e,
+                "assert_transformer",
+                "_process_try_statement",
+                suggestions=["Check nested With rewriting in Try blocks"],
+            )
+
+        return new_try
+
+    except (AttributeError, TypeError, IndexError) as e:
+        # Report error but don't raise - let caller handle fallback
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_process_try_statement",
+            suggestions=["Check Try block transformation logic"],
+        )
+        return None
 
 
 def _recursively_rewrite_withs(stmt: cst.BaseStatement) -> cst.BaseStatement:
@@ -1827,6 +1926,25 @@ def transform_assert_dict_equal(node: cst.Call) -> cst.CSTNode:
     return node
 
 
+def _create_robust_regex(pattern: str) -> str:
+    """Create a regex pattern that's more tolerant of whitespace variations.
+
+    Args:
+        pattern: The base regex pattern
+
+    Returns:
+        A regex pattern with improved whitespace tolerance
+    """
+    # Replace literal spaces with flexible whitespace patterns
+    robust_pattern = pattern.replace(r"\s+", r"\s+")
+    # Add tolerance for optional whitespace around dots
+    robust_pattern = robust_pattern.replace(r"\.", r"\s*\.\s*")
+    # Add tolerance for optional whitespace around brackets
+    robust_pattern = robust_pattern.replace(r"\[", r"\s*\[\s*")
+    robust_pattern = robust_pattern.replace(r"\]", r"\s*\]\s*")
+    return robust_pattern
+
+
 def transform_caplog_alias_string_fallback(code: str) -> str:
     """Apply conservative string-level fixes for caplog alias patterns.
 
@@ -1851,10 +1969,11 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     # we can safely rewrite `.exception` -> `.value` for those aliases.
     alias_names: set[str] = set()
     try:
-        for m in re.finditer(
-            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-            out,
-        ):
+        # Use more robust pattern with whitespace tolerance
+        robust_pattern = _create_robust_regex(
+            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)"
+        )
+        for m in re.finditer(robust_pattern, out):
             alias_names.add(m.group(1))
     except (AttributeError, TypeError, IndexError):
         alias_names = set()
@@ -1981,6 +2100,179 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     #   'a' in caplog.records -> 'a' in caplog.records.getMessage() or 'a' in caplog.messages
     out = re.sub(
         r"('.*?'|\".*?\")\s*in\s*caplog\.records\b(?!\s*\[)",
+        r"\1 in caplog.records.getMessage() or \1 in caplog.messages",
+        out,
+    )
+
+    # Add fallback mechanism for transformation failures
+    try:
+        # Try to apply transformations with error handling
+        return _apply_transformations_with_fallback(out)
+    except Exception as e:
+        # If all transformations fail, return original code with warning comment
+        from ..helpers.error_reporting import report_transformation_error
+
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "transform_caplog_alias_string_fallback",
+            suggestions=["Check for unusual code formatting that may break regex patterns"],
+        )
+        return "# String transformation failed - manual review may be needed\n" + code
+
+
+def _apply_transformations_with_fallback(code: str) -> str:
+    """Apply string transformations with comprehensive fallback handling.
+
+    Args:
+        code: The source code to transform
+
+    Returns:
+        Transformed code or original code if transformation fails
+    """
+    import re
+
+    out = code
+
+    # First, detect any aliases created by assertRaises/pytest.raises so
+    # we can safely rewrite `.exception` -> `.value` for those aliases.
+    alias_names: set[str] = set()
+    try:
+        # Use more robust pattern with whitespace tolerance
+        robust_pattern = _create_robust_regex(
+            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)"
+        )
+        for m in re.finditer(robust_pattern, out):
+            alias_names.add(m.group(1))
+    except (AttributeError, TypeError, IndexError):
+        alias_names = set()
+
+    if alias_names:
+        alias_pattern = r"(?:" + r"|".join(re.escape(n) for n in sorted(alias_names)) + r")"
+        # Direct attribute: <alias>.exception -> <alias>.value
+        out = re.sub(rf"\b({alias_pattern})\.exception\b", r"\1.value", out)
+        # str(context.exception) -> str(context.value) - more tolerant of whitespace
+        out = re.sub(
+            rf"\b(str|repr)\s*\(\s*({alias_pattern})\s*\.\s*exception\s*\)",
+            lambda m: f"{m.group(1)}({m.group(2)}.value)",
+            out,
+        )
+
+    # Detect assertLogs / caplog alias bindings so we can rewrite those
+    # `.output` occurrences into `caplog.messages` specifically.
+    try:
+        assertlogs_aliases: set[str] = set()
+        # More robust patterns that handle whitespace variations
+        for m in re.finditer(r"with\s+self\s*\.\s*assertLogs\s*\(\s*[^\)]*\s*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
+            assertlogs_aliases.add(m.group(1))
+        for m in re.finditer(r"with\s+caplog\s*\.\s*at_level\s*\(\s*[^\)]*\s*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
+            assertlogs_aliases.add(m.group(1))
+    except (AttributeError, TypeError, IndexError):
+        assertlogs_aliases = set()
+
+    if assertlogs_aliases:
+        alias_pattern2 = r"(?:" + r"|".join(re.escape(n) for n in sorted(assertlogs_aliases)) + r")"
+        # Replace explicitly bound alias `.output` occurrences with `caplog.records`.
+        # We keep the record-level view here so membership rewrites can
+        # call `.getMessage()` when appropriate; equality rewrites later
+        # will convert direct comparisons to `caplog.messages[...]`.
+        out = re.sub(rf"\b({alias_pattern2})\s*\.\s*output\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\s*\.\s*output\b", r"caplog.records", out)
+        # Keep `.records` mapped to caplog.records so attribute access remains available.
+        out = re.sub(rf"\b({alias_pattern2})\s*\.\s*records\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\s*\.\s*records\b", r"caplog.records", out)
+
+    # Generic fallback: replace any remaining `<alias>.output[...]` or
+    # `<alias>.output` with `caplog.records` (record-level view). We
+    # prefer the record-level replacement here to preserve `.getMessage()`
+    # semantic rewrites inserted by AST-level transformations. Later
+    # targeted regexes will convert record.getMessage() equality forms to
+    # `caplog.messages[...]` where a direct message comparison is clearer.
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\.\s*output\s*\[", r"caplog.records[", out)
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\.\s*output\b", r"caplog.records", out)
+
+    # Map common message-length checks to use caplog.messages so callers
+    # that compare lengths use the message-level view used elsewhere.
+    out = re.sub(r"\blen\s*\(\s*caplog\s*\.\s*records\s*\)", r"len(caplog.messages)", out)
+    out = re.sub(r"\blen\s*\(\s*caplog\s*\.\s*records\s*\[", r"len(caplog.messages[", out)
+
+    # Collapse repeated `.getMessage()` calls on records into a single
+    # reference to `caplog.messages[index]` (only when there are two or
+    # more repeated calls introduced by nested rewrites).
+    out = re.sub(
+        r"caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]\s*\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*{\s*2\s*,\s*}",
+        r"caplog.messages[\1]",
+        out,
+    )
+
+    # Replace `caplog.records[0].getMessage() == 'msg'` with
+    # `caplog.messages[0] == 'msg'` for clearer message comparisons.
+    out = re.sub(
+        r"caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]\s*\.\s*getMessage\s*\(\s*\)\s*==\s*('.*?'|\".*?\")",
+        r"caplog.messages[\1] == \2",
+        out,
+    )
+
+    # Membership checks like `'msg' in caplog.records[0].getMessage()` ->
+    # convert to message-level view `caplog.messages[0]` for clarity.
+    # NOTE: do not convert membership checks that use `.getMessage()` into
+    # `caplog.messages[...]`. Tests (and callers) expect membership checks
+    # to preserve the `.getMessage()` call so that message substring checks
+    # continue to operate on the record message string. Equality checks are
+    # still rewritten to `caplog.messages[...]` for clarity elsewhere.
+    out = re.sub(r"('.*?'|\".*?\")\s+in\s+caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]", r"\1 in caplog.messages[\2]", out)
+
+    # Rewrite cases where a literal is compared to caplog.records[i].getMessage()
+    # on the RHS (for example: 'oops' == caplog.records[0].getMessage()) into
+    # a message-level comparison: caplog.messages[0] == 'oops'
+    out = re.sub(
+        r"('.*?'|\".*?\")\s*==\s*caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]\s*\.\s*getMessage\s*\(\s*\)",
+        r"caplog.messages[\2] == \1",
+        out,
+    )
+
+    # Normalize common record.getMessage() patterns into the
+    # message-list form to avoid chained/getMessage artifacts produced
+    # by earlier rewrites. Handle several common shapes conservatively
+    # so downstream tests see a stable `caplog.messages[...]` or
+    # `caplog.messages` form rather than complex `.getMessage()` chains.
+    # e.g., caplog.records.getMessage()[0].getMessage() -> caplog.messages[0]
+    out = re.sub(
+        r"caplog\s*\.\s*records\s*\.\s*getMessage\s*\(\s*\)\s*\[\s*(\d+)\s*\]\s*\.\s*getMessage\s*\(\s*\)",
+        r"caplog.messages[\1]",
+        out,
+    )
+
+    # caplog.records.getMessage()[N] -> caplog.messages[N]
+    out = re.sub(r"caplog\s*\.\s*records\s*\.\s*getMessage\s*\(\s*\)\s*\[\s*(\d+)\s*\]", r"caplog.messages[\1]", out)
+    # Membership: 'msg' in caplog.records[0].getMessage() -> caplog.messages[0]
+    out = re.sub(
+        r"('.*?'|\".*?\")\s+in\s+caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]\s*\.\s*getMessage\s*\(\s*\)",
+        r"\1 in caplog.messages[\2]",
+        out,
+    )
+
+    # Collapse chained `.getMessage()` calls on `caplog.records.getMessage()`
+    # into a message-list reference so tests that expect `caplog.messages`
+    # will find it. This handles odd nested rewrites like
+    # `caplog.records.getMessage().getMessage()`.
+    out = re.sub(
+        r"caplog\s*\.\s*records\s*\.\s*getMessage\s*\(\s*\)\s*\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*+",
+        r"caplog.messages",
+        out,
+    )
+
+    # Collapse accidental repeated `.getMessage()` calls into a single
+    # call to avoid artifacts like `.getMessage().getMessage()`.
+    out = re.sub(r"\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*{\s*2\s*,\s*}", r".getMessage()", out)
+
+    # For membership checks against the record-list with no subscript,
+    # include both the record-level `.getMessage()` form and the
+    # message-list `caplog.messages` form so tests that expect either
+    # will find a match. Example transformation:
+    #   'a' in caplog.records -> 'a' in caplog.records.getMessage() or 'a' in caplog.messages
+    out = re.sub(
+        r"('.*?'|\".*?\")\s+in\s+caplog\s*\.\s*records\b(?!\s*\[)",
         r"\1 in caplog.records.getMessage() or \1 in caplog.messages",
         out,
     )

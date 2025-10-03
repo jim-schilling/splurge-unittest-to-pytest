@@ -29,7 +29,7 @@ class TestValidatedMigrationConfig:
         assert config.line_length == 120
         assert config.dry_run is False
         assert config.fail_fast is False
-        assert config.test_method_prefixes == ["test"]
+        assert config.test_method_prefixes == ["test", "spec", "should", "it"]
         assert config.parametrize is True
         assert config.parametrize_ids is False
         assert config.parametrize_type_hints is False
@@ -79,15 +79,15 @@ class TestValidatedMigrationConfig:
             ValidatedMigrationConfig(file_patterns=[])
 
         # Empty string pattern should fail
-        with pytest.raises(ValueError, match="Invalid file pattern"):
+        with pytest.raises(ValueError, match="File pattern at index 0 cannot be empty or whitespace-only"):
             ValidatedMigrationConfig(file_patterns=[""])
 
         # Whitespace-only pattern should fail
-        with pytest.raises(ValueError, match="Invalid file pattern"):
+        with pytest.raises(ValueError, match="File pattern at index 0 cannot be empty or whitespace-only"):
             ValidatedMigrationConfig(file_patterns=["   "])
 
         # Mixed valid/invalid should fail
-        with pytest.raises(ValueError, match="Invalid file pattern"):
+        with pytest.raises(ValueError, match="File pattern at index 1 cannot be empty or whitespace-only"):
             ValidatedMigrationConfig(file_patterns=["test_*.py", ""])
 
     def test_test_method_prefixes_validation(self):
@@ -101,11 +101,11 @@ class TestValidatedMigrationConfig:
             ValidatedMigrationConfig(test_method_prefixes=[])
 
         # Empty string prefix should fail
-        with pytest.raises(ValueError, match="Invalid test method prefix"):
+        with pytest.raises(ValueError, match="Test method prefix at index 0 cannot be empty or whitespace-only"):
             ValidatedMigrationConfig(test_method_prefixes=[""])
 
         # Whitespace-only prefix should fail
-        with pytest.raises(ValueError, match="Invalid test method prefix"):
+        with pytest.raises(ValueError, match="Test method prefix at index 0 cannot be empty or whitespace-only"):
             ValidatedMigrationConfig(test_method_prefixes=["   "])
 
     def test_boolean_fields(self):
@@ -284,7 +284,40 @@ class TestEdgeCases:
         """Test list field defaults."""
         config = ValidatedMigrationConfig()
         assert config.file_patterns == ["test_*.py"]
-        assert config.test_method_prefixes == ["test"]
+        assert config.test_method_prefixes == ["test", "spec", "should", "it"]
+
+    def test_enhanced_validation_error_messages(self):
+        """Test that validation provides helpful error messages."""
+        # Test file pattern validation
+        with pytest.raises(ValueError, match="At least one file pattern must be specified"):
+            ValidatedMigrationConfig(file_patterns=[])
+
+        with pytest.raises(ValueError, match="Input should be a valid string"):
+            ValidatedMigrationConfig(file_patterns=[123])
+
+        # Test test method prefix validation
+        with pytest.raises(ValueError, match="At least one test method prefix must be specified"):
+            ValidatedMigrationConfig(test_method_prefixes=[])
+
+        with pytest.raises(ValueError, match="Input should be a valid string"):
+            ValidatedMigrationConfig(test_method_prefixes=[123])
+
+        with pytest.raises(ValueError, match="contains invalid characters"):
+            ValidatedMigrationConfig(test_method_prefixes=["test!"])
+
+        # Test assert places validation
+        with pytest.raises(ValueError, match="Input should be greater than or equal to 1"):
+            ValidatedMigrationConfig(assert_almost_equal_places=0)
+
+        with pytest.raises(ValueError, match="Input should be less than or equal to 15"):
+            ValidatedMigrationConfig(assert_almost_equal_places=20)
+
+        # Test log level validation
+        with pytest.raises(ValueError, match="must be one of"):
+            ValidatedMigrationConfig(log_level="INVALID")
+
+        with pytest.raises(ValueError, match="Input should be a valid string"):
+            ValidatedMigrationConfig(log_level=123)
 
     def test_field_descriptions(self):
         """Test that field descriptions are set correctly."""
@@ -345,7 +378,7 @@ class TestValidationErrorHandling:
         with pytest.raises(ValidationError) as exc_info:
             validate_migration_config(config_dict)
 
-        assert "Invalid file pattern" in str(exc_info.value)
+        assert "File pattern at index 1 cannot be empty or whitespace-only" in str(exc_info.value)
 
     def test_type_validation_errors(self):
         """Test type validation errors."""
@@ -389,11 +422,11 @@ class TestConfigurationScenarios:
         """Test minimal valid configuration."""
         config = ValidatedMigrationConfig(
             file_patterns=["test_*.py"],
-            test_method_prefixes=["test"],
+            test_method_prefixes=["test", "spec", "should", "it"],
         )
 
         assert config.file_patterns == ["test_*.py"]
-        assert config.test_method_prefixes == ["test"]
+        assert config.test_method_prefixes == ["test", "spec", "should", "it"]
         # Other fields should have defaults
         assert config.line_length == 120
         assert config.dry_run is False

@@ -76,6 +76,30 @@ def setup_logging(debug_mode: bool = False) -> None:
     logging.getLogger("isort").setLevel(logging.WARNING)
 
 
+def setup_logging_with_level(log_level: str) -> None:
+    """Configure root logging levels based on a specific level.
+
+    Args:
+        log_level: The logging level to set (DEBUG, INFO, WARNING, ERROR)
+    """
+    import logging
+
+    # Map string levels to logging constants
+    level_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING, "ERROR": logging.ERROR}
+
+    level = level_map.get(log_level.upper(), logging.INFO)
+    logging.getLogger().setLevel(level)
+
+    if level == logging.DEBUG:
+        # Enable DEBUG logging for our package namespace only
+        logging.getLogger("splurge_unittest_to_pytest").setLevel(logging.DEBUG)
+
+    # Explicitly silence known noisy third-party libraries
+    logging.getLogger("libcst").setLevel(logging.WARNING)
+    logging.getLogger("black").setLevel(logging.WARNING)
+    logging.getLogger("isort").setLevel(logging.WARNING)
+
+
 def set_quiet_mode(quiet: bool = False) -> None:
     """Reduce logging output for quiet CLI invocations.
 
@@ -176,6 +200,62 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
     event_bus.subscribe(ErrorEvent, _on_error)
 
 
+def detect_test_prefixes_from_files(source_files: list[str]) -> list[str]:
+    """Auto-detect test method prefixes from source files.
+
+    Args:
+        source_files: List of source file paths to analyze
+
+    Returns:
+        List of detected test method prefixes, with "test" always included as fallback
+    """
+    import re
+    from pathlib import Path
+
+    detected_prefixes = set()
+    common_prefixes = ["test", "spec", "should", "it"]
+
+    for file_path in source_files:
+        try:
+            path = Path(file_path)
+            if not path.exists() or not path.is_file():
+                continue
+
+            content = path.read_text(encoding="utf-8")
+
+            # Look for function definitions that might be test methods
+            # Pattern: def [prefix]_.*\(self.*\):
+            pattern = r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)_.*?\(.*?\):"
+            matches = re.findall(pattern, content)
+
+            for match in matches:
+                # Check if this looks like a test method (not too long, contains test-like words)
+                if len(match) <= 20 and any(word in match.lower() for word in ["test", "spec", "check", "verify"]):
+                    # Extract prefix (part before first underscore or the whole word if no underscore)
+                    if "_" in match:
+                        prefix = match.split("_")[0]
+                    else:
+                        prefix = match
+
+                    # Only include reasonable prefixes (2-10 chars, starts with letter)
+                    if 2 <= len(prefix) <= 10 and prefix.isidentifier():
+                        detected_prefixes.add(prefix)
+
+        except (OSError, UnicodeDecodeError):
+            # Skip files that can't be read
+            continue
+
+    # Always include "test" as a fallback
+    result = ["test"]
+
+    # Add detected prefixes that are in our common list
+    for prefix in sorted(detected_prefixes):
+        if prefix in common_prefixes and prefix != "test":
+            result.append(prefix)
+
+    return result
+
+
 def create_config(
     target_root: str | None = None,
     root_directory: str | None = None,
@@ -190,7 +270,10 @@ def create_config(
     generate_report: bool = True,
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
+    detect_prefixes: bool = False,
     assert_places: int = 7,
+    log_level: str = "INFO",
+    max_file_size: int = 10,
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
@@ -239,6 +322,8 @@ def create_config(
         backup_root=backup_root,
         line_length=line_length,
         assert_almost_equal_places=assert_places,
+        log_level=log_level,
+        max_file_size_mb=max_file_size,
         dry_run=dry_run,
         fail_fast=fail_fast,
         verbose=verbose,
@@ -422,11 +507,16 @@ def migrate(
     generate_report: bool = typer.Option(False, "--report", help="Generate migration report", is_flag=True),
     report_format: str = typer.Option("json", "--report-format", help="Format for migration report"),
     test_method_prefixes: list[str] = typer.Option(
-        ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
+        ["test", "spec", "should", "it"], "--prefix", help="Allowed test method prefixes (repeatable)"
+    ),
+    detect_prefixes: bool = typer.Option(
+        False, "--detect-prefixes", help="Auto-detect test method prefixes from source files", is_flag=True
     ),
     assert_places: int = typer.Option(
         7, "--assert-places", help="Default decimal places for assertAlmostEqual transformations (1-15)"
     ),
+    log_level: str = typer.Option("INFO", "--log-level", help="Set logging level (DEBUG, INFO, WARNING, ERROR)"),
+    max_file_size: int = typer.Option(10, "--max-file-size", help="Maximum file size in MB to process (1-100)"),
     suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
     ext: str | None = typer.Option(
         None,
@@ -453,6 +543,8 @@ def migrate(
         debug: Enable debug-level logging output.
         posix: Format displayed file paths using POSIX separators when True.
         diff: When used with --dry-run, show unified diffs rather than full code output.
+        log_level: Set the logging level for the application.
+        max_file_size: Maximum file size in MB to process (larger files may cause memory issues).
         list_files: When used with --dry-run, list files only (no code shown).
         fail_fast: Stop processing on the first encountered error.
         verbose: Enable verbose info logging.
@@ -468,8 +560,49 @@ def migrate(
         typer.echo("Error: --info and --debug cannot be used together.")
         raise typer.Exit(code=2)
 
+    # Validate source files first to get valid_files for prefix detection
+    valid_files = cast(
+        list[str], validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse) or []
+    )
+
+    # Auto-detect test prefixes if requested
+    effective_prefixes = test_method_prefixes
+    if detect_prefixes and valid_files:
+        detected_prefixes = detect_test_prefixes_from_files(valid_files)
+        if detected_prefixes != test_method_prefixes:
+            logger.info(f"Auto-detected test prefixes: {detected_prefixes}")
+            effective_prefixes = detected_prefixes
+
+    # Create configuration (decision model always enabled, parametrize always enabled by default)
+    config = create_config(
+        target_root=target_root,
+        root_directory=root_directory,
+        file_patterns=file_patterns,
+        recurse_directories=recurse,
+        backup_originals=not skip_backup,
+        backup_root=backup_root,
+        line_length=line_length,
+        dry_run=dry_run,
+        fail_fast=fail_fast,
+        verbose=verbose,
+        generate_report=generate_report,
+        report_format=report_format,
+        test_method_prefixes=effective_prefixes,
+        detect_prefixes=detect_prefixes,
+        assert_places=assert_places,
+        log_level=log_level,
+        max_file_size=max_file_size,
+        suffix=suffix,
+        ext=ext,
+    )
+
+    # Set up logging based on configuration
     if debug or info:
         setup_logging(debug)
+    elif hasattr(config, "log_level"):
+        # Set logging level based on configuration
+        config_log_level = getattr(config, "log_level", "INFO")
+        setup_logging_with_level(config_log_level)
 
     set_quiet_mode(not (debug or info))
 
@@ -478,31 +611,6 @@ def migrate(
         event_bus = create_event_bus()
         # Attach lightweight progress handlers that print to stdout when not quiet
         attach_progress_handlers(event_bus, verbose=verbose)
-
-        # Create configuration (decision model always enabled, parametrize always enabled by default)
-        config = create_config(
-            target_root=target_root,
-            root_directory=root_directory,
-            file_patterns=file_patterns,
-            recurse_directories=recurse,
-            backup_originals=not skip_backup,
-            backup_root=backup_root,
-            line_length=line_length,
-            dry_run=dry_run,
-            fail_fast=fail_fast,
-            verbose=verbose,
-            generate_report=generate_report,
-            report_format=report_format,
-            test_method_prefixes=test_method_prefixes,
-            assert_places=assert_places,
-            suffix=suffix,
-            ext=ext,
-        )
-
-        # Validate source files
-        valid_files = cast(
-            list[str], validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse) or []
-        )
         assert isinstance(valid_files, list)
         num_valid = len(valid_files)
         logger.info(f"Found {num_valid} Python files to process")

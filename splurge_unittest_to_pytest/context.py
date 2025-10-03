@@ -100,6 +100,14 @@ class MigrationConfig:
     assert_almost_equal_places: int = 7
     """Default number of decimal places for assertAlmostEqual transformations (1-15)"""
 
+    # Logging and reporting settings
+    log_level: str = "INFO"
+    """Default logging level (DEBUG, INFO, WARNING, ERROR)"""
+
+    # Performance settings
+    max_file_size_mb: int = 10
+    """Maximum file size in MB to process (larger files may cause memory issues)"""
+
     # Behavior settings
     dry_run: bool = False
     fail_fast: bool = False
@@ -120,7 +128,7 @@ class MigrationConfig:
     report_format: str = "json"  # json, html, markdown
 
     # Test discovery / naming
-    test_method_prefixes: list[str] = field(default_factory=lambda: ["test"])
+    test_method_prefixes: list[str] = field(default_factory=lambda: ["test", "spec", "should", "it"])
 
     # Degradation settings for gradual transformation failure handling
     degradation_enabled: bool = True

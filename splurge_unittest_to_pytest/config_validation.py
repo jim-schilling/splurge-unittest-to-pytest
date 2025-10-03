@@ -54,11 +54,15 @@ class ValidatedMigrationConfig(BaseModel):
     assert_almost_equal_places: int = Field(
         default=7, ge=1, le=15, description="Default decimal places for assertAlmostEqual transformations"
     )
+    log_level: str = Field(default="INFO", description="Default logging level")
+    max_file_size_mb: int = Field(default=10, ge=1, le=100, description="Maximum file size in MB")
     dry_run: bool = Field(default=False, description="Whether to perform a dry run")
     fail_fast: bool = Field(default=False, description="Whether to fail on first error")
 
     # Test method patterns
-    test_method_prefixes: list[str] = Field(default_factory=lambda: ["test"], description="Prefixes for test methods")
+    test_method_prefixes: list[str] = Field(
+        default_factory=lambda: ["test", "spec", "should", "it"], description="Prefixes for test methods"
+    )
 
     # Parametrize settings
     parametrize: bool = Field(default=True, description="Whether to convert subTests to parametrize")
@@ -77,30 +81,93 @@ class ValidatedMigrationConfig(BaseModel):
     @classmethod
     def validate_file_patterns(cls, v):
         if not v:
-            raise ValueError("At least one file pattern must be specified")
-        for pattern in v:
-            if not isinstance(pattern, str) or not pattern.strip():
-                raise ValueError(f"Invalid file pattern: {pattern}")
+            raise ValueError(
+                "At least one file pattern must be specified. "
+                "Use glob patterns like 'test_*.py', '*.py', or 'test_*.py' to match files."
+            )
+
+        # Validate each pattern with improved error messages
+        for i, pattern in enumerate(v):
+            if not isinstance(pattern, str):
+                raise ValueError(f"File pattern at index {i} must be a string, got {type(pattern).__name__}")
+
+            # Check for empty/whitespace-only patterns
+            if not pattern or not pattern.strip():
+                raise ValueError(
+                    f"File pattern at index {i} cannot be empty or whitespace-only. "
+                    "Use patterns like 'test_*.py', '*.py', or 'tests/**/*.py'."
+                )
+
+            # Check for basic pattern validity (should contain at least one wildcard or be a simple filename)
+            if not any(char in pattern for char in ["*", "?", "["]) and not pattern.endswith(".py"):
+                # Allow simple filenames that end with .py
+                if not ("." in pattern and pattern.split(".")[-1].isalnum()):
+                    raise ValueError(
+                        f"File pattern '{pattern}' at index {i} should contain wildcards (*, ?, []) "
+                        "or be a valid Python filename. Examples: 'test_*.py', '*.py', 'mytest.py'."
+                    )
         return v
 
     @field_validator("test_method_prefixes")
     @classmethod
     def validate_test_prefixes(cls, v):
         if not v:
-            raise ValueError("At least one test method prefix must be specified")
-        for prefix in v:
-            if not isinstance(prefix, str) or not prefix.strip():
-                raise ValueError(f"Invalid test method prefix: {prefix}")
+            raise ValueError(
+                "At least one test method prefix must be specified. "
+                "Common prefixes include 'test', 'spec', 'should', 'it'."
+            )
+
+        # Validate each prefix with improved error messages
+        for i, prefix in enumerate(v):
+            if not isinstance(prefix, str):
+                raise ValueError(f"Test method prefix at index {i} must be a string, got {type(prefix).__name__}")
+
+            # Check for empty/whitespace-only prefixes
+            if not prefix or not prefix.strip():
+                raise ValueError(
+                    f"Test method prefix at index {i} cannot be empty or whitespace-only. "
+                    "Use meaningful prefixes like 'test', 'spec', or 'should'."
+                )
+
+            # Check for reasonable prefix format (letters, numbers, underscores, hyphens)
+            if not prefix.replace("_", "").replace("-", "").isalnum():
+                raise ValueError(
+                    f"Test method prefix '{prefix}' at index {i} contains invalid characters. "
+                    "Use only letters, numbers, underscores, and hyphens. "
+                    "Examples: 'test', 'test_case', 'should_pass'."
+                )
+
         return v
 
     @field_validator("assert_almost_equal_places")
     @classmethod
     def validate_assert_places(cls, v):
         if not isinstance(v, int):
-            raise ValueError("assert_almost_equal_places must be an integer")
+            raise ValueError("assert_almost_equal_places must be an integer (1-15)")
+
         if v < 1 or v > 15:
-            raise ValueError("assert_almost_equal_places must be between 1 and 15")
+            raise ValueError(
+                f"assert_almost_equal_places must be between 1 and 15, got {v}. "
+                "Use 7 for standard precision, or 1-3 for high precision floating point comparisons. "
+                "Higher values (10-15) are useful for very precise decimal comparisons."
+            )
         return v
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, v):
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR"]
+        if not isinstance(v, str):
+            raise ValueError("log_level must be a string (DEBUG, INFO, WARNING, ERROR)")
+
+        upper_v = v.upper()
+        if upper_v not in valid_levels:
+            raise ValueError(
+                f"log_level must be one of: {', '.join(valid_levels)}, got '{v}'. "
+                "Choose DEBUG for detailed troubleshooting, INFO for normal operation, "
+                "WARNING for important messages, or ERROR for critical issues only."
+            )
+        return upper_v
 
     class Config:
         """Pydantic configuration."""
