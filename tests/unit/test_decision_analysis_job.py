@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from splurge_unittest_to_pytest.circuit_breaker import CircuitBreakerOpenException
 from splurge_unittest_to_pytest.context import MigrationConfig, PipelineContext
 from splurge_unittest_to_pytest.decision_model import DecisionModel
 from splurge_unittest_to_pytest.events import EventBus
@@ -72,7 +73,8 @@ class TestDecisionAnalysisJob:
         context = PipelineContext.create("test.py", "test_out.py", config)
 
         # Execute job - should propagate the error from the task
-        with pytest.raises(Exception, match="Test error"):
+        # Since we now use circuit breakers, the exception might be wrapped
+        with pytest.raises((Exception, CircuitBreakerOpenException), match="Test error"):
             job.execute(context, "invalid source")
 
 

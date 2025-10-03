@@ -32,6 +32,7 @@ from typing import Any
 import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
 
+from ..exceptions import TransformationValidationError
 from .assert_transformer import (
     _recursively_rewrite_withs,
     transform_assert_almost_equal,
@@ -88,10 +89,6 @@ from .transformer_helper import ReplacementApplier, ReplacementRegistry
 
 
 """CST-based transformer for unittest to pytest conversion."""
-
-
-class TransformationValidationError(Exception):
-    """Raised when the final transformed code fails CST validation."""
 
 
 @dataclass
@@ -155,7 +152,8 @@ class _RemoveUnittestTestCaseBases(cst.CSTTransformer):
                 ):
                     changed = True
                     continue
-            except Exception:
+            except AttributeError:
+                # Malformed CST node, skip this base
                 pass
 
             new_bases.append(base)
@@ -181,14 +179,16 @@ class _NormalizeClassBases(cst.CSTTransformer):
                     if value is None:
                         continue
                     rebuilt.append(cst.Arg(value=value))
-                except Exception:
+                except (AttributeError, TypeError):
+                    # Malformed CST node, keep original
                     rebuilt.append(base)
 
             if not rebuilt:
                 return cst.ClassDef(name=updated.name, body=updated.body, decorators=updated.decorators)
 
             return updated.with_changes(bases=rebuilt)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
+            # CST transformation failed, return unchanged
             return updated
 
 
@@ -211,7 +211,8 @@ class _NormalizeTestMethodNames(cst.CSTTransformer):
     def leave_ClassDef(self, original: cst.ClassDef, updated: cst.ClassDef) -> cst.ClassDef:
         try:
             self._stack.pop()
-        except Exception:
+        except IndexError:
+            # Stack underflow, ignore
             pass
         return updated
 
@@ -459,7 +460,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     if isinstance(first, cst.Expr) and isinstance(first.value, cst.SimpleString):
                         insert_index = index + 1
                         continue
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
+                # Malformed node, skip and continue
                 continue
             break
         return insert_index
@@ -504,7 +506,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     if isinstance(call.func, cst.Attribute) and isinstance(call.func.value, cst.Name):
                         if call.func.attr.value == "main" and call.func.value.value in {"unittest", "pytest"}:
                             return True
-        except Exception:
+        except (AttributeError, TypeError):
+            # Malformed node, don't drop it
             return False
 
         return False
@@ -537,7 +540,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 module_fixture = create_module_fixture(setup_module_entries, teardown_module_entries)
                 module_fixtures.append(module_fixture)
                 self.needs_pytest_import = True
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
+            # Fixture creation failed, skip fixtures
             pass
         finally:
             state.clear_autouse_buffers()
@@ -598,7 +602,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                         instance_fixture = create_instance_fixture(setup_inst, teardown_inst)
                         class_body_items.append(instance_fixture)
                         self.needs_pytest_import = True
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 # Ignore fixture generation errors and fall back to original statements.
                 pass
 
@@ -619,7 +623,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 class_body_items.append(stmt)
 
             return node.with_changes(body=node.body.with_changes(body=class_body_items))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
+            # CST transformation failed, return unchanged
             return node
 
     def _wrap_top_level_asserts(self, nodes: Sequence[cst.CSTNode]) -> list[cst.CSTNode]:
@@ -635,7 +640,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             try:
                 wrapped_nodes = wrap_assert_in_block([node])
                 rewritten.extend(wrapped_nodes)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
+                # Assert wrapping failed, keep original
                 rewritten.append(node)
 
         return rewritten
@@ -649,7 +655,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             if new_decorators is not None and new_decorators is not original_decorators:
                 self.needs_pytest_import = True
             return node.with_changes(decorators=new_decorators)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
+            # Decorator rewriting failed, return unchanged
             return node
 
     def _convert_simple_subtests(
@@ -686,7 +693,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 current_node = ensure_subtests_param(current_node)
 
             return current_node, body_with_subtests
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
+            # Subtest conversion failed, return original
             return node, list(getattr(node.body, "body", []))
 
     def _get_function_decision(self, function_name: str) -> Any | None:
@@ -717,7 +725,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
 
             function_proposals = getattr(class_proposal, "function_proposals", {})
             return function_proposals.get(function_name)
-        except Exception:
+        except (AttributeError, TypeError, KeyError):
+            # Decision model access failed
             return None
 
     def _apply_decision_model_transformation(
@@ -745,7 +754,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             else:  # 'keep-loop' or unknown strategy
                 # Keep the original loop structure
                 return node
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return node
 
     def _ensure_fixture_parameters(
@@ -770,7 +779,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 if not any(isinstance(param.name, cst.Name) and param.name.value == "caplog" for param in params):
                     params.append(cst.Param(name=cst.Name(value="caplog")))
                     result_node = result_node.with_changes(params=result_node.params.with_changes(params=params))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return node
 
         return result_node
@@ -816,7 +825,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 if walk(stmt):
                     return True
             return False
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return False
 
     def _apply_recursive_with_rewrites(self, node: cst.FunctionDef) -> cst.FunctionDef:
@@ -828,9 +837,9 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             try:
                 rewritten_body = [_recursively_rewrite_withs(stmt) for stmt in getattr(node.body, "body", [])]
                 return node.with_changes(body=node.body.with_changes(body=rewritten_body))
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 return node
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return node
 
     def _parse_to_module(self, code: str) -> cst.Module:
@@ -853,7 +862,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         try:
             wrapper = MetadataWrapper(module)
             return wrapper.visit(ReplacementApplier(self.replacement_registry))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return module
 
     def _apply_recursive_with_cleanup(self, module: cst.Module) -> cst.Module:
@@ -874,18 +883,18 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                         else:
                             try:
                                 class_body.append(_recursively_rewrite_withs(stmt))
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError):
                                 class_body.append(stmt)
                     rewritten_body.append(node.with_changes(body=node.body.with_changes(body=class_body)))
                     continue
 
                 try:
                     rewritten_body.append(_recursively_rewrite_withs(node))
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     rewritten_body.append(node)
 
             return module.with_changes(body=rewritten_body)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return module
 
     def _finalize_transformed_code(self, code: str) -> str:
@@ -902,7 +911,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         # Targeted post-pass for remaining caplog alias usages.
         try:
             transformed_code = transform_caplog_alias_string_fallback(transformed_code)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             pass
 
         # Conservative string-level fallback for any remaining assertRaises-style contexts.
@@ -911,7 +920,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
 
             transformed_code = re.sub(r"with\s+self\.assertRaisesRegex\s*\(", "with pytest.raises(", transformed_code)
             transformed_code = re.sub(r"with\s+self\.assertRaises\s*\(", "with pytest.raises(", transformed_code)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             pass
 
         transformed_code = remove_unittest_imports_if_unused(transformed_code)
@@ -943,7 +952,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         for transformer in transformers:
             try:
                 cleaned_module = cleaned_module.visit(transformer)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 return cleaned_module
 
         return cleaned_module
@@ -967,7 +976,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             pos = self.get_metadata(PositionProvider, old_node)
             self.replacement_registry.record(pos, new_node)
             # recorded replacement (silent)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             # If metadata isn't available for some reason, skip recording
             pass
 
@@ -1001,7 +1010,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     self.needs_pytest_import = True
                     try:
                         self._unittest_classes.add(node.name.value)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
                     # Mark this class for transformation
                     break
@@ -1113,10 +1122,10 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             node, body_statements = self._convert_simple_subtests(original_node, node)
             try:
                 wrapped_body = wrap_assert_in_block(body_statements)
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 wrapped_body = body_statements
             node = node.with_changes(body=node.body.with_changes(body=wrapped_body))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             wrapped_body = list(getattr(node.body, "body", []))
             node = node.with_changes(body=node.body.with_changes(body=wrapped_body))
 
@@ -1126,14 +1135,14 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         try:
             if body_uses_subtests(getattr(node.body, "body", [])):
                 node = ensure_subtests_param(node)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             pass
 
         # Pop function stack if we tracked it
         if self._function_stack:
             try:
                 self._function_stack.pop()
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 pass
 
         return node
@@ -1143,7 +1152,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         # Track function stack entry so leave_Call can know the enclosing function
         try:
             self._function_stack.append(node.name.value)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             pass
         name = node.name.value
         # Decide whether we're inside a class; if so, record per-class; otherwise module-level
@@ -1208,11 +1217,11 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 try:
                     stmt_module = cst.Module(body=[stmt])
                     target_list.append(stmt_module.code.strip())
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     # Fallback: try to stringify the node or skip if generation fails
                     try:
                         target_list.append(str(type(stmt).__name__))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
     # Fixture string-based fallback moved to transformers.fixture_transformer.transform_fixtures_string_based
@@ -1388,7 +1397,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                             return updated_node
                         # expression-level replacement is safe to return
                         return new_node  # type: ignore[return-value]
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         # On any transformation error, fall back to the original node
                         return updated_node
 
@@ -1524,20 +1533,20 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         """
         try:
             module = cst.parse_module(code)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return code
 
         try:
             unittest_classes = set(getattr(self, "_unittest_classes", set()))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             unittest_classes = set()
 
         try:
             cleaned_module = self._run_inheritance_cleanup(module, unittest_classes)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return code
 
         try:
             return cleaned_module.code
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return code

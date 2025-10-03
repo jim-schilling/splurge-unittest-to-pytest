@@ -31,6 +31,7 @@ dependencies = [
     "typer>=0.9.0",
     "black>=23.0.0",
     "isort>=5.12.0",
+    "pydantic>=2.11.9"
 ]
 
 [project.optional-dependencies]

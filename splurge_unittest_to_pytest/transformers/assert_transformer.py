@@ -207,7 +207,7 @@ def _rewrite_equality_comparison(
                 if replaced is not None:
                     new_args = [cst.Arg(value=replaced)] + expr.args[1:]
                     return expr.with_changes(args=new_args)
-            except Exception:
+            except (AttributeError, TypeError, IndexError):
                 pass
 
         return None
@@ -279,7 +279,7 @@ def _rewrite_unary_operation(unary: cst.UnaryOperation, alias_name: str) -> cst.
 
     try:
         rewritten_inner = _rewrite_expression(inner, alias_name)
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         rewritten_inner = None
 
     if rewritten_inner is not None:
@@ -1108,7 +1108,7 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         next_stmt = statements[i + 1] if (i + 1) < len(statements) else None
         new_with, consumed = create_with_wrapping_next_stmt(with_item, next_stmt)
         return [new_with], consumed, True
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         # Conservative: do not handle on errors
         return [], 0, False
 
@@ -1147,7 +1147,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
             ):
                 original_alias_name = orig_item.asname.name.value
                 break
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             pass
     # silently inspect With items
     for item in stmt.items:
@@ -1234,7 +1234,7 @@ def get_with_alias_name(items: list[cst.WithItem]) -> str | None:
         try:
             if item.asname and isinstance(item.asname, cst.AsName) and isinstance(item.asname.name, cst.Name):
                 return item.asname.name.value
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             pass
     return None
 
@@ -1326,14 +1326,14 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
                         new_targets.append(target)
                 if changed:
                     replaced = t.with_changes(comparisons=new_targets)
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             replaced = None
 
         if replaced is not None:
             return target_assert.with_changes(test=replaced)
 
         return None
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         # Conservative: do not rewrite on any unexpected errors
         return None
 
@@ -1376,7 +1376,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
 
         new_block = new_with.body.with_changes(body=new_body)
         return new_with.with_changes(body=new_block)
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         # Conservative: return original when any error occurs
         return new_with
 
@@ -1445,7 +1445,7 @@ def rewrite_following_statements_for_alias(
                                     new_args.append(a.with_changes(value=msg_call))
                                     changed_args = True
                                     continue
-                            except Exception:
+                            except (AttributeError, TypeError, IndexError):
                                 pass
 
                             new_args.append(a)
@@ -1467,7 +1467,7 @@ def rewrite_following_statements_for_alias(
                     statements[k] = wrapper_stmt.with_changes(body=[final_assert])
                 else:
                     statements[k] = cst.SimpleStatementLine(body=[final_assert])
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             # Conservative: do not handle on errors
             pass
 
@@ -1501,7 +1501,7 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
         if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
             try:
                 nodes_to_append, consumed, handled = handle_bare_assert_call(statements, i)
-            except Exception:
+            except (AttributeError, TypeError, IndexError):
                 # be conservative on errors and fall back to original behavior
                 nodes_to_append, consumed, handled = ([], 0, False)
 
@@ -1537,17 +1537,17 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                                     and isinstance(it.asname.name, cst.Name)
                                 ):
                                     alias_names.append(it.asname.name.value)
-                            except Exception:
+                            except (AttributeError, TypeError, IndexError):
                                 pass
 
                         # Rewrite the with-body for each alias found.
                         for a in alias_names:
                             try:
                                 new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
-                            except Exception:
+                            except (AttributeError, TypeError, IndexError):
                                 pass
 
-                    except Exception:
+                    except (AttributeError, TypeError, IndexError):
                         pass
 
                     out.append(new_with)
@@ -1559,14 +1559,14 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                         for a in alias_names:
                             try:
                                 rewrite_following_statements_for_alias(statements, i + 1, a)
-                            except Exception:
+                            except (AttributeError, TypeError, IndexError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, IndexError):
                         pass
 
                     i += 1
                     wrapped = True
-            except Exception:
+            except (AttributeError, TypeError, IndexError):
                 # Conservative fallback: keep original With
                 out.append(stmt)
                 i += 1
@@ -1615,15 +1615,15 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                         # inner context-manager rewrites are not lost.
                         try:
                             new_try = _recursively_rewrite_withs(new_try)
-                        except Exception:
+                        except (AttributeError, TypeError, IndexError):
                             pass
                         out.append(new_try)
                         i += 1
                         continue
-                    except Exception:
+                    except (AttributeError, TypeError, IndexError):
                         # fallback to original stmt on any error
                         pass
-            except Exception:
+            except (AttributeError, TypeError, IndexError):
                 pass
 
             out.append(stmt)
@@ -1699,7 +1699,7 @@ def _recursively_rewrite_withs(stmt: cst.BaseStatement) -> cst.BaseStatement:
 
         # Default: return original
         return stmt
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         return stmt
 
     # Debug: unreachable here normally
@@ -1771,7 +1771,7 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
             out,
         ):
             alias_names.add(m.group(1))
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         alias_names = set()
 
     if alias_names:
@@ -1793,7 +1793,7 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
             assertlogs_aliases.add(m.group(1))
         for m in re.finditer(r"with\s+caplog\.at_level\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
             assertlogs_aliases.add(m.group(1))
-    except Exception:
+    except (AttributeError, TypeError, IndexError):
         assertlogs_aliases = set()
 
     if assertlogs_aliases:

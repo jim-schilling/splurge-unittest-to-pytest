@@ -126,8 +126,9 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
             src = Path(event.context.source_file)
             filename = src.name
             typer.echo(f"Starting migration: {filename}")
-        except Exception:
-            typer.echo(f"Starting migration (run_id={event.run_id})")
+        except (AttributeError, TypeError, ValueError) as e:
+            # Context or source_file is malformed
+            typer.echo(f"Starting migration (run_id={event.run_id}) - Warning: {e}")
 
     def _on_step_started(event: StepStartedEvent) -> None:
         # Make step names more user-friendly
@@ -228,7 +229,7 @@ def create_config(
 
     base = MigrationConfig()
 
-    return MigrationConfig(
+    config = MigrationConfig(
         target_root=target_root,
         root_directory=root_directory,
         file_patterns=file_patterns or base.file_patterns,
@@ -245,6 +246,10 @@ def create_config(
         target_suffix=suffix,
         target_extension=ext,
     )
+
+    # Validate the configuration
+    config.validate()
+    return config
 
 
 def validate_source_files(source_files: list[str]) -> list[str]:
@@ -493,10 +498,7 @@ def migrate(
             list[str], validate_source_files_with_patterns(source_files, root_directory, file_patterns, recurse) or []
         )
         assert isinstance(valid_files, list)
-        try:
-            num_valid = len(valid_files)  # type: ignore[arg-type]
-        except Exception:
-            num_valid = 0
+        num_valid = len(valid_files)
         logger.info(f"Found {num_valid} Python files to process")
 
         # Create pipeline factory
@@ -535,7 +537,7 @@ def migrate(
                         for k, v in gen.items():
                             try:
                                 gen_map[str(_P(k))] = v
-                            except Exception:
+                            except (TypeError, ValueError, OSError):
                                 gen_map[str(k)] = v
                     elif isinstance(gen, str):
                         # Single-string fallback - map the single target path
@@ -545,7 +547,7 @@ def migrate(
                             from pathlib import Path as _P
 
                             gen_map[str(_P(path))] = gen
-                        except Exception:
+                        except (TypeError, ValueError, OSError):
                             gen_map[str(path)] = gen
                 # Determine presentation mode from CLI flags (diff/list_files)
                 if list_files:
@@ -575,7 +577,7 @@ def migrate(
                                 # or use the backup/extension flags when needed.
 
                                 orig_text = original.read_text(encoding="utf-8") if original.exists() else ""
-                            except Exception:
+                            except (FileNotFoundError, PermissionError, UnicodeDecodeError, OSError):
                                 orig_text = ""
 
                             a = orig_text.splitlines(keepends=True)

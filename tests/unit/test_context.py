@@ -49,6 +49,134 @@ def test_migration_config_from_dict_ignores_legacy_subtest():
     assert not hasattr(config, "subtest")
 
 
+def test_migration_config_validation_success():
+    """Test that valid configuration passes validation."""
+    config = MigrationConfig(line_length=100, target_root="/tmp", file_patterns=["test_*.py"])
+
+    # Should not raise any exception
+    config.validate()
+
+
+def test_migration_config_validation_invalid_line_length():
+    """Test that invalid line length fails validation."""
+    config = MigrationConfig(line_length=50)  # Too low
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_validation_invalid_file_patterns():
+    """Test that empty file patterns fail validation."""
+    config = MigrationConfig(file_patterns=[])  # Empty list
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_validation_invalid_file_patterns():
+    """Test that invalid file patterns fail validation."""
+    config = MigrationConfig(file_patterns=[])
+
+    try:
+        config.validate()
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_from_dict_validates():
+    """Test that from_dict validates configurations."""
+    # Valid config should work
+    config = MigrationConfig.from_dict({"line_length": 100})
+    assert config.line_length == 100
+
+    # Invalid config should fail
+    try:
+        MigrationConfig.from_dict({"line_length": 30})  # Too low
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        assert "Invalid configuration" in str(e)
+
+
+def test_migration_config_validation_comprehensive():
+    """Test comprehensive configuration validation scenarios."""
+
+    # Test valid configurations
+    valid_configs = [
+        {"line_length": 120, "file_patterns": ["test_*.py"], "parametrize": True},
+        {"line_length": 80, "file_patterns": ["*_test.py", "test_*"], "parametrize": False},
+        {"line_length": 200, "file_patterns": ["custom_pattern.py"], "parametrize_ids": True},
+    ]
+
+    for config_dict in valid_configs:
+        config = MigrationConfig.from_dict(config_dict)
+        assert config.line_length == config_dict["line_length"]
+        assert config.file_patterns == config_dict["file_patterns"]
+
+    # Test invalid line_length (too low)
+    try:
+        MigrationConfig.from_dict({"line_length": 50})
+        raise AssertionError("Should have raised ValueError for line_length too low")
+    except ValueError as e:
+        assert "Invalid migration configuration" in str(e)
+
+    # Test invalid line_length (too high)
+    try:
+        MigrationConfig.from_dict({"line_length": 250})
+        raise AssertionError("Should have raised ValueError for line_length too high")
+    except ValueError as e:
+        assert "Invalid migration configuration" in str(e)
+
+    # Test empty file_patterns
+    try:
+        MigrationConfig.from_dict({"file_patterns": []})
+        raise AssertionError("Should have raised ValueError for empty file_patterns")
+    except ValueError as e:
+        assert "Invalid migration configuration" in str(e)
+
+    # Test invalid file_patterns (empty string)
+    try:
+        MigrationConfig.from_dict({"file_patterns": ["", "valid_pattern.py"]})
+        raise AssertionError("Should have raised ValueError for empty file pattern")
+    except ValueError as e:
+        assert "Invalid migration configuration" in str(e)
+
+    # Test invalid file_patterns (whitespace only)
+    try:
+        MigrationConfig.from_dict({"file_patterns": ["   ", "valid_pattern.py"]})
+        raise AssertionError("Should have raised ValueError for whitespace-only file pattern")
+    except ValueError as e:
+        assert "Invalid migration configuration" in str(e)
+
+
+def test_migration_config_validation_error_messages():
+    """Test that validation error messages are clear and actionable."""
+
+    # Test line_length too low
+    try:
+        MigrationConfig.from_dict({"line_length": 40})
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        error_msg = str(e)
+        assert "Invalid migration configuration" in error_msg
+        assert "line_length" in error_msg or "ge" in error_msg
+
+    # Test empty file patterns
+    try:
+        MigrationConfig.from_dict({"file_patterns": []})
+        raise AssertionError("Should have raised ValueError")
+    except ValueError as e:
+        error_msg = str(e)
+        assert "Invalid migration configuration" in error_msg
+        assert "file_patterns" in error_msg or "at least one" in error_msg.lower()
+
+
 def test_pipeline_context_creation():
     """Test creating pipeline context."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:

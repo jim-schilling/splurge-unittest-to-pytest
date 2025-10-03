@@ -12,6 +12,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
+from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, get_circuit_breaker
 from .context import PipelineContext
 from .events import EventBus, StepCompletedEvent, StepStartedEvent
 from .result import Result, ResultStatus
@@ -301,18 +302,34 @@ class Pipeline(Generic[T, R]):
     overall data and context flow.
     """
 
-    def __init__(self, name: str, jobs: list[Job], event_bus: EventBus) -> None:
+    circuit_breaker: CircuitBreaker | None
+
+    def __init__(
+        self,
+        name: str,
+        jobs: list[Job],
+        event_bus: EventBus,
+        circuit_breaker_config: CircuitBreakerConfig | None = None,
+    ) -> None:
         """Initialize pipeline.
 
         Args:
             name: Unique name for this pipeline
             jobs: List of jobs to execute in order
             event_bus: Event bus for publishing events
+            circuit_breaker_config: Optional circuit breaker configuration
         """
         self.name = name
         self.jobs = jobs
         self.event_bus = event_bus
+        self.circuit_breaker_config = circuit_breaker_config
         self._logger = logging.getLogger(f"{__name__}.{name}")
+
+        # Create circuit breaker for this pipeline
+        if circuit_breaker_config:
+            self.circuit_breaker = get_circuit_breaker(f"pipeline_{name}", circuit_breaker_config)
+        else:
+            self.circuit_breaker = None
 
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
         """Execute all jobs in the pipeline in order.
@@ -334,14 +351,32 @@ class Pipeline(Generic[T, R]):
         for i, job in enumerate(self.jobs):
             self._logger.debug(f"Executing job {i + 1}/{len(self.jobs)}: {job.name}")
 
-            result = job.execute(current_context, current_input)
+            try:
+                # Use circuit breaker recovery if configured
+                if self.circuit_breaker:
+                    result = self.circuit_breaker.attempt_recovery(job.execute, current_context, current_input)
+                else:
+                    result = job.execute(current_context, current_input)
 
-            if result.is_error():
-                self._logger.error(f"Job {job.name} failed, aborting pipeline {self.name}")
-                error = result.error or RuntimeError(f"Pipeline {self.name} failed at job {job.name}")
+                if result.is_error():
+                    self._logger.error(f"Job {job.name} failed, aborting pipeline {self.name}")
+                    error = result.error or RuntimeError(f"Pipeline {self.name} failed at job {job.name}")
+                    return Result.failure(
+                        error,
+                        {"pipeline": self.name, "failed_job": job.name, "job_index": i, "context": context.run_id},
+                    )
+            except Exception as e:
+                # Circuit breaker open or other execution error
+                self._logger.error(f"Job {job.name} execution failed with circuit breaker protection: {e}")
                 return Result.failure(
-                    error,
-                    {"pipeline": self.name, "failed_job": job.name, "job_index": i, "context": context.run_id},
+                    e,
+                    {
+                        "pipeline": self.name,
+                        "failed_job": job.name,
+                        "job_index": i,
+                        "context": context.run_id,
+                        "circuit_breaker_protected": self.circuit_breaker is not None,
+                    },
                 )
 
             job_results.append(result)
@@ -362,9 +397,9 @@ class Pipeline(Generic[T, R]):
         # Return successful result with combined warnings
         final_result = job_results[-1]
         if all_warnings:
-            return Result.warning(final_result.data, all_warnings, final_result.metadata)  # type: ignore
+            return Result.warning(final_result.data, all_warnings, final_result.metadata)
 
-        return Result.success(final_result.data, final_result.metadata)  # type: ignore
+        return Result.success(final_result.data, final_result.metadata)
 
     def add_job(self, job: Job) -> None:
         """Add a job to the pipeline.

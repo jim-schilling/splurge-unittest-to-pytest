@@ -77,7 +77,7 @@ def add_pytest_imports(code: str, transformer: object | None = None) -> str:
                                 if s == self.name:
                                     self.found = True
                                     return
-                except Exception:
+                except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                     # Be conservative and ignore errors in detection
                     pass
 
@@ -119,7 +119,7 @@ def add_pytest_imports(code: str, transformer: object | None = None) -> str:
                             if isinstance(part, cst.Name):
                                 parts.insert(0, part.value)
                             nm = ".".join(parts)
-                    except Exception:
+                    except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                         nm = ""
 
                     if nm == "pytest":
@@ -144,7 +144,7 @@ def add_pytest_imports(code: str, transformer: object | None = None) -> str:
                 module.visit(finder)
                 if finder.found:
                     has_re = True
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             pass
 
         # Build a mutable copy of the module body for insertion. We avoid
@@ -190,7 +190,7 @@ def add_pytest_imports(code: str, transformer: object | None = None) -> str:
 
         new_module = module.with_changes(body=new_body)
         return new_module.code
-    except Exception:
+    except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
         return code
 
 
@@ -274,7 +274,7 @@ def remove_unittest_imports_if_unused(code: str) -> str:
                                 if s == "unittest":
                                     self.found = True
                                     return
-                except Exception:
+                except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                     pass
 
         finder = Finder()
@@ -324,7 +324,7 @@ def remove_unittest_imports_if_unused(code: str) -> str:
                             if isinstance(part, cst.Name):
                                 parts.insert(0, part.value)
                             nm = ".".join(parts)
-                    except Exception:
+                    except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                         nm = ""
 
                     if nm != "unittest":
@@ -345,5 +345,5 @@ def remove_unittest_imports_if_unused(code: str) -> str:
 
         new_module = module.with_changes(body=new_body)
         return new_module.code
-    except Exception:
+    except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
         return code

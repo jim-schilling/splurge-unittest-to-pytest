@@ -13,8 +13,11 @@ from splurge_unittest_to_pytest.exceptions import (
     AnalysisStepError,
     ContextError,
     DecisionAnalysisError,
+    ParametrizeConversionError,
     PatternDetectionError,
     ReconciliationError,
+    TransformationError,
+    TransformationValidationError,
 )
 
 
@@ -201,4 +204,67 @@ class TestExceptionInheritance:
 
         assert isinstance(error, ContextError)
         assert isinstance(error, DecisionAnalysisError)
+        assert isinstance(error, Exception)
+
+
+class TestTransformationError:
+    """Test the TransformationError class."""
+
+    def test_minimal_transformation_error(self):
+        """Test creating a minimal TransformationError."""
+        error = TransformationError("Transformation failed")
+
+        assert error.message == "Transformation failed"
+        assert error.details == {}
+
+    def test_transformation_error_with_pattern(self):
+        """Test creating a TransformationError with pattern type."""
+        error = TransformationError("Assert rewrite failed", pattern_type="assert_equal")
+
+        assert error.message == "Assert rewrite failed"
+        assert error.details == {"pattern_type": "assert_equal"}
+
+
+class TestTransformationValidationError:
+    """Test the TransformationValidationError class."""
+
+    def test_minimal_validation_error(self):
+        """Test creating a minimal TransformationValidationError."""
+        error = TransformationValidationError("CST validation failed")
+
+        assert error.message == "CST validation failed"
+        assert error.details == {"pattern_type": "validation"}
+
+    def test_validation_error_inheritance(self):
+        """Test that TransformationValidationError inherits properly."""
+        error = TransformationValidationError("Validation failed")
+
+        assert isinstance(error, TransformationValidationError)
+        assert isinstance(error, TransformationError)
+        assert isinstance(error, Exception)
+
+
+class TestParametrizeConversionError:
+    """Test the ParametrizeConversionError class."""
+
+    def test_default_parametrize_error(self):
+        """Test creating a ParametrizeConversionError with default message."""
+        error = ParametrizeConversionError()
+
+        assert error.message == "Cannot safely convert subTest loop to parametrize"
+        assert error.details == {"pattern_type": "parametrize"}
+
+    def test_custom_parametrize_error(self):
+        """Test creating a ParametrizeConversionError with custom message."""
+        error = ParametrizeConversionError("Custom parametrize error")
+
+        assert error.message == "Custom parametrize error"
+        assert error.details == {"pattern_type": "parametrize"}
+
+    def test_parametrize_error_inheritance(self):
+        """Test that ParametrizeConversionError inherits properly."""
+        error = ParametrizeConversionError()
+
+        assert isinstance(error, ParametrizeConversionError)
+        assert isinstance(error, TransformationError)
         assert isinstance(error, Exception)

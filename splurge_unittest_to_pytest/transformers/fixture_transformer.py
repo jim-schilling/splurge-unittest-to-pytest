@@ -103,12 +103,12 @@ def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[
         try:
             # Try parsing as an expression (simple assignments/expressions)
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 # Parse full statement and append it regardless of its concrete type
                 parsed_stmt = cst.parse_module(setup_line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
@@ -116,11 +116,11 @@ def create_class_fixture(setup_class_code: list[str], teardown_class_code: list[
     for teardown_line in teardown_class_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     if not body_statements:
@@ -170,11 +170,11 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
     for setup_line in setup_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(setup_line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(setup_line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Yield(value=None))]))
@@ -182,11 +182,11 @@ def create_instance_fixture(setup_code: list[str], teardown_code: list[str]) -> 
     for teardown_line in teardown_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     if not body_statements:
@@ -230,11 +230,11 @@ def create_teardown_fixture(teardown_code: list[str]) -> cst.FunctionDef:
     for teardown_line in teardown_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(teardown_line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(teardown_line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     func = cst.FunctionDef(
@@ -279,11 +279,11 @@ def create_module_fixture(setup_module_code: list[str], teardown_module_code: li
     for line in setup_module_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     # Insert the yield for teardown pairing
@@ -292,11 +292,11 @@ def create_module_fixture(setup_module_code: list[str], teardown_module_code: li
     for line in teardown_module_code:
         try:
             body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.parse_expression(line))]))
-        except Exception:
+        except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
             try:
                 parsed_stmt = cst.parse_module(line).body[0]
                 body_statements.append(parsed_stmt)
-            except Exception:
+            except (AttributeError, TypeError, IndexError, cst.ParserSyntaxError):
                 body_statements.append(cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))]))
 
     if not body_statements:
