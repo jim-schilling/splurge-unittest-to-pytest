@@ -267,6 +267,7 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         parametrize_include_ids: bool | None = None,
         parametrize_add_annotations: bool | None = None,
         decision_model: Any | None = None,
+        config: Any | None = None,
     ) -> None:
         self._import_tracker = RegexImportTracker()
         self._fixture_state = FixtureCollectionState()
@@ -282,6 +283,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         )
         # Decision model for enhanced transformation decisions
         self.decision_model = decision_model
+        # Migration configuration for transformation settings
+        self.config = config
         # Replacement registry for two-pass metadata-based replacements
         self.replacement_registry = ReplacementRegistry()
         # Debugging flag to enable verbose internal tracing
@@ -1368,8 +1371,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                     "assertGreaterEqual": transform_assert_greater_equal,
                     "assertLess": transform_assert_less,
                     "assertLessEqual": transform_assert_less_equal,
-                    "assertAlmostEqual": transform_assert_almost_equal,
-                    "assertNotAlmostEqual": transform_assert_not_almost_equal,
+                    "assertAlmostEqual": lambda node: transform_assert_almost_equal(node, config=self.config),
+                    "assertNotAlmostEqual": lambda node: transform_assert_not_almost_equal(node, config=self.config),
                     # assertLogs/assertNoLogs handled by wrap_assert_logs_in_block
                     "assertRegex": lambda node: transform_assert_regex(
                         node, re_alias=self.re_alias, re_search_name=self.re_search_name

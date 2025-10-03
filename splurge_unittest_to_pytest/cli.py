@@ -190,6 +190,7 @@ def create_config(
     generate_report: bool = True,
     report_format: str = "json",
     test_method_prefixes: list[str] | None = None,
+    assert_places: int = 7,
     suffix: str = "",
     ext: str | None = None,
 ) -> MigrationConfig:
@@ -237,6 +238,7 @@ def create_config(
         backup_originals=backup_originals,
         backup_root=backup_root,
         line_length=line_length,
+        assert_almost_equal_places=assert_places,
         dry_run=dry_run,
         fail_fast=fail_fast,
         verbose=verbose,
@@ -422,6 +424,9 @@ def migrate(
     test_method_prefixes: list[str] = typer.Option(
         ["test"], "--prefix", help="Allowed test method prefixes (repeatable)"
     ),
+    assert_places: int = typer.Option(
+        7, "--assert-places", help="Default decimal places for assertAlmostEqual transformations (1-15)"
+    ),
     suffix: str = typer.Option("", "--suffix", help="Suffix appended to target filename stem (default: '')"),
     ext: str | None = typer.Option(
         None,
@@ -489,6 +494,7 @@ def migrate(
             generate_report=generate_report,
             report_format=report_format,
             test_method_prefixes=test_method_prefixes,
+            assert_places=assert_places,
             suffix=suffix,
             ext=ext,
         )

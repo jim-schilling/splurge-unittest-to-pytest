@@ -24,9 +24,17 @@ This software is released under the MIT License.
 """
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import libcst as cst
+
+# Import error reporting for enhanced debugging
+try:
+    from .error_reporting import report_transformation_error
+except ImportError:
+    # Fallback if error reporting not available
+    def report_transformation_error(error, component, operation, **kwargs):
+        pass
 
 # Debug collector removed; transformations should be silent in normal runs
 
@@ -358,7 +366,7 @@ def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
     return node
 
 
-def transform_assert_not_almost_equal(node: cst.Call) -> cst.CSTNode:
+def transform_assert_not_almost_equal(node: cst.Call, config: Any | None = None) -> cst.CSTNode:
     """Rewrite ``assertNotAlmostEqual`` to a negated numeric comparison.
 
     The unittest form ``self.assertNotAlmostEqual(a, b, places=N)`` is
@@ -384,7 +392,9 @@ def transform_assert_not_almost_equal(node: cst.Call) -> cst.CSTNode:
                 places = arg.value
                 break
         if places is None:
-            places = cst.Integer(value="7")
+            # Use config value if available, otherwise default to 7
+            places_value = getattr(config, "assert_almost_equal_places", 7) if config else 7
+            places = cst.Integer(value=str(places_value))
         diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
         round_call = cst.Call(func=cst.Name(value="round"), args=[cst.Arg(value=diff), cst.Arg(value=places)])
         comp = cst.Comparison(
@@ -1108,8 +1118,35 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
         next_stmt = statements[i + 1] if (i + 1) < len(statements) else None
         new_with, consumed = create_with_wrapping_next_stmt(with_item, next_stmt)
         return [new_with], consumed, True
-    except (AttributeError, TypeError, IndexError):
-        # Conservative: do not handle on errors
+    except AttributeError as e:
+        # Malformed CST node structure
+        from .error_reporting import report_transformation_error
+
+        report_transformation_error(
+            e, "assert_transformer", "handle_bare_assert_call", suggestions=["Check AST node structure in source code"]
+        )
+        return [], 0, False
+    except TypeError as e:
+        # Type mismatch in node processing
+        from .error_reporting import report_transformation_error
+
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "handle_bare_assert_call",
+            suggestions=["Verify node types in transformation logic"],
+        )
+        return [], 0, False
+    except IndexError as e:
+        # Array/list access error
+        from .error_reporting import report_transformation_error
+
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "handle_bare_assert_call",
+            suggestions=["Check statement indexing in transformation"],
+        )
         return [], 0, False
 
 
@@ -1501,8 +1538,14 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
         if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
             try:
                 nodes_to_append, consumed, handled = handle_bare_assert_call(statements, i)
-            except (AttributeError, TypeError, IndexError):
-                # be conservative on errors and fall back to original behavior
+            except (AttributeError, TypeError, IndexError) as e:
+                # Report specific errors but maintain conservative fallback
+                report_transformation_error(
+                    e,
+                    "assert_transformer",
+                    "wrap_assert_in_block",
+                    suggestions=["Check statement structure in transformation"],
+                )
                 nodes_to_append, consumed, handled = ([], 0, False)
 
             if handled:
@@ -1514,61 +1557,90 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
         elif isinstance(stmt, cst.With):
             try:
                 new_with, alias_name, changed = transform_with_items(stmt)
-
-                if not changed:
-                    # Nothing to do; append original and mark handled to
-                    # avoid falling through and appending twice.
-                    out.append(stmt)
-                    i += 1
-                    wrapped = True
-                else:
-                    # If the transformed With had alias(es) that should be
-                    # rewritten inside the block, rewrite for each original
-                    # alias name found on the incoming With items. This handles
-                    # multi-item parenthesized With statements that bind more
-                    # than one alias (for example ``with A as a, B as b:``).
-                    try:
-                        alias_names: list[str] = []
-                        for it in stmt.items:
-                            try:
-                                if (
-                                    it.asname
-                                    and isinstance(it.asname, cst.AsName)
-                                    and isinstance(it.asname.name, cst.Name)
-                                ):
-                                    alias_names.append(it.asname.name.value)
-                            except (AttributeError, TypeError, IndexError):
-                                pass
-
-                        # Rewrite the with-body for each alias found.
-                        for a in alias_names:
-                            try:
-                                new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
-                            except (AttributeError, TypeError, IndexError):
-                                pass
-
-                    except (AttributeError, TypeError, IndexError):
-                        pass
-
-                    out.append(new_with)
-
-                    # Also rewrite a small window of following statements for
-                    # each alias so references outside the with-block are
-                    # updated to caplog usage where possible.
-                    try:
-                        for a in alias_names:
-                            try:
-                                rewrite_following_statements_for_alias(statements, i + 1, a)
-                            except (AttributeError, TypeError, IndexError):
-                                pass
-                    except (AttributeError, TypeError, IndexError):
-                        pass
-
-                    i += 1
-                    wrapped = True
-            except (AttributeError, TypeError, IndexError):
-                # Conservative fallback: keep original With
+            except (AttributeError, TypeError, ValueError) as e:
+                # Report specific errors but maintain conservative fallback
+                report_transformation_error(
+                    e,
+                    "assert_transformer",
+                    "wrap_assert_in_block",
+                    suggestions=["Check With statement structure in transformation"],
+                )
+                # Keep original statement on error
                 out.append(stmt)
+                i += 1
+                wrapped = True
+                continue
+
+            if not changed:
+                # Nothing to do; append original and mark handled to
+                # avoid falling through and appending twice.
+                out.append(stmt)
+                i += 1
+                wrapped = True
+            else:
+                # If the transformed With had alias(es) that should be
+                # rewritten inside the block, rewrite for each original
+                # alias name found on the incoming With items. This handles
+                # multi-item parenthesized With statements that bind more
+                # than one alias (for example ``with A as a, B as b:``).
+                try:
+                    alias_names: list[str] = []
+                    for it in stmt.items:
+                        try:
+                            if it.asname and isinstance(it.asname, cst.AsName) and isinstance(it.asname.name, cst.Name):
+                                alias_names.append(it.asname.name.value)
+                        except (AttributeError, TypeError, IndexError) as e:
+                            report_transformation_error(
+                                e,
+                                "assert_transformer",
+                                "wrap_assert_in_block",
+                                suggestions=["Check With item structure"],
+                            )
+
+                    # Rewrite the with-body for each alias found.
+                    for a in alias_names:
+                        try:
+                            new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
+                        except (AttributeError, TypeError, IndexError) as e:
+                            report_transformation_error(
+                                e,
+                                "assert_transformer",
+                                "wrap_assert_in_block",
+                                suggestions=["Check alias rewriting logic"],
+                            )
+
+                except (AttributeError, TypeError, IndexError) as e:
+                    report_transformation_error(
+                        e,
+                        "assert_transformer",
+                        "wrap_assert_in_block",
+                        suggestions=["Check With statement alias processing"],
+                    )
+
+                out.append(new_with)
+
+                # Also rewrite a small window of following statements for
+                # each alias so references outside the with-block are
+                # updated to caplog usage where possible.
+                try:
+                    for a in alias_names:
+                        try:
+                            rewrite_following_statements_for_alias(statements, i + 1, a)
+                        except (AttributeError, TypeError, IndexError) as e:
+                            report_transformation_error(
+                                e,
+                                "assert_transformer",
+                                "wrap_assert_in_block",
+                                suggestions=["Check following statement rewriting"],
+                            )
+                except (AttributeError, TypeError, IndexError) as e:
+                    report_transformation_error(
+                        e,
+                        "assert_transformer",
+                        "wrap_assert_in_block",
+                        suggestions=["Check alias statement processing"],
+                    )
+
                 i += 1
                 wrapped = True
 
@@ -1615,16 +1687,29 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
                         # inner context-manager rewrites are not lost.
                         try:
                             new_try = _recursively_rewrite_withs(new_try)
-                        except (AttributeError, TypeError, IndexError):
-                            pass
+                        except (AttributeError, TypeError, IndexError) as e:
+                            report_transformation_error(
+                                e,
+                                "assert_transformer",
+                                "wrap_assert_in_block",
+                                suggestions=["Check nested With rewriting in Try blocks"],
+                            )
                         out.append(new_try)
                         i += 1
                         continue
-                    except (AttributeError, TypeError, IndexError):
-                        # fallback to original stmt on any error
-                        pass
-            except (AttributeError, TypeError, IndexError):
-                pass
+                    except (AttributeError, TypeError, IndexError) as e:
+                        # Report error but fallback to original stmt
+                        report_transformation_error(
+                            e,
+                            "assert_transformer",
+                            "wrap_assert_in_block",
+                            suggestions=["Check Try block transformation logic"],
+                        )
+            except (AttributeError, TypeError, IndexError) as e:
+                # Report error in Try processing
+                report_transformation_error(
+                    e, "assert_transformer", "wrap_assert_in_block", suggestions=["Check Try statement structure"]
+                )
 
             out.append(stmt)
             i += 1
@@ -2008,7 +2093,7 @@ def transform_assert_less_equal(node: cst.Call) -> cst.CSTNode:
     return node
 
 
-def transform_assert_almost_equal(node: cst.Call) -> cst.CSTNode:
+def transform_assert_almost_equal(node: cst.Call, config: Any | None = None) -> cst.CSTNode:
     """Rewrite ``self.assertAlmostEqual(a, b[, places=N])`` to ``assert a == pytest.approx(b)`` or a ``round`` fallback.
 
     When ``places`` is omitted this helper prefers ``pytest.approx(b)``

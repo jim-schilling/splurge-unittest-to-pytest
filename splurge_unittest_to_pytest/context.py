@@ -96,6 +96,10 @@ class MigrationConfig:
     # Code quality flags removed: format_code, optimize_imports, add_type_hints
     line_length: int | None = 120  # Use black default (120) if None
 
+    # Transformation precision settings
+    assert_almost_equal_places: int = 7
+    """Default number of decimal places for assertAlmostEqual transformations (1-15)"""
+
     # Behavior settings
     dry_run: bool = False
     fail_fast: bool = False
@@ -395,7 +399,7 @@ class ContextManager:
             success or an error describing the problem.
         """
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml  # type: ignore
 
             with open(config_file, encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)

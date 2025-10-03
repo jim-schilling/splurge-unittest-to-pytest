@@ -46,7 +46,6 @@ def foo():
     assert "import re as re2" in out
 
 
-
 @pytest.mark.parametrize(
     "src, transformer_kwargs, expect_pytest, expect_re",
     [

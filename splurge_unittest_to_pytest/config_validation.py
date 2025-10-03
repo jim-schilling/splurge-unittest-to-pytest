@@ -51,6 +51,9 @@ class ValidatedMigrationConfig(BaseModel):
 
     # Transformation settings
     line_length: int | None = Field(default=120, ge=60, le=200, description="Maximum line length")
+    assert_almost_equal_places: int = Field(
+        default=7, ge=1, le=15, description="Default decimal places for assertAlmostEqual transformations"
+    )
     dry_run: bool = Field(default=False, description="Whether to perform a dry run")
     fail_fast: bool = Field(default=False, description="Whether to fail on first error")
 
@@ -88,6 +91,15 @@ class ValidatedMigrationConfig(BaseModel):
         for prefix in v:
             if not isinstance(prefix, str) or not prefix.strip():
                 raise ValueError(f"Invalid test method prefix: {prefix}")
+        return v
+
+    @field_validator("assert_almost_equal_places")
+    @classmethod
+    def validate_assert_places(cls, v):
+        if not isinstance(v, int):
+            raise ValueError("assert_almost_equal_places must be an integer")
+        if v < 1 or v > 15:
+            raise ValueError("assert_almost_equal_places must be between 1 and 15")
         return v
 
     class Config:
