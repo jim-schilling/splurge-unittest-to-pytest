@@ -59,7 +59,12 @@ class UnittestFileDetector(ast.NodeVisitor):
         try:
             tree = ast.parse(source_code, filename=str(file_path))
         except SyntaxError as e:
+            # Re-raise SyntaxError with file context to match tests' expectations
             raise SyntaxError(f"Invalid Python syntax in {file_path}") from e
+        except ValueError as e:
+            # ast.parse raises ValueError when the source contains null bytes
+            # Tests expect a SyntaxError for binary files; normalize to SyntaxError
+            raise SyntaxError(f"Invalid Python syntax in {file_path}: {e}") from e
 
         # Reset state and visit the AST
         self.has_unittest_import = False
