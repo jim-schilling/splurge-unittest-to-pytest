@@ -66,7 +66,7 @@ class MigrationOrchestrator:
         if not Path(source_file).exists():
             return Result.failure(FileNotFoundError(f"Source file not found: {source_file}"))
 
-        # Determine target file path. If a target_directory is provided in
+        # Determine target file path. If a target_root is provided in
         # the config, use it while preserving the original filename and
         # extension. Otherwise, let PipelineContext.create compute a default
         # (which preserves the original extension unless overridden by
@@ -74,9 +74,9 @@ class MigrationOrchestrator:
         target_file: str | None = None
         suffix = config.target_suffix if config else ""
 
-        if config and config.target_directory:
+        if config and config.target_root:
             src_path = Path(source_file)
-            dest_dir = Path(config.target_directory)
+            dest_dir = Path(config.target_root)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             # Determine extension to use (override if provided)

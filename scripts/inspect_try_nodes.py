@@ -4,7 +4,7 @@ from splurge_unittest_to_pytest.context import MigrationConfig
 from splurge_unittest_to_pytest.migration_orchestrator import MigrationOrchestrator
 
 orc = MigrationOrchestrator()
-config = MigrationConfig(target_directory=".", backup_originals=False, dry_run=True)
+config = MigrationConfig(target_root=".", backup_originals=False, dry_run=True)
 res = orc.migrate_file("tests/data/given_and_expected/unittest_given_09.txt", config)
 code = res.metadata.get("generated_code")
 mod = cst.parse_module(code)

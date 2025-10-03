@@ -8,7 +8,7 @@ def test_create_config_defaults():
     cfg = cli.create_config()
     # basic sanity checks on returned MigrationConfig
     assert cfg is not None
-    assert hasattr(cfg, "target_directory")
+    assert hasattr(cfg, "target_root")
     assert cfg.enable_decision_analysis is True
 
 

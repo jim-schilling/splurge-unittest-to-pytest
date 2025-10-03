@@ -30,7 +30,7 @@ from .events import (
 from .pipeline import PipelineFactory
 
 # Initialize typer app
-app = typer.Typer(name="unittest-to-pytest", help="Migrate unittest test suites to pytest format", add_completion=False)
+app = typer.Typer(name="splurge-unittest-to-pytest", help="Migrate unittest test suites to pytest format", add_completion=False)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -174,7 +174,7 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
 
 
 def create_config(
-    target_directory: str | None = None,
+    target_root: str | None = None,
     root_directory: str | None = None,
     file_patterns: list[str] | None = None,
     recurse_directories: bool = True,
@@ -227,7 +227,7 @@ def create_config(
     base = MigrationConfig()
 
     return MigrationConfig(
-        target_directory=target_directory,
+        target_root=target_root,
         root_directory=root_directory,
         file_patterns=file_patterns or base.file_patterns,
         recurse_directories=recurse_directories,
@@ -385,7 +385,7 @@ def migrate(
         ["test_*.py"], "--file", "-f", help="Glob patterns for input files (repeatable)"
     ),
     recurse: bool = typer.Option(True, "--recurse", "-r", help="Recurse directories when searching for files"),
-    target_directory: str | None = typer.Option(None, "--target-dir", "-t", help="Target directory for output files"),
+    target_root: str | None = typer.Option(None, "--target-root", "-t", help="Target root directory for output files"),
     skip_backup: bool = typer.Option(False, "--skip-backup", "-sb", help="Skip backup of original files", is_flag=True),
     backup_root: str | None = typer.Option(
         None, "--backup-root", help="Root directory for backup files (preserves folder structure when recursing)"
@@ -433,7 +433,7 @@ def migrate(
         root_directory: Optional root directory to search when using patterns.
         file_patterns: Glob patterns used to discover input files.
         recurse: Recurse directories when searching for files.
-        target_directory: Directory where converted files will be written.
+        target_root: Root directory where converted files will be written.
         backup_originals: When True create backups of original files prior to overwriting.
         backup_root: Root directory for backup files. When specified, backups preserve folder structure.
         line_length: Maximum line length used by code formatters.
@@ -469,7 +469,7 @@ def migrate(
 
         # Create configuration (decision model always enabled, parametrize always enabled by default)
         config = create_config(
-            target_directory=target_directory,
+            target_root=target_root,
             root_directory=root_directory,
             file_patterns=file_patterns,
             recurse_directories=recurse,
@@ -637,7 +637,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "# This file contains configuration options for the migration tool.": None,
         "# You can override these settings using command-line flags.": None,
         "# Output settings": None,
-        "target_directory": default_config.get("target_directory"),
+        "target_root": default_config.get("target_root"),
         "backup_originals": default_config.get("backup_originals"),
         "backup_root": default_config.get("backup_root"),
         "# Transformation settings": None,
@@ -670,6 +670,9 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
     except Exception as e:
         logger.error(f"Failed to create configuration file: {e}")
         raise typer.Exit(code=1) from None
+
+
+__all__ = ["create_config", "create_event_bus", "attach_progress_handlers"]
 
 
 def main() -> None:

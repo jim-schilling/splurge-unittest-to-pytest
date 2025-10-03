@@ -7,7 +7,7 @@ orchestrator = MigrationOrchestrator()
 
 files = sorted(glob.glob("tests/data/given_and_expected/unittest_given_2*.txt"))
 for f in files:
-    cfg = MigrationConfig(target_directory=".", backup_originals=False)
+    cfg = MigrationConfig(target_root=".", backup_originals=False)
     res = orchestrator.migrate_file(f, cfg)
     out_name = f.replace("unittest_given_", "pytest_expected_")
     if res.is_success():

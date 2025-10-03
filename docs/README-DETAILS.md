@@ -257,7 +257,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``-d, --dir DIR``: Root directory for input discovery.
 - ``-f, --file PATTERN``: Glob pattern(s) to select files (repeatable). Default: ``test_*.py``.
 - ``-r, --recurse / --no-recurse``: Recurse directories (default: recurse).
-- ``-t, --target-dir DIR``: Directory to write outputs.
+- ``-t, --target-root DIR``: Root directory to write outputs.
 - ``--backup-root DIR``: Root directory for backup files when recursing. When specified, backups preserve folder structure. By default, backups are created next to the original files.
 - ``--skip-backup``: Skip creating a ``.backup`` copy of originals when writing (presence-only flag). By default the tool creates a ``.backup`` file next to the original when writing; if a ``.backup`` file already exists it will be preserved and not overwritten.
 - ``--line-length N``: Max line length used by formatters (default: 120).
