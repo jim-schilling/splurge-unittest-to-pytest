@@ -25,6 +25,33 @@ def _build_get_message_call(access: "_orig.AliasOutputAccess") -> cst.Call:
 __all__ = ["_extract_alias_output_slices", "_build_caplog_records_expr"]
 
 
+def _create_robust_regex(pattern: str) -> str:
+    """Delegate robust regex creation to the original module (conservative shim)."""
+    try:
+        return _orig._create_robust_regex(pattern)
+    except Exception:
+        return pattern
+
+
+def transform_caplog_alias_string_fallback(code: str) -> str:
+    """Delegate string-level caplog alias fallbacks to the original implementation."""
+    try:
+        return _orig.transform_caplog_alias_string_fallback(code)
+    except Exception:
+        return code
+
+
+def transform_assert_dict_equal(node: cst.Call) -> cst.CSTNode:
+    """Delegate assert-dict-equal transform to AST rewrites shim."""
+    try:
+        return _orig.transform_assert_dict_equal(node)
+    except Exception:
+        return node
+
+
+__all__.extend(["_create_robust_regex", "transform_caplog_alias_string_fallback", "transform_assert_dict_equal"])
+
+
 def _rewrite_membership_comparison(
     comp_node: cst.Comparison,
     alias_name: str,
@@ -355,6 +382,55 @@ def get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
     return None  # type: ignore[unreachable]
 
 
+# Explicit mapping from unittest assert method name -> original module transform function name.
+# This is clearer and easier to extend than an ad-hoc CamelCase->snake_case heuristic.
+ASSERT_METHOD_TO_TRANSFORM: dict[str, str] = {
+    "assertEqual": "transform_assert_equal",
+    "assertNotEqual": "transform_assert_not_equal",
+    "assertIn": "transform_assert_in",
+    "assertNotIn": "transform_assert_not_in",
+    "assertTrue": "transform_assert_true",
+    "assertFalse": "transform_assert_false",
+    "assertIs": "transform_assert_is",
+    "assertIsNot": "transform_assert_is_not",
+    "assertIsNone": "transform_assert_is_none",
+    "assertIsNotNone": "transform_assert_is_not_none",
+    "assertRaises": "transform_assert_raises",
+    "assertRaisesRegex": "transform_assert_raises_regex",
+    "assertRegex": "transform_assert_regex",
+    "assertNotRegex": "transform_assert_not_regex",
+    "assertCountEqual": "transform_assert_count_equal",
+    "assertAlmostEqual": "transform_assert_almost_equal",
+    "assertGreater": "transform_assert_greater",
+    "assertGreaterEqual": "transform_assert_greater_equal",
+    "assertLess": "transform_assert_less",
+    "assertLessEqual": "transform_assert_less_equal",
+    "assertSequenceEqual": "transform_assert_sequence_equal",
+    "assertListEqual": "transform_assert_list_equal",
+    "assertTupleEqual": "transform_assert_tuple_equal",
+    "assertSetEqual": "transform_assert_set_equal",
+    "assertDictEqual": "transform_assert_dict_equal",
+    "assertDictContainsSubset": "transform_assert_dict_contains_subset",
+    "assertAlmostEquals": "transform_assert_almost_equal",  # alias spelling
+    "assertItemsEqual": "transform_assert_items_equal",  # Py2 name sometimes encountered
+}
+
+
+def _lookup_transform_fn_for_assert_method(method_name: str):
+    """Return a callable transform function from the original module for the
+    given unittest method name, or None when not available.
+
+    This centralizes the mapping and makes it easy to add additional
+    assert-methods later. The mapping stores function names to avoid
+    importing many symbols; we resolve them via getattr on the original
+    module to preserve the delegation pattern used elsewhere in this file.
+    """
+    fn_name = ASSERT_METHOD_TO_TRANSFORM.get(method_name)
+    if not fn_name:
+        return None
+    return getattr(_orig, fn_name, None)
+
+
 def get_caplog_level_args(call_expr: cst.Call) -> list[cst.Arg]:
     """Extract args suitable for ``caplog.at_level`` from an ``assertLogs`` call.
 
@@ -647,6 +723,44 @@ def rewrite_following_statements_for_alias(
     for idx in range(start_index, end):
         try:
             s = statements[idx]
+            # Handle SimpleStatementLine containing a self/cls assert* call
+            # e.g. ``self.assertEqual(len(log.output), 1)``. Convert known
+            # assertX calls into their AST-shaped Assert form using the
+            # original module's transform_assert_* helpers, then attempt
+            # to rewrite the resulting Assert for alias references.
+            if isinstance(s, cst.SimpleStatementLine):
+                body = getattr(s, "body", None)
+                if isinstance(body, list | tuple) and len(body) == 1 and isinstance(body[0], cst.Expr):
+                    expr = body[0].value
+                    if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
+                        func_attr = expr.func
+                        owner = getattr(func_attr, "value", None)
+                        # Only consider self/cls owned assert calls
+                        if isinstance(owner, cst.Name) and owner.value in {"self", "cls"}:
+                            attr = func_attr.attr
+                            if isinstance(attr, cst.Name):
+                                # Map known unittest assert method names to the
+                                # original module's transform function using the
+                                # explicit mapping helper. This is clearer and
+                                # handles irregular names like 'assertRaisesRegex'.
+                                mname = attr.value
+                                transform_fn = _lookup_transform_fn_for_assert_method(mname)
+                                if callable(transform_fn):
+                                    try:
+                                        transformed = transform_fn(expr)
+                                    except Exception:
+                                        transformed = None
+                                    # If we get an Assert node back, attempt to
+                                    # rewrite it for alias references and replace
+                                    # the statement in-place when successful.
+                                    if isinstance(transformed, cst.Assert):
+                                        try:
+                                            r = rewrite_single_alias_assert(transformed, alias_name)
+                                        except Exception:
+                                            r = None
+                                        if r is not None:
+                                            statements[idx] = cst.SimpleStatementLine(body=[r])
+                                            continue
             # libCST often wraps top-level asserts in a SimpleStatementLine whose
             # body contains a single Assert node. Support both shapes so the
             # in-place rewrite updates the list correctly.
