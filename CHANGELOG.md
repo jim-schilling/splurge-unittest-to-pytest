@@ -8,6 +8,9 @@
 - Added unit tests:
 	- `tests/unit/test_caplog_helpers_basic.py` for caplog helper behavior.
 	- `tests/unit/test_debug_gate_basic.py` for debug gate behavior.
+ - Added additional unit tests for path utilities:
+    - `tests/unit/test_path_utils_basic.py` (basic validation and ensure_parent_dir)
+    - `tests/unit/test_path_utils_edgecases.py` (empty path, invalid chars, Windows long-path, permission error simulation)
 
 ### Changed
 - `splurge_unittest_to_pytest.transformers.assert_transformer` now delegates caplog-related behavior to `_caplog_helpers` and re-exports thin compatibility shims to preserve public APIs.

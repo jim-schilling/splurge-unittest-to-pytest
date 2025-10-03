@@ -8,7 +8,6 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
-import os
 import platform
 from pathlib import Path
 
@@ -62,11 +61,14 @@ def validate_source_path(source_path: str | Path) -> Path:
 
 
 def validate_target_path(target_path: str | Path, create_parent: bool = True) -> Path:
-    """Validate and prepare a target file path.
+    """Validate a target file path without performing side-effects.
+
+    This function performs only pure validation and does not create
+    directories or modify the filesystem. To perform the side-effect of
+    ensuring the parent directory exists, call `ensure_parent_dir()`.
 
     Args:
         target_path: Target path to validate
-        create_parent: Whether to create parent directories
 
     Returns:
         Normalized and validated Path object
@@ -77,26 +79,33 @@ def validate_target_path(target_path: str | Path, create_parent: bool = True) ->
     try:
         path = Path(target_path)
 
-        # Ensure parent directory exists or can be created
-        if create_parent and path.parent:
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-            except (OSError, PermissionError) as e:
-                raise PathValidationError(
-                    f"Cannot create parent directory: {e}", str(path.parent), "parent_creation"
-                ) from e
+        # Basic validation checks that do not modify the FS
+        if not str(path).strip():
+            raise PathValidationError("Target path cannot be empty", str(path), "empty_path")
 
-        # Check if target is writable (if it exists or parent exists)
-        if path.parent.exists():
-            if not os.access(path.parent, os.W_OK):
-                raise PathValidationError(
-                    f"Target directory is not writable: {path.parent}", str(path.parent), "write_permission"
-                )
+        # Check for invalid characters in path name
+        invalid_chars = '<>:"|?*'
+        if any(char in path.name for char in invalid_chars):
+            raise PathValidationError(f"Path contains invalid characters: {invalid_chars}", str(path), "invalid_chars")
 
         return path
 
     except (OSError, ValueError) as e:
         raise PathValidationError(f"Invalid target path: {e}", str(target_path), "target_format") from e
+
+
+def ensure_parent_dir(target_path: str | Path, exist_ok: bool = True) -> None:
+    """Side-effect: ensure the parent directory of target_path exists.
+
+    This function performs the filesystem modification previously baked
+    into `validate_target_path`.
+    """
+    path = Path(target_path)
+    try:
+        if path.parent:
+            path.parent.mkdir(parents=True, exist_ok=exist_ok)
+    except (OSError, PermissionError) as e:
+        raise PathValidationError(f"Cannot create parent directory: {e}", str(path.parent), "parent_creation") from e
 
 
 def normalize_path_for_display(path: str | Path, force_posix: bool = False) -> str:
