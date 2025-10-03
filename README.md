@@ -1,7 +1,7 @@
 
 # splurge-unittest-to-pytest
 
-[![Version](https://img.shields.io/badge/version-2025.0.1-blue.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
+
 [![PyPI](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![Development Status](https://img.shields.io/badge/Development%20Status-Alpha-lightgrey.svg)](#)
 

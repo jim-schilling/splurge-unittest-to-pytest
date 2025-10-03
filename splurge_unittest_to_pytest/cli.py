@@ -984,14 +984,14 @@ def migrate(
 
 @app.command("version")
 def version() -> None:
-    """Show the version of unittest-to-pytest."""
+    """Show the version of splurge-unittest-to-pytest."""
     from . import __version__
 
-    typer.echo(f"unittest-to-pytest {__version__}")
+    typer.echo(f"splurge-unittest-to-pytest {__version__}")
 
 
 @app.command("init-config")
-def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", help="Output configuration file")) -> None:
+def init_config(output_file: str = typer.Argument("splurge-unittest-to-pytest.yaml", help="Output configuration file")) -> None:
     """Initialize a configuration file with default settings.
 
     This command creates a configuration file with all available options
@@ -1008,7 +1008,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
 
     # Add comments to explain options
     config_with_comments = {
-        "# unittest-to-pytest Configuration File": None,
+        "# splurge-unittest-to-pytest Configuration File": None,
         "# This file contains configuration options for the migration tool.": None,
         "# You can override these settings using command-line flags.": None,
         "# Output settings": None,
