@@ -1768,7 +1768,13 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
         # Process the try body
         try_body = getattr(stmt, "body", None)
         if try_body is not None and hasattr(try_body, "body"):
-            new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(try_body.body)))
+            # try_body.body should be a tuple/list of statements
+            body_statements = try_body.body
+            if isinstance(body_statements, list | tuple):
+                new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(body_statements)))
+            else:
+                # If it's not a list/tuple, keep as is
+                new_try_body = try_body
         else:
             new_try_body = try_body
 
@@ -1777,8 +1783,13 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
         for h in getattr(stmt, "handlers", []) or []:
             h_body = getattr(h, "body", None)
             if h_body is not None and hasattr(h_body, "body"):
-                new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(h_body.body)))
-                new_h = h.with_changes(body=new_h_body)
+                # h_body.body should be a tuple/list of statements
+                body_statements = h_body.body
+                if isinstance(body_statements, list | tuple):
+                    new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(body_statements)))
+                    new_h = h.with_changes(body=new_h_body)
+                else:
+                    new_h = h
             else:
                 new_h = h
             new_handlers.append(new_h)
@@ -1786,12 +1797,18 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
         # Process orelse
         new_orelse = getattr(stmt, "orelse", None)
         if new_orelse is not None and hasattr(new_orelse, "body"):
-            new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(new_orelse.body)))
+            # new_orelse.body should be a tuple/list of statements
+            body_statements = new_orelse.body
+            if isinstance(body_statements, list | tuple):
+                new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(body_statements)))
 
         # Process finalbody
         new_finalbody = getattr(stmt, "finalbody", None)
         if new_finalbody is not None and hasattr(new_finalbody, "body"):
-            new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(new_finalbody.body)))
+            # new_finalbody.body should be a tuple/list of statements
+            body_statements = new_finalbody.body
+            if isinstance(body_statements, list | tuple):
+                new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(body_statements)))
 
         # Build new Try node with updated blocks
         new_try = stmt.with_changes(

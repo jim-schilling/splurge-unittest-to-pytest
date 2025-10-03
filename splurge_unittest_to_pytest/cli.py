@@ -21,6 +21,8 @@ from .context import ContextManager, MigrationConfig
 from .events import (
     ErrorEvent,
     EventBus,
+    JobCompletedEvent,
+    JobStartedEvent,
     LoggingSubscriber,
     PipelineCompletedEvent,
     PipelineStartedEvent,
@@ -149,10 +151,32 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
         try:
             src = Path(event.context.source_file)
             filename = src.name
-            typer.echo(f"Starting migration: {filename}")
+            typer.echo(f"Starting migration pipeline: {filename}")
         except (AttributeError, TypeError, ValueError) as e:
             # Context or source_file is malformed
             typer.echo(f"Starting migration (run_id={event.run_id}) - Warning: {e}")
+
+    def _on_job_started(event: JobStartedEvent) -> None:
+        from pathlib import Path
+
+        try:
+            src = Path(event.context.source_file)
+            filename = src.name
+            typer.echo(f"Starting job: {event.job_name} {filename}")
+        except (AttributeError, TypeError, ValueError) as e:
+            # Context or source_file is malformed
+            typer.echo(f"Starting job: {event.job_name} - Warning: {e}")
+
+    def _on_job_completed(event: JobCompletedEvent) -> None:
+        from pathlib import Path
+
+        try:
+            src = Path(event.context.source_file)
+            filename = src.name
+            typer.echo(f"Job completed: {event.job_name} {filename}")
+        except (AttributeError, TypeError, ValueError) as e:
+            # Context or source_file is malformed
+            typer.echo(f"Job completed: {event.job_name} - Warning: {e}")
 
     def _on_step_started(event: StepStartedEvent) -> None:
         # Make step names more user-friendly
@@ -194,6 +218,8 @@ def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None
         typer.echo(f"  [ERROR] Error in {event.component}: {event.error}")
 
     event_bus.subscribe(PipelineStartedEvent, _on_pipeline_started)
+    event_bus.subscribe(JobStartedEvent, _on_job_started)
+    event_bus.subscribe(JobCompletedEvent, _on_job_completed)
     event_bus.subscribe(StepStartedEvent, _on_step_started)
     event_bus.subscribe(StepCompletedEvent, _on_step_completed)
     event_bus.subscribe(PipelineCompletedEvent, _on_pipeline_completed)

@@ -14,7 +14,15 @@ from typing import Any, Generic, TypeVar
 
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, get_circuit_breaker
 from .context import PipelineContext
-from .events import EventBus, StepCompletedEvent, StepStartedEvent
+from .events import (
+    EventBus,
+    JobCompletedEvent,
+    JobStartedEvent,
+    PipelineCompletedEvent,
+    PipelineStartedEvent,
+    StepCompletedEvent,
+    StepStartedEvent,
+)
 from .result import Result, ResultStatus
 
 T = TypeVar("T")
@@ -225,6 +233,16 @@ class Job(Generic[T, R]):
         self.event_bus = event_bus
         self._logger = logging.getLogger(f"{__name__}.{name}")
 
+    def _get_timestamp(self) -> float:
+        """Get current timestamp for event publishing.
+
+        Returns:
+            Current timestamp as float
+        """
+        import time
+
+        return time.time()
+
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
         """Execute all tasks and thread context/data through them.
 
@@ -236,7 +254,19 @@ class Job(Generic[T, R]):
             ``Result`` containing final transformed data on success or the
             first encountered error.
         """
+        # Publish job started event
+        start_event = JobStartedEvent(
+            timestamp=self._get_timestamp(),
+            run_id=context.run_id,
+            context=context,
+            job_name=self.name,
+            job_type=self.__class__.__name__,
+            task_count=len(self.tasks),
+        )
+        self.event_bus.publish(start_event)
+
         self._logger.info(f"Starting job: {self.name} with {len(self.tasks)} tasks")
+        start_time = self._get_timestamp()
 
         current_context = context
         task_results = []
@@ -250,6 +280,20 @@ class Job(Generic[T, R]):
             if result.is_error():
                 self._logger.error(f"Task {task.name} failed, aborting job {self.name}")
                 error = result.error or RuntimeError(f"Job {self.name} failed at task {task.name}")
+
+                # Publish job completed event with error
+                duration_ms = (self._get_timestamp() - start_time) * 1000
+                completion_event = JobCompletedEvent(
+                    timestamp=self._get_timestamp(),
+                    run_id=context.run_id,
+                    context=context,
+                    job_name=self.name,
+                    job_type=self.__class__.__name__,
+                    final_result=result,
+                    duration_ms=duration_ms,
+                )
+                self.event_bus.publish(completion_event)
+
                 return Result.failure(
                     error,
                     {"job": self.name, "failed_task": task.name, "task_index": i, "context": context.run_id},
@@ -270,8 +314,23 @@ class Job(Generic[T, R]):
             if result.warnings:
                 all_warnings.extend(result.warnings)
 
-        # Return successful result with combined warnings
+        # Calculate duration and publish completion event
+        duration_ms = (self._get_timestamp() - start_time) * 1000
         final_result = task_results[-1]
+
+        # Publish job completed event
+        completion_event = JobCompletedEvent(
+            timestamp=self._get_timestamp(),
+            run_id=context.run_id,
+            context=context,
+            job_name=self.name,
+            job_type=self.__class__.__name__,
+            final_result=final_result,
+            duration_ms=duration_ms,
+        )
+        self.event_bus.publish(completion_event)
+
+        # Return successful result with combined warnings
         if all_warnings:
             return Result.warning(final_result.data, all_warnings, final_result.metadata)  # type: ignore
 
@@ -331,6 +390,16 @@ class Pipeline(Generic[T, R]):
         else:
             self.circuit_breaker = None
 
+    def _get_timestamp(self) -> float:
+        """Get current timestamp for event publishing.
+
+        Returns:
+            Current timestamp as float
+        """
+        import time
+
+        return time.time()
+
     def execute(self, context: PipelineContext, initial_input: Any = None) -> Result[R]:
         """Execute all jobs in the pipeline in order.
 
@@ -342,6 +411,15 @@ class Pipeline(Generic[T, R]):
             ``Result`` containing final transformed data on success or the
             first error encountered.
         """
+        # Publish pipeline started event
+        start_event = PipelineStartedEvent(
+            timestamp=self._get_timestamp(),
+            run_id=context.run_id,
+            context=context,
+        )
+        self.event_bus.publish(start_event)
+
+        start_time = self._get_timestamp()
         self._logger.info(f"Starting pipeline: {self.name} with {len(self.jobs)} jobs")
 
         current_context = context
@@ -361,6 +439,18 @@ class Pipeline(Generic[T, R]):
                 if result.is_error():
                     self._logger.error(f"Job {job.name} failed, aborting pipeline {self.name}")
                     error = result.error or RuntimeError(f"Pipeline {self.name} failed at job {job.name}")
+
+                    # Publish pipeline completed event with error
+                    duration_ms = (self._get_timestamp() - start_time) * 1000
+                    completion_event = PipelineCompletedEvent(
+                        timestamp=self._get_timestamp(),
+                        run_id=context.run_id,
+                        context=context,
+                        final_result=result,
+                        duration_ms=duration_ms,
+                    )
+                    self.event_bus.publish(completion_event)
+
                     return Result.failure(
                         error,
                         {"pipeline": self.name, "failed_job": job.name, "job_index": i, "context": context.run_id},
@@ -368,6 +458,19 @@ class Pipeline(Generic[T, R]):
             except Exception as e:
                 # Circuit breaker open or other execution error
                 self._logger.error(f"Job {job.name} execution failed with circuit breaker protection: {e}")
+
+                # Publish pipeline completed event with exception
+                duration_ms = (self._get_timestamp() - start_time) * 1000
+                error_result: Result[R] = Result.failure(e)
+                completion_event = PipelineCompletedEvent(
+                    timestamp=self._get_timestamp(),
+                    run_id=context.run_id,
+                    context=context,
+                    final_result=error_result,
+                    duration_ms=duration_ms,
+                )
+                self.event_bus.publish(completion_event)
+
                 return Result.failure(
                     e,
                     {
@@ -394,8 +497,21 @@ class Pipeline(Generic[T, R]):
             if result.warnings:
                 all_warnings.extend(result.warnings)
 
-        # Return successful result with combined warnings
+        # Calculate duration and publish completion event
+        duration_ms = (self._get_timestamp() - start_time) * 1000
         final_result = job_results[-1]
+
+        # Publish pipeline completed event
+        completion_event = PipelineCompletedEvent(
+            timestamp=self._get_timestamp(),
+            run_id=context.run_id,
+            context=context,
+            final_result=final_result,
+            duration_ms=duration_ms,
+        )
+        self.event_bus.publish(completion_event)
+
+        # Return successful result with combined warnings
         if all_warnings:
             return Result.warning(final_result.data, all_warnings, final_result.metadata)
 
