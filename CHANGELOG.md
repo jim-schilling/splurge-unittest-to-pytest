@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2025.0.4] 2025-10-03
+
+- Fixed version number in `__init__.py` and `pyproject.toml` to `2025.0.4`.
+- Updated CLI command descriptions to reference `splurge-unittest-to-pytest` instead of `unittest-to-pytest`.
+- Updated default configuration file name in `init-config` command to `splurge-unittest-to-pytest.yaml`.
+- Removed stray test files from the project root directory.
+
 ## [2025.0.3] 2025-10-03
 
 **Medium Priority Brittleness Remediation - COMPLETED**

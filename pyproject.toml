@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.0.3"
-description = "A robust tool for migrating unittest test suites to pytest format"
+version = "2025.0.4"
+description = "A tool for migrating unittest test suites to pytest format"
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["unittest", "pytest", "migration", "testing", "code-transformation"]
