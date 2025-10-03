@@ -40,6 +40,7 @@ class TestMath(unittest.TestCase):
         if isinstance(gen, dict):
             # Coerce keys to plain strings (Path objects may be present)
             from pathlib import Path as _P
+
             for k, v in gen.items():
                 try:
                     gen_map[str(_P(k))] = v
@@ -51,6 +52,7 @@ class TestMath(unittest.TestCase):
             path = result.data[0] if isinstance(result.data, list) and result.data else (result.data or "")
             try:
                 from pathlib import Path as _P
+
                 gen_map[str(_P(path))] = gen
             except Exception:
                 gen_map[str(path)] = gen
