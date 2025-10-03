@@ -320,6 +320,7 @@ All flags are available on the ``migrate`` command. Summary below; use
 
 ## Advanced Options
 - ``--source-map``: Create source mapping for debugging transformations (advanced users) (presence-only flag).
+- ``--max-depth``: Maximum depth to traverse nested control flow structures (3-15, default: 7). Controls how deeply the transformer explores nested control flow blocks (try/except/else/finally, with, if/else, for/else, while/else) when processing assertions.
 
 YAML Configuration File Format
 -------------------------------
@@ -388,6 +389,7 @@ report_format: "json"
 
 # Advanced Options
 create_source_map: false
+max_depth: 7
 ```
 
 ### Configuration File Usage

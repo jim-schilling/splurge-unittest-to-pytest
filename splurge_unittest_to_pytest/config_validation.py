@@ -81,6 +81,9 @@ class ValidatedMigrationConfig(BaseModel):
     # Advanced options
     preserve_file_encoding: bool = Field(default=True, description="Whether to preserve original file encoding")
     create_source_map: bool = Field(default=False, description="Whether to create source mapping for debugging")
+    max_depth: int = Field(
+        default=7, ge=3, le=15, description="Maximum depth to traverse nested control flow structures"
+    )
 
     # Test method patterns
     test_method_prefixes: list[str] = Field(

@@ -641,7 +641,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 continue
 
             try:
-                wrapped_nodes = wrap_assert_in_block([node])
+                max_depth = getattr(self.config, "max_depth", 7) if self.config else 7
+                wrapped_nodes = wrap_assert_in_block([node], max_depth)
                 rewritten.extend(wrapped_nodes)
             except (AttributeError, TypeError, ValueError):
                 # Assert wrapping failed, keep original
@@ -1124,7 +1125,8 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
             node = self._rewrite_function_decorators(node)
             node, body_statements = self._convert_simple_subtests(original_node, node)
             try:
-                wrapped_body = wrap_assert_in_block(body_statements)
+                max_depth = getattr(self.config, "max_depth", 7) if self.config else 7
+                wrapped_body = wrap_assert_in_block(body_statements, max_depth)
             except (AttributeError, TypeError, ValueError):
                 wrapped_body = body_statements
             node = node.with_changes(body=node.body.with_changes(body=wrapped_body))

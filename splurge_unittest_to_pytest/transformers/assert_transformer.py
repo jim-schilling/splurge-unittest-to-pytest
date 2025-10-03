@@ -1561,7 +1561,7 @@ def _handle_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], 
         return None
 
 
-def _handle_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
+def _handle_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
     """Handle a Try statement with recursive processing.
 
     Args:
@@ -1571,7 +1571,7 @@ def _handle_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
         Processed statement or None if no changes needed
     """
     try:
-        return _process_try_statement(stmt)
+        return _process_try_statement(stmt, max_depth)
     except (AttributeError, TypeError, IndexError) as e:
         report_transformation_error(
             e,
@@ -1583,7 +1583,7 @@ def _handle_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
 
 
 def _process_statement_with_fallback(
-    stmt: cst.BaseStatement, statements: list[cst.BaseStatement], i: int
+    stmt: cst.BaseStatement, statements: list[cst.BaseStatement], i: int, max_depth: int = 7
 ) -> tuple[list[cst.BaseStatement], int]:
     """Process a single statement with comprehensive fallback handling.
 
@@ -1610,15 +1610,25 @@ def _process_statement_with_fallback(
             return [processed_with], 1
 
     # Handle Try statements with recursive processing
-    processed_stmt = _handle_try_statement(stmt)
+    processed_stmt = _handle_try_statement(stmt, max_depth)
     if processed_stmt is not None:
         return [processed_stmt], 1
+
+    # Handle If statements with recursive processing
+    processed_if = _process_if_statement(stmt, max_depth)
+    if processed_if is not None:
+        return [processed_if], 1
+
+    # Handle For/While loops with recursive processing
+    processed_loop = _process_loop_statement(stmt, max_depth)
+    if processed_loop is not None:
+        return [processed_loop], 1
 
     # No transformation needed - return original statement
     return [stmt], 1
 
 
-def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
+def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7) -> list[cst.BaseStatement]:
     """Convert standalone unittest assert-context calls into With blocks.
 
     This helper looks for bare expression statements like
@@ -1644,7 +1654,7 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement]) -> list[cst.BaseSt
         stmt = statements[i]
 
         try:
-            processed_nodes, consumed = _process_statement_with_fallback(stmt, statements, i)
+            processed_nodes, consumed = _process_statement_with_fallback(stmt, statements, i, max_depth)
             out.extend(processed_nodes)
             i += consumed
         except Exception as e:
@@ -1752,7 +1762,41 @@ def _process_with_statement(stmt: cst.With, statements: list[cst.BaseStatement],
         return None
 
 
-def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
+def _safe_extract_statements(body_container, max_depth: int = 7) -> list[cst.BaseStatement] | None:
+    """Safely extract a list of statements from a body container, handling nested structures.
+
+    This handles cases where LibCST might create complex nested body structures
+    in deeply nested control flow statements.
+
+    Args:
+        body_container: An IndentedBlock or similar container that should have a body attribute
+        max_depth: Maximum depth to traverse when unwrapping nested structures
+
+    Returns:
+        List of statements if extractable, None otherwise
+    """
+    if body_container is None or not hasattr(body_container, "body"):
+        return None
+
+    current = body_container.body
+
+    # Handle nested IndentedBlock structures that might occur in complex nesting
+    depth = 0
+    while depth < max_depth:
+        if isinstance(current, list | tuple):
+            return list(current)
+        elif hasattr(current, "body"):
+            current = current.body
+            depth += 1
+        else:
+            # Unexpected structure, give up
+            return None
+
+    # Too deeply nested or unexpected structure
+    return None
+
+
+def _process_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
     """Process a Try statement by recursively applying wrap_assert_in_block to its inner blocks.
 
     Args:
@@ -1767,14 +1811,9 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
     try:
         # Process the try body
         try_body = getattr(stmt, "body", None)
-        if try_body is not None and hasattr(try_body, "body"):
-            # try_body.body should be a tuple/list of statements
-            body_statements = try_body.body
-            if isinstance(body_statements, list | tuple):
-                new_try_body = try_body.with_changes(body=wrap_assert_in_block(list(body_statements)))
-            else:
-                # If it's not a list/tuple, keep as is
-                new_try_body = try_body
+        body_statements = _safe_extract_statements(try_body, max_depth)
+        if body_statements is not None:
+            new_try_body = try_body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
         else:
             new_try_body = try_body
 
@@ -1782,33 +1821,31 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
         new_handlers = []
         for h in getattr(stmt, "handlers", []) or []:
             h_body = getattr(h, "body", None)
-            if h_body is not None and hasattr(h_body, "body"):
-                # h_body.body should be a tuple/list of statements
-                body_statements = h_body.body
-                if isinstance(body_statements, list | tuple):
-                    new_h_body = h_body.with_changes(body=wrap_assert_in_block(list(body_statements)))
-                    new_h = h.with_changes(body=new_h_body)
-                else:
-                    new_h = h
+            body_statements = _safe_extract_statements(h_body, max_depth)
+            if body_statements is not None:
+                new_h_body = h_body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+                new_h = h.with_changes(body=new_h_body)
             else:
                 new_h = h
             new_handlers.append(new_h)
 
         # Process orelse
         new_orelse = getattr(stmt, "orelse", None)
-        if new_orelse is not None and hasattr(new_orelse, "body"):
-            # new_orelse.body should be a tuple/list of statements
-            body_statements = new_orelse.body
-            if isinstance(body_statements, list | tuple):
-                new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(list(body_statements)))
+        body_statements = _safe_extract_statements(new_orelse, max_depth)
+        if body_statements is not None and new_orelse is not None and hasattr(new_orelse, "body"):
+            # Update the inner list within the BaseSuite body
+            new_orelse = new_orelse.with_changes(
+                body=new_orelse.body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+            )
 
         # Process finalbody
         new_finalbody = getattr(stmt, "finalbody", None)
-        if new_finalbody is not None and hasattr(new_finalbody, "body"):
-            # new_finalbody.body should be a tuple/list of statements
-            body_statements = new_finalbody.body
-            if isinstance(body_statements, list | tuple):
-                new_finalbody = new_finalbody.with_changes(body=wrap_assert_in_block(list(body_statements)))
+        body_statements = _safe_extract_statements(new_finalbody, max_depth)
+        if body_statements is not None and new_finalbody is not None and hasattr(new_finalbody, "body"):
+            # Update the inner list within the BaseSuite body
+            new_finalbody = new_finalbody.with_changes(
+                body=new_finalbody.body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+            )
 
         # Build new Try node with updated blocks
         new_try = stmt.with_changes(
@@ -1835,6 +1872,115 @@ def _process_try_statement(stmt: cst.BaseStatement) -> cst.BaseStatement | None:
             "assert_transformer",
             "_process_try_statement",
             suggestions=["Check Try block transformation logic"],
+        )
+        return None
+
+
+def _process_if_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
+    """Process an If statement by recursively applying wrap_assert_in_block to its body and orelse.
+
+    Args:
+        stmt: The statement to process
+
+    Returns:
+        The processed statement, or None if the statement is not an If
+    """
+    if not isinstance(stmt, cst.If):
+        return None
+
+    try:
+        # Process the if body
+        if_body = getattr(stmt, "body", None)
+        body_statements = _safe_extract_statements(if_body, max_depth)
+        if body_statements is not None:
+            new_if_body = if_body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+        else:
+            new_if_body = if_body
+
+        # Process orelse (may be Else node with a .body BaseSuite)
+        new_orelse = getattr(stmt, "orelse", None)
+        body_statements = _safe_extract_statements(new_orelse, max_depth)
+        if body_statements is not None and new_orelse is not None and hasattr(new_orelse, "body"):
+            try:
+                # Preferred: update the inner BaseSuite body if present
+                new_orelse = new_orelse.with_changes(
+                    body=new_orelse.body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+                )
+            except Exception:
+                try:
+                    # Fallback: update the orelse body directly
+                    new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+                except Exception:
+                    pass
+
+        new_if = stmt.with_changes(body=new_if_body, orelse=new_orelse)
+        # Ensure nested With items are also rewritten
+        try:
+            new_if = _recursively_rewrite_withs(new_if)
+        except (AttributeError, TypeError, IndexError):
+            pass
+        return new_if
+
+    except (AttributeError, TypeError, IndexError) as e:
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_process_if_statement",
+            suggestions=["Check If block transformation logic"],
+        )
+        return None
+
+
+def _process_loop_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
+    """Process For/While loops by recursively applying wrap_assert_in_block to body and orelse.
+
+    Args:
+        stmt: The statement to process
+
+    Returns:
+        The processed statement, or None if not a For/While loop
+    """
+    if not isinstance(stmt, cst.For | cst.While):
+        return None
+
+    try:
+        loop_body = getattr(stmt, "body", None)
+        body_statements = _safe_extract_statements(loop_body, max_depth)
+        if body_statements is not None:
+            new_loop_body = loop_body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+        else:
+            new_loop_body = loop_body
+
+        # Process orelse which can be a BaseSuite
+        new_orelse = getattr(stmt, "orelse", None)
+        body_statements = _safe_extract_statements(new_orelse, max_depth)
+        if body_statements is not None and new_orelse is not None and hasattr(new_orelse, "body"):
+            try:
+                # Preferred: if inner body supports with_changes
+                new_orelse = new_orelse.with_changes(
+                    body=new_orelse.body.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+                )
+            except Exception:
+                try:
+                    # Fallback: set body directly
+                    new_orelse = new_orelse.with_changes(body=wrap_assert_in_block(body_statements, max_depth))
+                except Exception:
+                    pass
+
+        new_loop = stmt.with_changes(body=new_loop_body, orelse=new_orelse)
+        # Ensure nested With items are also rewritten
+        try:
+            new_loop = _recursively_rewrite_withs(new_loop)
+        except (AttributeError, TypeError, IndexError):
+            pass
+        return new_loop
+
+    except (AttributeError, TypeError, IndexError) as e:
+        report_transformation_error(
+            e,
+            "assert_transformer",
+            "_process_loop_statement",
+            suggestions=["Check For/While loop transformation logic"],
         )
         return None
 
@@ -1896,7 +2042,37 @@ def _recursively_rewrite_withs(stmt: cst.BaseStatement) -> cst.BaseStatement:
                 new_body = stmt.body.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.body.body])
             new_orelse = stmt.orelse
             if getattr(stmt, "orelse", None) and hasattr(stmt.orelse, "body"):
-                new_orelse = stmt.orelse.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body])
+                try:
+                    # If Else.body is a BaseSuite with inner .body list
+                    new_orelse = stmt.orelse.with_changes(
+                        body=stmt.orelse.body.with_changes(
+                            body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body.body]
+                        )
+                    )
+                except Exception:
+                    # Fallback: treat orelse.body as list
+                    new_orelse = stmt.orelse.with_changes(
+                        body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body]
+                    )
+            return stmt.with_changes(body=new_body, orelse=new_orelse)
+
+        # For/While nodes: rewrite bodies and else blocks
+        if isinstance(stmt, cst.For | cst.While):
+            new_body = stmt.body
+            if hasattr(stmt.body, "body"):
+                new_body = stmt.body.with_changes(body=[_recursively_rewrite_withs(s) for s in stmt.body.body])
+            new_orelse = stmt.orelse
+            if getattr(stmt, "orelse", None) and hasattr(stmt.orelse, "body"):
+                try:
+                    new_orelse = stmt.orelse.with_changes(
+                        body=stmt.orelse.body.with_changes(
+                            body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body.body]
+                        )
+                    )
+                except Exception:
+                    new_orelse = stmt.orelse.with_changes(
+                        body=[_recursively_rewrite_withs(s) for s in stmt.orelse.body]
+                    )
             return stmt.with_changes(body=new_body, orelse=new_orelse)
 
         # Default: return original

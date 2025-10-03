@@ -672,6 +672,9 @@ def migrate(
     create_source_map: bool = typer.Option(
         False, "--source-map", help="Create source mapping for debugging transformations (advanced users)", is_flag=True
     ),
+    max_depth: int = typer.Option(
+        7, "--max-depth", help="Maximum depth to traverse nested control flow structures (3-15, default: 7)"
+    ),
 ) -> None:
     """Migrate unittest files to pytest format with comprehensive configuration options.
 
@@ -842,6 +845,7 @@ def migrate(
     config_kwargs["cache_analysis_results"] = final_cache_analysis
     config_kwargs["preserve_file_encoding"] = final_preserve_encoding
     config_kwargs["create_source_map"] = create_source_map
+    config_kwargs["max_depth"] = max_depth
 
     config = base_config.with_override(**config_kwargs)
 
@@ -1047,6 +1051,7 @@ def init_config(output_file: str = typer.Argument("unittest-to-pytest.yaml", hel
         "# Advanced options": None,
         "preserve_file_encoding": default_config.get("preserve_file_encoding"),
         "create_source_map": default_config.get("create_source_map"),
+        "max_depth": default_config.get("max_depth"),
         "# Degradation settings": None,
         "degradation_enabled": default_config.get("degradation_enabled"),
         "degradation_tier": default_config.get("degradation_tier"),

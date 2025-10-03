@@ -169,6 +169,8 @@ class MigrationConfig:
     """Whether to preserve original file encoding when writing output"""
     create_source_map: bool = False
     """Whether to create source mapping for debugging transformations"""
+    max_depth: int = 7
+    """Maximum depth to traverse when processing nested control flow structures (3-15)"""
 
     def with_override(self, **kwargs: Any) -> "MigrationConfig":
         """Return a new ``MigrationConfig`` with specified overrides.
