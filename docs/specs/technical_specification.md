@@ -680,7 +680,7 @@ class EventBus:
 class MigrationConfig:
     """Migration behavior configuration."""
     # Output settings
-    target_directory: Optional[str] = None
+    target_root: Optional[str] = None
     preserve_structure: bool = True
     backup_originals: bool = True
     

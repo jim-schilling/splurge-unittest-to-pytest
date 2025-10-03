@@ -74,7 +74,7 @@ class MigrationConfig:
     """
 
     # Output settings
-    target_directory: str | None = None
+    target_root: str | None = None
     root_directory: str | None = None
     file_patterns: list[str] = field(default_factory=lambda: ["test_*.py"])
     recurse_directories: bool = True

@@ -21,7 +21,7 @@ def test_suffix_and_ext_applied(tmp_path: Path):
     write_sample(src)
 
     out_dir = tmp_path / "out"
-    config = cli.create_config(target_directory=str(out_dir), suffix="_migrated", ext="txt")
+    config = cli.create_config(target_root=str(out_dir), suffix="_migrated", ext="txt")
 
     res = main_module.migrate([str(src)], config=config)
     assert res.is_success()
@@ -40,7 +40,7 @@ def test_suffix_sanitization(tmp_path: Path):
 
     out_dir = tmp_path / "out2"
     # Provide a nasty suffix with dots and unsafe chars
-    config = cli.create_config(target_directory=str(out_dir), suffix="..weird..$$$..", ext=None)
+    config = cli.create_config(target_root=str(out_dir), suffix="..weird..$$$..", ext=None)
 
     res = main_module.migrate([str(src)], config=config)
     assert res.is_success()
@@ -55,7 +55,7 @@ def test_ext_normalization_and_invalid(tmp_path: Path):
 
     out_dir = tmp_path / "out3"
     # Provide uppercase ext; expect normalization to lower-case
-    config = cli.create_config(target_directory=str(out_dir), suffix="", ext=".TxT")
+    config = cli.create_config(target_root=str(out_dir), suffix="", ext=".TxT")
 
     res = main_module.migrate([str(src)], config=config)
     assert res.is_success()
@@ -63,7 +63,7 @@ def test_ext_normalization_and_invalid(tmp_path: Path):
     assert written.suffix == ".txt"
 
     # Provide invalid extension -> should be ignored (preserve original)
-    config2 = cli.create_config(target_directory=str(out_dir), suffix="", ext="...!!")
+    config2 = cli.create_config(target_root=str(out_dir), suffix="", ext="...!!")
     res2 = main_module.migrate([str(src)], config=config2)
     assert res2.is_success()
     written2 = Path(res2.data[0])
@@ -75,7 +75,7 @@ def test_suffix_leading_chars(tmp_path: Path):
     write_sample(src)
     out_dir = tmp_path / "out4"
     # Suffix with leading underscore/hyphen should be normalized to single leading underscore
-    config = cli.create_config(target_directory=str(out_dir), suffix="__pref--", ext=None)
+    config = cli.create_config(target_root=str(out_dir), suffix="__pref--", ext=None)
     res = main_module.migrate([str(src)], config=config)
     assert res.is_success()
     written = Path(res.data[0])
@@ -86,7 +86,7 @@ def test_dry_run_returns_path_without_writing(tmp_path: Path):
     src = tmp_path / "dry.py"
     write_sample(src)
     out_dir = tmp_path / "out_dry"
-    config = cli.create_config(target_directory=str(out_dir), suffix="_x", ext=None)
+    config = cli.create_config(target_root=str(out_dir), suffix="_x", ext=None)
     config = config.with_override(dry_run=True)
 
     res = main_module.migrate([str(src)], config=config)

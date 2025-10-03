@@ -33,7 +33,7 @@ splurge-unittest-to-pytest migrate [OPTIONS] [SOURCE_FILES...]
 ```
 
 By default the tool preserves the original source file extensions and will
-write converted output next to the inputs. Use ``-t/--target-dir`` to write to
+write converted output next to the inputs. Use ``-t/--target-root`` to write to
 an alternate location.
 
 ## At-a-glance features
