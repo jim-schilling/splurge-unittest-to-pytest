@@ -23,6 +23,7 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -215,7 +216,7 @@ def _rewrite_equality_comparison(
                 if replaced is not None:
                     new_args = [cst.Arg(value=replaced)] + expr.args[1:]
                     return expr.with_changes(args=new_args)
-            except (AttributeError, TypeError, IndexError):
+            except (AttributeError, TypeError, IndexError, re.error):
                 pass
 
         return None
@@ -287,7 +288,7 @@ def _rewrite_unary_operation(unary: cst.UnaryOperation, alias_name: str) -> cst.
 
     try:
         rewritten_inner = _rewrite_expression(inner, alias_name)
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         rewritten_inner = None
 
     if rewritten_inner is not None:
@@ -1184,7 +1185,7 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
             ):
                 original_alias_name = orig_item.asname.name.value
                 break
-        except (AttributeError, TypeError, IndexError):
+        except (AttributeError, TypeError, IndexError, re.error):
             pass
     # silently inspect With items
     for item in stmt.items:
@@ -1271,7 +1272,7 @@ def get_with_alias_name(items: list[cst.WithItem]) -> str | None:
         try:
             if item.asname and isinstance(item.asname, cst.AsName) and isinstance(item.asname.name, cst.Name):
                 return item.asname.name.value
-        except (AttributeError, TypeError, IndexError):
+        except (AttributeError, TypeError, IndexError, re.error):
             pass
     return None
 
@@ -1363,14 +1364,14 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
                         new_targets.append(target)
                 if changed:
                     replaced = t.with_changes(comparisons=new_targets)
-        except (AttributeError, TypeError, IndexError):
+        except (AttributeError, TypeError, IndexError, re.error):
             replaced = None
 
         if replaced is not None:
             return target_assert.with_changes(test=replaced)
 
         return None
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         # Conservative: do not rewrite on any unexpected errors
         return None
 
@@ -1413,7 +1414,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
 
         new_block = new_with.body.with_changes(body=new_body)
         return new_with.with_changes(body=new_block)
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         # Conservative: return original when any error occurs
         return new_with
 
@@ -1482,7 +1483,7 @@ def rewrite_following_statements_for_alias(
                                     new_args.append(a.with_changes(value=msg_call))
                                     changed_args = True
                                     continue
-                            except (AttributeError, TypeError, IndexError):
+                            except (AttributeError, TypeError, IndexError, re.error):
                                 pass
 
                             new_args.append(a)
@@ -1504,7 +1505,7 @@ def rewrite_following_statements_for_alias(
                     statements[k] = wrapper_stmt.with_changes(body=[final_assert])
                 else:
                     statements[k] = cst.SimpleStatementLine(body=[final_assert])
-        except (AttributeError, TypeError, IndexError):
+        except (AttributeError, TypeError, IndexError, re.error):
             # Conservative: do not handle on errors
             pass
 
@@ -1883,7 +1884,7 @@ def _recursively_rewrite_withs(stmt: cst.BaseStatement) -> cst.BaseStatement:
 
         # Default: return original
         return stmt
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         return stmt
 
     # Debug: unreachable here normally
@@ -1935,14 +1936,21 @@ def _create_robust_regex(pattern: str) -> str:
     Returns:
         A regex pattern with improved whitespace tolerance
     """
-    # Replace literal spaces with flexible whitespace patterns
-    robust_pattern = pattern.replace(r"\s+", r"\s+")
-    # Add tolerance for optional whitespace around dots
-    robust_pattern = robust_pattern.replace(r"\.", r"\s*\.\s*")
-    # Add tolerance for optional whitespace around brackets
-    robust_pattern = robust_pattern.replace(r"\[", r"\s*\[\s*")
-    robust_pattern = robust_pattern.replace(r"\]", r"\s*\]\s*")
-    return robust_pattern
+    try:
+        # Replace literal spaces with flexible whitespace patterns
+        robust_pattern = pattern.replace(r"\s+", r"\s+")
+        # Add tolerance for optional whitespace around dots (but avoid creating problematic patterns)
+        robust_pattern = robust_pattern.replace(r"\.", r"\s*\.\s*")
+        # Add tolerance for optional whitespace around brackets
+        robust_pattern = robust_pattern.replace(r"\[", r"\s*\[\s*")
+        robust_pattern = robust_pattern.replace(r"\]", r"\s*\]\s*")
+
+        # Test that the pattern compiles
+        re.compile(robust_pattern)
+        return robust_pattern
+    except re.error:
+        # If the robust pattern fails to compile, return the original pattern
+        return pattern
 
 
 def transform_caplog_alias_string_fallback(code: str) -> str:
@@ -1961,8 +1969,6 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
         The modified source string after performing the conservative
         substitutions.
     """
-    import re
-
     out = code
 
     # First, detect any aliases created by assertRaises/pytest.raises so
@@ -1975,7 +1981,7 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
         )
         for m in re.finditer(robust_pattern, out):
             alias_names.add(m.group(1))
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         alias_names = set()
 
     if alias_names:
@@ -1997,7 +2003,7 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
             assertlogs_aliases.add(m.group(1))
         for m in re.finditer(r"with\s+caplog\.at_level\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
             assertlogs_aliases.add(m.group(1))
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         assertlogs_aliases = set()
 
     if assertlogs_aliases:
@@ -2130,8 +2136,6 @@ def _apply_transformations_with_fallback(code: str) -> str:
     Returns:
         Transformed code or original code if transformation fails
     """
-    import re
-
     out = code
 
     # First, detect any aliases created by assertRaises/pytest.raises so
@@ -2144,7 +2148,7 @@ def _apply_transformations_with_fallback(code: str) -> str:
         )
         for m in re.finditer(robust_pattern, out):
             alias_names.add(m.group(1))
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         alias_names = set()
 
     if alias_names:
@@ -2167,7 +2171,7 @@ def _apply_transformations_with_fallback(code: str) -> str:
             assertlogs_aliases.add(m.group(1))
         for m in re.finditer(r"with\s+caplog\s*\.\s*at_level\s*\(\s*[^\)]*\s*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
             assertlogs_aliases.add(m.group(1))
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError, re.error):
         assertlogs_aliases = set()
 
     if assertlogs_aliases:
