@@ -167,6 +167,11 @@
   - Updated `docs/README-DETAILS.md` with comprehensive CLI reference and usage examples
   - Added detailed explanations of configuration templates, interactive builder, and field help system
 
+- **Simplified CLI Usage**: Added `__main__.py` module for cleaner command-line invocation:
+  - Users can now run `python -m splurge_unittest_to_pytest [command]` instead of `python -m splurge_unittest_to_pytest.cli [command]`
+  - Backward compatibility maintained - both invocation methods work
+  - Updated all documentation examples to use the simplified command format
+
 #### Changed
 - Enhanced `ValidatedMigrationConfig` class with sophisticated cross-field validation
 - Added intelligent configuration suggestions and use case detection

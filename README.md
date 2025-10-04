@@ -31,7 +31,7 @@ pip install splurge-unittest-to-pytest
 Run the CLI (module mode shown):
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate [OPTIONS] [SOURCE_FILES...]
+python -m splurge_unittest_to_pytest migrate [OPTIONS] [SOURCE_FILES...]
  OR
 splurge-unittest-to-pytest migrate [OPTIONS] [SOURCE_FILES...]
 ```
@@ -97,7 +97,7 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 For the full set of flags and detailed help, run:
 
 ```bash
-splurge-unittest-to-pytest migrate --help
+python -m splurge_unittest_to_pytest migrate --help
 ```
 
 ## Examples
@@ -105,80 +105,80 @@ splurge-unittest-to-pytest migrate --help
 Preview conversion for a single file and print generated code:
 
 ```bash
-splurge-unittest-to-pytest migrate --dry-run tests/test_example.py
+python -m splurge_unittest_to_pytest migrate --dry-run tests/test_example.py
 ```
 
 Show unified diff for a directory:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate -d tests --dry-run --diff
+python -m splurge_unittest_to_pytest migrate -d tests --dry-run --diff
 ```
 
 Quiet dry-run with POSIX paths:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate -d tests --dry-run --posix --quiet
+python -m splurge_unittest_to_pytest migrate -d tests --dry-run --posix --quiet
 ```
 
 Perform migration and write files to `converted/` (preserve extensions). Backups are created by default; to disable backups pass ``--skip-backup``:
 
 ```bash
-python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted
+python -m splurge_unittest_to_pytest migrate -d tests -t converted
 # Disable backups when writing:
-python -m splurge_unittest_to_pytest.cli migrate -d tests -t converted --skip-backup
+python -m splurge_unittest_to_pytest migrate -d tests -t converted --skip-backup
 ```
 
 Redirect backups to a custom directory while preserving folder structure:
 
 ```bash
 # Create backups in a centralized location when processing multiple directories:
-python -m splurge_unittest_to_pytest.cli migrate -d tests --backup-root ./backups
+python -m splurge_unittest_to_pytest migrate -d tests --backup-root ./backups
 ```
 
 Migrate with custom test prefixes for modern testing frameworks:
 
 ```bash
 # Support spec_ methods for BDD-style tests
-python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix spec --dry-run
+python -m splurge_unittest_to_pytest migrate tests/ --prefix spec --dry-run
 
 # Support multiple prefixes for hybrid test suites
-python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix test --prefix spec --prefix should
+python -m splurge_unittest_to_pytest migrate tests/ --prefix test --prefix spec --prefix should
 ```
 
 Use intelligent configuration suggestions and analysis:
 
 ```bash
 # Get intelligent suggestions for your project
-python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions
 
 # Analyze your project's use case and get tailored recommendations
-python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+python -m splurge_unittest_to_pytest migrate tests/ --use-case-analysis
 
 # Get help for a specific configuration field
-python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+python -m splurge_unittest_to_pytest migrate --field-help max_file_size_mb
 ```
 
 Use configuration templates for common scenarios:
 
 ```bash
 # List available templates
-python -m splurge_unittest_to_pytest.cli migrate --list-templates
+python -m splurge_unittest_to_pytest migrate --list-templates
 
 # Use a pre-configured template
-python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+python -m splurge_unittest_to_pytest migrate tests/ --template ci_integration
 
 # Generate configuration documentation
-python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+python -m splurge_unittest_to_pytest migrate --generate-docs markdown
 ```
 
 Use YAML configuration files for complex setups:
 
 ```bash
 # Create a configuration file with all settings
-python -m splurge_unittest_to_pytest.cli init-config my-migration.yaml
+python -m splurge_unittest_to_pytest init-config my-migration.yaml
 
 # Use the configuration file
-python -m splurge_unittest_to_pytest.cli migrate --config my-migration.yaml tests/
+python -m splurge_unittest_to_pytest migrate --config my-migration.yaml tests/
 ```
 
 ## Programmatic usage (quick)

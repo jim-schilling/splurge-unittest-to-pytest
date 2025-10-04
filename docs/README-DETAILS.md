@@ -628,46 +628,46 @@ Get intelligent suggestions for your project:
 
 ```bash
 # Analyze project and show configuration suggestions
-python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions
 
 # Get comprehensive use case analysis
-python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+python -m splurge_unittest_to_pytest migrate tests/ --use-case-analysis
 
 # Combine suggestions with analysis
-python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions --use-case-analysis
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions --use-case-analysis
 ```
 
 Use configuration templates:
 
 ```bash
 # List all available templates
-python -m splurge_unittest_to_pytest.cli migrate --list-templates
+python -m splurge_unittest_to_pytest migrate --list-templates
 
 # Use a specific template for CI/CD integration
-python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+python -m splurge_unittest_to_pytest migrate tests/ --template ci_integration
 
 # Use template for large codebase migration
-python -m splurge_unittest_to_pytest.cli migrate tests/ --template large_codebase
+python -m splurge_unittest_to_pytest migrate tests/ --template large_codebase
 ```
 
 Get help and documentation:
 
 ```bash
 # Get detailed help for a configuration field
-python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+python -m splurge_unittest_to_pytest migrate --field-help max_file_size_mb
 
 # Generate markdown documentation for all configuration options
-python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+python -m splurge_unittest_to_pytest migrate --generate-docs markdown
 
 # Generate HTML documentation
-python -m splurge_unittest_to_pytest.cli migrate --generate-docs html
+python -m splurge_unittest_to_pytest migrate --generate-docs html
 ```
 
 Interactive configuration:
 
 ```bash
 # Create configuration interactively (guided setup)
-python -m splurge_unittest_to_pytest.cli init-config --interactive my-project-config.yaml
+python -m splurge_unittest_to_pytest init-config --interactive my-project-config.yaml
 ```
 
 ## Enhanced Validation Features
@@ -676,19 +676,19 @@ Analyze configuration and get intelligent suggestions:
 
 ```bash
 # Show detected use case and configuration suggestions
-python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions --use-case-analysis
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions --use-case-analysis
 
 # Get help for a specific configuration field
-python -m splurge_unittest_to_pytest.cli migrate --field-help target_root
+python -m splurge_unittest_to_pytest migrate --field-help target_root
 
 # List available configuration templates
-python -m splurge_unittest_to_pytest.cli migrate --list-templates
+python -m splurge_unittest_to_pytest migrate --list-templates
 
 # Use a template for migration
-python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+python -m splurge_unittest_to_pytest migrate tests/ --template ci_integration
 
 # Generate configuration documentation
-python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+python -m splurge_unittest_to_pytest migrate --generate-docs markdown
 ```
 python -m splurge_unittest_to_pytest.cli generate-templates --output-dir ./my-templates --format json
 
@@ -698,48 +698,48 @@ python -m splurge_unittest_to_pytest.cli error-recovery --error "Permission deni
 python -m splurge_unittest_to_pytest.cli error-recovery --error "Invalid config" --category configuration --workflow-only
 
 # Interactive Configuration Building
-python -m splurge_unittest_to_pytest.cli configure
-python -m splurge_unittest_to_pytest.cli configure --output-file config.yaml
-python -m splurge_unittest_to_pytest.cli configure --analyze-only
+python -m splurge_unittest_to_pytest configure
+python -m splurge_unittest_to_pytest configure --output-file config.yaml
+python -m splurge_unittest_to_pytest configure --analyze-only
 ```
 
 Selectively disable specific transformations:
 
 ```bash
 # Keep unittest assertions unchanged but convert everything else
-python -m splurge_unittest_to_pytest.cli migrate --no-transform-assertions tests/
+python -m splurge_unittest_to_pytest migrate --no-transform-assertions tests/
 
 # Convert only assertions and imports, skip setup/teardown conversion
-python -m splurge_unittest_to_pytest.cli migrate --transform-assertions --transform-imports --no-transform-setup tests/
+python -m splurge_unittest_to_pytest migrate --transform-assertions --transform-imports --no-transform-setup tests/
 
 # Continue processing even if some files fail
-python -m splurge_unittest_to_pytest.cli migrate --continue-on-error tests/
+python -m splurge_unittest_to_pytest migrate --continue-on-error tests/
 ```
 
 Control output formatting and imports:
 
 ```bash
 # Skip code formatting (faster but may produce inconsistent style)
-python -m splurge_unittest_to_pytest.cli migrate --no-format tests/
+python -m splurge_unittest_to_pytest migrate --no-format tests/
 
 # Keep unused unittest imports (may leave redundant imports)
-python -m splurge_unittest_to_pytest.cli migrate --no-remove-imports tests/
+python -m splurge_unittest_to_pytest migrate --no-remove-imports tests/
 
 # Preserve comments in import sections
-python -m splurge_unittest_to_pytest.cli migrate --preserve-import-comments tests/
+python -m splurge_unittest_to_pytest migrate --preserve-import-comments tests/
 ```
 
 Advanced analysis and discovery:
 
 ```bash
 # Auto-detect test method prefixes from source files
-python -m splurge_unittest_to_pytest.cli migrate --detect-prefixes tests/
+python -m splurge_unittest_to_pytest migrate --detect-prefixes tests/
 
 # Support multiple custom test prefixes
-python -m splurge_unittest_to_pytest.cli migrate --prefix test --prefix spec --prefix should --prefix it tests/
+python -m splurge_unittest_to_pytest migrate --prefix test --prefix spec --prefix should --prefix it tests/
 
 # Set precision for floating-point assertions
-python -m splurge_unittest_to_pytest.cli migrate --assert-places 10 tests/
+python -m splurge_unittest_to_pytest migrate --assert-places 10 tests/
 ```
 
 Programmatic API
@@ -835,12 +835,12 @@ Error Recovery Example:
 
 ```bash
 # Analyze an error and get recovery suggestions
-splurge-unittest-to-pytest error-recovery \
+python -m splurge_unittest_to_pytest error-recovery \
   --error "File not found: /missing/file.py" \
   --category filesystem
 
 # Interactive recovery mode
-splurge-unittest-to-pytest error-recovery \
+python -m splurge_unittest_to_pytest error-recovery \
   --error "Permission denied" \
   --interactive
 ```
@@ -875,13 +875,13 @@ Configuration Building Example:
 
 ```bash
 # Analyze project and create configuration interactively
-python -m splurge_unittest_to_pytest.cli configure
+python -m splurge_unittest_to_pytest configure
 
 # Save configuration to file
-python -m splurge_unittest_to_pytest.cli configure --output-file my-config.yaml
+python -m splurge_unittest_to_pytest configure --output-file my-config.yaml
 
 # Just analyze project without creating configuration
-python -m splurge_unittest_to_pytest.cli configure --analyze-only
+python -m splurge_unittest_to_pytest configure --analyze-only
 ```
 
 Programmatic Configuration Building:
