@@ -23,6 +23,7 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, cast
@@ -33,19 +34,109 @@ import libcst as cst
 try:
     from ..helpers.error_reporting import report_transformation_error
 except ImportError:
-    # Fallback if error reporting not available
+
     def report_transformation_error(error, component, operation, **kwargs):
         pass
+
+
+# Caplog helpers extracted to a small module to remove duplication
+from ._caplog_helpers import (
+    AliasOutputAccess,
+    build_caplog_records_expr,
+    build_get_message_call,
+    extract_alias_output_slices,
+)
+
+
+def _preserve_indented_block(
+    orig_block: cst.BaseSmallStatement | None, new_block: cst.IndentedBlock
+) -> cst.IndentedBlock:
+    """Delegate to `assert_with_rewrites._preserve_indented_body_wrapper`.
+
+    During staged migration prefer a central preservation helper in
+    `assert_with_rewrites` while keeping this symbol available for
+    existing callers. The implementation is a thin delegation.
+    """
+    try:
+        from . import assert_with_rewrites as _with_rewrites
+
+        res = _with_rewrites._preserve_indented_body_wrapper(orig_block, new_block)
+        if isinstance(res, cst.IndentedBlock):
+            return res
+    except Exception:
+        pass
+    return new_block
+
+
+__all__ = ["AliasOutputAccess"]
+
+
+# Backwards-compatible re-exports: during the staged refactor we provide
+# thin wrappers that delegate to the new modules. This keeps the public
+# API stable while allowing reviewers to see the code moves incrementally.
+try:  # pragma: no cover - import-time shim
+    from . import assert_ast_rewrites as _ast_rewrites
+    from . import assert_fallbacks as _fallbacks
+    from . import assert_with_rewrites as _with_rewrites
+
+    # Expose the most commonly used helpers via the original module
+    # name so callers don't need to update imports immediately.
+    parenthesized_expression = _ast_rewrites.parenthesized_expression
+    ParenthesizedExpression = _ast_rewrites.ParenthesizedExpression
+    _extract_alias_output_slices = _with_rewrites._extract_alias_output_slices
+    _build_caplog_records_expr = _with_rewrites._build_caplog_records_expr
+    parenthesized_expression_shim = _fallbacks.parenthesized_expression_shim
+except Exception:
+    # If imports fail for some reason keep original definitions; this
+    # branch will rarely run in normal test runs but is safe to keep.
+    pass
+
+# Import AST-shaped helpers (moved implementations). We use the module
+# imported above (`_ast_rewrites`) and assign names to keep a stable
+# public API without long multi-import blocks that confuse import
+# formatting checks.
+try:
+    parenthesized_expression = _ast_rewrites.parenthesized_expression
+    ParenthesizedExpression = _ast_rewrites.ParenthesizedExpression
+    transform_assert_equal = _ast_rewrites.transform_assert_equal
+    transform_assert_not_almost_equal = _ast_rewrites.transform_assert_not_almost_equal
+    transform_assert_true = _ast_rewrites.transform_assert_true
+    transform_assert_false = _ast_rewrites.transform_assert_false
+    transform_assert_is = _ast_rewrites.transform_assert_is
+    transform_assert_not_equal = _ast_rewrites.transform_assert_not_equal
+    transform_assert_is_not = _ast_rewrites.transform_assert_is_not
+    transform_assert_is_none = _ast_rewrites.transform_assert_is_none
+    transform_assert_is_not_none = _ast_rewrites.transform_assert_is_not_none
+    transform_assert_not_in = _ast_rewrites.transform_assert_not_in
+    transform_assert_isinstance = _ast_rewrites.transform_assert_isinstance
+    transform_assert_not_isinstance = _ast_rewrites.transform_assert_not_isinstance
+    transform_assert_count_equal = _ast_rewrites.transform_assert_count_equal
+    transform_assert_multiline_equal = _ast_rewrites.transform_assert_multiline_equal
+    transform_assert_regex = _ast_rewrites.transform_assert_regex
+    transform_assert_not_regex = _ast_rewrites.transform_assert_not_regex
+    transform_assert_in = _ast_rewrites.transform_assert_in
+except Exception:
+    # older behavior: functions are defined below as originals
+    pass
+
+
+# Backwards-compatible underscored API used by tests and other modules
+def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
+    return extract_alias_output_slices(expr)
+
+
+def _build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
+    return build_caplog_records_expr(access)
+
+
+def _build_get_message_call(access: AliasOutputAccess) -> cst.Call:
+    return build_get_message_call(access)
+
 
 # Debug collector removed; transformations should be silent in normal runs
 
 
-@dataclass(frozen=True)
-class AliasOutputAccess:
-    """Represents access to ``<alias>.output`` with optional subscripts."""
-
-    alias_name: str
-    slices: tuple[cst.SubscriptElement, ...]
+# AliasOutputAccess moved to transformers._caplog_helpers
 
 
 @dataclass(frozen=True)
@@ -93,43 +184,10 @@ def parenthesized_expression(expr: cst.BaseExpression) -> ParenthesizedExpressio
     return ParenthesizedExpression(has_parentheses=bool(lpar or rpar), lpar=lpar, rpar=rpar)
 
 
-def _extract_alias_output_slices(expr: cst.BaseExpression) -> AliasOutputAccess | None:
-    """Return alias/output access details when ``expr`` targets ``<alias>.output``."""
-
-    slices: list[cst.SubscriptElement] = []
-    current: cst.BaseExpression = expr
-
-    while isinstance(current, cst.Subscript):
-        slices.insert(0, current.slice)
-        current = cast(cst.BaseExpression, current.value)
-
-    if (
-        isinstance(current, cst.Attribute)
-        and isinstance(current.value, cst.Name)
-        and isinstance(current.attr, cst.Name)
-        and current.attr.value in {"output", "records"}
-    ):
-        return AliasOutputAccess(alias_name=current.value.value, slices=tuple(slices))
-
-    return None
-
-
-def _build_caplog_records_expr(access: AliasOutputAccess) -> cst.BaseExpression:
-    """Construct ``caplog.records`` expression with the original slices applied."""
-
-    base: cst.BaseExpression = cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-    for slice_item in access.slices:
-        base = cst.Subscript(value=cast(cst.BaseExpression, base), slice=slice_item)
-    return base
-
-
-def _build_get_message_call(access: AliasOutputAccess) -> cst.Call:
-    """Construct ``caplog.records[...].getMessage()`` call for the provided access."""
-
-    return cst.Call(
-        func=cst.Attribute(value=_build_caplog_records_expr(access), attr=cst.Name(value="getMessage")),
-        args=[],
-    )
+# The detailed logic for extracting alias access and building caplog
+# expressions lives in `transformers/_caplog_helpers.py` and is imported
+# above as `extract_alias_output_slices`, `build_caplog_records_expr`,
+# and `build_get_message_call`.
 
 
 def _rewrite_length_comparison(
@@ -141,9 +199,9 @@ def _rewrite_length_comparison(
     left = comp_node.left
     if isinstance(left, cst.Call) and isinstance(left.func, cst.Name) and left.func.value == "len" and left.args:
         arg0 = left.args[0].value
-        access = _extract_alias_output_slices(arg0)
+        access = extract_alias_output_slices(arg0)
         if access is not None and access.alias_name == alias_name:
-            new_arg = _build_caplog_records_expr(access)
+            new_arg = build_caplog_records_expr(access)
             new_left = left.with_changes(args=[cst.Arg(value=new_arg)])
             return comp_node.with_changes(left=new_left)
 
@@ -161,10 +219,10 @@ def _rewrite_membership_comparison(
 
     for target in comp_node.comparisons:
         if isinstance(target.operator, cst.In):
-            access = _extract_alias_output_slices(cast(cst.BaseExpression, target.comparator))
+            access = extract_alias_output_slices(cast(cst.BaseExpression, target.comparator))
             if access is not None and access.alias_name == alias_name:
                 new_targets.append(
-                    cst.ComparisonTarget(operator=target.operator, comparator=_build_get_message_call(access))
+                    cst.ComparisonTarget(operator=target.operator, comparator=build_get_message_call(access))
                 )
                 changed = True
                 continue
@@ -188,12 +246,12 @@ def _rewrite_equality_comparison(
     left_access = None
 
     if isinstance(new_left, cst.Subscript | cst.Attribute):
-        left_access = _extract_alias_output_slices(cast(cst.BaseExpression, new_left))
+        left_access = extract_alias_output_slices(cast(cst.BaseExpression, new_left))
     if left_access is not None and left_access.alias_name == alias_name:
         if isinstance(new_left, cst.Subscript):
-            new_left = _build_get_message_call(left_access)
+            new_left = build_get_message_call(left_access)
         else:
-            new_left = _build_caplog_records_expr(left_access)
+            new_left = build_caplog_records_expr(left_access)
         changed = True
 
     # Also handle the pattern where callers reference the exception alias
@@ -234,12 +292,12 @@ def _rewrite_equality_comparison(
         comparator = target.comparator
         # First handle caplog output patterns as before
         if isinstance(target.operator, cst.Equal) and isinstance(comparator, cst.Subscript | cst.Attribute):
-            access = _extract_alias_output_slices(cast(cst.BaseExpression, comparator))
+            access = extract_alias_output_slices(cast(cst.BaseExpression, comparator))
             if access is not None and access.alias_name == alias_name:
                 if isinstance(comparator, cst.Subscript):
-                    comparator = _build_get_message_call(access)
+                    comparator = build_get_message_call(access)
                 else:
-                    comparator = _build_caplog_records_expr(access)
+                    comparator = build_caplog_records_expr(access)
                 target = target.with_changes(comparator=comparator)
                 changed = True
                 new_targets.append(target)
@@ -343,340 +401,55 @@ def _rewrite_expression(expr: cst.BaseExpression, alias_name: str) -> cst.BaseEx
     return None
 
 
-def transform_assert_equal(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertEqual(a, b)`` to a bare ``assert a == b``.
-
-    This function expects ``node`` to be a :class:`libcst.Call` that
-    represents a ``self.assertEqual`` (or equivalent) invocation.
-
-    Args:
-        node: A :class:`libcst.Call` node for the original assertion call.
-
-    Returns:
-        A :class:`libcst.Assert` node performing ``a == b`` when the
-        call has at least two positional arguments. If the call has
-        fewer than two arguments the original node is returned
-        unchanged.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_equal = _ast_rewrites.transform_assert_equal
 
 
-def transform_assert_not_almost_equal(node: cst.Call, config: Any | None = None) -> cst.CSTNode:
-    """Rewrite ``assertNotAlmostEqual`` to a negated numeric comparison.
-
-    The unittest form ``self.assertNotAlmostEqual(a, b, places=N)`` is
-    approximated with ``assert not round(a - b, N) == 0``. If the
-    ``places`` keyword is omitted this function uses ``7`` as the
-    default number of decimal places to mirror unittest's default.
-
-    Args:
-        node: A :class:`libcst.Call` node for the original assertion call.
-
-    Returns:
-        A :class:`libcst.Assert` node containing a negated
-        :class:`libcst.Comparison` using ``round`` when the call has at
-        least two arguments. If the call is missing required arguments
-        the original node is returned unchanged.
-    """
-    if len(node.args) >= 2:
-        left = node.args[0].value
-        right = node.args[1].value
-        places = None
-        for arg in node.args:
-            if arg.keyword and isinstance(arg.keyword, cst.Name) and arg.keyword.value == "places":
-                places = arg.value
-                break
-        if places is None:
-            # Use config value if available, otherwise default to 7
-            places_value = getattr(config, "assert_almost_equal_places", 7) if config else 7
-            places = cst.Integer(value=str(places_value))
-        diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
-        round_call = cst.Call(func=cst.Name(value="round"), args=[cst.Arg(value=diff), cst.Arg(value=places)])
-        comp = cst.Comparison(
-            left=round_call,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer(value="0"))],
-        )
-        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=comp))
-    return node
+transform_assert_not_almost_equal = _ast_rewrites.transform_assert_not_almost_equal
 
 
-def transform_assert_true(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertTrue(expr)`` to ``assert expr``.
-
-    Args:
-        node: A :class:`libcst.Call` node representing the original
-            ``assertTrue`` invocation.
-
-    Returns:
-        A :class:`libcst.Assert` node with ``test`` set to the first
-        positional argument when present; otherwise returns the input
-        node unchanged.
-    """
-    if len(node.args) >= 1:
-        return cst.Assert(test=node.args[0].value)
-    return node
+transform_assert_true = _ast_rewrites.transform_assert_true
 
 
-def transform_assert_false(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertFalse(expr)`` to ``assert not expr``.
-
-    Args:
-        node: A :class:`libcst.Call` node representing the original
-            ``assertFalse`` invocation.
-
-    Returns:
-        A :class:`libcst.Assert` node containing a
-        :class:`libcst.UnaryOperation` with operator ``Not`` and the
-        supplied expression when at least one positional argument is
-        present. Otherwise returns the input node unchanged.
-    """
-    if len(node.args) >= 1:
-        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=node.args[0].value))
-    return node
+transform_assert_false = _ast_rewrites.transform_assert_false
 
 
-def transform_assert_is(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIs(a, b)`` to ``assert a is b``.
-
-    Args:
-        node: A :class:`libcst.Call` node representing the original
-            ``assertIs`` invocation.
-
-    Returns:
-        A :class:`libcst.Assert` node performing an identity comparison
-        when two positional arguments are provided; otherwise returns
-        the original node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_is = _ast_rewrites.transform_assert_is
 
 
-def transform_assert_not_equal(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertNotEqual(a, b)`` to ``assert a != b``.
-
-    Returns a :class:`libcst.Assert` with an inequality comparison when
-    two positional arguments exist; otherwise returns the input node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.NotEqual(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_not_equal = _ast_rewrites.transform_assert_not_equal
 
 
-def transform_assert_is_not(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIsNot(a, b)`` to ``assert a is not b``.
-
-    Returns a :class:`libcst.Assert` with an identity-negative
-    comparison when two positional arguments exist; otherwise returns
-    the input node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_is_not = _ast_rewrites.transform_assert_is_not
 
 
-def transform_assert_is_none(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIsNone(x)`` to ``assert x is None``.
-
-    Returns a :class:`libcst.Assert` performing the comparison when a
-    single positional argument is provided; otherwise returns the
-    original node.
-    """
-    if len(node.args) >= 1:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Is(), comparator=cst.Name(value="None"))],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_is_none = _ast_rewrites.transform_assert_is_none
 
 
-def transform_assert_is_not_none(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIsNotNone(x)`` to ``assert x is not None``.
-
-    Returns a :class:`libcst.Assert` performing the comparison when a
-    single positional argument is provided; otherwise returns the
-    original node.
-    """
-    if len(node.args) >= 1:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.IsNot(), comparator=cst.Name(value="None"))],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_is_not_none = _ast_rewrites.transform_assert_is_not_none
 
 
-def transform_assert_not_in(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertNotIn(a, b)`` to ``assert a not in b``.
-
-    Returns a :class:`libcst.Assert` performing the membership negation
-    when two positional arguments are present; otherwise returns the
-    original node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.NotIn(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_not_in = _ast_rewrites.transform_assert_not_in
 
 
-def transform_assert_isinstance(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIsInstance(obj, cls)`` to ``assert isinstance(obj, cls)``.
-
-    Returns a :class:`libcst.Assert` whose test is a call to
-    :func:`isinstance` when two positional arguments are present; if
-    not, the original node is returned.
-    """
-    if len(node.args) >= 2:
-        isinstance_call = cst.Call(
-            func=cst.Name(value="isinstance"),
-            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
-        )
-        return cst.Assert(test=isinstance_call)
-    return node
+transform_assert_isinstance = _ast_rewrites.transform_assert_isinstance
 
 
-def transform_assert_not_isinstance(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertNotIsInstance(obj, cls)`` to ``assert not isinstance(obj, cls)``.
-
-    Returns an :class:`libcst.Assert` wrapping an ``isinstance`` call in
-    a unary ``not`` when two positional arguments are present; otherwise
-    returns the input node unchanged.
-    """
-    if len(node.args) >= 2:
-        isinstance_call = cst.Call(
-            func=cst.Name(value="isinstance"),
-            args=[cst.Arg(value=node.args[0].value), cst.Arg(value=node.args[1].value)],
-        )
-        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=isinstance_call))
-    return node
+transform_assert_not_isinstance = _ast_rewrites.transform_assert_not_isinstance
 
 
-def transform_assert_count_equal(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertCountEqual(a, b)`` to ``assert sorted(a) == sorted(b)``.
-
-    Uses ``sorted`` on both operands to achieve an order-insensitive
-    equality check. Returns a :class:`libcst.Assert` when two
-    positional arguments are provided; otherwise returns the original
-    node.
-    """
-    if len(node.args) >= 2:
-        left = cst.Call(func=cst.Name(value="sorted"), args=[cst.Arg(value=node.args[0].value)])
-        right = cst.Call(func=cst.Name(value="sorted"), args=[cst.Arg(value=node.args[1].value)])
-        comp = cst.Comparison(left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=right)])
-        return cst.Assert(test=comp)
-    return node
+transform_assert_count_equal = _ast_rewrites.transform_assert_count_equal
 
 
-def transform_assert_multiline_equal(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertMultiLineEqual(a, b)`` to ``assert a == b``.
-
-    Returns a :class:`libcst.Assert` performing equality when two
-    positional arguments are provided; otherwise returns the original
-    node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_multiline_equal = _ast_rewrites.transform_assert_multiline_equal
 
 
-def transform_assert_regex(
-    node: cst.Call, re_alias: str | None = None, re_search_name: str | None = None
-) -> cst.CSTNode:
-    """Rewrite ``self.assertRegex(text, pattern)`` to ``assert re.search(pattern, text)``.
-
-    This function constructs a :func:`re.search` call using either an
-    explicitly-provided ``re_search_name`` (for ``from re import search``)
-    or an ``re_alias`` (defaulting to ``re``). The generated call is
-    used as the test expression of a :class:`libcst.Assert`.
-
-    Args:
-        node: The original :class:`libcst.Call` node.
-        re_alias: Optional module alias to use instead of ``re``.
-        re_search_name: Optional function name to use when ``search`` was
-            imported directly from the ``re`` module.
-
-    Returns:
-        A :class:`libcst.Assert` node representing the ``re.search``
-        invocation when the call has at least two positional arguments;
-        otherwise returns the original node.
-    """
-    if len(node.args) >= 2:
-        # If caller imported `search` directly (from re import search), use that name
-        if re_search_name:
-            func: cst.BaseExpression = cst.Name(value=re_search_name)
-        else:
-            re_name = re_alias or "re"
-            func = cst.Attribute(value=cst.Name(value=re_name), attr=cst.Name(value="search"))
-
-        call = cst.Call(
-            func=func,
-            args=[cst.Arg(value=node.args[1].value), cst.Arg(value=node.args[0].value)],
-        )
-        return cst.Assert(test=call)
-    return node
+transform_assert_regex = _ast_rewrites.transform_assert_regex
 
 
-def transform_assert_not_regex(
-    node: cst.Call, re_alias: str | None = None, re_search_name: str | None = None
-) -> cst.CSTNode:
-    """Rewrite ``self.assertNotRegex(text, pattern)`` to ``assert not re.search(pattern, text)``.
-
-    See ``transform_assert_regex`` for how the ``re`` name is chosen.
-    Returns a negated :class:`libcst.Assert` when applicable; otherwise
-    returns the original node.
-    """
-    if len(node.args) >= 2:
-        if re_search_name:
-            func: cst.BaseExpression = cst.Name(value=re_search_name)
-        else:
-            re_name = re_alias or "re"
-            func = cst.Attribute(value=cst.Name(value=re_name), attr=cst.Name(value="search"))
-
-        call = cst.Call(func=func, args=[cst.Arg(value=node.args[1].value), cst.Arg(value=node.args[0].value)])
-        return cst.Assert(test=cst.UnaryOperation(operator=cst.Not(), expression=call))
-    return node
+transform_assert_not_regex = _ast_rewrites.transform_assert_not_regex
 
 
-def transform_assert_in(node: cst.Call) -> cst.CSTNode:
-    """Rewrite ``self.assertIn(a, b)`` to ``assert a in b``.
-
-    Returns a :class:`libcst.Assert` performing the membership check
-    when two positional arguments are present; otherwise returns the
-    original node.
-    """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.In(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+transform_assert_in = _ast_rewrites.transform_assert_in
 
 
 def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
@@ -713,11 +486,13 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
+            )
             new_args.append(
                 cst.Arg(
                     value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
+                        params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
                     )
                 )
             )
@@ -733,11 +508,8 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=code_to_test)])
 
-                new_args.append(
-                    cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
-                    )
-                )
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
+                new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
 
         return cst.Call(func=new_attr, args=new_args)
     return node
@@ -765,14 +537,10 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
             # Additional arguments for the callable
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[3:]]
             lambda_call = cst.Call(func=callable_arg, args=lambda_args)
-            args.append(
-                cst.Arg(
-                    value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
-                    )
-                )
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
             )
+            args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
         else:
             # Standard case with just the callable
             if isinstance(callable_arg, cst.Lambda):
@@ -785,11 +553,8 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=callable_arg)])
 
-                args.append(
-                    cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
-                    )
-                )
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
+                args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
 
         args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg))
         return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")), args=args)
@@ -854,11 +619,13 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
+            )
             new_args.append(
                 cst.Arg(
                     value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
+                        params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
                     )
                 )
             )
@@ -875,9 +642,12 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=code_to_test)])
 
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
                 new_args.append(
                     cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
+                        value=cst.Lambda(
+                            params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
+                        )
                     )
                 )
 
@@ -916,7 +686,12 @@ def transform_assert_warns_regex(node: cst.Call) -> cst.CSTNode:
 
             args: list[cst.Arg] = [
                 cst.Arg(value=exc),
-                cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))),
+                cst.Arg(
+                    value=cst.Lambda(
+                        params=cst.Parameters(params=[]),
+                        body=_preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body])),
+                    )
+                ),
                 cst.Arg(keyword=cst.Name(value="match"), value=match_arg),
             ]
         return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")), args=args)
@@ -932,13 +707,7 @@ def get_self_attr_call(stmt: cst.BaseStatement) -> tuple[str, cst.Call] | None:
     tuple of the attribute name (``'foo'``) and the :class:`libcst.Call`
     node. Returns ``None`` for any other shapes.
     """
-    if isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr):
-        expr = stmt.body[0].value
-        if isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute):
-            func = expr.func
-            if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
-                return func.attr.value, expr
-    return None
+    return _with_rewrites.get_self_attr_call(stmt)
 
 
 def get_caplog_level_args(call_expr: cst.Call) -> list[cst.Arg]:
@@ -950,21 +719,7 @@ def get_caplog_level_args(call_expr: cst.Call) -> list[cst.Arg]:
     ``caplog.at_level(...)`. When no level is supplied it defaults to
     ``"INFO"``.
     """
-    level_arg = call_expr.args[1] if len(call_expr.args) >= 2 else None
-    if level_arg is None:
-        for a in call_expr.args:
-            if a.keyword and isinstance(a.keyword, cst.Name) and a.keyword.value == "level":
-                level_arg = a
-                break
-
-    caplog_level_args: list[cst.Arg] = []
-    if level_arg:
-        level_value = level_arg.value if isinstance(level_arg, cst.Arg) else level_arg.value
-        caplog_level_args.append(cst.Arg(value=level_value))
-    else:
-        caplog_level_args.append(cst.Arg(value=cst.SimpleString(value='"INFO"')))
-
-    return caplog_level_args
+    return _with_rewrites.get_caplog_level_args(call_expr)
 
 
 def build_caplog_call(call_expr: cst.Call) -> cst.Call:
@@ -979,8 +734,7 @@ def build_caplog_call(call_expr: cst.Call) -> cst.Call:
         ``caplog.at_level`` attribute and whose args are the level
         arguments (defaulting to ``"INFO"`` when not specified).
     """
-    args = get_caplog_level_args(call_expr)
-    return cst.Call(func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")), args=args)
+    return _with_rewrites.build_caplog_call(call_expr)
 
 
 def build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None:
@@ -999,53 +753,7 @@ def build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None
         A :class:`libcst.WithItem` when the input maps to a known
         pytest context manager; otherwise ``None``.
     """
-    if not isinstance(call_expr.func, cst.Attribute):
-        return None
-    func = call_expr.func
-    if not (isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}):
-        return None
-
-    attr_name = func.attr.value
-
-    if attr_name in {"assertWarns", "assertWarnsRegex"}:
-        exc_arg = call_expr.args[0] if call_expr.args else None
-        match_arg = call_expr.args[1] if len(call_expr.args) >= 2 else None
-        warn_items_args: list[cst.Arg] = []
-        if exc_arg:
-            warn_items_args.append(cst.Arg(value=exc_arg.value))
-        if match_arg:
-            warn_items_args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
-        warn_call = cst.Call(
-            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
-            args=warn_items_args,
-        )
-        return cst.WithItem(item=warn_call)
-
-    if attr_name in {"assertRaises", "assertRaisesRegex"}:
-        exc_arg = call_expr.args[0] if call_expr.args else None
-        match_arg = call_expr.args[1] if len(call_expr.args) >= 2 else None
-        raises_items_args: list[cst.Arg] = []
-        if exc_arg:
-            raises_items_args.append(cst.Arg(value=exc_arg.value))
-        if match_arg:
-            # pass the regex via the `match=` keyword to pytest.raises
-            raises_items_args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
-        raises_call = cst.Call(
-            func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
-            args=raises_items_args,
-        )
-        return cst.WithItem(item=raises_call)
-
-    if attr_name in {"assertLogs", "assertNoLogs"}:
-        caplog_level_args = get_caplog_level_args(call_expr)
-
-        cap_call = cst.Call(
-            func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
-            args=caplog_level_args,
-        )
-        return cst.WithItem(item=cap_call)
-
-    return None
+    return _with_rewrites.build_with_item_from_assert_call(call_expr)
 
 
 def create_with_wrapping_next_stmt(
@@ -1058,19 +766,7 @@ def create_with_wrapping_next_stmt(
     (the transformer should advance by 2), or ``1`` when no following
     statement exists and a ``pass`` node is used as the with-body.
     """
-    if next_stmt is not None:
-        if isinstance(next_stmt, cst.With):
-            inner_body = getattr(next_stmt.body, "body", [])
-            body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], inner_body))
-        else:
-            body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [next_stmt]))
-        with_node = cst.With(body=body_block, items=[with_item])
-        return with_node, 2
-    else:
-        pass_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))])
-        body_block = cst.IndentedBlock(body=cast(list[cst.BaseStatement], [pass_stmt]))
-        with_node = cst.With(body=body_block, items=[with_item])
-        return with_node, 1
+    return _with_rewrites.create_with_wrapping_next_stmt(with_item, next_stmt)
 
 
 def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tuple[list[cst.BaseStatement], int, bool]:
@@ -1091,64 +787,7 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
     Returns:
         A tuple of ``(nodes_to_append, consumed_count, handled)``.
     """
-    try:
-        if i >= len(statements):
-            return [], 0, False
-
-        stmt = statements[i]
-        if not (
-            isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and isinstance(stmt.body[0], cst.Expr)
-        ):
-            return [], 0, False
-
-        expr = stmt.body[0].value
-        if not (isinstance(expr, cst.Call) and isinstance(expr.func, cst.Attribute)):
-            return [], 0, False
-
-        # Only consider self/cls attribute calls
-        func = expr.func
-        if not (isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}):
-            return [], 0, False
-
-        # Build WithItem if this call maps to a known context (warns/raises/logs)
-        with_item = build_with_item_from_assert_call(expr)
-        if not with_item:
-            return [], 0, False
-
-        # Determine next statement (or None)
-        next_stmt = statements[i + 1] if (i + 1) < len(statements) else None
-        new_with, consumed = create_with_wrapping_next_stmt(with_item, next_stmt)
-        return [new_with], consumed, True
-    except AttributeError as e:
-        # Malformed CST node structure
-        from ..helpers.error_reporting import report_transformation_error
-
-        report_transformation_error(
-            e, "assert_transformer", "handle_bare_assert_call", suggestions=["Check AST node structure in source code"]
-        )
-        return [], 0, False
-    except TypeError as e:
-        # Type mismatch in node processing
-        from ..helpers.error_reporting import report_transformation_error
-
-        report_transformation_error(
-            e,
-            "assert_transformer",
-            "handle_bare_assert_call",
-            suggestions=["Verify node types in transformation logic"],
-        )
-        return [], 0, False
-    except IndexError as e:
-        # Array/list access error
-        from ..helpers.error_reporting import report_transformation_error
-
-        report_transformation_error(
-            e,
-            "assert_transformer",
-            "handle_bare_assert_call",
-            suggestions=["Check statement indexing in transformation"],
-        )
-        return [], 0, False
+    return _with_rewrites.handle_bare_assert_call(statements, i)
 
 
 def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
@@ -1170,92 +809,21 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
         potentially rewritten With node; ``alias_name`` is an alias
         string or ``None``; ``changed`` is a boolean.
     """
-    new_items: list[cst.WithItem] = []
-    changed = False
-    # Capture original alias name (if any) from the incoming With items so
-    # downstream callers (lookahead rewriting) can locate references to the
-    # original alias (for example `log.output`) in following statements.
-    original_alias_name: str | None = None
-    for orig_item in stmt.items:
-        try:
-            if (
-                orig_item.asname
-                and isinstance(orig_item.asname, cst.AsName)
-                and isinstance(orig_item.asname.name, cst.Name)
-            ):
-                original_alias_name = orig_item.asname.name.value
-                break
-        except (AttributeError, TypeError, IndexError, re.error):
-            pass
-    # silently inspect With items
-    for item in stmt.items:
-        ctx = item.item
-        if isinstance(ctx, cst.Call) and isinstance(ctx.func, cst.Attribute):
-            func = ctx.func
-            if isinstance(func.value, cst.Name) and func.value.value in {"self", "cls"}:
-                if func.attr.value in {"assertWarns", "assertWarnsRegex"}:
-                    exc_arg = ctx.args[0] if ctx.args else None
-                    match_arg = ctx.args[1] if len(ctx.args) >= 2 else None
-                    warn_items_args_local: list[cst.Arg] = []
-                    if exc_arg:
-                        warn_items_args_local.append(cst.Arg(value=exc_arg.value))
-                    if match_arg:
-                        warn_items_args_local.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
-                    warn_call = cst.Call(
-                        func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")),
-                        args=warn_items_args_local,
-                    )
-                    new_item = cst.WithItem(item=warn_call)
-                    new_items.append(new_item)
-                    changed = True
-                    # transformed to pytest.warns
-                    continue
+    try:
+        import logging
 
-                if func.attr.value in {"assertLogs", "assertNoLogs"}:
-                    caplog_level_args_local = get_caplog_level_args(ctx)
-                    cap_call = cst.Call(
-                        func=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="at_level")),
-                        args=caplog_level_args_local,
-                    )
-                    # Do not bind a synthetic alias when converting to
-                    # `caplog.at_level(...)`. Use the `caplog` fixture
-                    # directly at runtime rather than inventing a local
-                    # alias; downstream string-level fallbacks will map
-                    # any original alias usages to `caplog.messages`.
-                    new_item = cst.WithItem(item=cap_call)
-                    new_items.append(new_item)
-                    changed = True
-                    # transformed to caplog.at_level
-                    continue
-
-                if func.attr.value in {"assertRaises", "assertRaisesRegex"}:
-                    exc_arg = ctx.args[0] if ctx.args else None
-                    match_arg = ctx.args[1] if len(ctx.args) >= 2 else None
-                    raises_items_args_local: list[cst.Arg] = []
-                    if exc_arg:
-                        raises_items_args_local.append(cst.Arg(value=exc_arg.value))
-                    if match_arg:
-                        raises_items_args_local.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg.value))
-                    raises_call = cst.Call(
-                        func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")),
-                        args=raises_items_args_local,
-                    )
-                    new_item = cst.WithItem(item=raises_call, asname=item.asname)
-                    new_items.append(new_item)
-                    changed = True
-                    # transformed to pytest.raises
-                    continue
-
-        new_items.append(item)
-
-    if not changed:
-        return stmt, None, False
-
-    new_with = stmt.with_changes(items=new_items)
-
-    # Return the original alias name (if any) so callers that rewrite
-    # following statements can find references to the original alias.
-    return new_with, original_alias_name, True
+        _logger = logging.getLogger(__name__)
+        _logger.debug(
+            "assert_transformer.transform_with_items: delegating to _with_rewrites for %s", type(stmt).__name__
+        )
+    except Exception:
+        pass
+    res = _with_rewrites.transform_with_items(stmt)
+    try:
+        _logger.debug("assert_transformer.transform_with_items: result changed=%s", res[2])
+    except Exception:
+        pass
+    return res
 
 
 def get_with_alias_name(items: list[cst.WithItem]) -> str | None:
@@ -1268,13 +836,7 @@ def get_with_alias_name(items: list[cst.WithItem]) -> str | None:
         The alias name string if an ``as`` name is present on any item,
         otherwise ``None``.
     """
-    for item in items:
-        try:
-            if item.asname and isinstance(item.asname, cst.AsName) and isinstance(item.asname.name, cst.Name):
-                return item.asname.name.value
-        except (AttributeError, TypeError, IndexError, re.error):
-            pass
-    return None
+    return _with_rewrites.get_with_alias_name(items)
 
 
 def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> cst.Assert | None:
@@ -1295,85 +857,7 @@ def rewrite_single_alias_assert(target_assert: cst.Assert, alias_name: str) -> c
         A new :class:`libcst.Assert` if a rewrite was applied, or
         ``None`` when no rewrite was possible.
     """
-    try:
-        t = target_assert.test
-
-        # First try the existing expression-based rewrites
-        rewritten_test = _rewrite_expression(t, alias_name)
-        if rewritten_test is not None:
-            return target_assert.with_changes(test=rewritten_test)
-
-        if isinstance(t, cst.Comparison):
-            comp_new = _rewrite_comparison(t, alias_name)
-            if comp_new is not None:
-                return target_assert.with_changes(test=comp_new)
-
-        # Additional AST-level handling: rewrite direct attribute access
-        # patterns like `<alias>.records[...]` or
-        # `<alias>.records[index].getMessage()` to use `caplog.records` or
-        # `caplog.messages` when appropriate so downstream code can
-        # reference record attributes such as `.levelname`.
-        def _rewrite_alias_records(expr: cst.BaseExpression) -> cst.BaseExpression | None:
-            # caplog.records[...] or caplog.records
-            if isinstance(expr, cst.Subscript):
-                value = expr.value
-                if isinstance(value, cst.Attribute) and isinstance(value.value, cst.Name):
-                    if (
-                        value.value.value == alias_name
-                        and isinstance(value.attr, cst.Name)
-                        and value.attr.value == "records"
-                    ):
-                        return expr.with_changes(
-                            value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                        )
-            if isinstance(expr, cst.Attribute) and isinstance(expr.value, cst.Subscript):
-                sub = expr.value
-                if isinstance(sub.value, cst.Attribute) and isinstance(sub.value.value, cst.Name):
-                    if (
-                        sub.value.value.value == alias_name
-                        and isinstance(sub.value.attr, cst.Name)
-                        and sub.value.attr.value == "records"
-                    ):
-                        # e.g., <alias>.records[0].getMessage() -> caplog.records[0].getMessage()
-                        return expr.with_changes(
-                            value=sub.with_changes(
-                                value=cst.Attribute(value=cst.Name(value="caplog"), attr=cst.Name(value="records"))
-                            )
-                        )
-            return None
-
-        replaced = None
-        try:
-            # Walk left and comparisons for candidate replacements
-            left_repl = _rewrite_alias_records(t.left) if isinstance(t.left, cst.BaseExpression) else None
-            if left_repl is not None:
-                replaced = t.with_changes(left=left_repl)
-            else:
-                # Check comparators
-                new_targets = []
-                changed = False
-                for target in t.comparisons:
-                    comp_expr = target.comparator
-                    repl = None
-                    if isinstance(comp_expr, cst.BaseExpression):
-                        repl = _rewrite_alias_records(comp_expr)
-                    if repl is not None:
-                        new_targets.append(target.with_changes(comparator=repl))
-                        changed = True
-                    else:
-                        new_targets.append(target)
-                if changed:
-                    replaced = t.with_changes(comparisons=new_targets)
-        except (AttributeError, TypeError, IndexError, re.error):
-            replaced = None
-
-        if replaced is not None:
-            return target_assert.with_changes(test=replaced)
-
-        return None
-    except (AttributeError, TypeError, IndexError, re.error):
-        # Conservative: do not rewrite on any unexpected errors
-        return None
+    return _with_rewrites.rewrite_single_alias_assert(target_assert, alias_name)
 
 
 def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str) -> cst.With:
@@ -1393,30 +877,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
         The potentially rewritten :class:`libcst.With` node. On any
         error the original node is returned unchanged.
     """
-    try:
-        new_body: list[cst.BaseSmallStatement] = []
-        for inner in getattr(new_with.body, "body", []):
-            s = inner
-            # Try rewriting bare Assert nodes
-            if isinstance(s, cst.Assert):
-                rewritten = rewrite_single_alias_assert(s, alias_name)
-                new_body.append(rewritten if rewritten is not None else s)
-                continue
-
-            # Try rewriting SimpleStatementLine wrapping an Assert
-            if isinstance(s, cst.SimpleStatementLine) and len(s.body) == 1 and isinstance(s.body[0], cst.Assert):
-                rewritten = rewrite_single_alias_assert(s.body[0], alias_name)
-                new_body.append(s.with_changes(body=[rewritten]) if rewritten is not None else s)
-                continue
-
-            # Default: keep original statement
-            new_body.append(s)
-
-        new_block = new_with.body.with_changes(body=new_body)
-        return new_with.with_changes(body=new_block)
-    except (AttributeError, TypeError, IndexError, re.error):
-        # Conservative: return original when any error occurs
-        return new_with
+    return _with_rewrites.rewrite_asserts_using_alias_in_with_body(new_with, alias_name)
 
 
 def rewrite_following_statements_for_alias(
@@ -1435,79 +896,7 @@ def rewrite_following_statements_for_alias(
     intentionally conservative: exceptions are caught and ignored so
     callers can continue safely.
     """
-    for k in range(start_index, min(len(statements), start_index + look_ahead)):
-        s = statements[k]
-        try:
-            target_assert = None
-            wrapper_stmt = None
-            if isinstance(s, cst.Assert):
-                target_assert = s
-            elif isinstance(s, cst.SimpleStatementLine) and len(s.body) == 1 and isinstance(s.body[0], cst.Assert):
-                wrapper_stmt = s
-                target_assert = s.body[0]
-
-            if target_assert is None:
-                # Additionally handle calls like `self.assertEqual(...)` or
-                # other Expr(Call) forms that reference the original
-                # alias. These calls will be transformed later into AST
-                # asserts by other passes, but we can conservatively
-                # rewrite alias references in their arguments now.
-                if isinstance(s, cst.SimpleStatementLine) and len(s.body) == 1 and isinstance(s.body[0], cst.Expr):
-                    expr = s.body[0].value
-                    if isinstance(expr, cst.Call):
-                        new_args = []
-                        changed_args = False
-                        for a in expr.args:
-                            try:
-                                val = a.value
-                                # len(alias.records) -> len(caplog.records)
-                                if (
-                                    isinstance(val, cst.Call)
-                                    and isinstance(val.func, cst.Name)
-                                    and val.func.value == "len"
-                                    and val.args
-                                ):
-                                    inner = val.args[0].value
-                                    access = _extract_alias_output_slices(inner)
-                                    if access is not None and access.alias_name == alias_name:
-                                        new_inner = _build_caplog_records_expr(access)
-                                        new_len = val.with_changes(args=[cst.Arg(value=new_inner)])
-                                        new_args.append(a.with_changes(value=new_len))
-                                        changed_args = True
-                                        continue
-
-                                access = _extract_alias_output_slices(val)
-                                if access is not None and access.alias_name == alias_name:
-                                    # Use getMessage() to yield the logged string
-                                    msg_call = _build_get_message_call(access)
-                                    new_args.append(a.with_changes(value=msg_call))
-                                    changed_args = True
-                                    continue
-                            except (AttributeError, TypeError, IndexError, re.error):
-                                pass
-
-                            new_args.append(a)
-
-                        if changed_args:
-                            updated_call = expr.with_changes(args=tuple(new_args))
-                            statements[k] = cst.SimpleStatementLine(body=[cst.Expr(value=updated_call)])
-                            continue
-                continue
-
-            rewritten = rewrite_single_alias_assert(target_assert, alias_name)
-            if rewritten is not None:
-                # No AST-level rewrite from `caplog.records` -> `<alias>.messages`.
-                # Keep libcst-level rewrites conservative and leave `caplog.records`
-                # in place. The string-level fallback (applied later) will map
-                # `caplog.records` to `_caplog.messages` when appropriate.
-                final_assert = rewritten
-                if wrapper_stmt is not None:
-                    statements[k] = wrapper_stmt.with_changes(body=[final_assert])
-                else:
-                    statements[k] = cst.SimpleStatementLine(body=[final_assert])
-        except (AttributeError, TypeError, IndexError, re.error):
-            # Conservative: do not handle on errors
-            pass
+    return _with_rewrites.rewrite_following_statements_for_alias(statements, start_index, alias_name, look_ahead)
 
 
 def _handle_simple_statement_line(
@@ -1647,15 +1036,37 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
         applied. The function is conservative and preserves original
         nodes on error.
     """
+
+    _logger = logging.getLogger(__name__)
     out: list[cst.BaseStatement] = []
+
+    # Use shared utility to keep behavior consistent across transformers
+    from .transformer_helper import wrap_small_stmt_if_needed as _wrap_small_stmt_if_needed
+
     i = 0
+    try:
+        _logger.debug("assert_transformer.wrap_assert_in_block: starting with %d statements", len(statements))
+    except Exception:
+        pass
 
     while i < len(statements):
         stmt = statements[i]
 
         try:
             processed_nodes, consumed = _process_statement_with_fallback(stmt, statements, i, max_depth)
-            out.extend(processed_nodes)
+            # Ensure small-statement nodes are wrapped before appending so
+            # they remain valid Statement nodes when placed in IndentedBlock.body.
+            for n in processed_nodes:
+                wrapped = _wrap_small_stmt_if_needed(n)
+                try:
+                    _logger.debug(
+                        "assert_transformer.wrap_assert_in_block: appending %s (wrapped=%s)",
+                        type(n).__name__,
+                        type(wrapped).__name__,
+                    )
+                except Exception:
+                    pass
+                out.append(wrapped)
             i += consumed
         except Exception as e:
             # Ultimate fallback - preserve original statement and continue
@@ -1763,34 +1174,17 @@ def _process_with_statement(stmt: cst.With, statements: list[cst.BaseStatement],
 
 
 def _safe_extract_statements(body_container, max_depth: int = 7) -> list[cst.BaseStatement] | None:
-    """Safely extract a list of statements from a body container, handling nested structures.
+    """Delegate to the staged-migration helper in `assert_with_rewrites`.
 
-    This handles cases where LibCST might create complex nested body structures
-    in deeply nested control flow statements.
-
-    Args:
-        body_container: An IndentedBlock or similar container that should have a body attribute
-        max_depth: Maximum depth to traverse when unwrapping nested structures
-
-    Returns:
-        List of statements if extractable, None otherwise
+    Keeping this symbol in the original module preserves the public
+    API while allowing the implementation to live in the new file.
     """
-    if body_container is None or not hasattr(body_container, "body"):
+    try:
+        from . import assert_with_rewrites as _with_rewrites
+
+        return _with_rewrites._safe_extract_statements(body_container, max_depth)
+    except Exception:
         return None
-
-    current = body_container.body
-
-    # Handle nested IndentedBlock structures that might occur in complex nesting
-    depth = 0
-    while depth < max_depth:
-        if isinstance(current, list | tuple):
-            return list(current)
-        elif hasattr(current, "body"):
-            current = current.body
-            depth += 1
-        else:
-            # Unexpected structure, give up
-            return None
 
     # Too deeply nested or unexpected structure
     return None
@@ -2111,13 +1505,7 @@ def transform_assert_dict_equal(node: cst.Call) -> cst.CSTNode:
     positional arguments are present; otherwise returns the original
     node.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_dict_equal(node)
 
 
 def _create_robust_regex(pattern: str) -> str:
@@ -2467,13 +1855,7 @@ def transform_assert_list_equal(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` when two positional arguments are
     provided; otherwise returns the input node unchanged.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_list_equal(node)
 
 
 def transform_assert_set_equal(node: cst.Call) -> cst.CSTNode:
@@ -2482,13 +1864,7 @@ def transform_assert_set_equal(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` when two positional arguments are
     provided; otherwise returns the input node unchanged.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_set_equal(node)
 
 
 def transform_assert_tuple_equal(node: cst.Call) -> cst.CSTNode:
@@ -2497,13 +1873,7 @@ def transform_assert_tuple_equal(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` when two positional arguments are
     provided; otherwise returns the input node unchanged.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_tuple_equal(node)
 
 
 def transform_assert_greater(node: cst.Call) -> cst.CSTNode:
@@ -2512,13 +1882,7 @@ def transform_assert_greater(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` performing the greater-than
     comparison when two positional arguments are provided.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.GreaterThan(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_greater(node)
 
 
 def transform_assert_greater_equal(node: cst.Call) -> cst.CSTNode:
@@ -2527,13 +1891,7 @@ def transform_assert_greater_equal(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` performing the greater-or-equal
     comparison when two positional arguments are provided.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.GreaterThanEqual(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_greater_equal(node)
 
 
 def transform_assert_less(node: cst.Call) -> cst.CSTNode:
@@ -2542,13 +1900,7 @@ def transform_assert_less(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` performing the less-than
     comparison when two positional arguments are provided.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.LessThan(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_less(node)
 
 
 def transform_assert_less_equal(node: cst.Call) -> cst.CSTNode:
@@ -2557,13 +1909,7 @@ def transform_assert_less_equal(node: cst.Call) -> cst.CSTNode:
     Returns a :class:`libcst.Assert` performing the less-or-equal
     comparison when two positional arguments are provided.
     """
-    if len(node.args) >= 2:
-        comp = cst.Comparison(
-            left=node.args[0].value,
-            comparisons=[cst.ComparisonTarget(operator=cst.LessThanEqual(), comparator=node.args[1].value)],
-        )
-        return cst.Assert(test=comp)
-    return node
+    return _ast_rewrites.transform_assert_less_equal(node)
 
 
 def transform_assert_almost_equal(node: cst.Call, config: Any | None = None) -> cst.CSTNode:
@@ -2583,34 +1929,7 @@ def transform_assert_almost_equal(node: cst.Call, config: Any | None = None) -> 
         positional args are present the function returns ``None`` or the
         original node (preserving conservative behavior).
     """
-    if len(node.args) >= 2:
-        left = node.args[0].value
-        right = node.args[1].value
-        # find places kwarg if present (libcst represents keywords as Arg with keyword attr)
-        places = None
-        for arg in node.args:
-            if arg.keyword and isinstance(arg.keyword, cst.Name) and arg.keyword.value == "places":
-                places = arg.value
-                break
-        # If places not provided, use pytest.approx(right)
-        if places is None:
-            approx_call = cst.Call(
-                func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="approx")),
-                args=[cst.Arg(value=right)],
-            )
-            comp = cst.Comparison(
-                left=left, comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=approx_call)]
-            )
-            return cst.Assert(test=comp)
-        else:
-            # Fallback: keep previous behavior using round() to emulate places
-            diff = cst.BinaryOperation(left=left, operator=cst.Subtract(), right=right)
-            round_call = cst.Call(func=cst.Name(value="round"), args=[cst.Arg(value=diff), cst.Arg(value=places)])
-            comp = cst.Comparison(
-                left=round_call,
-                comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer(value="0"))],
-            )
-            return cst.Assert(test=comp)
+    return _ast_rewrites.transform_assert_almost_equal(node, config)
 
 
 def transform_assert_almost_equals(node: cst.Call) -> cst.CSTNode:
@@ -2619,7 +1938,7 @@ def transform_assert_almost_equals(node: cst.Call) -> cst.CSTNode:
     Delegates to :func:`transform_assert_almost_equal` to perform the
     same rewrite.
     """
-    return transform_assert_almost_equal(node)
+    return _ast_rewrites.transform_assert_almost_equals(node)
 
 
 def transform_assert_not_almost_equals(node: cst.Call) -> cst.CSTNode:
@@ -2627,4 +1946,4 @@ def transform_assert_not_almost_equals(node: cst.Call) -> cst.CSTNode:
 
     Delegates to :func:`transform_assert_not_almost_equal`.
     """
-    return transform_assert_not_almost_equal(node)
+    return _ast_rewrites.transform_assert_not_almost_equals(node)

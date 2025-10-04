@@ -14,3 +14,13 @@ from .unittest_transformer import (
 __all__ = [
     "UnittestToPytestCstTransformer",
 ]
+
+# Re-export the new assert split modules for convenient imports while we
+# perform the staged refactor.
+from . import (
+    assert_ast_rewrites,
+    assert_fallbacks,
+    assert_with_rewrites,
+)  # noqa: F401
+
+__all__ += ["assert_ast_rewrites", "assert_with_rewrites", "assert_fallbacks"]

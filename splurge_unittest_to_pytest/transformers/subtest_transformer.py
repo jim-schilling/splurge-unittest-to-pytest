@@ -25,7 +25,7 @@ from collections.abc import Sequence
 
 import libcst as cst
 
-from .parametrize_helper import convert_subtest_loop_to_parametrize
+from .parametrize_helper import ParametrizeOptions, convert_subtest_loop_to_parametrize
 
 
 def _extract_from_list_or_tuple(node: cst.BaseExpression) -> list[cst.BaseExpression] | None:
@@ -58,11 +58,25 @@ def convert_simple_subtests_to_parametrize(
     changed = False
 
     while True:
-        converted = convert_subtest_loop_to_parametrize(current, current, transformer)
+        options = ParametrizeOptions(
+            parametrize_include_ids=getattr(transformer, "parametrize_include_ids", True),
+            parametrize_add_annotations=getattr(transformer, "parametrize_add_annotations", True),
+        )
+        converted = convert_subtest_loop_to_parametrize(current, current, options)
         if converted is None:
             break
         changed = True
         current = converted
+        # Maintain the previous behaviour where the transformer's
+        # `needs_pytest_import` flag was set by the converter. When callers
+        # use explicit options the converter cannot set transformer state,
+        # so set it here to preserve behaviour.
+        try:
+            transformer.needs_pytest_import = True
+        except Exception:
+            # Be conservative: if transformer doesn't support attribute set,
+            # ignore and continue (keeps previous conservative behaviour).
+            pass
 
     if not changed:
         return None
@@ -87,6 +101,20 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
     """
 
     out: list[cst.BaseStatement] = []
+
+    def _wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
+        """Ensure libcst small-statement nodes are wrapped in a SimpleStatementLine.
+
+        Some transforms may return small-statement nodes like ``cst.Assert`` or
+        ``cst.Expr``. When inserted directly into an ``IndentedBlock`` they can
+        lose formatting metadata. Wrapping them in ``SimpleStatementLine``
+        preserves indentation and leading_lines information during serialization.
+        """
+        # Delegate to the shared utility to ensure consistent behavior
+        from .transformer_helper import wrap_small_stmt_if_needed as _wrap_small_stmt_if_needed
+
+        return _wrap_small_stmt_if_needed(node)
+
     for stmt in statements:
         if isinstance(stmt, cst.With):
             items = stmt.items
@@ -100,7 +128,12 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                         new_body = stmt.body
                         if isinstance(new_body, cst.IndentedBlock):
                             converted_inner = convert_subtests_in_body(new_body.body)
-                            new_body = new_body.with_changes(body=converted_inner)
+                            # Ensure any small-statement nodes are wrapped so
+                            # indentation and leading_lines are preserved.
+                            wrapped_inner: list[cst.BaseStatement] = []
+                            for n in converted_inner:
+                                wrapped_inner.append(_wrap_small_stmt_if_needed(n))
+                            new_body = new_body.with_changes(body=wrapped_inner)
                         new_with = stmt.with_changes(items=[new_item], body=new_body)
                         out.append(new_with)
                         continue
@@ -110,7 +143,11 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
         if hasattr(stmt, "body") and isinstance(stmt.body, cst.IndentedBlock):
             inner_block = stmt.body
             converted = convert_subtests_in_body(inner_block.body)
-            new_block = inner_block.with_changes(body=converted)
+            # Wrap any small-statement nodes to preserve leading_lines/indentation
+            wrapped_block: list[cst.BaseStatement] = []
+            for n in converted:
+                wrapped_block.append(_wrap_small_stmt_if_needed(n))
+            new_block = inner_block.with_changes(body=wrapped_block)
             try:
                 # For simple cases this will return a new statement with the
                 # updated body (works for If, For, While, Try, with the
@@ -129,7 +166,10 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                     h_body = getattr(h, "body", None)
                     if isinstance(h_body, cst.IndentedBlock):
                         converted_h = convert_subtests_in_body(h_body.body)
-                        new_h = h.with_changes(body=h_body.with_changes(body=converted_h))
+                        wrapped_h: list[cst.BaseStatement] = []
+                        for n in converted_h:
+                            wrapped_h.append(_wrap_small_stmt_if_needed(n))
+                        new_h = h.with_changes(body=h_body.with_changes(body=wrapped_h))
                     else:
                         new_h = h
                     new_handlers.append(new_h)
@@ -139,13 +179,19 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
                 final_block = getattr(stmt, "finalbody", None)
                 if isinstance(orelse_block, cst.BaseSuite):
                     converted_orelse = convert_subtests_in_body(getattr(orelse_block, "body", []))
-                    new_orelse = orelse_block.with_changes(body=converted_orelse)
+                    wrapped_orelse: list[cst.BaseStatement] = []
+                    for n in converted_orelse:
+                        wrapped_orelse.append(_wrap_small_stmt_if_needed(n))
+                    new_orelse = orelse_block.with_changes(body=wrapped_orelse)
                 else:
                     new_orelse = orelse_block
 
                 if isinstance(final_block, cst.BaseSuite):
                     converted_final = convert_subtests_in_body(getattr(final_block, "body", []))
-                    new_final = final_block.with_changes(body=converted_final)
+                    wrapped_final: list[cst.BaseStatement] = []
+                    for n in converted_final:
+                        wrapped_final.append(_wrap_small_stmt_if_needed(n))
+                    new_final = final_block.with_changes(body=wrapped_final)
                 else:
                     new_final = final_block
 

@@ -25,6 +25,90 @@ from typing import cast
 import libcst as cst
 
 from ..exceptions import ParametrizeConversionError
+from ._resolvers import (
+    _collect_constant_assignment_values as _collect_constant_assignment_values_resolver,
+)
+from ._resolvers import (
+    _collect_expression_names as _collect_expression_names_resolver,
+)
+from ._resolvers import (
+    _expression_is_constant as _expression_is_constant_resolver,
+)
+from ._resolvers import (
+    _extract_dict_pairs as _extract_dict_pairs_resolver,
+)
+from ._resolvers import (
+    _extract_literal_elements as _extract_literal_elements_resolver,
+)
+from ._resolvers import (
+    _inline_constant_expression as _inline_constant_expression_resolver,
+)
+from ._resolvers import (
+    _resolve_mapping_argument as _resolve_mapping_argument_resolver,
+)
+from ._resolvers import (
+    _resolve_name_reference as _resolve_name_reference_resolver,
+)
+from ._resolvers import (
+    _resolve_sequence_argument as _resolve_sequence_argument_resolver,
+)
+
+
+# Lightweight wrappers to preserve the original local function names and
+# adapt the resolver module's return types into the local dataclasses.
+def _extract_literal_elements(node: cst.BaseExpression) -> tuple[cst.BaseExpression, ...] | None:
+    return _extract_literal_elements_resolver(node)
+
+
+def _extract_dict_pairs(node: cst.BaseExpression) -> tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...] | None:
+    return _extract_dict_pairs_resolver(node)
+
+
+def _expression_is_constant(expression: cst.CSTNode) -> bool:
+    return _expression_is_constant_resolver(expression)
+
+
+def _inline_constant_expression(
+    expression: cst.BaseExpression, constants: Mapping[str, cst.BaseExpression]
+) -> cst.BaseExpression:
+    return _inline_constant_expression_resolver(expression, constants)
+
+
+def _collect_expression_names(expression: cst.CSTNode) -> set[str]:
+    return _collect_expression_names_resolver(expression)
+
+
+def _collect_constant_assignment_values(
+    statements: Sequence[cst.BaseStatement], loop_index: int
+) -> dict[str, cst.BaseExpression]:
+    return _collect_constant_assignment_values_resolver(statements, loop_index)
+
+
+def _resolve_name_reference(
+    name: str, statements: Sequence[cst.BaseStatement], loop_index: int
+) -> tuple[tuple[cst.BaseExpression, ...], int | None] | None:
+    return _resolve_name_reference_resolver(name, statements, loop_index)
+
+
+def _resolve_sequence_argument(
+    expr: cst.BaseExpression, statements: Sequence[cst.BaseStatement], loop_index: int
+) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
+    values, candidates = _resolve_sequence_argument_resolver(expr, statements, loop_index)
+    if not candidates:
+        return values, ()
+    converted = tuple(_RemovalCandidate(index=c.index, name=c.name) for c in candidates)
+    return values, converted
+
+
+def _resolve_mapping_argument(
+    expr: cst.BaseExpression, statements: Sequence[cst.BaseStatement], loop_index: int
+) -> tuple[tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...], tuple[_RemovalCandidate, ...]]:
+    pairs, candidates = _resolve_mapping_argument_resolver(expr, statements, loop_index)
+    if not candidates:
+        return pairs, ()
+    converted = tuple(_RemovalCandidate(index=c.index, name=c.name) for c in candidates)
+    return pairs, converted
+
 
 DOMAINS = ["transformers", "parametrize"]
 __all__ = ["convert_subtest_loop_to_parametrize"]
@@ -45,10 +129,22 @@ class _RemovalCandidate:
     name: str | None
 
 
+@dataclass(frozen=True)
+class ParametrizeOptions:
+    """Explicit options controlling parametrize conversion behaviour.
+
+    This dataclass allows callers to opt into explicit, testable options
+    rather than relying on attributes on the transformer object.
+    """
+
+    parametrize_include_ids: bool = True
+    parametrize_add_annotations: bool = True
+
+
 def convert_subtest_loop_to_parametrize(
     original_func: cst.FunctionDef,
     updated_func: cst.FunctionDef,
-    transformer,
+    transformer_or_options,
 ) -> cst.FunctionDef | None:
     """Return a parametrized ``FunctionDef`` when a simple subTest loop is detected.
 
@@ -91,8 +187,18 @@ def convert_subtest_loop_to_parametrize(
 
         removable_indexes = _filter_removal_candidates(removal_candidates, body_statements, subtest_loop)
 
-        include_ids = getattr(transformer, "parametrize_include_ids", True)
-        add_annotations = getattr(transformer, "parametrize_add_annotations", True)
+        # Support two calling conventions for backward compatibility:
+        # 1) Pass the transformer object (existing callers) and read attributes
+        # 2) Pass an explicit ParametrizeOptions instance
+        if isinstance(transformer_or_options, ParametrizeOptions):
+            options = transformer_or_options
+            include_ids = options.parametrize_include_ids
+            add_annotations = options.parametrize_add_annotations
+            transformer = None
+        else:
+            transformer = transformer_or_options
+            include_ids = getattr(transformer, "parametrize_include_ids", True)
+            add_annotations = getattr(transformer, "parametrize_add_annotations", True)
 
         annotations = _infer_param_annotations(rows) if add_annotations else tuple(None for _ in param_names)
         new_params = _ensure_function_params(updated_func.params, param_names, annotations)
@@ -104,7 +210,8 @@ def convert_subtest_loop_to_parametrize(
         if matching_index is None and any(_is_parametrize_decorator(deco) for deco in existing_decorators):
             return None
 
-        transformer.needs_pytest_import = True
+        if transformer is not None:
+            transformer.needs_pytest_import = True
 
         if matching_index is not None:
             target_decorator = existing_decorators[matching_index]
@@ -298,15 +405,9 @@ def _extract_call_iter_rows(
     return None
 
 
-def _extract_literal_elements(node: cst.BaseExpression) -> tuple[cst.BaseExpression, ...] | None:
-    if isinstance(node, cst.List | cst.Tuple):
-        elements: list[cst.BaseExpression] = []
-        for element in node.elements:
-            if not isinstance(element, cst.Element):
-                return None
-            elements.append(element.value)
-        return tuple(elements)
-    return None
+# `_extract_literal_elements` is delegated to `transformers._resolvers` via the
+# small wrapper defined near the top of this module. The original inline
+# implementation has been removed to avoid duplication.
 
 
 def _is_range_call(node: cst.BaseExpression) -> bool:
@@ -348,79 +449,74 @@ def _normalize_range_args(args: Sequence[int]) -> tuple[int, int, int]:
     raise ParametrizeConversionError
 
 
-def _resolve_name_reference(
-    name: str,
-    statements: Sequence[cst.BaseStatement],
-    loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], int | None] | None:
-    for idx in range(loop_index - 1, -1, -1):
-        stmt = statements[idx]
-        if isinstance(stmt, cst.SimpleStatementLine):
-            for small_stmt in stmt.body:
-                if isinstance(small_stmt, cst.Assign):
-                    if len(small_stmt.targets) != 1:
-                        continue
-                    target = small_stmt.targets[0].target
-                    if isinstance(target, cst.Name) and target.value == name:
-                        elements = _extract_literal_elements(small_stmt.value)
-                        if elements is not None:
-                            # If the variable is mutated between this assignment
-                            # and the loop (for example built up via
-                            # `scenarios.append(...)`), treat it as non-resolvable
-                            # to a static literal so we preserve the accumulator
-                            # and do not convert to parametrize.
-                            mutated = False
-                            for midx in range(idx + 1, loop_index):
-                                mid_stmt = statements[midx]
-                                # Check simple statement lines for common
-                                # mutation patterns like `name.append(...)`
-                                if isinstance(mid_stmt, cst.SimpleStatementLine):
-                                    for mid_small in mid_stmt.body:
-                                        # expr statements calling name.append/extend/etc
-                                        if isinstance(mid_small, cst.Expr) and isinstance(mid_small.value, cst.Call):
-                                            func = mid_small.value.func
-                                            if isinstance(func, cst.Attribute) and isinstance(func.value, cst.Name):
-                                                if func.value.value == name and isinstance(func.attr, cst.Name):
-                                                    if func.attr.value in {
-                                                        "append",
-                                                        "extend",
-                                                        "insert",
-                                                        "pop",
-                                                        "clear",
-                                                        "remove",
-                                                        "appendleft",
-                                                    }:
-                                                        mutated = True
-                                                        break
-                                        # assignments to the same name indicate mutation
-                                        if isinstance(mid_small, cst.Assign):
-                                            for t in mid_small.targets:
-                                                if isinstance(t.target, cst.Name) and t.target.value == name:
-                                                    mutated = True
-                                                    break
-                                    if mutated:
-                                        break
-                                # Augmented assignments also count
-                                if isinstance(mid_stmt, cst.AugAssign):
-                                    target = mid_stmt.target
-                                    if isinstance(target, cst.Name) and target.value == name:
-                                        mutated = True
-                                        break
+def _evaluate_int_literal(expr: cst.BaseExpression) -> int:
+    if not isinstance(expr, cst.Integer):
+        raise ParametrizeConversionError
 
-                            if mutated:
-                                return None
+    try:
+        return int(expr.value)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ParametrizeConversionError from exc
 
-                            # Only mark the original assignment removable if
-                            # the literal elements are compile-time constants
-                            # (for example, simple strings, integers, or
-                            # expressions made up of constants). If the list
-                            # contains expressions that reference local names
-                            # (such as `[''] * size`) we should preserve the
-                            # assignment so the local `size` binding remains
-                            # available at runtime.
-                            removable_index: int | None = idx if len(stmt.body) == 1 else None
-                            return elements, removable_index
-    return None
+
+def _build_decorator(
+    param_names: tuple[str, ...],
+    rows: Sequence[tuple[cst.BaseExpression, ...]],
+    include_ids: bool,
+) -> cst.Decorator:
+    # Delegate to a small factory function to centralize how we construct
+    # the ``pytest.mark.parametrize`` call. This makes the code easier to
+    # test and keep consistent across different call sites.
+    return _make_parametrize_call(param_names=param_names, rows=rows, include_ids=include_ids)
+
+
+def _make_parametrize_call(
+    *,
+    param_names: tuple[str, ...],
+    rows: Sequence[tuple[cst.BaseExpression, ...]],
+    include_ids: bool,
+) -> cst.Decorator:
+    """Construct a ``pytest.mark.parametrize`` decorator Call node.
+
+    Args:
+        param_names: tuple of parameter names as strings.
+        rows: sequence of tuple expressions representing row data.
+        include_ids: whether to append an ``ids`` kwarg with row ids.
+
+    Returns:
+        A libcst.Decorator node wrapping the parametrize Call.
+    """
+    param_arg_value = ",".join(param_names)
+    params_arg = cst.Arg(value=cst.SimpleString(value=f'"{param_arg_value}"'))
+
+    list_elements: list[cst.Element] = []
+    for row in rows:
+        if len(row) == 1:
+            list_elements.append(cst.Element(value=row[0].deep_clone()))
+        else:
+            tuple_expr = cst.Tuple(elements=[cst.Element(value=item.deep_clone()) for item in row])
+            list_elements.append(cst.Element(value=tuple_expr))
+
+    data_arg = cst.Arg(value=cst.List(elements=tuple(list_elements)))
+
+    args: list[cst.Arg] = [params_arg, data_arg]
+
+    if include_ids:
+        id_elements = [cst.Element(value=cst.SimpleString(value=f'"row_{i}"')) for i in range(len(rows))]
+        ids_arg = cst.Arg(keyword=cst.Name(value="ids"), value=cst.List(elements=tuple(id_elements)))
+        args.append(ids_arg)
+
+    func = cst.Attribute(
+        value=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark")),
+        attr=cst.Name(value="parametrize"),
+    )
+    call = cst.Call(func=func, args=tuple(args))
+    return cst.Decorator(decorator=call)
+
+
+# The detailed implementation of name-resolution was moved into
+# `transformers._resolvers`. The thin wrapper near the top of this module
+# delegates to that implementation so the local API remains stable.
 
 
 def _normalize_iter_value(value: cst.BaseExpression, arity: int) -> tuple[cst.BaseExpression, ...] | None:
@@ -514,123 +610,6 @@ def _build_mapping_rows(
             rows.append(value.deep_clone())
 
     return tuple(rows), removal_candidates
-
-
-def _resolve_sequence_argument(
-    expr: cst.BaseExpression,
-    statements: Sequence[cst.BaseStatement],
-    loop_index: int,
-) -> tuple[tuple[cst.BaseExpression, ...], tuple[_RemovalCandidate, ...]]:
-    literal_values = _extract_literal_elements(expr)
-    if literal_values is not None:
-        return literal_values, ()
-
-    if isinstance(expr, cst.Name):
-        resolution = _resolve_name_reference(expr.value, statements, loop_index)
-        if resolution is None:
-            raise ParametrizeConversionError
-        values, removable_index = resolution
-        if removable_index is None:
-            return values, ()
-        return values, (_RemovalCandidate(index=removable_index, name=expr.value),)
-
-    raise ParametrizeConversionError
-
-
-def _resolve_mapping_argument(
-    expr: cst.BaseExpression,
-    statements: Sequence[cst.BaseStatement],
-    loop_index: int,
-) -> tuple[tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...], tuple[_RemovalCandidate, ...]]:
-    direct_pairs = _extract_dict_pairs(expr)
-    if direct_pairs is not None:
-        return direct_pairs, ()
-
-    if not isinstance(expr, cst.Name):
-        raise ParametrizeConversionError
-
-    name = expr.value
-    for idx in range(loop_index - 1, -1, -1):
-        stmt = statements[idx]
-        if not isinstance(stmt, cst.SimpleStatementLine):
-            continue
-        for small_stmt in stmt.body:
-            if not isinstance(small_stmt, cst.Assign):
-                continue
-            if len(small_stmt.targets) != 1:
-                continue
-            target = small_stmt.targets[0].target
-            if not isinstance(target, cst.Name) or target.value != name:
-                continue
-            pairs = _extract_dict_pairs(small_stmt.value)
-            if pairs is None:
-                raise ParametrizeConversionError
-            removal: tuple[_RemovalCandidate, ...]
-            if len(stmt.body) == 1:
-                removal = (_RemovalCandidate(index=idx, name=name),)
-            else:
-                removal = ()
-            return pairs, removal
-
-    raise ParametrizeConversionError
-
-
-def _extract_dict_pairs(
-    node: cst.BaseExpression,
-) -> tuple[tuple[cst.BaseExpression, cst.BaseExpression], ...] | None:
-    if not isinstance(node, cst.Dict):
-        return None
-
-    pairs: list[tuple[cst.BaseExpression, cst.BaseExpression]] = []
-    for element in node.elements:
-        if not isinstance(element, cst.DictElement):
-            return None
-        pairs.append((element.key, element.value))
-
-    return tuple(pairs)
-
-
-def _evaluate_int_literal(expr: cst.BaseExpression) -> int:
-    if not isinstance(expr, cst.Integer):
-        raise ParametrizeConversionError
-
-    try:
-        return int(expr.value)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise ParametrizeConversionError from exc
-
-
-def _build_decorator(
-    param_names: tuple[str, ...],
-    rows: Sequence[tuple[cst.BaseExpression, ...]],
-    include_ids: bool,
-) -> cst.Decorator:
-    param_arg_value = ",".join(param_names)
-    params_arg = cst.Arg(value=cst.SimpleString(value=f'"{param_arg_value}"'))
-
-    list_elements: list[cst.Element] = []
-    for row in rows:
-        if len(row) == 1:
-            list_elements.append(cst.Element(value=row[0].deep_clone()))
-        else:
-            tuple_expr = cst.Tuple([cst.Element(value=item.deep_clone()) for item in row])
-            list_elements.append(cst.Element(value=tuple_expr))
-    data_arg = cst.Arg(value=cst.List(elements=list_elements))
-
-    parametrize_call = cst.Call(
-        func=cst.Attribute(
-            value=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="mark")),
-            attr=cst.Name(value="parametrize"),
-        ),
-        args=[params_arg, data_arg],
-    )
-
-    if include_ids:
-        ids_elements = [cst.Element(value=cst.SimpleString(value=f'"row_{index}"')) for index in range(len(rows))]
-        ids_arg = cst.Arg(keyword=cst.Name(value="ids"), value=cst.List(elements=ids_elements))
-        parametrize_call = parametrize_call.with_changes(args=[*parametrize_call.args, ids_arg])
-
-    return cst.Decorator(decorator=parametrize_call)
 
 
 def _infer_param_annotations(
@@ -860,39 +839,7 @@ def _collect_local_assignment_names(
     return names
 
 
-def _collect_constant_assignment_values(
-    statements: Sequence[cst.BaseStatement],
-    loop_index: int,
-) -> dict[str, cst.BaseExpression]:
-    constants: dict[str, cst.BaseExpression] = {}
-
-    for index in range(loop_index):
-        stmt = statements[index]
-        if not isinstance(stmt, cst.SimpleStatementLine):
-            continue
-        for small_stmt in stmt.body:
-            if isinstance(small_stmt, cst.Assign):
-                if len(small_stmt.targets) != 1:
-                    continue
-                target = small_stmt.targets[0].target
-                if not isinstance(target, cst.Name):
-                    continue
-                value_expr = small_stmt.value
-                if _expression_is_constant(value_expr):
-                    constants[target.value] = value_expr
-            elif isinstance(small_stmt, cst.AnnAssign):
-                target = small_stmt.target
-                if not isinstance(target, cst.Name):
-                    continue
-
-                value_node = small_stmt.value
-                if value_node is None:
-                    continue
-                value_expr = value_node
-                if _expression_is_constant(value_expr):
-                    constants[target.value] = value_expr
-
-    return constants
+# _collect_constant_assignment_values is implemented near the top of this file
 
 
 def _inline_constant_rows(
@@ -916,77 +863,6 @@ def _inline_constant_rows(
         return tuple(tuple(expression for expression in row) for row in rows)
 
     return tuple(tuple(_inline_constant_expression(expression, constants) for expression in row) for row in rows)
-
-
-def _inline_constant_expression(
-    expression: cst.BaseExpression,
-    constants: Mapping[str, cst.BaseExpression],
-) -> cst.BaseExpression:
-    class _ConstantInliner(cst.CSTTransformer):
-        def __init__(self, mapping: Mapping[str, cst.BaseExpression]) -> None:
-            self.mapping = mapping
-
-        def leave_Name(
-            self,
-            original_node: cst.Name,
-            updated_node: cst.Name,
-        ) -> cst.BaseExpression:  # noqa: D401 - libcst signature
-            replacement = self.mapping.get(original_node.value)
-            if replacement is None:
-                return updated_node
-            return replacement.deep_clone()
-
-    transformer = _ConstantInliner(constants)
-    updated = expression.visit(transformer)
-    return cast(cst.BaseExpression, updated)
-
-
-def _expression_is_constant(expression: cst.CSTNode) -> bool:
-    if isinstance(expression, cst.Integer | cst.Float | cst.SimpleString):
-        return True
-
-    if isinstance(expression, cst.Name):
-        return expression.value in {"True", "False", "None"}
-
-    if isinstance(expression, cst.UnaryOperation):
-        return _expression_is_constant(expression.expression)
-
-    if isinstance(expression, cst.List | cst.Tuple | cst.Set):
-        return all(
-            isinstance(element, cst.Element) and _expression_is_constant(element.value)
-            for element in expression.elements
-        )
-
-    if isinstance(expression, cst.Dict):
-        return all(
-            isinstance(element, cst.DictElement)
-            and element.key is not None
-            and _expression_is_constant(element.key)
-            and _expression_is_constant(element.value)
-            for element in expression.elements
-        )
-
-    if isinstance(expression, cst.BinaryOperation):
-        return _expression_is_constant(expression.left) and _expression_is_constant(expression.right)
-
-    if isinstance(expression, cst.Attribute):
-        return _expression_is_constant(expression.value)
-
-    return False
-
-
-def _collect_expression_names(expression: cst.CSTNode) -> set[str]:
-    ignored = {"True", "False", "None"}
-    collected: set[str] = set()
-
-    class _Collector(cst.CSTVisitor):
-        def visit_Name(self, node: cst.Name) -> bool:  # noqa: N802 - libcst naming
-            collected.add(node.value)
-            return True
-
-    expression.visit(_Collector())
-
-    return collected.difference(ignored)
 
 
 def _filter_removal_candidates(

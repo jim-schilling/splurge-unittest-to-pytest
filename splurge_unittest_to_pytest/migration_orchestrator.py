@@ -89,9 +89,13 @@ class MigrationOrchestrator:
             src_path = validated_source
             dest_dir = Path(config.target_root)
 
-            # Validate and prepare target directory
+            # Validate target directory (pure validation) and ensure parent dir exists
             try:
-                validated_target_dir = validate_target_path(dest_dir, create_parent=True)
+                validated_target_dir = validate_target_path(dest_dir)
+                # Perform the side-effect of creating parent directories
+                from .helpers.path_utils import ensure_parent_dir
+
+                ensure_parent_dir(validated_target_dir)
             except PathValidationError as e:
                 return Result.failure(e)
 

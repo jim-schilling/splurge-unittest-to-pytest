@@ -991,7 +991,9 @@ def version() -> None:
 
 
 @app.command("init-config")
-def init_config(output_file: str = typer.Argument("splurge-unittest-to-pytest.yaml", help="Output configuration file")) -> None:
+def init_config(
+    output_file: str = typer.Argument("splurge-unittest-to-pytest.yaml", help="Output configuration file"),
+) -> None:
     """Initialize a configuration file with default settings.
 
     This command creates a configuration file with all available options
