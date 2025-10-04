@@ -202,3 +202,42 @@ class ReplacementApplier(cst.CSTTransformer):
         except (AttributeError, TypeError, IndexError):
             pass
         return updated_node
+
+
+# Backwards-compatible export: many modules historically imported
+# `_wrap_small_stmt_if_needed` from transformer_helper; provide the
+# shared implementation under the legacy name for convenience.
+
+
+def wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
+    """Compatibility wrapper kept in transformer_helper.
+
+    Mirrors the implementation previously provided by
+    ``transformer_utils.wrap_small_stmt_if_needed`` so callers can import
+    it from this module and ``transformer_utils.py`` can be removed.
+    """
+    try:
+        if isinstance(node, cst.BaseSmallStatement):
+            return cst.SimpleStatementLine(body=[node])
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "wrap_small_stmt_if_needed: isinstance(BaseSmallStatement) raised", exc_info=True
+        )
+
+    if isinstance(node, cst.BaseStatement):
+        return node
+
+    try:
+        if isinstance(node, cst.BaseExpression):
+            return cst.SimpleStatementLine(body=[cst.Expr(node)])
+    except Exception:
+        logging.getLogger(__name__).debug("wrap_small_stmt_if_needed: isinstance(BaseExpression) raised", exc_info=True)
+
+    return cst.SimpleStatementLine(body=[cst.Pass()])
+
+
+# Public API: export the convenience helper used by other transformers.
+# Historically callers imported `_wrap_small_stmt_if_needed` from this
+# module; exposing it explicitly here keeps the module's public surface
+# stable during the migration/refactor.
+__all__ = ["ReplacementRegistry", "ReplacementApplier", "wrap_small_stmt_if_needed"]

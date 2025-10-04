@@ -110,20 +110,10 @@ def convert_subtests_in_body(statements: Sequence[cst.CSTNode]) -> list[cst.Base
         lose formatting metadata. Wrapping them in ``SimpleStatementLine``
         preserves indentation and leading_lines information during serialization.
         """
-        try:
-            # libcst small statements are instances of BaseSmallStatement
-            if isinstance(node, cst.BaseSmallStatement):
-                return cst.SimpleStatementLine(body=[node])
-        except Exception:
-            pass
-        # If it's already a BaseStatement (For, If, SimpleStatementLine, etc.), return as-is
-        if isinstance(node, cst.BaseStatement):
-            return node  # type: ignore[return-value]
-        # Fallback: try to coerce expr-like nodes into a SimpleStatementLine
-        try:
-            return cst.SimpleStatementLine(body=[node])  # type: ignore[arg-type]
-        except Exception:
-            return node  # type: ignore[return-value]
+        # Delegate to the shared utility to ensure consistent behavior
+        from .transformer_helper import wrap_small_stmt_if_needed as _wrap_small_stmt_if_needed
+
+        return _wrap_small_stmt_if_needed(node)
 
     for stmt in statements:
         if isinstance(stmt, cst.With):

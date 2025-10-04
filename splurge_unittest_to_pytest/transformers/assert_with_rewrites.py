@@ -23,6 +23,7 @@ from ._caplog_helpers import (
 from ._caplog_helpers import (
     extract_alias_output_slices as _caplog_extract_alias_output_slices,
 )
+from .transformer_helper import wrap_small_stmt_if_needed
 
 _logger = logging.getLogger(__name__)
 
@@ -962,36 +963,8 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
     logger = logging.getLogger(__name__)
     out: list[cst.BaseStatement] = []
 
-    def _wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
-        # If node is a libcst BaseSmallStatement (e.g. Assert, Pass)
-        # wrap it into a SimpleStatementLine so it can be placed into
-        # an IndentedBlock.body which expects statements.
-        try:
-            if isinstance(node, cst.BaseSmallStatement):
-                return cst.SimpleStatementLine(body=[node])
-        except Exception:
-            pass
-
-        # If it's already a BaseStatement, return as-is
-        if isinstance(node, cst.BaseStatement):
-            return node
-
-        # If it's a BaseExpression (an expression node), wrap it into an
-        # expression statement so it becomes a BaseSmallStatement and can
-        # be placed into a SimpleStatementLine.body which expects
-        # BaseSmallStatement items.
-        try:
-            if isinstance(node, cst.BaseExpression):
-                return cst.SimpleStatementLine(body=[cst.Expr(node)])
-        except Exception:
-            pass
-
-        # As a conservative fallback, return a pass statement so the
-        # surrounding block remains syntactically valid. This branch
-        # should be unreachable in normal operation because callers
-        # generally pass statements or expressions, but it keeps the
-        # function's return type strictly cst.BaseStatement for mypy.
-        return cst.SimpleStatementLine(body=[cst.Pass()])
+    # Use shared utility for wrapping small statements
+    _wrap_small_stmt_if_needed = wrap_small_stmt_if_needed
 
     i = 0
     while i < len(statements):

@@ -1040,18 +1040,8 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
     _logger = logging.getLogger(__name__)
     out: list[cst.BaseStatement] = []
 
-    def _wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
-        try:
-            if isinstance(node, cst.BaseSmallStatement):
-                return cst.SimpleStatementLine(body=[node])
-        except Exception:
-            pass
-        if isinstance(node, cst.BaseStatement):
-            return node  # type: ignore[return-value]
-        try:
-            return cst.SimpleStatementLine(body=[node])  # type: ignore[arg-type]
-        except Exception:
-            return node  # type: ignore[return-value]
+    # Use shared utility to keep behavior consistent across transformers
+    from .transformer_helper import wrap_small_stmt_if_needed as _wrap_small_stmt_if_needed
 
     i = 0
     try:
