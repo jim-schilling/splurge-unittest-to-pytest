@@ -126,6 +126,47 @@
 
 - **Public helper:** Added `prepare_config` to the public API and documented its usage in `docs/usage/prepare_config.md`. This helper provides a single, consistent entrypoint to build `MigrationConfig` programmatically, applies intelligent defaults, and gracefully falls back when enhanced validation is unavailable. Added unit and integration tests to cover the helper and CLI dry-run behavior.
 
+- **Comprehensive Configuration Documentation**: Added detailed configuration reference documentation:
+  - `docs/configuration-reference.md`: Auto-generated comprehensive configuration reference
+  - `docs/config-advanced-options.md`: Advanced configuration options guide
+  - `docs/config-degradation-settings.md`: Degradation and fallback settings
+  - `docs/config-import-handling.md`: Import handling configuration
+  - `docs/config-output-settings.md`: Output and file handling settings
+  - `docs/config-parametrize-settings.md`: Parametrize transformation settings
+  - `docs/config-processing-options.md`: Processing and performance options
+  - `docs/config-test-method-patterns.md`: Test method pattern configuration
+  - `docs/config-transform-selection.md`: Transform selection options
+  - `docs/config-transformation-settings.md`: General transformation settings
+
+- **Configuration Examples and Templates**: Added practical examples and templates:
+  - `examples/config-templates/`: Ready-to-use configuration templates for common scenarios
+    - `basic-migration.yaml`: Basic unittest to pytest migration
+    - `ci-cd-integration.yaml`: CI/CD pipeline integration
+    - `comprehensive-migration.yaml`: Full-featured migration setup
+    - `advanced-analysis.yaml`: Advanced analysis and reporting
+    - `batch-processing.yaml`: Batch processing optimization
+    - `minimal.yaml`: Minimal configuration for simple migrations
+  - `examples/workflow-templates/`: Workflow templates for different migration approaches
+    - `simple-migration-workflow.yaml`: Basic migration workflow
+    - `comprehensive-migration-workflow.yaml`: Full migration workflow
+    - `ci-cd-workflow.yaml`: CI/CD integration workflow
+    - `gradual-migration-workflow.yaml`: Gradual migration approach
+    - `legacy-code-workflow.yaml`: Legacy codebase migration
+
+- **Enhanced Testing**: Added comprehensive test coverage for new features:
+  - `tests/unit/test_cli_adapters_comprehensive.py`: Comprehensive CLI adapter testing
+  - Additional integration tests for configuration validation and error reporting
+
+- **Documentation Generation Tools**: Added automated documentation generation:
+  - `scripts/generate_config_docs.py`: Script for generating configuration documentation
+  - `splurge_unittest_to_pytest/config_docs_generator.py`: Configuration documentation generator
+  - `splurge_unittest_to_pytest/config_metadata.py`: Configuration metadata system
+
+- **Updated README Files**: Enhanced documentation with new features:
+  - Updated main `README.md` with intelligent configuration features and examples
+  - Updated `docs/README-DETAILS.md` with comprehensive CLI reference and usage examples
+  - Added detailed explanations of configuration templates, interactive builder, and field help system
+
 #### Changed
 - Enhanced `ValidatedMigrationConfig` class with sophisticated cross-field validation
 - Added intelligent configuration suggestions and use case detection
