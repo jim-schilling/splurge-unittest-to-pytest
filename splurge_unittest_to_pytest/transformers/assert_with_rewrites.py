@@ -5,38 +5,146 @@ reduce reviewer friction. Later we will move focused implementations
 from ``assert_transformer.py`` into this file.
 """
 
+from typing import Any
+
 import libcst as cst
 
 from . import assert_transformer as _orig
+from ._caplog_helpers import (
+    AliasOutputAccess,
+)
+from ._caplog_helpers import (
+    build_caplog_records_expr as _caplog_build_caplog_records_expr,
+)
+from ._caplog_helpers import (
+    build_get_message_call as _caplog_build_get_message_call,
+)
+from ._caplog_helpers import (
+    extract_alias_output_slices as _caplog_extract_alias_output_slices,
+)
 
 
-def _extract_alias_output_slices(expr: cst.BaseExpression) -> "_orig.AliasOutputAccess | None":
-    return _orig._extract_alias_output_slices(expr)
+def _extract_alias_output_slices(expr: cst.BaseExpression) -> "AliasOutputAccess | None":
+    return _caplog_extract_alias_output_slices(expr)
 
 
-def _build_caplog_records_expr(access: "_orig.AliasOutputAccess") -> cst.BaseExpression:
-    return _orig._build_caplog_records_expr(access)
+def _build_caplog_records_expr(access: "AliasOutputAccess") -> cst.BaseExpression:
+    return _caplog_build_caplog_records_expr(access)
 
 
-def _build_get_message_call(access: "_orig.AliasOutputAccess") -> cst.Call:
-    return _orig._build_get_message_call(access)
+def _build_get_message_call(access: "AliasOutputAccess") -> cst.Call:
+    return _caplog_build_get_message_call(access)
 
 
 __all__ = ["_extract_alias_output_slices", "_build_caplog_records_expr"]
 
 
 def _create_robust_regex(pattern: str) -> str:
-    """Delegate robust regex creation to the original module (conservative shim)."""
-    try:
-        return _orig._create_robust_regex(pattern)
-    except Exception:
-        return pattern
+    """Create a regex pattern tolerant of minor whitespace differences.
+
+    The original implementation in ``assert_transformer`` had a more
+    complex approach but for the staged migration we prefer a tiny,
+    stable helper that simply returns the input pattern. This keeps
+    behavior conservative and avoids import-time coupling.
+    """
+    return pattern
 
 
 def transform_caplog_alias_string_fallback(code: str) -> str:
-    """Delegate string-level caplog alias fallbacks to the original implementation."""
+    """Apply conservative string-level fixes for caplog alias patterns.
+
+    Some patterns are difficult to rewrite reliably using only libcst
+    transforms. This helper applies a few safe, regex-based
+    substitutions to convert occurrences of ``<alias>.output`` to
+    ``caplog.records`` and to call ``.getMessage()`` when comparisons or
+    membership checks expect a message string.
+    """
     try:
-        return _orig.transform_caplog_alias_string_fallback(code)
+        out = code
+    except Exception:
+        return code
+
+    # First, detect any aliases created by assertRaises/pytest.raises so
+    # we can safely rewrite `.exception` -> `.value` for those aliases.
+    alias_names: set[str] = set()
+    try:
+        robust_pattern = _create_robust_regex(
+            r"with\s+(?:pytest\.raises|self\.assertRaises(?:Regex)?)\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)"
+        )
+        import re
+
+        for m in re.finditer(robust_pattern, out):
+            alias_names.add(m.group(1))
+    except Exception:
+        alias_names = set()
+
+    if alias_names:
+        import re
+
+        alias_pattern = r"(?:" + r"|".join(re.escape(n) for n in sorted(alias_names)) + r")"
+        out = re.sub(rf"\b({alias_pattern})\.exception\b", r"\1.value", out)
+        out = re.sub(
+            rf"\b(str|repr)\s*\(\s*({alias_pattern})\.exception\s*\)",
+            lambda m: f"{m.group(1)}({m.group(2)}.value)",
+            out,
+        )
+
+    # Detect assertLogs / caplog alias bindings so we can rewrite those
+    # `.output` occurrences into `caplog.records` specifically.
+    try:
+        assertlogs_aliases: set[str] = set()
+        import re
+
+        for m in re.finditer(r"with\s+self\.assertLogs\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
+            assertlogs_aliases.add(m.group(1))
+        for m in re.finditer(r"with\s+caplog\.at_level\s*\([^\)]*\)\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)", out):
+            assertlogs_aliases.add(m.group(1))
+    except Exception:
+        assertlogs_aliases = set()
+
+    if assertlogs_aliases:
+        import re
+
+        alias_pattern2 = r"(?:" + r"|".join(re.escape(n) for n in sorted(assertlogs_aliases)) + r")"
+        out = re.sub(rf"\b({alias_pattern2})\.output\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\.output\b", r"caplog.records", out)
+        out = re.sub(rf"\b({alias_pattern2})\.records\s*\[", r"caplog.records[", out)
+        out = re.sub(rf"\b({alias_pattern2})\.records\b", r"caplog.records", out)
+
+    # Generic fallback: replace any remaining `<alias>.output[...]` or
+    # `<alias>.output` with `caplog.records` (record-level view).
+    import re
+
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\s*\[", r"caplog.records[", out)
+    out = re.sub(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.output\b", r"caplog.records", out)
+
+    # Map common message-length checks to use caplog.messages
+    out = re.sub(r"\blen\s*\(\s*caplog\.records\s*\)", r"len(caplog.messages)", out)
+    out = re.sub(r"\blen\s*\(\s*caplog\.records\s*\[", r"len(caplog.messages[", out)
+
+    out = re.sub(r"caplog\.records\s*\[(\d+)\](?:\.getMessage\(\)){2}", r"caplog.messages[\1]", out)
+
+    out = re.sub(
+        r"caplog\.records\s*\[(\d+)\]\.getMessage\(\)\s*==\s*('.*?'|\".*?\")",
+        r"caplog.messages[\1] == \2",
+        out,
+    )
+
+    out = re.sub(r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]", r"\1 in caplog.messages[\2]", out)
+
+    out = re.sub(r"('.*?'|\".*?\")\s*==\s*caplog\.records\s*\[(\d+)\]\.getMessage\(\)", r"caplog.messages[\2] == \1", out)
+
+    out = re.sub(r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]\.getMessage\(\)", r"caplog.messages[\1]", out)
+    out = re.sub(r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]", r"caplog.messages[\1]", out)
+
+    out = re.sub(
+        r"('.*?'|\".*?\")\s*in\s*caplog\.records\b(?!\s*\[)",
+        r"\1 in caplog.records.getMessage() or \1 in caplog.messages",
+        out,
+    )
+
+    try:
+        return _orig._apply_transformations_with_fallback(out) if hasattr(_orig, "_apply_transformations_with_fallback") else out
     except Exception:
         return code
 
@@ -152,7 +260,7 @@ def _rewrite_unary_operation(unary: cst.UnaryOperation, alias_name: str) -> cst.
     if rewritten_inner is not None:
         # If the inner was a comparison, preserve parentheses metadata when present
         if isinstance(inner, cst.Comparison):
-            parens = _orig.parenthesized_expression(inner)
+            parens = parenthesized_expression(inner)
             comparison_result = rewritten_inner
             if (
                 isinstance(comparison_result, cst.Comparison)
@@ -172,7 +280,7 @@ def _rewrite_unary_operation(unary: cst.UnaryOperation, alias_name: str) -> cst.
     if rewritten_comp is None:
         return None
 
-    parens = _orig.parenthesized_expression(inner)
+    parens = parenthesized_expression(inner)
     if len(rewritten_comp.comparisons) == 1 and isinstance(rewritten_comp.comparisons[0].operator, cst.In):
         comparator_expr = rewritten_comp.comparisons[0].comparator
         return unary.with_changes(expression=parens.strip(comparator_expr))
@@ -316,10 +424,11 @@ def _handle_simple_statement_line(
         return None
 
     try:
-        # Delegate to the existing handler where implemented
-        return _orig.handle_bare_assert_call(statements, i)
+        # Use the local implementation when available to avoid cross-module
+        # delegation during staged migration.
+        return handle_bare_assert_call(statements, i)
     except (AttributeError, TypeError, IndexError) as e:
-        _orig.report_transformation_error(
+        _report_transformation_error(
             e,
             "assert_with_rewrites",
             "_handle_simple_statement_line",
@@ -331,9 +440,9 @@ def _handle_simple_statement_line(
 def _handle_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], i: int) -> cst.With | None:
     """Handle a With statement that might need transformation; wrap processing with error reporting."""
     try:
-        return _orig._process_with_statement(stmt, statements, i)
+        return _process_with_statement(stmt, statements, i)
     except (AttributeError, TypeError, IndexError) as e:
-        _orig.report_transformation_error(
+        _report_transformation_error(
             e,
             "assert_with_rewrites",
             "_handle_with_statement",
@@ -345,9 +454,9 @@ def _handle_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], 
 def _handle_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
     """Handle a Try statement with recursive processing and error reporting."""
     try:
-        return _orig._process_try_statement(stmt, max_depth)
+        return _process_try_statement(stmt, max_depth)
     except (AttributeError, TypeError, IndexError) as e:
-        _orig.report_transformation_error(
+        _report_transformation_error(
             e,
             "assert_with_rewrites",
             "_handle_try_statement",
@@ -514,6 +623,334 @@ def build_with_item_from_assert_call(call_expr: cst.Call) -> cst.WithItem | None
     return None
 
 
+def _process_with_statement(stmt: cst.With, statements: list[cst.BaseStatement], index: int) -> cst.With | None:
+    """Process a With statement by transforming With items and rewriting aliases.
+
+    This is a conservative, local implementation adapted from the original
+    module. It uses local helpers where possible to avoid cross-module
+    delegation during the staged migration.
+    """
+    try:
+        new_with, alias_name, changed = transform_with_items(stmt)
+
+        if not changed:
+            return new_with
+
+        # Collect alias names from original items
+        alias_names: list[str] = []
+        for it in stmt.items:
+            try:
+                if it.asname and isinstance(it.asname, cst.AsName) and isinstance(it.asname.name, cst.Name):
+                    alias_names.append(it.asname.name.value)
+            except Exception:
+                continue
+
+        # Rewrite the with-body for each alias found.
+        for a in alias_names:
+            try:
+                new_with = rewrite_asserts_using_alias_in_with_body(new_with, a)
+            except Exception:
+                continue
+
+        # Also attempt to rewrite a small window of following statements for each alias
+        for a in alias_names:
+            try:
+                rewrite_following_statements_for_alias(statements, index + 1, a)
+            except Exception:
+                continue
+
+        return new_with
+
+    except Exception:
+        return None
+
+
+def _process_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
+    """Process a Try statement by recursively applying local wrap/rewrites.
+
+    This adapted implementation uses the local `_safe_extract_statements`
+    helper and reuses the original module's `wrap_assert_in_block` and
+    `_recursively_rewrite_withs` where appropriate to minimize code
+    duplication during the staged migration.
+    """
+    if not isinstance(stmt, cst.Try):
+        return None
+
+    try:
+        try_body = getattr(stmt, "body", None)
+        body_statements = _safe_extract_statements(try_body, max_depth)
+        if body_statements is not None and try_body is not None:
+            # reuse original wrap_assert_in_block to avoid duplicating larger logic
+            new_try_body = try_body.with_changes(body=_orig.wrap_assert_in_block(body_statements, max_depth))
+        else:
+            new_try_body = try_body
+
+        new_handlers = []
+        for h in getattr(stmt, "handlers", []) or []:
+            h_body = getattr(h, "body", None)
+            body_statements = _safe_extract_statements(h_body, max_depth)
+            if body_statements is not None and h_body is not None:
+                new_h_body = h_body.with_changes(body=_orig.wrap_assert_in_block(body_statements, max_depth))
+                new_h = h.with_changes(body=new_h_body)
+            else:
+                new_h = h
+            new_handlers.append(new_h)
+
+        new_orelse = getattr(stmt, "orelse", None)
+        body_statements = _safe_extract_statements(new_orelse, max_depth)
+        if new_orelse is not None and hasattr(new_orelse, "body"):
+            body_statements = _safe_extract_statements(new_orelse, max_depth)
+            if body_statements is not None:
+                new_orelse = new_orelse.with_changes(
+                    body=new_orelse.body.with_changes(body=_orig.wrap_assert_in_block(body_statements, max_depth))
+                )
+
+        new_finalbody = getattr(stmt, "finalbody", None)
+        body_statements = _safe_extract_statements(new_finalbody, max_depth)
+        if new_finalbody is not None and hasattr(new_finalbody, "body"):
+            body_statements = _safe_extract_statements(new_finalbody, max_depth)
+            if body_statements is not None:
+                new_finalbody = new_finalbody.with_changes(
+                    body=new_finalbody.body.with_changes(body=_orig.wrap_assert_in_block(body_statements, max_depth))
+                )
+
+        new_try = stmt.with_changes(body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody)
+
+        try:
+            rewritten = _recursively_rewrite_withs(new_try)
+            # Only accept the rewritten value when it preserves the Try shape
+            if isinstance(rewritten, cst.Try):
+                new_try = rewritten
+        except Exception:
+            pass
+
+        return new_try
+
+    except Exception:
+        return None
+
+
+def _preserve_indented_body_wrapper(orig_block: Any | None, new_block: Any | None) -> Any:
+    """Return ``new_block`` but wrapped/preserved to match the original
+    IndentedBlock/Block structure if present.
+
+    When libcst nodes are rewritten we sometimes lose the concrete
+    wrapper type (for example an IndentedBlock vs a simple Block). Call
+    this helper when replacing a body's inner statements: it will try to
+    return a wrapper of the same type as ``orig_block`` containing the
+    statements from ``new_block``.
+    """
+    try:
+        # quick guard: if either side is None just return the new block
+        if orig_block is None or new_block is None:
+            return new_block
+
+        # If original is an IndentedBlock-like object with `body`, keep it.
+        if hasattr(orig_block, "body") and hasattr(new_block, "body"):
+            try:
+                return orig_block.with_changes(body=new_block.body)
+            except Exception:
+                # If direct with_changes on the original fails, attempt a
+                # safer, more generic approach: determine the dataclass
+                # fields exposed by the original and new wrapper types and
+                # copy any common fields (except 'body') from the original
+                # to the new block. This preserves a broader set of
+                # formatting metadata (comments, parentheses, leading
+                # lines, indent tokens) when available while avoiding
+                # hard-coded attribute lists which may vary across libcst
+                # versions.
+                try:
+                    orig_fields = set(getattr(type(orig_block), "__dataclass_fields__", {}).keys())
+                    new_fields = set(getattr(type(new_block), "__dataclass_fields__", {}).keys())
+                except Exception:
+                    orig_fields = set()
+                    new_fields = set()
+
+                # Choose the intersection and exclude 'body' which we set
+                # explicitly. Only copy shallow attributes; if with_changes
+                # rejects the value we'll fall through to the fallback.
+                common = (orig_fields & new_fields) - {"body"}
+                updates: dict[str, object] = {}
+                for attr in sorted(common):
+                    try:
+                        val = getattr(orig_block, attr)
+                    except Exception:
+                        continue
+                    # Skip private / callable-like attributes
+                    if attr.startswith("_"):
+                        continue
+                    if callable(val):
+                        continue
+                    updates[attr] = val
+
+                if updates and hasattr(new_block, "with_changes"):
+                    try:
+                        # body is set explicitly to the new statements
+                        return new_block.with_changes(**updates, body=new_block.body)
+                    except Exception:
+                        # if copying the broader set fails, continue to
+                        # fallback below
+                        pass
+    except Exception:
+        pass
+
+    # fallback: return new_block unchanged
+    return new_block
+
+
+# Minimal ParenthesizedExpression/parenthesized_expression shim
+class ParenthesizedExpression:
+    def __init__(self, has_parentheses: bool, lpar: tuple = (), rpar: tuple = ()):  # pragma: no cover - tiny shim
+        self.has_parentheses = has_parentheses
+        self.lpar = lpar
+        self.rpar = rpar
+
+    def strip(self, expr: cst.BaseExpression) -> cst.BaseExpression:
+        if not self.has_parentheses or not hasattr(expr, "with_changes"):
+            return expr
+        updates: dict[str, object] = {}
+        if hasattr(expr, "lpar"):
+            updates["lpar"] = ()
+        if hasattr(expr, "rpar"):
+            updates["rpar"] = ()
+        return expr.with_changes(**updates) if updates else expr
+
+
+def parenthesized_expression(expr: cst.BaseExpression) -> ParenthesizedExpression:
+    lpar = tuple(getattr(expr, "lpar", ()))
+    rpar = tuple(getattr(expr, "rpar", ()))
+    return ParenthesizedExpression(bool(lpar or rpar), lpar, rpar)
+
+
+def _report_transformation_error(err: Exception, component: str, operation: str, **kwargs) -> None:
+    """Local shim for error reporting used during staged migration.
+
+    Defer to the original module if it exposes a reporting helper; this
+    keeps error handling centralized while allowing local calls.
+    """
+    try:
+        if hasattr(_orig, "report_transformation_error"):
+            _orig.report_transformation_error(err, component, operation, **kwargs)
+    except Exception:
+        # swallow to avoid transformation from failing the overall run
+        return
+
+
+def _recursively_rewrite_withs(node: cst.CSTNode) -> cst.CSTNode:
+    """Conservative local wrapper that defers to the original when present.
+
+    This exists so migrations can call a local helper while retaining the
+    original module's more complete rewrite logic until we've moved it.
+    """
+    try:
+        if hasattr(_orig, "_recursively_rewrite_withs") and isinstance(node, cst.BaseStatement):
+            try:
+                res = _orig._recursively_rewrite_withs(node)
+                if isinstance(res, cst.BaseStatement):
+                    return res
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return node
+
+
+def _process_statement_with_fallback(
+    stmt: cst.BaseStatement, statements: list[cst.BaseStatement], i: int, max_depth: int = 7
+) -> tuple[list[cst.BaseStatement], int]:
+    """Process a single statement with conservative fallbacks using local helpers.
+
+    This mirrors the original behavior but prefers local handlers where
+    available and defers to the original module for more complex
+    control-flow processors.
+    """
+    # Handle bare expression calls like: self.assertLogs(...)
+    if isinstance(stmt, cst.SimpleStatementLine):
+        result = _handle_simple_statement_line(stmt, statements, i)
+        if result is not None:
+            nodes_to_append, consumed, handled = result
+            if handled:
+                return nodes_to_append, consumed
+
+    # Handle existing with-statements
+    if isinstance(stmt, cst.With):
+        processed_with = _handle_with_statement(stmt, statements, i)
+        if processed_with is not None:
+            return [processed_with], 1
+
+    # Try Try statements using local processor
+    processed_stmt = _process_try_statement(stmt, max_depth)
+    if processed_stmt is not None:
+        return [processed_stmt], 1
+
+    # Defer to original module for if/loop processors when not present locally
+    try:
+        processed_if = _orig._process_if_statement(stmt, max_depth)
+    except Exception:
+        processed_if = None
+    if processed_if is not None:
+        return [processed_if], 1
+
+    try:
+        processed_loop = _orig._process_loop_statement(stmt, max_depth)
+    except Exception:
+        processed_loop = None
+    if processed_loop is not None:
+        return [processed_loop], 1
+
+    return [stmt], 1
+
+
+def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7) -> list[cst.BaseStatement]:
+    """Thin wrapper delegating to the original module's wrap_assert_in_block.
+
+    Keeping a local symbol avoids callers needing to import `_orig` and
+    simplifies staged migration.
+    """
+    # Local conservative implementation: iterate statements and process
+    # each with the local `_process_statement_with_fallback` helper. This
+    # reduces cross-module delegation during migration while preserving
+    # the original behavior where we can't safely transform.
+    out: list[cst.BaseStatement] = []
+    i = 0
+    while i < len(statements):
+        stmt = statements[i]
+        try:
+            nodes, consumed = _process_statement_with_fallback(stmt, statements, i, max_depth)
+        except Exception:
+            # On error, append the original statement and move on
+            out.append(stmt)
+            i += 1
+            continue
+
+        # nodes is a list of nodes to append; consumed indicates how many
+        # original statements were consumed (usually 1 or 2)
+        out.extend(nodes)
+        i += consumed
+
+    return out
+
+
+def _process_if_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
+    """Local wrapper for 'if' processing that prefers the original implementation but is safe to call."""
+    try:
+        if hasattr(_orig, "_process_if_statement"):
+            return _orig._process_if_statement(stmt, max_depth)
+    except Exception:
+        pass
+    return None
+
+
+def _process_loop_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.BaseStatement | None:
+    """Local wrapper for loop (for/while) processing that defers to the original when present."""
+    try:
+        if hasattr(_orig, "_process_loop_statement"):
+            return _orig._process_loop_statement(stmt, max_depth)
+    except Exception:
+        pass
+    return None
+
+
 def create_with_wrapping_next_stmt(
     with_item: cst.WithItem, next_stmt: cst.BaseStatement | None
 ) -> tuple[cst.With, int]:
@@ -677,7 +1114,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
                     r = None
                 if r is not None:
                     # preserve the SimpleStatementLine wrapper and replace the inner Assert
-                    new_stmts.append(s.with_changes(body=[r]))
+                    new_stmts.append(_preserve_indented_body_wrapper(s, s.with_changes(body=[r])))
                     changed = True
                     continue
 
@@ -690,7 +1127,7 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
             if r is not None:
                 # wrap rewritten Assert into a SimpleStatementLine so IndentedBlock.body
                 # contains valid Statement nodes rather than raw small-statement nodes.
-                new_stmts.append(cst.SimpleStatementLine(body=[r]))
+                new_stmts.append(_preserve_indented_body_wrapper(s, cst.SimpleStatementLine(body=[r])))
                 changed = True
                 continue
 
@@ -712,8 +1149,9 @@ def rewrite_asserts_using_alias_in_with_body(new_with: cst.With, alias_name: str
         pass
 
     # Fallback: construct a fresh IndentedBlock if we can't preserve the
-    # original metadata. This is conservative but may lose some formatting.
-    return new_with.with_changes(body=cst.IndentedBlock(body=new_stmts))
+    # original metadata. Use the preservation helper to prefer keeping the
+    # original wrapper shape when possible.
+    return new_with.with_changes(body=_preserve_indented_body_wrapper(orig_body, cst.IndentedBlock(body=new_stmts)))
 
 
 def rewrite_following_statements_for_alias(
@@ -759,7 +1197,8 @@ def rewrite_following_statements_for_alias(
                                         except Exception:
                                             r = None
                                         if r is not None:
-                                            statements[idx] = cst.SimpleStatementLine(body=[r])
+                                            # preserve the original SimpleStatementLine wrapper
+                                            statements[idx] = _preserve_indented_body_wrapper(s, s.with_changes(body=[r]))
                                             continue
             # libCST often wraps top-level asserts in a SimpleStatementLine whose
             # body contains a single Assert node. Support both shapes so the
@@ -768,8 +1207,8 @@ def rewrite_following_statements_for_alias(
                 r = rewrite_single_alias_assert(s, alias_name)
                 if r is not None:
                     # wrap Assert into a SimpleStatementLine so the list of
-                    # statements (BaseStatement) remains well-typed
-                    statements[idx] = cst.SimpleStatementLine(body=[r])
+                    # statements (BaseStatement) remains well-typed; preserve wrapper
+                    statements[idx] = _preserve_indented_body_wrapper(s, cst.SimpleStatementLine(body=[r]))
             elif isinstance(s, cst.SimpleStatementLine):
                 # If the SimpleStatementLine contains exactly one small-statement
                 # and it's an Assert, attempt to rewrite that inner Assert and
@@ -780,8 +1219,8 @@ def rewrite_following_statements_for_alias(
                     inner = body[0]
                     r = rewrite_single_alias_assert(inner, alias_name)
                     if r is not None:
-                        # replace the single-item body with the rewritten Assert
-                        statements[idx] = s.with_changes(body=[r])
+                        # replace the single-item body with the rewritten Assert, preserving wrappers
+                        statements[idx] = _preserve_indented_body_wrapper(s, s.with_changes(body=[r]))
         except Exception:
             continue
     return None

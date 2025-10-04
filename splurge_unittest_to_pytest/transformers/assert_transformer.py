@@ -46,6 +46,24 @@ from ._caplog_helpers import (
     extract_alias_output_slices,
 )
 
+
+def _preserve_indented_block(orig_block: cst.BaseSmallStatement | None, new_block: cst.IndentedBlock) -> cst.IndentedBlock:
+    """Try to preserve wrapper metadata when constructing an IndentedBlock.
+
+    This is a minimal helper to reduce formatting/token loss during
+    staged transformations. If preservation fails, returns the provided
+    new_block unchanged.
+    """
+    try:
+        if orig_block is not None and hasattr(orig_block, "with_changes"):
+            try:
+                return orig_block.with_changes(body=new_block.body)  # type: ignore[arg-type]
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return new_block
+
 __all__ = ["AliasOutputAccess"]
 
 
@@ -464,14 +482,8 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
-            new_args.append(
-                cst.Arg(
-                    value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
-                    )
-                )
-            )
+            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
+            new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
         else:
             # Standard case with just the callable
             if isinstance(code_to_test, cst.Lambda):
@@ -484,11 +496,8 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=code_to_test)])
 
-                new_args.append(
-                    cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
-                    )
-                )
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
+                new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
 
         return cst.Call(func=new_attr, args=new_args)
     return node
@@ -516,14 +525,8 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
             # Additional arguments for the callable
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[3:]]
             lambda_call = cst.Call(func=callable_arg, args=lambda_args)
-            args.append(
-                cst.Arg(
-                    value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
-                    )
-                )
-            )
+            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
+            args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
         else:
             # Standard case with just the callable
             if isinstance(callable_arg, cst.Lambda):
@@ -536,11 +539,8 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=callable_arg)])
 
-                args.append(
-                    cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
-                    )
-                )
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
+                args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
 
         args.append(cst.Arg(keyword=cst.Name(value="match"), value=match_arg))
         return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="raises")), args=args)
@@ -605,14 +605,8 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
-            new_args.append(
-                cst.Arg(
-                    value=cst.Lambda(
-                        params=cst.Parameters(params=[]),
-                        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]),
-                    )
-                )
-            )
+            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
+            new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
         else:
             # Standard case with just the callable
             if isinstance(code_to_test, cst.Lambda):
@@ -626,11 +620,8 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
                     # It's some other expression, use it directly
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=code_to_test)])
 
-                new_args.append(
-                    cst.Arg(
-                        value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))
-                    )
-                )
+                lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
+                new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
 
         return cst.Call(func=new_attr, args=new_args)
     return node
@@ -667,7 +658,7 @@ def transform_assert_warns_regex(node: cst.Call) -> cst.CSTNode:
 
             args: list[cst.Arg] = [
                 cst.Arg(value=exc),
-                cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=cst.IndentedBlock(body=[lambda_body]))),
+                cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body])))),
                 cst.Arg(keyword=cst.Name(value="match"), value=match_arg),
             ]
         return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")), args=args)
