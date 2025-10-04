@@ -100,7 +100,15 @@ class MigrationOrchestrator:
                 return Result.failure(e)
 
             # Determine extension to use (override if provided)
-            ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
+            if config.target_extension is not None:
+                # Ensure extension starts with a dot
+                ext_to_use = (
+                    f".{config.target_extension}"
+                    if not config.target_extension.startswith(".")
+                    else config.target_extension
+                )
+            else:
+                ext_to_use = src_path.suffix
             if suffix:
                 # Append suffix to the stem, preserve/override extension
                 new_name = f"{src_path.stem}{suffix}{ext_to_use}"
@@ -119,7 +127,15 @@ class MigrationOrchestrator:
                 src_path = Path(source_file)
                 # keep original extension (unless target_extension provided),
                 # but add suffix to stem.
-                ext_to_use = config.target_extension if config.target_extension is not None else src_path.suffix
+                if config.target_extension is not None:
+                    # Ensure extension starts with a dot
+                    ext_to_use = (
+                        f".{config.target_extension}"
+                        if not config.target_extension.startswith(".")
+                        else config.target_extension
+                    )
+                else:
+                    ext_to_use = src_path.suffix
                 tentative = f"{src_path.stem}{suffix}{ext_to_use}"
                 # Create target path alongside the source
                 target_file = str(src_path.with_name(tentative))

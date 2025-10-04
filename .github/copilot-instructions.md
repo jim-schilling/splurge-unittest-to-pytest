@@ -169,6 +169,7 @@ This document contains coding standards and guidelines for the splurge-ai-rules 
 - Validate behavior of public APIs only.
 - Prefer validation using actual data, interfaces, and objects
 - Minimize use of mocks, except where appropriate.
+- Mock at architectural boundaries (external systems, I/O) but prefer real objects for internal logic.
 - Ensure tests are isolated and do not depend on external systems or state.
 - Each code module must have at least one corresponding test module.
 - Unit test must target 85% code coverage for all public interfaces and methods.

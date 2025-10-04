@@ -44,6 +44,23 @@ __all__ = [
     "ContextError",
     "TransformationValidationError",
     "ParametrizeConversionError",
+    # Error Reporting
+    "ErrorReporter",
+    "SmartError",
+    "ErrorCategory",
+    "ErrorSeverity",
+    "ErrorSuggestionEngine",
+    "ErrorRecoveryAssistant",
+    "Suggestion",
+    "RecoveryStep",
+    "RecoveryWorkflow",
+    # Phase 3: Intelligent Configuration Assistant
+    "InteractiveConfigBuilder",
+    "ProjectAnalyzer",
+    "IntegratedConfigurationManager",
+    "EnhancedConfigurationResult",
+    "ProjectType",
+    "prepare_config",
 ]
 
 
@@ -97,6 +114,23 @@ def __getattr__(name: str):
         "ContextError": "splurge_unittest_to_pytest.exceptions",
         "TransformationValidationError": "splurge_unittest_to_pytest.exceptions",
         "ParametrizeConversionError": "splurge_unittest_to_pytest.exceptions",
+        # Error Reporting
+        "ErrorReporter": "splurge_unittest_to_pytest.error_reporting",
+        "SmartError": "splurge_unittest_to_pytest.error_reporting",
+        "ErrorCategory": "splurge_unittest_to_pytest.error_reporting",
+        "ErrorSeverity": "splurge_unittest_to_pytest.error_reporting",
+        "ErrorSuggestionEngine": "splurge_unittest_to_pytest.error_reporting",
+        "ErrorRecoveryAssistant": "splurge_unittest_to_pytest.error_reporting",
+        "Suggestion": "splurge_unittest_to_pytest.error_reporting",
+        "RecoveryStep": "splurge_unittest_to_pytest.error_reporting",
+        "RecoveryWorkflow": "splurge_unittest_to_pytest.error_reporting",
+        # Phase 3: Intelligent Configuration Assistant
+        "InteractiveConfigBuilder": "splurge_unittest_to_pytest.config_validation",
+        "ProjectAnalyzer": "splurge_unittest_to_pytest.config_validation",
+        "IntegratedConfigurationManager": "splurge_unittest_to_pytest.config_validation",
+        "EnhancedConfigurationResult": "splurge_unittest_to_pytest.config_validation",
+        "ProjectType": "splurge_unittest_to_pytest.config_validation",
+        "prepare_config": "splurge_unittest_to_pytest.cli_helpers",
     }
 
     if name not in mapping:

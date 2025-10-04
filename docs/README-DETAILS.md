@@ -531,6 +531,16 @@ python -m splurge_unittest_to_pytest.cli generate-docs html --output-file config
 # Generate configuration template files for all use cases
 python -m splurge_unittest_to_pytest.cli generate-templates
 python -m splurge_unittest_to_pytest.cli generate-templates --output-dir ./my-templates --format json
+
+# Error Recovery and Analysis
+python -m splurge_unittest_to_pytest.cli error-recovery --error "File not found: /missing/file.py"
+python -m splurge_unittest_to_pytest.cli error-recovery --error "Permission denied" --interactive
+python -m splurge_unittest_to_pytest.cli error-recovery --error "Invalid config" --category configuration --workflow-only
+
+# Interactive Configuration Building
+python -m splurge_unittest_to_pytest.cli configure
+python -m splurge_unittest_to_pytest.cli configure --output-file config.yaml
+python -m splurge_unittest_to_pytest.cli configure --analyze-only
 ```
 
 Selectively disable specific transformations:
@@ -612,6 +622,22 @@ else:
 	print("Migration failed:", result.error)
 ```
 
+Programmatic helper: `prepare_config`
+------------------------------------
+
+Use `prepare_config` when you want a single entrypoint to build a
+`MigrationConfig` programmatically. It applies defaults, supports an
+optional interactive flow, and attempts to run enhanced validation. The
+function always returns a `MigrationConfig` instance for consistent use in
+tests and programmatic calls.
+
+```python
+from splurge_unittest_to_pytest import prepare_config
+
+cfg = prepare_config(interactive=False, questions=[{"key": "line_length", "default": 88}])
+print(cfg.line_length)  # -> 88
+```
+
 Safety and limitations
 ----------------------
 
@@ -634,6 +660,82 @@ and intelligent fallback mechanisms:
 - **Graceful error handling**: Comprehensive fallback mechanisms prevent tool failures on edge cases
 - **Deprecated API support**: Handles legacy unittest method names (`assertAlmostEquals`, `assertNotAlmostEquals`) for maximum compatibility
 - **Intelligent transformation**: Complex transformation logic broken into focused, maintainable functions with enhanced error reporting
+
+Advanced Error Reporting and Recovery
+------------------------------------
+
+The tool now includes a sophisticated error reporting system that provides intelligent guidance for resolving issues:
+
+- **Smart Error Classification**: Automatically categorizes errors into 10 categories (CONFIGURATION, FILESYSTEM, PARSING, TRANSFORMATION, VALIDATION, PERMISSION, DEPENDENCY, NETWORK, RESOURCE, UNKNOWN)
+- **Context-Aware Suggestions**: Generates intelligent suggestions based on error type and context, with priority-based sorting
+- **Recovery Workflows**: Provides step-by-step recovery guidance for common error scenarios with estimated completion times and success rates
+- **Interactive Error Recovery**: New CLI command `error-recovery` offers guided assistance for error resolution
+
+Error Recovery Example:
+
+```bash
+# Analyze an error and get recovery suggestions
+splurge-unittest-to-pytest error-recovery \
+  --error "File not found: /missing/file.py" \
+  --category filesystem
+
+# Interactive recovery mode
+splurge-unittest-to-pytest error-recovery \
+  --error "Permission denied" \
+  --interactive
+```
+
+Programmatic Error Reporting:
+
+```python
+from splurge_unittest_to_pytest.error_reporting import ErrorReporter
+
+reporter = ErrorReporter()
+error = ValueError("Configuration error: target_root does not exist")
+report = reporter.report_error(error, {"target_root": "/missing/path"})
+
+# Access enhanced error information
+print(f"Category: {report['error']['category']}")
+print(f"Severity: {report['error']['severity']}")
+print(f"Suggestions: {len(report['error']['suggestions'])}")
+print(f"Recovery workflow: {report['recovery_workflow']['title']}")
+```
+
+Interactive Configuration Building
+---------------------------------
+
+The tool now includes an intelligent configuration builder that analyzes your project and guides you through creating optimal configurations:
+
+- **Project Analysis**: Automatically detects project type, test patterns, and complexity
+- **Interactive Workflows**: Different configuration experiences based on detected project types
+- **Intelligent Defaults**: Suggests appropriate settings based on project analysis
+- **Configuration Validation**: Validates and enhances configurations before use
+
+Configuration Building Example:
+
+```bash
+# Analyze project and create configuration interactively
+python -m splurge_unittest_to_pytest.cli configure
+
+# Save configuration to file
+python -m splurge_unittest_to_pytest.cli configure --output-file my-config.yaml
+
+# Just analyze project without creating configuration
+python -m splurge_unittest_to_pytest.cli configure --analyze-only
+```
+
+Programmatic Configuration Building:
+
+```python
+from splurge_unittest_to_pytest.config_validation import InteractiveConfigBuilder
+
+builder = InteractiveConfigBuilder()
+config = builder.build_configuration_interactive()
+
+# Use the validated configuration
+from splurge_unittest_to_pytest import main
+result = main.migrate(["tests/"], config=config)
+```
 
 Note on top-level __main__ guards and runtime test invocations
 ------------------------------------------------------------
@@ -664,6 +766,13 @@ Developer notes
 - Contributions: open a PR against the ``main`` branch and include tests
 	for new behavior. Keep changes small and run the full suite before
 	requesting review.
+
+- Static type-checking notes: we apply a targeted mypy override to exclude
+	the runtime CLI module (`splurge_unittest_to_pytest.cli`) from strict
+	checks. This keeps the library modules under tight static scrutiny while
+	avoiding false-positives caused by Typer's runtime OptionInfo objects.
+	See `docs/developer/mypy-overrides.md` for details and instructions to
+	re-enable strict checking for the CLI module during reviews.
 
 Recent updates
 --------------

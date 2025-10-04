@@ -6,6 +6,7 @@ to ensure they are properly formed and contain valid values.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -19,6 +20,8 @@ except ImportError:
 if TYPE_CHECKING:
     from pydantic import BaseModel, Field, field_validator, model_validator
     from pydantic import ValidationError as PydanticValidationError
+
+    from .context import MigrationConfig
 else:
     try:
         from pydantic import BaseModel, Field, field_validator, model_validator
@@ -618,6 +621,16 @@ class Suggestion:
     def __str__(self) -> str:
         return f"[{self.type.value.upper()}] {self.message} - {self.action}"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize Suggestion to a dictionary."""
+        return {
+            "type": self.type.value,
+            "message": self.message,
+            "action": self.action,
+            "examples": self.examples or [],
+            "priority": self.priority,
+        }
+
 
 class ConfigurationAdvisor:
     """Provides intelligent configuration suggestions based on use case detection."""
@@ -715,9 +728,7 @@ class ConfigurationAdvisor:
 
         return suggestions
 
-    def _generate_use_case_suggestions(
-        self, config: ValidatedMigrationConfig, use_case: str
-    ) -> list[Suggestion]:
+    def _generate_use_case_suggestions(self, config: ValidatedMigrationConfig, use_case: str) -> list[Suggestion]:
         """Generate use case specific suggestions."""
         suggestions = []
 
@@ -1425,3 +1436,532 @@ def generate_config_from_template(template_name: str) -> dict:
     if template:
         return template.config_dict.copy()
     raise ValueError(f"Template not found: {template_name}")
+
+
+# Phase 3: Intelligent Configuration Assistant
+class ProjectType(Enum):
+    """Types of projects that can be analyzed for configuration suggestions."""
+
+    LEGACY_TESTING = "legacy_testing"
+    MODERN_FRAMEWORK = "modern_framework"
+    CUSTOM_SETUP = "custom_setup"
+    UNKNOWN = "unknown"
+
+
+class InteractiveConfigBuilder:
+    """Interactive configuration assistant for complex setups."""
+
+    def __init__(self):
+        self.questions = self._build_question_tree()
+        self.project_analyzer = ProjectAnalyzer()
+
+    def build_configuration_interactive(self) -> tuple[MigrationConfig, dict]:
+        """Guide user through configuration with intelligent defaults.
+
+        Returns:
+            tuple[MigrationConfig, dict]: The configuration and interaction data for CLI
+        """
+        # Detect project type
+        project_type = self._detect_project_type()
+
+        # Ask targeted questions based on project type
+        if project_type == ProjectType.LEGACY_TESTING:
+            config, interaction_data = self._legacy_migration_workflow()
+        elif project_type == ProjectType.MODERN_FRAMEWORK:
+            config, interaction_data = self._modern_framework_workflow()
+        elif project_type == ProjectType.CUSTOM_SETUP:
+            config, interaction_data = self._custom_setup_workflow()
+        else:
+            config, interaction_data = self._unknown_project_workflow()
+
+        return config, interaction_data
+
+    def _detect_project_type(self) -> ProjectType:
+        """Analyze project structure to suggest appropriate configuration."""
+        # Check for common testing frameworks, project structure, etc.
+        # For now, use a simple heuristic based on file patterns
+
+        # Look for test files in current directory
+        test_files = list(Path(".").glob("test_*.py"))
+        spec_files = list(Path(".").glob("spec_*.py"))
+
+        if spec_files:
+            return ProjectType.MODERN_FRAMEWORK
+        elif len(test_files) > 5:
+            return ProjectType.LEGACY_TESTING
+        else:
+            return ProjectType.CUSTOM_SETUP
+
+    def _legacy_migration_workflow(self) -> tuple[MigrationConfig, dict]:
+        """Configuration workflow for legacy unittest projects."""
+        from .context import MigrationConfig
+
+        config = MigrationConfig()
+
+        # Define the questions and their defaults
+        questions = [
+            {
+                "key": "backup_originals",
+                "prompt": "Create backups of original files?",
+                "type": "confirm",
+                "default": True,
+            },
+            {
+                "key": "backup_root",
+                "prompt": "Backup directory",
+                "type": "prompt",
+                "default": "./backups",
+                "condition": lambda config: config.backup_originals,
+            },
+            {"key": "target_root", "prompt": "Output directory", "type": "prompt", "default": "./converted"},
+            {
+                "key": "file_patterns",
+                "prompt": "File patterns to migrate (comma-separated)",
+                "type": "prompt",
+                "default": "test_*.py",
+                "process": lambda x: [p.strip() for p in x.split(",")],
+            },
+            {
+                "key": "recurse_directories",
+                "prompt": "Recurse into subdirectories?",
+                "type": "confirm",
+                "default": True,
+            },
+            {"key": "use_prefixes", "prompt": "Use custom test method prefixes?", "type": "confirm", "default": False},
+            {
+                "key": "test_method_prefixes",
+                "prompt": "Test method prefixes (comma-separated)",
+                "type": "prompt",
+                "default": "test",
+                "condition": lambda config: getattr(config, "use_prefixes", False),
+                "process": lambda x: [p.strip() for p in x.split(",")],
+            },
+        ]
+
+        interaction_data = {
+            "project_type": ProjectType.LEGACY_TESTING,
+            "questions": questions,
+            "title": "Legacy Testing Project Configuration",
+        }
+
+        return config, interaction_data
+
+    def _modern_framework_workflow(self) -> tuple[MigrationConfig, dict]:
+        """Configuration workflow for modern testing frameworks."""
+        from .context import MigrationConfig
+
+        config = MigrationConfig()
+
+        # Define the questions and their defaults
+        questions = [
+            {
+                "key": "test_method_prefixes",
+                "prompt": "Test method prefixes (comma-separated)",
+                "type": "prompt",
+                "default": "test,spec,should,it",
+                "process": lambda x: [p.strip() for p in x.split(",")],
+            },
+            {
+                "key": "backup_originals",
+                "prompt": "Create backups of original files?",
+                "type": "confirm",
+                "default": True,
+            },
+            {"key": "target_root", "prompt": "Output directory", "type": "prompt", "default": "./converted"},
+            {
+                "key": "detect_prefixes",
+                "prompt": "Auto-detect test prefixes from source files?",
+                "type": "confirm",
+                "default": True,
+            },
+        ]
+
+        interaction_data = {
+            "project_type": ProjectType.MODERN_FRAMEWORK,
+            "questions": questions,
+            "title": "Modern Framework Project Configuration",
+        }
+
+        return config, interaction_data
+
+    def _custom_setup_workflow(self) -> tuple[MigrationConfig, dict]:
+        """Configuration workflow for custom testing setups."""
+        from .context import MigrationConfig
+
+        config = MigrationConfig()
+
+        # Define the questions and their defaults
+        questions = [
+            {"key": "backup_originals", "prompt": "Create backups?", "type": "confirm", "default": True},
+            {"key": "target_root", "prompt": "Output directory", "type": "prompt", "default": "./converted"},
+            {
+                "key": "file_patterns",
+                "prompt": "File patterns (comma-separated)",
+                "type": "prompt",
+                "default": "test_*.py,spec_*.py",
+                "process": lambda x: [p.strip() for p in x.split(",")],
+            },
+            {
+                "key": "recurse_directories",
+                "prompt": "Recurse into subdirectories?",
+                "type": "confirm",
+                "default": True,
+            },
+            {
+                "key": "test_method_prefixes",
+                "prompt": "Test method prefixes (comma-separated)",
+                "type": "prompt",
+                "default": "test",
+                "process": lambda x: [p.strip() for p in x.split(",")],
+            },
+            {"key": "detect_prefixes", "prompt": "Auto-detect test prefixes?", "type": "confirm", "default": False},
+            {
+                "key": "create_source_map",
+                "prompt": "Create source map for debugging?",
+                "type": "confirm",
+                "default": False,
+            },
+        ]
+
+        interaction_data = {
+            "project_type": ProjectType.CUSTOM_SETUP,
+            "questions": questions,
+            "title": "Custom Setup Project Configuration",
+            "description": "For custom setups, we'll configure each aspect individually.",
+        }
+
+        return config, interaction_data
+
+    def _unknown_project_workflow(self) -> tuple[MigrationConfig, dict]:
+        """Configuration workflow for unknown project types."""
+        # For unknown projects, use the comprehensive custom setup workflow
+        config, interaction_data = self._custom_setup_workflow()
+        interaction_data["title"] = "Unknown Project Type Configuration"
+        return config, interaction_data
+
+    def _build_question_tree(self) -> dict:
+        """Build the question tree for interactive configuration."""
+        return {
+            "project_detection": {
+                "question": "What type of testing framework are you using?",
+                "options": {
+                    "legacy": "Traditional unittest with test_ methods",
+                    "modern": "Modern framework (BDD, RSpec-style)",
+                    "custom": "Custom testing setup",
+                    "unknown": "Not sure / mixed setup",
+                },
+            },
+            "backup_strategy": {
+                "question": "How would you like to handle backups?",
+                "options": {
+                    "folder": "Create a backup folder with original structure",
+                    "inline": "Create .bak files next to originals",
+                    "none": "No backups (not recommended)",
+                },
+            },
+            "output_strategy": {
+                "question": "Where should converted files be placed?",
+                "options": {
+                    "separate": "Separate output directory",
+                    "inline": "Replace original files (with backups)",
+                    "custom": "Custom location",
+                },
+            },
+        }
+
+
+class ProjectAnalyzer:
+    """Analyzes project structure for intelligent configuration suggestions."""
+
+    def analyze_project(self, root_path: str = ".") -> dict[str, Any]:
+        """Analyze project structure and provide insights."""
+        root = Path(root_path)
+
+        # Use local typed variables for easy mypy-friendly mutations
+        test_files: list[str] = []
+        test_prefixes: set[str] = set()
+        has_setup_methods: bool = False
+        has_nested_classes: bool = False
+
+        # Analyze test files
+        for py_file in root.rglob("*.py"):
+            if self._is_test_file(py_file):
+                test_files.append(str(py_file))
+
+                # Analyze file content for patterns
+                try:
+                    with open(py_file, encoding="utf-8") as f:
+                        content = f.read()
+
+                    # Check for test method prefixes
+                    prefixes = self._extract_test_prefixes(content)
+                    test_prefixes.update(prefixes)
+
+                    # Check for setup methods
+                    if self._has_setup_methods(content):
+                        has_setup_methods = True
+
+                    # Check for nested test classes
+                    if self._has_nested_classes(content):
+                        has_nested_classes = True
+
+                except Exception:
+                    # Skip files that can't be read
+                    continue
+
+        # Determine project type based on analysis
+        analysis = {
+            "test_files": test_files,
+            "test_prefixes": test_prefixes,
+            "has_setup_methods": has_setup_methods,
+            "has_nested_classes": has_nested_classes,
+        }
+
+        # Determine project type and complexity using full analysis context
+        analysis_context = {
+            "test_files": test_files,
+            "test_prefixes": test_prefixes,
+            "has_setup_methods": has_setup_methods,
+            "has_nested_classes": has_nested_classes,
+            "complexity_score": 0,
+        }
+
+        analysis["project_type"] = self._determine_project_type(analysis_context)
+        analysis["complexity_score"] = self._calculate_complexity_score(analysis_context)
+
+        return analysis
+
+    def _is_test_file(self, file_path: Path) -> bool:
+        """Determine if a file is likely a test file."""
+        filename = file_path.name.lower()
+
+        # Common test file patterns
+        if filename.startswith("test_") or filename.startswith("spec_"):
+            return True
+
+        # Check for test-related content
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                content = f.read()
+                return "def test_" in content or "def spec_" in content or "unittest" in content
+        except Exception:
+            return False
+
+    def _extract_test_prefixes(self, content: str) -> set[str]:
+        """Extract test method prefixes from file content."""
+        prefixes = set()
+
+        # Look for common test method patterns
+        import re
+
+        test_methods = re.findall(r"def\s+(test_\w+|spec_\w+|should_\w+|it_\w+)", content)
+
+        for method in test_methods:
+            prefix = method.split("_")[0] + "_"
+            prefixes.add(prefix)
+
+        return prefixes
+
+    def _has_setup_methods(self, content: str) -> bool:
+        """Check if file has setup/teardown methods."""
+        setup_patterns = [
+            "def setUp",
+            "def tearDown",
+            "def setup_method",
+            "def teardown_method",
+            "def before_each",
+            "def after_each",
+            "def before_all",
+            "def after_all",
+        ]
+
+        return any(pattern in content for pattern in setup_patterns)
+
+    def _has_nested_classes(self, content: str) -> bool:
+        """Check if file has nested test classes."""
+        # Look for class definitions within other class definitions
+        import re
+
+        # Simple heuristic: multiple class definitions in file
+        class_count = len(re.findall(r"^\s*class\s+\w+", content, re.MULTILINE))
+        return class_count > 3  # Arbitrary threshold for nested classes
+
+    def _determine_project_type(self, analysis: dict[str, Any]) -> ProjectType:
+        """Determine project type based on analysis results."""
+        prefixes = analysis["test_prefixes"]
+
+        if "spec_" in prefixes or "should_" in prefixes or "it_" in prefixes:
+            return ProjectType.MODERN_FRAMEWORK
+        elif len(analysis["test_files"]) >= 1 and "test_" in prefixes:
+            # Has test files with standard test_ prefix = legacy testing
+            return ProjectType.LEGACY_TESTING
+        elif analysis["has_nested_classes"] or analysis["complexity_score"] > 5:
+            return ProjectType.CUSTOM_SETUP
+        else:
+            return ProjectType.UNKNOWN
+
+    def _calculate_complexity_score(self, analysis: dict[str, Any]) -> int:
+        """Calculate a complexity score for the project."""
+        score = 0
+
+        # More test files = more complex
+        score += min(len(analysis["test_files"]) // 5, 3)
+
+        # Setup methods indicate complexity
+        if analysis["has_setup_methods"]:
+            score += 2
+
+        # Nested classes indicate complexity
+        if analysis["has_nested_classes"]:
+            score += 3
+
+        # Multiple prefixes indicate custom setup
+        if len(analysis["test_prefixes"]) > 2:
+            score += 2
+
+        return score
+
+
+class IntegratedConfigurationManager:
+    """Unified configuration management system with validation and suggestions."""
+
+    def __init__(self):
+        self.validator = None  # Will be set when ValidatedMigrationConfig is available
+        # These will be set externally to avoid circular imports
+        self.analyzer = None  # ConfigurationUseCaseDetector
+        self.advisor = None  # ConfigurationAdvisor
+
+    def validate_and_enhance_config(self, config_dict: dict[str, Any]) -> EnhancedConfigurationResult:
+        """Comprehensive configuration validation and enhancement."""
+        # Step 1: Basic validation
+        try:
+            validated_config = ValidatedMigrationConfig(**config_dict)
+        except ValueError as e:
+            return EnhancedConfigurationResult(
+                success=False,
+                errors=self._categorize_validation_errors(e),
+                suggestions=self._generate_config_suggestions_from_error(e),
+            )
+
+        # Step 2: Use case detection and optimization suggestions
+        use_case = self.analyzer.detect_use_case(validated_config)
+        optimization_suggestions = self.advisor.suggest_improvements(validated_config)
+
+        # Step 3: Cross-field validation and constraint checking
+        cross_field_issues = self._validate_cross_field_constraints(validated_config)
+
+        # Step 4: File system validation
+        filesystem_issues = self._validate_filesystem_constraints(validated_config)
+
+        all_issues = cross_field_issues + filesystem_issues
+
+        if all_issues:
+            return EnhancedConfigurationResult(
+                success=False,
+                config=validated_config,
+                warnings=all_issues,
+                suggestions=optimization_suggestions,
+                use_case_detected=use_case,
+            )
+
+        return EnhancedConfigurationResult(
+            success=True, config=validated_config, suggestions=optimization_suggestions, use_case_detected=use_case
+        )
+
+    def _categorize_validation_errors(self, error: ValueError) -> list[dict[str, Any]]:
+        """Categorize validation errors for better handling."""
+        error_str = str(error)
+        errors = []
+
+        if "cross-field" in error_str.lower():
+            errors.append({"type": "cross_field_validation", "message": error_str, "category": "configuration"})
+        else:
+            errors.append({"type": "validation_error", "message": error_str, "category": "configuration"})
+
+        return errors
+
+    def _generate_config_suggestions_from_error(self, error: ValueError) -> list[Suggestion]:
+        """Generate suggestions from validation errors."""
+        suggestions = []
+
+        # Basic suggestion for any validation error
+        suggestions.append(
+            Suggestion(
+                type=SuggestionType.CORRECTION,
+                message="Configuration validation failed",
+                action="Review the error message and fix the configuration",
+                priority=1,
+            )
+        )
+
+        return suggestions
+
+    def _validate_cross_field_constraints(self, config: ValidatedMigrationConfig) -> list[str]:
+        """Validate cross-field constraints."""
+        issues = []
+
+        # Example: dry_run with target_root
+        if config.dry_run and config.target_root:
+            issues.append("dry_run mode ignores target_root setting")
+
+        # Example: backup_root without backups
+        if config.backup_root and not config.backup_originals:
+            issues.append("backup_root specified but backup_originals is disabled")
+
+        return issues
+
+    def _validate_filesystem_constraints(self, config: ValidatedMigrationConfig) -> list[str]:
+        """Validate filesystem-related constraints."""
+        issues = []
+
+        # Check if target_root exists and is writable (if not dry_run)
+        if config.target_root and not config.dry_run:
+            target_path = Path(config.target_root)
+            if not target_path.exists():
+                issues.append(f"target_root directory does not exist: {config.target_root}")
+            elif not os.access(config.target_root, os.W_OK):
+                issues.append(f"target_root directory is not writable: {config.target_root}")
+
+        # Check backup_root if specified
+        if config.backup_root:
+            backup_path = Path(config.backup_root)
+            if not backup_path.exists():
+                issues.append(f"backup_root directory does not exist: {config.backup_root}")
+            elif not os.access(config.backup_root, os.W_OK):
+                issues.append(f"backup_root directory is not writable: {config.backup_root}")
+
+        return issues
+
+
+@dataclass
+class EnhancedConfigurationResult:
+    """Result of enhanced configuration validation and analysis."""
+
+    success: bool
+    config: ValidatedMigrationConfig | None = None
+    errors: list[dict[str, Any]] | None = None
+    warnings: list[str] | None = None
+    suggestions: list[Suggestion] | None = None
+    use_case_detected: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "success": self.success,
+            "config": self.config.__dict__ if self.config else None,
+            "errors": self.errors or [],
+            "warnings": self.warnings or [],
+            "suggestions": [s.to_dict() for s in self.suggestions or []],
+            "use_case_detected": self.use_case_detected,
+        }
+
+
+# Import here to avoid circular imports
+try:
+    from .exceptions import ConfigurationError, ParseError, TransformationError, ValidationError
+except ImportError:
+    # Handle case where exceptions aren't available yet
+    ParseError = None  # type: ignore
+    TransformationError = None  # type: ignore
+    ValidationError = None  # type: ignore
+    ConfigurationError = None  # type: ignore

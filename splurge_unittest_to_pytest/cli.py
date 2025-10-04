@@ -17,27 +17,42 @@ from typing import cast
 import typer
 
 from . import main as main_module
+from .cli_adapters import build_config_from_cli
+from .cli_helpers import (
+    _apply_defaults_to_config,
+    _handle_enhanced_validation_features,
+    _handle_interactive_questions,
+    attach_progress_handlers,
+    create_config,
+    create_event_bus,
+    detect_test_prefixes_from_files,
+    set_quiet_mode,
+    setup_logging,
+    setup_logging_with_level,
+    validate_source_files,
+    validate_source_files_with_patterns,
+)
 
 # Enhanced validation imports
+# Phase 3: Intelligent Configuration Assistant
 from .config_validation import (
     ConfigurationAdvisor,
     ConfigurationUseCaseDetector,
+    IntegratedConfigurationManager,
+    InteractiveConfigBuilder,
+    ProjectAnalyzer,
     generate_configuration_documentation,
     get_field_help,
     get_template,
     list_available_templates,
 )
 from .context import ContextManager, MigrationConfig
-from .events import (
-    ErrorEvent,
-    EventBus,
-    JobCompletedEvent,
-    JobStartedEvent,
-    LoggingSubscriber,
-    PipelineCompletedEvent,
-    PipelineStartedEvent,
-    StepCompletedEvent,
-    StepStartedEvent,
+
+# Error reporting imports
+from .error_reporting import (
+    ErrorCategory,
+    ErrorReporter,
+    SmartError,
 )
 from .pipeline import PipelineFactory
 
@@ -50,489 +65,6 @@ app = typer.Typer(
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(debug_mode: bool = False) -> None:
-    """Configure root logging levels.
-
-    This sets the root logger to ``DEBUG`` when ``debug_mode`` is True and to
-    ``INFO`` otherwise. It also reduces verbosity for known noisy third-party
-    libraries used by the project.
-
-    Args:
-        debug_mode: If True, enable debug-level logging for troubleshooting.
-    """
-    """
-    When debug_mode is False, set the root logger to INFO.
-
-    When debug_mode is True, keep the root logger at INFO but enable
-    DEBUG for the package logger only (``splurge_unittest_to_pytest``).
-    This prevents noisy third-party libraries from emitting DEBUG logs
-    while still providing detailed logs from this project.
-    """
-
-    # Keep root at INFO by default to avoid flooding logs with unrelated
-    # debug messages from third-party libraries. When verbose is requested
-    # enable DEBUG only for this package's logger so callers can inspect
-    # internal behavior without external noise.
-    root_level = logging.INFO
-    logging.getLogger().setLevel(root_level)
-
-    if debug_mode:
-        # Enable DEBUG logging for our package namespace only
-        logging.getLogger("splurge_unittest_to_pytest").setLevel(logging.DEBUG)
-
-    # Explicitly silence known noisy third-party libraries
-    logging.getLogger("libcst").setLevel(logging.WARNING)
-    logging.getLogger("black").setLevel(logging.WARNING)
-    logging.getLogger("isort").setLevel(logging.WARNING)
-
-
-def setup_logging_with_level(log_level: str) -> None:
-    """Configure root logging levels based on a specific level.
-
-    Args:
-        log_level: The logging level to set (DEBUG, INFO, WARNING, ERROR)
-    """
-    import logging
-
-    # Map string levels to logging constants
-    level_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING, "ERROR": logging.ERROR}
-
-    level = level_map.get(log_level.upper(), logging.INFO)
-    logging.getLogger().setLevel(level)
-
-    if level == logging.DEBUG:
-        # Enable DEBUG logging for our package namespace only
-        logging.getLogger("splurge_unittest_to_pytest").setLevel(logging.DEBUG)
-
-    # Explicitly silence known noisy third-party libraries
-    logging.getLogger("libcst").setLevel(logging.WARNING)
-    logging.getLogger("black").setLevel(logging.WARNING)
-    logging.getLogger("isort").setLevel(logging.WARNING)
-
-
-def set_quiet_mode(quiet: bool = False) -> None:
-    """Reduce logging output for quiet CLI invocations.
-
-    When ``quiet`` is True the root logger is set to ``WARNING`` and known
-    third-party libraries are similarly quieted. This is intended for
-    scripted or CI usage where informational logging is undesirable.
-
-    Args:
-        quiet: If True, set logging to the warning level.
-    """
-    if quiet:
-        logging.getLogger().setLevel(logging.WARNING)
-        # Keep third-party noise down as well
-        logging.getLogger("libcst").setLevel(logging.WARNING)
-        logging.getLogger("black").setLevel(logging.WARNING)
-        logging.getLogger("isort").setLevel(logging.WARNING)
-
-
-def create_event_bus() -> EventBus:
-    """Create and configure the application event bus.
-
-    The returned :class:`EventBus` will have a ``LoggingSubscriber`` attached
-    so pipeline events are emitted to the configured Python logging
-    infrastructure.
-
-    Returns:
-        An initialized :class:`EventBus` instance.
-    """
-    event_bus = EventBus()
-    LoggingSubscriber(event_bus)  # Configure logging subscriber
-    return event_bus
-
-
-def attach_progress_handlers(event_bus: EventBus, verbose: bool = False) -> None:
-    """Attach simple progress-printing handlers to the event bus.
-
-    Handlers print compact progress updates to stdout using typer.echo.
-    They are intentionally lightweight and will be no-ops when ``not verbose`` is
-    True so the CLI's verbose mode is respected.
-    """
-    if not verbose:
-        return
-
-    def _on_pipeline_started(event: PipelineStartedEvent) -> None:
-        from pathlib import Path
-
-        try:
-            src = Path(event.context.source_file)
-            filename = src.name
-            typer.echo(f"Starting migration pipeline: {filename}")
-        except (AttributeError, TypeError, ValueError) as e:
-            # Context or source_file is malformed
-            typer.echo(f"Starting migration (run_id={event.run_id}) - Warning: {e}")
-
-    def _on_job_started(event: JobStartedEvent) -> None:
-        from pathlib import Path
-
-        try:
-            src = Path(event.context.source_file)
-            filename = src.name
-            typer.echo(f"Starting job: {event.job_name} {filename}")
-        except (AttributeError, TypeError, ValueError) as e:
-            # Context or source_file is malformed
-            typer.echo(f"Starting job: {event.job_name} - Warning: {e}")
-
-    def _on_job_completed(event: JobCompletedEvent) -> None:
-        from pathlib import Path
-
-        try:
-            src = Path(event.context.source_file)
-            filename = src.name
-            typer.echo(f"Job completed: {event.job_name} {filename}")
-        except (AttributeError, TypeError, ValueError) as e:
-            # Context or source_file is malformed
-            typer.echo(f"Job completed: {event.job_name} - Warning: {e}")
-
-    def _on_step_started(event: StepStartedEvent) -> None:
-        # Make step names more user-friendly
-        friendly_name = event.step_name.replace("_", " ").title()
-        if "decision" in event.step_name.lower():
-            typer.echo("  Analyzing code patterns...")
-        elif "parse" in event.step_name.lower():
-            typer.echo("  Parsing source code...")
-        elif "collect" in event.step_name.lower():
-            typer.echo("  Collecting test structures...")
-        elif "format" in event.step_name.lower():
-            typer.echo("  Formatting output code...")
-        elif "output" in event.step_name.lower():
-            typer.echo("  Writing converted file...")
-        else:
-            typer.echo(f"  Running {friendly_name}...")
-
-    def _on_step_completed(event: StepCompletedEvent) -> None:
-        status = event.result.status.name if hasattr(event.result, "status") else "UNKNOWN"
-        if status == "SUCCESS":
-            status_icon = "[OK]"
-        elif status == "WARNING":
-            status_icon = "[WARN]"
-        else:
-            status_icon = "[ERROR]"
-
-        step_name = event.step_name.replace("_", " ").title()
-        typer.echo(f"  {status_icon} {step_name} completed in {event.duration_ms:.0f}ms")
-
-    def _on_pipeline_completed(event: PipelineCompletedEvent) -> None:
-        status = "SUCCESS" if event.final_result.is_success() else "FAILED"
-        if status == "SUCCESS":
-            filename = Path(event.context.source_file).name
-            typer.echo(f"[SUCCESS] Migration completed successfully: {filename}")
-        else:
-            typer.echo(f"[FAILED] Migration failed in {event.duration_ms:.0f}ms")
-
-    def _on_error(event: ErrorEvent) -> None:
-        typer.echo(f"  [ERROR] Error in {event.component}: {event.error}")
-
-    event_bus.subscribe(PipelineStartedEvent, _on_pipeline_started)
-    event_bus.subscribe(JobStartedEvent, _on_job_started)
-    event_bus.subscribe(JobCompletedEvent, _on_job_completed)
-    event_bus.subscribe(StepStartedEvent, _on_step_started)
-    event_bus.subscribe(StepCompletedEvent, _on_step_completed)
-    event_bus.subscribe(PipelineCompletedEvent, _on_pipeline_completed)
-    event_bus.subscribe(ErrorEvent, _on_error)
-
-
-def detect_test_prefixes_from_files(source_files: list[str]) -> list[str]:
-    """Auto-detect test method prefixes from source files.
-
-    Args:
-        source_files: List of source file paths to analyze
-
-    Returns:
-        List of detected test method prefixes, with "test" always included as fallback
-    """
-    import re
-    from pathlib import Path
-
-    detected_prefixes = set()
-    common_prefixes = ["test", "spec", "should", "it"]
-
-    for file_path in source_files:
-        try:
-            path = Path(file_path)
-            if not path.exists() or not path.is_file():
-                continue
-
-            content = path.read_text(encoding="utf-8")
-
-            # Look for function definitions that might be test methods
-            # Pattern: def [prefix]_.*\(self.*\):
-            pattern = r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)_.*?\(.*?\):"
-            matches = re.findall(pattern, content)
-
-            for match in matches:
-                # Check if this looks like a test method (not too long, contains test-like words)
-                if len(match) <= 20 and any(word in match.lower() for word in ["test", "spec", "check", "verify"]):
-                    # Extract prefix (part before first underscore or the whole word if no underscore)
-                    if "_" in match:
-                        prefix = match.split("_")[0]
-                    else:
-                        prefix = match
-
-                    # Only include reasonable prefixes (2-10 chars, starts with letter)
-                    if 2 <= len(prefix) <= 10 and prefix.isidentifier():
-                        detected_prefixes.add(prefix)
-
-        except (OSError, UnicodeDecodeError):
-            # Skip files that can't be read
-            continue
-
-    # Always include "test" as a fallback
-    result = ["test"]
-
-    # Add detected prefixes that are in our common list
-    for prefix in sorted(detected_prefixes):
-        if prefix in common_prefixes and prefix != "test":
-            result.append(prefix)
-
-    return result
-
-
-def create_config(
-    target_root: str | None = None,
-    root_directory: str | None = None,
-    file_patterns: list[str] | None = None,
-    recurse_directories: bool = True,
-    backup_originals: bool = True,
-    backup_root: str | None = None,
-    line_length: int | None = 120,
-    dry_run: bool = False,
-    fail_fast: bool = False,
-    verbose: bool = False,
-    generate_report: bool = True,
-    report_format: str = "json",
-    test_method_prefixes: list[str] | None = None,
-    detect_prefixes: bool = False,
-    assert_places: int = 7,
-    log_level: str = "INFO",
-    max_file_size: int = 10,
-    suffix: str = "",
-    ext: str | None = None,
-    # New configuration options
-    format_output: bool = True,
-    remove_unused_imports: bool = True,
-    preserve_import_comments: bool = True,
-    transform_assertions: bool = True,
-    transform_setup_teardown: bool = True,
-    transform_subtests: bool = True,
-    transform_skip_decorators: bool = True,
-    transform_imports: bool = True,
-    continue_on_error: bool = False,
-    max_concurrent_files: int = 1,
-    cache_analysis_results: bool = True,
-    preserve_file_encoding: bool = True,
-    create_source_map: bool = False,
-) -> MigrationConfig:
-    """Build a :class:`MigrationConfig` from CLI options.
-
-    The CLI intentionally exposes a smaller surface area than the full
-    :class:`MigrationConfig` to keep the command simple. This helper maps the
-    selected CLI options into a :class:`MigrationConfig` instance used by the
-    programmatic API.
-
-    Args:
-        target_directory: Target directory for output files. When ``None`` the
-            original directory is used (or the configured root).
-        root_directory: Optional root directory used when searching by patterns.
-        file_patterns: Glob patterns used to locate input files.
-        recurse_directories: Whether to recursively search subdirectories.
-        backup_originals: Create backup copies of original files before writing.
-        backup_root: Root directory for backup files. When specified, backups preserve folder structure.
-        line_length: Maximum line length for code formatting (passed to black).
-        dry_run: If True do not write files; return generated code in metadata.
-        fail_fast: Stop processing on the first encountered error.
-        verbose: Enable verbose logging.
-        generate_report: Whether to produce a migration report.
-        report_format: Format for the migration report (e.g. ``json``).
-        test_method_prefixes: Allowed test method name prefixes (repeatable).
-        suffix: Suffix appended to the target filename stem.
-        ext: Optional override for the target file extension.
-
-    Returns:
-        A populated :class:`MigrationConfig` instance ready for use by the
-        migration orchestrator.
-    """
-    from .helpers.utility import sanitize_extension, sanitize_suffix
-
-    suffix = sanitize_suffix(suffix)
-    ext = sanitize_extension(ext)
-
-    base = MigrationConfig()
-
-    config = MigrationConfig(
-        target_root=target_root,
-        root_directory=root_directory,
-        file_patterns=file_patterns or base.file_patterns,
-        recurse_directories=recurse_directories,
-        backup_originals=backup_originals,
-        backup_root=backup_root,
-        line_length=line_length,
-        assert_almost_equal_places=assert_places,
-        log_level=log_level,
-        max_file_size_mb=max_file_size,
-        dry_run=dry_run,
-        fail_fast=fail_fast,
-        verbose=verbose,
-        generate_report=generate_report,
-        report_format=report_format,
-        test_method_prefixes=test_method_prefixes or base.test_method_prefixes,
-        target_suffix=suffix,
-        target_extension=ext,
-        # New configuration options
-        format_output=format_output,
-        remove_unused_imports=remove_unused_imports,
-        preserve_import_comments=preserve_import_comments,
-        transform_assertions=transform_assertions,
-        transform_setup_teardown=transform_setup_teardown,
-        transform_subtests=transform_subtests,
-        transform_skip_decorators=transform_skip_decorators,
-        transform_imports=transform_imports,
-        continue_on_error=continue_on_error,
-        max_concurrent_files=max_concurrent_files,
-        cache_analysis_results=cache_analysis_results,
-        preserve_file_encoding=preserve_file_encoding,
-        create_source_map=create_source_map,
-    )
-
-    # Validate the configuration
-    config.validate()
-    return config
-
-
-def validate_source_files(source_files: list[str]) -> list[str]:
-    """Validate and expand source file and directory inputs.
-
-    This helper accepts a list of paths (files or directories) and returns a
-    flattened list of Python source files to process. Non-Python files are
-    skipped, and the function will raise a ``typer.Exit`` with a non-zero
-    exit code when no valid Python files are found or when an explicitly
-    provided path does not exist.
-
-    Args:
-        source_files: List of file or directory paths provided on the CLI.
-
-    Returns:
-        A list of validated Python file paths as strings.
-
-    Raises:
-        typer.Exit: When no Python files are found or a provided path is
-            missing.
-    """
-    valid_files = []
-
-    for source in source_files:
-        path = Path(source)
-
-        if not path.exists():
-            logger.error(f"Source path does not exist: {source}")
-            raise typer.Exit(code=1)
-
-        # When users provide explicit files on the CLI we accept the path as
-        # long as it exists. This lets callers pass non-.py test fixtures
-        # (for example .txt sample inputs used in examples) or pre-expanded
-        # glob results. Directory inputs are still searched recursively but
-        # we keep the default patterning behavior in the pattern-based
-        # helper.
-        if path.is_file():
-            valid_files.append(str(path))
-        elif path.is_dir():
-            # Recursively find all Python files by default
-            for py_file in path.rglob("*.py"):
-                valid_files.append(str(py_file))
-        else:
-            logger.warning(f"Skipping unknown path type: {source}")
-
-    if not valid_files:
-        logger.error("No Python files found to process")
-        raise typer.Exit(code=1)
-
-    return valid_files
-
-
-# mypy: ignore-errors
-
-
-def validate_source_files_with_patterns(
-    source_files: list[str], root_directory: str | None, file_patterns: list[str], recurse: bool
-) -> list[str]:
-    """Validate and expand inputs using an optional root directory and
-    filename patterns.
-
-    Behavior:
-    - When ``root_directory`` is provided, its tree is searched using the
-      provided ``file_patterns``.
-    - When ``source_files`` are provided they are included in the search
-      scope (files are added directly and directories are searched using
-      the supplied patterns).
-    - When neither ``root_directory`` nor ``source_files`` are provided, the
-      current working directory is searched using ``file_patterns``.
-
-    Args:
-        source_files: Explicit files or directories provided on the CLI.
-        root_directory: Optional base directory to search when patterns are used.
-        file_patterns: Glob-style filename patterns to match (e.g. ``test_*.py``).
-        recurse: Whether to recurse into subdirectories when searching.
-
-    Returns:
-        A deduplicated list of Python file paths matching the search criteria.
-
-    Raises:
-        typer.Exit: When no matching Python files are found.
-    """
-    roots: list[Path] = []
-    if root_directory:
-        roots.append(Path(root_directory))
-
-    if source_files:
-        for src in source_files:
-            roots.append(Path(src))
-
-    if not roots:
-        roots = [Path(".")]
-
-    valid_files: list[str] = []
-
-    def add_if_py(p: Path) -> None:
-        # Respect whatever the glob returned. When users supply explicit
-        # filename patterns we should honor them rather than enforcing a
-        # .py-only policy. This enables using example fixtures with other
-        # extensions (for example '.txt') in dry-run or test scenarios.
-        if p.is_file():
-            valid_files.append(str(p))
-
-    for root in roots:
-        if not root.exists():
-            logger.warning(f"Skipping non-existent path: {root}")
-            continue
-        if root.is_file():
-            add_if_py(root)
-            continue
-        # Directory: apply patterns
-        for pattern in file_patterns:
-            if recurse:
-                for p in root.rglob(pattern):
-                    add_if_py(p)
-            else:
-                for p in root.glob(pattern):
-                    add_if_py(p)
-
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for f in valid_files:
-        if f not in seen:
-            seen.add(f)
-            deduped.append(f)
-
-    if not deduped:
-        logger.error("No Python files found to process")
-        raise typer.Exit(code=1) from None
-
-    return deduped
 
 
 @app.command("migrate")
@@ -785,11 +317,12 @@ def migrate(
         try:
             config_result = ContextManager.load_config_from_file(config_file_path)
             if config_result.is_success():
-                base_config = config_result.data
+                # config_result.data should be a MigrationConfig; cast for mypy
+                base_config = cast(MigrationConfig, config_result.data)
                 logger.info(f"Loaded configuration from: {config_file_path}")
             else:
                 typer.echo(f"Error loading configuration file: {config_result.error}")
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=1) from None
         except Exception as e:
             typer.echo(f"Error loading configuration file: {e}")
             raise typer.Exit(code=1) from e
@@ -821,7 +354,7 @@ def migrate(
 
     # Create configuration (decision model always enabled, parametrize always enabled by default)
     # Use base_config as the foundation and override with CLI parameters
-    config_kwargs = {}
+    config_kwargs: dict[str, object] = {}
 
     # Only add CLI parameters that were explicitly provided (not None)
     if target_root is not None:
@@ -906,7 +439,8 @@ def migrate(
 
     # Create configuration with enhanced validation, but handle gracefully
     try:
-        config = base_config.with_override(**config_kwargs)
+        # Use adapters at the CLI boundary to coerce OptionInfo/runtime values
+        config = build_config_from_cli(base_config, config_kwargs)
     except ValueError as e:
         # If enhanced validation fails, try to create config without enhanced features
         # This allows CLI to work even with configurations that would normally fail validation
@@ -922,7 +456,7 @@ def migrate(
             # basic_config_kwargs.pop("use_case_analysis", None)
 
             try:
-                config = base_config.with_override(**basic_config_kwargs)
+                config = build_config_from_cli(base_config, basic_config_kwargs)
                 logger.info("Successfully created configuration without enhanced validation features.")
             except Exception as fallback_error:
                 logger.error(f"Failed to create even basic configuration: {fallback_error}")
@@ -955,10 +489,29 @@ def migrate(
         logger.info(f"Found {num_valid} Python files to process")
 
         # Handle enhanced validation features as part of migration workflow
-        if show_suggestions or use_case_analysis:
-            _handle_enhanced_validation_features(
-                config, show_suggestions, use_case_analysis, None, False, None, None, is_standalone=False
-            )
+        if (
+            show_suggestions
+            or use_case_analysis
+            or generate_field_help
+            or list_templates
+            or use_template
+            or generate_docs
+        ):
+            config_kwargs = {}
+            if show_suggestions is not False:
+                config_kwargs["show_suggestions"] = show_suggestions
+            if use_case_analysis is not False:
+                config_kwargs["use_case_analysis"] = use_case_analysis
+            if generate_field_help is not None:
+                config_kwargs["generate_field_help"] = generate_field_help
+            if list_templates is not False:
+                config_kwargs["list_templates"] = list_templates
+            if use_template is not None:
+                config_kwargs["use_template"] = use_template
+            if generate_docs is not None:
+                config_kwargs["generate_docs"] = generate_docs
+
+            config = _handle_enhanced_validation_features(config, config_kwargs)
 
         # Create pipeline factory
         PipelineFactory(event_bus)  # Initialize factory for future use
@@ -1174,7 +727,7 @@ def generate_templates_cmd(
             content = json.dumps(template.config_dict, indent=2)
         else:
             typer.echo(f"Error: Unsupported format '{format}'. Use 'yaml' or 'json'.")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         try:
             with open(filepath, "w", encoding="utf-8") as f:
@@ -1291,122 +844,232 @@ def init_config(
         raise typer.Exit(code=1) from None
 
 
-def _handle_enhanced_validation_features(
-    config,
-    show_suggestions,
-    use_case_analysis,
-    generate_field_help,
-    list_templates,
-    use_template,
-    generate_docs,
-    is_standalone=True,
+@app.command("error-recovery")
+def error_recovery_cmd(
+    error_message: str = typer.Option(..., "--error", "-e", help="Error message to analyze"),
+    category: str = typer.Option(
+        "auto",
+        help="Error category (auto, configuration, filesystem, parsing, transformation, validation, permission, dependency)",
+    ),
+    context: str | None = typer.Option(None, help="Additional context as JSON string"),
+    interactive: bool = typer.Option(True, help="Run in interactive mode"),
+    workflow_only: bool = typer.Option(False, help="Show only recovery workflow, not suggestions"),
 ) -> None:
-    """Handle enhanced validation CLI features."""
-    if list_templates:
-        # List available templates
-        templates = list_available_templates()
-        typer.echo("Available configuration templates:")
-        for template in templates:
-            template_obj = get_template(template)
-            if template_obj:
-                typer.echo(f"  - {template}: {template_obj.description}")
-        if is_standalone:
-            typer.echo(f"\nTotal: {len(templates)} templates available")
-        return
+    """Interactive error recovery assistant.
 
-    if use_template:
-        # Use a specific template
-        template = get_template(use_template)
-        if template:
-            typer.echo(f"Using template: {template.name}")
-            typer.echo(f"Description: {template.description}")
-            typer.echo(f"Use case: {template.use_case}")
+    This command provides intelligent suggestions and recovery workflows for common errors
+    encountered during unittest to pytest migration.
+    """
+    import json
 
-            # Show YAML configuration
-            typer.echo("\nYAML Configuration:")
-            typer.echo(template.to_yaml())
+    # Initialize error reporter
+    reporter = ErrorReporter()
 
-            # Show CLI arguments
-            typer.echo("\nCLI Arguments:")
-            typer.echo(f"splurge-unittest-to-pytest migrate {template.to_cli_args()}")
-
-            # Show suggested usage
-            typer.echo("\nSuggested Usage:")
-            typer.echo(
-                f"1. Save the YAML config to a file: splurge-unittest-to-pytest migrate --template {use_template} --generate-docs markdown > config-reference.md"
-            )
-            typer.echo(
-                f"2. Use the CLI args for quick migration: splurge-unittest-to-pytest migrate {template.to_cli_args()}"
-            )
-
+    # Parse category
+    if category == "auto":
+        # Auto-detect category from error message
+        if any(term in error_message.lower() for term in ["config", "parameter", "option"]):
+            error_category = ErrorCategory.CONFIGURATION
+        elif any(term in error_message.lower() for term in ["file", "directory", "path"]):
+            error_category = ErrorCategory.FILESYSTEM
+        elif any(term in error_message.lower() for term in ["parse", "syntax", "invalid"]):
+            error_category = ErrorCategory.PARSING
+        elif any(term in error_message.lower() for term in ["transform", "convert"]):
+            error_category = ErrorCategory.TRANSFORMATION
+        elif any(term in error_message.lower() for term in ["permission", "access", "forbidden"]):
+            error_category = ErrorCategory.PERMISSION
+        elif any(term in error_message.lower() for term in ["import", "module", "package"]):
+            error_category = ErrorCategory.DEPENDENCY
         else:
-            typer.echo(f"Error: Template '{use_template}' not found.")
-            available = list_available_templates()
-            typer.echo(f"Available templates: {', '.join(available)}")
-        if is_standalone:
-            return
+            error_category = ErrorCategory.UNKNOWN
+    else:
+        try:
+            error_category = ErrorCategory(category.lower())
+        except ValueError:
+            typer.echo(
+                f"Error: Invalid category '{category}'. Valid options: auto, configuration, filesystem, parsing, transformation, validation, permission, dependency"
+            )
+            raise typer.Exit(code=1) from None
 
-    if generate_field_help:
-        # Show help for a specific field
-        help_text = get_field_help(generate_field_help)
-        typer.echo(help_text)
-        if is_standalone:
-            return
+    # Parse context if provided
+    context_dict = {}
+    if context:
+        try:
+            context_dict = json.loads(context)
+        except json.JSONDecodeError as e:
+            typer.echo(f"Warning: Invalid JSON context: {e}. Using empty context.")
 
-    if generate_docs:
-        # Generate documentation
-        if generate_docs not in ["markdown", "html"]:
-            typer.echo(f"Error: Format must be 'markdown' or 'html', got '{generate_docs}'")
-            if is_standalone:
-                raise typer.Exit(code=1)
-            return
+    # Create SmartError for analysis
+    smart_error = SmartError(message=error_message, category=error_category, context=context_dict)
 
-        typer.echo(f"Generating {generate_docs} documentation...")
-        docs = generate_configuration_documentation(generate_docs)
+    # Generate suggestions
+    suggestions = reporter.suggestion_engine.generate_suggestions(smart_error)
 
-        if generate_docs == "markdown":
-            # Save to file or show content
-            filename = "config-reference.md"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(docs)
-            typer.echo(f"Markdown documentation saved to: {filename}")
-        else:  # HTML
-            # Save to file or show content
-            filename = "config-reference.html"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(docs)
-            typer.echo(f"HTML documentation saved to: {filename}")
+    if not workflow_only:
+        typer.echo(f"\nError Analysis: {error_category.value.upper()}")
+        typer.echo(f"Severity: {reporter.severity_assessor.assess_severity(smart_error).value.upper()}")
+        typer.echo(f"Recoverable: {'Yes' if smart_error.is_recoverable() else 'No'}")
 
-        typer.echo(f"Generated {len(docs)} characters of documentation.")
-        if is_standalone:
-            return
+        if suggestions:
+            typer.echo(f"\nSuggestions ({len(suggestions)} found):")
+            for i, suggestion in enumerate(smart_error.get_prioritized_suggestions()[:5], 1):
+                typer.echo(f"\n  {i}. [{suggestion.category or 'GENERAL'}] {suggestion.message}")
+                typer.echo(f"     Action: {suggestion.action}")
+                if suggestion.examples:
+                    typer.echo(f"     Examples: {', '.join(suggestion.examples)}")
+        else:
+            typer.echo("\nNo specific suggestions available for this error.")
 
-    # Handle suggestions and use case analysis
-    if show_suggestions or use_case_analysis:
-        # Detect use case
-        detector = ConfigurationUseCaseDetector()
-        use_case = detector.detect_use_case(config)
+    # Get recovery workflow
+    workflow = reporter.get_recovery_workflow(smart_error)
 
-        if use_case_analysis:
-            typer.echo(f"Detected use case: {use_case}")
-            typer.echo(f"Use case description: {use_case.replace('_', ' ').title()}")
+    if workflow:
+        typer.echo(f"\nRecovery Workflow: {workflow.title}")
+        if workflow.description:
+            typer.echo(f"   {workflow.description}")
 
-        if show_suggestions:
-            typer.echo("\nConfiguration Suggestions:")
-            advisor = ConfigurationAdvisor()
-            suggestions = advisor.suggest_improvements(config)
+        typer.echo(f"\nEstimated time: {workflow.estimated_time or 'Unknown'}")
+        typer.echo(
+            f"Success rate: {workflow.success_rate * 100:.0f}%" if workflow.success_rate else "Success rate: Unknown"
+        )
 
-            if not suggestions:
-                typer.echo("No suggestions available for current configuration.")
+        typer.echo("\nRecovery Steps:")
+        for i, step in enumerate(workflow.steps or [], 1):
+            typer.echo(f"\n  {i}. {step.description}")
+            typer.echo(f"     Action: {step.action}")
+            if step.examples:
+                typer.echo(f"     Examples: {', '.join(step.examples)}")
+            if step.validation:
+                typer.echo(f"     Validation: {step.validation}")
+
+        # Interactive mode
+        if interactive:
+            typer.echo("\nInteractive Recovery Mode")
+            typer.echo("Would you like to proceed with the first recovery step? (y/n)")
+
+            response = input().strip().lower()
+            if response in ["y", "yes"]:
+                typer.echo(f"\nExecuting step 1: {workflow.steps[0].description}")
+                typer.echo(f"Action: {workflow.steps[0].action}")
+                if workflow.steps[0].examples:
+                    typer.echo(f"Example: {workflow.steps[0].examples[0]}")
+
+                typer.echo("\nApply this fix and then re-run your migration command.")
             else:
-                for i, suggestion in enumerate(suggestions, 1):
-                    typer.echo(f"\n{i}. [{suggestion.type.value.upper()}] {suggestion.message}")
-                    typer.echo(f"   Action: {suggestion.action}")
-                    if suggestion.examples:
-                        typer.echo(f"   Examples: {', '.join(suggestion.examples)}")
+                typer.echo("\nRecovery workflow saved for reference.")
+    else:
+        typer.echo("\nNo recovery workflow available for this error type.")
+        typer.echo("Consider reviewing the suggestions above and checking the documentation.")
 
 
-__all__ = ["create_config", "create_event_bus", "attach_progress_handlers"]
+@app.command("configure")
+def configure_cmd(
+    project_root: str = typer.Option(".", help="Root directory of the project to analyze"),
+    output_file: str | None = typer.Option(None, help="Save configuration to file (YAML format)"),
+    analyze_only: bool = typer.Option(False, help="Only analyze project, don't create configuration"),
+    silent: bool = typer.Option(False, help="Run without interactive prompts, use defaults only"),
+) -> None:
+    """Interactive configuration builder with intelligent project analysis.
+
+    This command analyzes your project structure and guides you through creating
+    an optimal configuration for unittest to pytest migration.
+    """
+
+    typer.echo("Interactive Configuration Builder")
+    typer.echo("This wizard will analyze your project and help create an optimal configuration.")
+
+    # Initialize components
+    analyzer = ProjectAnalyzer()
+    builder = InteractiveConfigBuilder()
+
+    # Initialize manager with required components
+    manager = IntegratedConfigurationManager()
+
+    manager.analyzer = ConfigurationUseCaseDetector()
+    manager.advisor = ConfigurationAdvisor()
+
+    # Analyze project
+    typer.echo(f"\nAnalyzing project in: {project_root}")
+    try:
+        analysis = analyzer.analyze_project(project_root)
+        typer.echo("Project analysis complete!")
+
+        # Show analysis results
+        typer.echo("\nProject Analysis Results:")
+        typer.echo(f"   Found {len(analysis['test_files'])} test files")
+        typer.echo(f"   Detected test prefixes: {', '.join(sorted(analysis['test_prefixes']))}")
+        typer.echo(f"   Project type: {analysis['project_type'].value}")
+        typer.echo(f"   Complexity score: {analysis['complexity_score']}")
+
+        if analyze_only:
+            typer.echo("\nAnalysis complete. Use --output-file to save configuration.")
+            return
+
+        # Build configuration interactively
+        config, interaction_data = builder.build_configuration_interactive()
+
+        # Handle questions
+        if silent:
+            typer.echo("Running in silent mode, using defaults...")
+            # Use defaults without prompting
+            config = _apply_defaults_to_config(config, interaction_data["questions"])
+        else:
+            typer.echo("Interactive Configuration Builder")
+            typer.echo("This wizard will help you configure unittest to pytest migration.")
+
+            # Show project type detection
+            project_type = interaction_data["project_type"]
+            typer.echo(f"\nDetected project type: {project_type.value.replace('_', ' ').title()}")
+
+            # Handle questions
+            config = _handle_interactive_questions(interaction_data["questions"])
+
+        # Validate and enhance
+        typer.echo("\nValidating and enhancing configuration...")
+        result = manager.validate_and_enhance_config(config.__dict__)
+
+        if result.success and result.config:
+            typer.echo("\nConfiguration complete and validated!")
+            # Save to file if requested
+            if output_file:
+                import yaml
+
+                config_dict = {k: v for k, v in result.config.__dict__.items() if v is not None and v != []}
+
+                with open(output_file, "w", encoding="utf-8") as f:
+                    yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+
+                typer.echo(f"Configuration saved to: {output_file}")
+
+                # Show usage example
+                typer.echo("\nUsage:")
+                typer.echo(f"   splurge-unittest-to-pytest migrate --config {output_file} [files...]")
+            else:
+                typer.echo("\nConfiguration ready! Use with:")
+                typer.echo("   splurge-unittest-to-pytest migrate [options] [files...]")
+        else:
+            typer.echo("\nConfiguration validation failed:")
+            for error in result.errors or []:
+                typer.echo(f"   - {error['message']}")
+
+            if result.warnings:
+                typer.echo("\nWarnings:")
+                for warning in result.warnings:
+                    typer.echo(f"   - {warning}")
+
+    except Exception as e:
+        typer.echo(f"Project analysis failed: {e}")
+        typer.echo("Please check the project directory and try again.")
+        raise typer.Exit(code=1) from e
+
+
+__all__ = [
+    "create_config",
+    "create_event_bus",
+    "attach_progress_handlers",
+    "validate_source_files",
+    "validate_source_files_with_patterns",
+]
 
 
 def main() -> None:

@@ -993,3 +993,241 @@ class TestIntegration:
         # Test invalid template name
         with pytest.raises(ValueError, match="Template not found"):
             generate_config_from_template("invalid_template")
+
+
+# Phase 3: Intelligent Configuration Assistant Tests
+class TestProjectType:
+    """Test project type enumeration."""
+
+    def test_project_types_exist(self):
+        """Test that all expected project types are defined."""
+        from splurge_unittest_to_pytest.config_validation import ProjectType
+
+        assert ProjectType.LEGACY_TESTING.value == "legacy_testing"
+        assert ProjectType.MODERN_FRAMEWORK.value == "modern_framework"
+        assert ProjectType.CUSTOM_SETUP.value == "custom_setup"
+        assert ProjectType.UNKNOWN.value == "unknown"
+
+
+class TestProjectAnalyzer:
+    """Test project analysis functionality."""
+
+    def test_analyze_project_basic(self, tmp_path):
+        """Test basic project analysis."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        # Create a simple test file in a subdirectory to avoid analyzing the whole project
+        test_dir = tmp_path / "tests"
+        test_dir.mkdir()
+        test_file = test_dir / "test_example.py"
+        test_file.write_text("def test_simple(): pass")
+
+        # Analyze just the test directory
+        analysis = analyzer.analyze_project(str(test_dir))
+
+        assert len(analysis["test_files"]) == 1
+        assert "test_" in analysis["test_prefixes"]
+        from splurge_unittest_to_pytest.config_validation import ProjectType
+
+        assert analysis["project_type"] == ProjectType.LEGACY_TESTING
+
+    def test_extract_test_prefixes(self, tmp_path):
+        """Test extraction of test method prefixes."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        content = """
+def test_example():
+    pass
+
+def spec_feature():
+    pass
+
+def should_work():
+    pass
+
+def it_should_pass():
+    pass
+"""
+
+        prefixes = analyzer._extract_test_prefixes(content)
+
+        assert "test_" in prefixes
+        assert "spec_" in prefixes
+        assert "should_" in prefixes
+        assert "it_" in prefixes
+
+    def test_has_setup_methods(self, tmp_path):
+        """Test detection of setup methods."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        content_with_setup = """
+def setUp(self):
+    pass
+
+def test_example():
+    pass
+"""
+
+        content_without_setup = """
+def test_example():
+    pass
+"""
+
+        assert analyzer._has_setup_methods(content_with_setup) is True
+        assert analyzer._has_setup_methods(content_without_setup) is False
+
+    def test_determine_project_type(self, tmp_path):
+        """Test project type determination."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer, ProjectType
+
+        analyzer = ProjectAnalyzer()
+
+        # Test modern framework detection
+        analysis_modern = {
+            "test_files": ["test1.py", "test2.py"],
+            "test_prefixes": {"spec_", "should_"},
+            "has_setup_methods": False,
+            "has_nested_classes": False,
+            "complexity_score": 2,
+        }
+        project_type = analyzer._determine_project_type(analysis_modern)
+        assert project_type == ProjectType.MODERN_FRAMEWORK
+
+        # Test legacy testing detection
+        analysis_legacy = {
+            "test_files": ["test1.py", "test2.py", "test3.py", "test4.py", "test5.py", "test6.py"],
+            "test_prefixes": {"test_"},
+            "has_setup_methods": False,
+            "has_nested_classes": False,
+            "complexity_score": 1,
+        }
+        project_type = analyzer._determine_project_type(analysis_legacy)
+        assert project_type == ProjectType.LEGACY_TESTING
+
+
+class TestInteractiveConfigBuilder:
+    """Test interactive configuration builder."""
+
+    def test_build_question_tree(self):
+        """Test that question tree is built correctly."""
+        from splurge_unittest_to_pytest.config_validation import InteractiveConfigBuilder
+
+        builder = InteractiveConfigBuilder()
+        questions = builder._build_question_tree()
+
+        assert "project_detection" in questions
+        assert "backup_strategy" in questions
+        assert "output_strategy" in questions
+
+        # Check project detection options
+        proj_detection = questions["project_detection"]
+        assert "question" in proj_detection
+        assert "options" in proj_detection
+        assert len(proj_detection["options"]) == 4
+
+
+class TestIntegratedConfigurationManager:
+    """Test integrated configuration management."""
+
+    def test_validate_and_enhance_config_success(self):
+        """Test successful configuration validation and enhancement."""
+        from splurge_unittest_to_pytest.config_validation import (
+            ConfigurationAdvisor,
+            ConfigurationUseCaseDetector,
+            IntegratedConfigurationManager,
+        )
+
+        manager = IntegratedConfigurationManager()
+        manager.analyzer = ConfigurationUseCaseDetector()
+        manager.advisor = ConfigurationAdvisor()
+
+        # Create the target directory for the test
+        import os
+
+        os.makedirs("./converted", exist_ok=True)
+
+        config_dict = {
+            "dry_run": False,
+            "backup_originals": True,
+            "target_root": "./converted",
+            "file_patterns": ["test_*.py"],
+            "recurse_directories": True,
+        }
+
+        result = manager.validate_and_enhance_config(config_dict)
+
+        assert result.success is True
+        assert result.config is not None
+        assert result.use_case_detected is not None
+
+    def test_validate_cross_field_constraints(self):
+        """Test cross-field constraint validation."""
+        from splurge_unittest_to_pytest.config_validation import (
+            ConfigurationAdvisor,
+            ConfigurationUseCaseDetector,
+            IntegratedConfigurationManager,
+        )
+
+        manager = IntegratedConfigurationManager()
+        manager.analyzer = ConfigurationUseCaseDetector()
+        manager.advisor = ConfigurationAdvisor()
+
+        # Create a config with cross-field issues
+        config_dict = {
+            "dry_run": True,
+            "target_root": "./output",  # Should warn about dry_run + target_root
+            "backup_root": "./backups",  # Should warn about backup_root without backup_originals
+            "backup_originals": False,
+        }
+
+        result = manager.validate_and_enhance_config(config_dict)
+
+        # Should detect validation errors (not warnings since config fails validation)
+        assert result.success is False
+        assert result.errors is not None
+        assert len(result.errors) > 0
+        assert result.errors[0]["category"] == "configuration"
+
+
+class TestEnhancedConfigurationResult:
+    """Test enhanced configuration result dataclass."""
+
+    def test_enhanced_result_creation(self):
+        """Test creating enhanced configuration result."""
+        from splurge_unittest_to_pytest.config_validation import EnhancedConfigurationResult, SuggestionType
+
+        result = EnhancedConfigurationResult(
+            success=True,
+            use_case_detected="basic_migration",
+            suggestions=[Suggestion(type=SuggestionType.CORRECTION, message="Test suggestion", action="Test action")],
+        )
+
+        assert result.success is True
+        assert result.use_case_detected == "basic_migration"
+        assert len(result.suggestions) == 1
+
+    def test_to_dict_conversion(self):
+        """Test converting result to dictionary."""
+        from splurge_unittest_to_pytest.config_validation import EnhancedConfigurationResult
+
+        result = EnhancedConfigurationResult(success=True, use_case_detected="test_case")
+
+        result_dict = result.to_dict()
+
+        assert result_dict["success"] is True
+        assert result_dict["use_case_detected"] == "test_case"
+        assert result_dict["errors"] == []
+        assert result_dict["warnings"] == []
+
+
+# Mock classes for testing (to avoid import issues)
+class FileNotFoundError(Exception):
+    """Mock FileNotFoundError for testing."""
+
+    pass
