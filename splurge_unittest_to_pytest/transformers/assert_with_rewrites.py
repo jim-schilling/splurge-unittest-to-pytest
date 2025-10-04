@@ -5,6 +5,7 @@ reduce reviewer friction. Later we will move focused implementations
 from ``assert_transformer.py`` into this file.
 """
 
+import logging
 from typing import Any
 
 import libcst as cst
@@ -22,6 +23,8 @@ from ._caplog_helpers import (
 from ._caplog_helpers import (
     extract_alias_output_slices as _caplog_extract_alias_output_slices,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 def _extract_alias_output_slices(expr: cst.BaseExpression) -> "AliasOutputAccess | None":
@@ -132,7 +135,9 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
 
     out = re.sub(r"('.*?'|\".*?\")\s*in\s*caplog\.records\s*\[(\d+)\]", r"\1 in caplog.messages[\2]", out)
 
-    out = re.sub(r"('.*?'|\".*?\")\s*==\s*caplog\.records\s*\[(\d+)\]\.getMessage\(\)", r"caplog.messages[\2] == \1", out)
+    out = re.sub(
+        r"('.*?'|\".*?\")\s*==\s*caplog\.records\s*\[(\d+)\]\.getMessage\(\)", r"caplog.messages[\2] == \1", out
+    )
 
     out = re.sub(r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]\.getMessage\(\)", r"caplog.messages[\1]", out)
     out = re.sub(r"caplog\.records\.getMessage\(\)\s*\[\s*(\d+)\s*\]", r"caplog.messages[\1]", out)
@@ -144,7 +149,11 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     )
 
     try:
-        return _orig._apply_transformations_with_fallback(out) if hasattr(_orig, "_apply_transformations_with_fallback") else out
+        return (
+            _orig._apply_transformations_with_fallback(out)
+            if hasattr(_orig, "_apply_transformations_with_fallback")
+            else out
+        )
     except Exception:
         return code
 
@@ -395,8 +404,12 @@ def _safe_extract_statements(body_container, max_depth: int = 7) -> list[cst.Bas
         # case unwrap the single element and continue drilling.
         if isinstance(current, list | tuple):
             # If it's a single-element list and that element itself
-            # exposes a .body, step into it and continue unwrapping.
-            if len(current) == 1 and hasattr(current[0], "body"):
+            # element is an IndentedBlock wrapper created by libcst; unwrap
+            # only when the single element is an IndentedBlock. Avoid
+            # unwrapping statement-level wrappers (With, Try, If, etc.)
+            # which also expose a .body but must be preserved for
+            # downstream transforms.
+            if len(current) == 1 and isinstance(current[0], cst.IndentedBlock):
                 current = current[0].body
                 depth += 1
                 continue
@@ -678,6 +691,10 @@ def _process_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.B
 
     try:
         try_body = getattr(stmt, "body", None)
+        try:
+            _logger.debug("_process_try_statement: entering Try node: %s", repr(stmt))
+        except Exception:
+            pass
         body_statements = _safe_extract_statements(try_body, max_depth)
         if body_statements is not None and try_body is not None:
             # reuse original wrap_assert_in_block to avoid duplicating larger logic
@@ -714,13 +731,38 @@ def _process_try_statement(stmt: cst.BaseStatement, max_depth: int = 7) -> cst.B
                     body=new_finalbody.body.with_changes(body=_orig.wrap_assert_in_block(body_statements, max_depth))
                 )
 
-        new_try = stmt.with_changes(body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody)
+        new_try = stmt.with_changes(
+            body=new_try_body, handlers=new_handlers, orelse=new_orelse, finalbody=new_finalbody
+        )
+
+        # As a defensive step during the staged migration, explicitly visit
+        # nested With nodes inside the constructed Try and apply the local
+        # transform_with_items helper. This ensures With.items that use
+        # ``self.assertRaises`` / ``self.assertWarns`` are converted to
+        # pytest equivalents and are preserved in subsequent passes.
+        try:
+
+            class _WithRewriter(cst.CSTTransformer):
+                def leave_With(self, original: cst.With, updated: cst.With) -> cst.With:
+                    try:
+                        new_with, _alias, changed = transform_with_items(updated)
+                        return new_with
+                    except Exception:
+                        return updated
+
+            rewritten_try = new_try.visit(_WithRewriter())
+            if isinstance(rewritten_try, cst.Try):
+                if rewritten_try is not new_try:
+                    _logger.debug(
+                        "_process_try_statement: applied With-item rewrites inside Try -> %s", repr(rewritten_try)
+                    )
+                new_try = rewritten_try
+        except Exception:
+            # Fall back to original behavior when anything goes wrong
+            pass
 
         try:
-            rewritten = _recursively_rewrite_withs(new_try)
-            # Only accept the rewritten value when it preserves the Try shape
-            if isinstance(rewritten, cst.Try):
-                new_try = rewritten
+            _logger.debug("_process_try_statement: exiting Try node -> %s", repr(new_try))
         except Exception:
             pass
 
@@ -744,6 +786,8 @@ def _preserve_indented_body_wrapper(orig_block: Any | None, new_block: Any | Non
         # quick guard: if either side is None just return the new block
         if orig_block is None or new_block is None:
             return new_block
+
+        # (no-op) diagnostic slot - intentionally left blank in production
 
         # If original is an IndentedBlock-like object with `body`, keep it.
         if hasattr(orig_block, "body") and hasattr(new_block, "body"):
@@ -843,15 +887,19 @@ def _recursively_rewrite_withs(node: cst.CSTNode) -> cst.CSTNode:
     original module's more complete rewrite logic until we've moved it.
     """
     try:
+        # If the original module provides a richer implementation, defer
         if hasattr(_orig, "_recursively_rewrite_withs") and isinstance(node, cst.BaseStatement):
             try:
+                _logger.debug("_recursively_rewrite_withs: delegating to _orig for node %s", type(node).__name__)
                 res = _orig._recursively_rewrite_withs(node)
                 if isinstance(res, cst.BaseStatement):
+                    _logger.debug("_recursively_rewrite_withs: _orig returned %s", type(res).__name__)
                     return res
             except Exception:
                 pass
     except Exception:
         pass
+    _logger.debug("_recursively_rewrite_withs: no-op for %s", type(node).__name__)
     return node
 
 
@@ -911,10 +959,47 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
     # each with the local `_process_statement_with_fallback` helper. This
     # reduces cross-module delegation during migration while preserving
     # the original behavior where we can't safely transform.
+    logger = logging.getLogger(__name__)
     out: list[cst.BaseStatement] = []
+
+    def _wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
+        # If node is a libcst BaseSmallStatement (e.g. Assert, Pass)
+        # wrap it into a SimpleStatementLine so it can be placed into
+        # an IndentedBlock.body which expects statements.
+        try:
+            if isinstance(node, cst.BaseSmallStatement):
+                return cst.SimpleStatementLine(body=[node])
+        except Exception:
+            pass
+
+        # If it's already a BaseStatement, return as-is
+        if isinstance(node, cst.BaseStatement):
+            return node
+
+        # If it's a BaseExpression (an expression node), wrap it into an
+        # expression statement so it becomes a BaseSmallStatement and can
+        # be placed into a SimpleStatementLine.body which expects
+        # BaseSmallStatement items.
+        try:
+            if isinstance(node, cst.BaseExpression):
+                return cst.SimpleStatementLine(body=[cst.Expr(node)])
+        except Exception:
+            pass
+
+        # As a conservative fallback, return a pass statement so the
+        # surrounding block remains syntactically valid. This branch
+        # should be unreachable in normal operation because callers
+        # generally pass statements or expressions, but it keeps the
+        # function's return type strictly cst.BaseStatement for mypy.
+        return cst.SimpleStatementLine(body=[cst.Pass()])
+
     i = 0
     while i < len(statements):
         stmt = statements[i]
+        try:
+            logger.debug("wrap_assert_in_block: processing stmt[%d]=%s", i, type(stmt).__name__)
+        except Exception:
+            pass
         try:
             nodes, consumed = _process_statement_with_fallback(stmt, statements, i, max_depth)
         except Exception:
@@ -925,7 +1010,15 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
 
         # nodes is a list of nodes to append; consumed indicates how many
         # original statements were consumed (usually 1 or 2)
-        out.extend(nodes)
+        for n in nodes:
+            wrapped = _wrap_small_stmt_if_needed(n)
+            try:
+                logger.debug(
+                    "wrap_assert_in_block: appended node type=%s (wrapped=%s)", type(n).__name__, type(wrapped).__name__
+                )
+            except Exception:
+                pass
+            out.append(wrapped)
         i += consumed
 
     return out
@@ -964,16 +1057,32 @@ def create_with_wrapping_next_stmt(
         # assertions expect a Name('pass') inside the SimpleStatementLine).
         pass_stmt = cst.SimpleStatementLine(body=[cst.Expr(value=cst.Name(value="pass"))])
         body = cst.IndentedBlock(body=[pass_stmt])
+        try:
+            _logger.debug("create_with_wrapping_next_stmt: created With with pass body: %s", repr(with_item))
+        except Exception:
+            pass
         return (cst.With(items=[with_item], body=body), 1)
 
     # If provided statement is already a SimpleStatementLine or IndentedBlock, reuse
     if isinstance(next_stmt, cst.SimpleStatementLine):
         body = cst.IndentedBlock(body=[next_stmt])
+        try:
+            _logger.debug(
+                "create_with_wrapping_next_stmt: wrapping existing SimpleStatementLine into With: %s", repr(next_stmt)
+            )
+        except Exception:
+            pass
         return (cst.With(items=[with_item], body=body), 2)
 
     # Otherwise wrap the statement into a SimpleStatementLine
     try:
         body = cst.IndentedBlock(body=[next_stmt])
+        try:
+            _logger.debug(
+                "create_with_wrapping_next_stmt: wrapped next_stmt type %s into With", type(next_stmt).__name__
+            )
+        except Exception:
+            pass
         return (cst.With(items=[with_item], body=body), 2)
     except Exception:
         # Conservative fallback
@@ -1009,6 +1118,12 @@ def handle_bare_assert_call(statements: list[cst.BaseStatement], i: int) -> tupl
     # Attempt to wrap the following statement if present
     next_stmt = statements[i + 1] if i + 1 < len(statements) else None
     with_node, consumed = create_with_wrapping_next_stmt(with_item, next_stmt)
+    try:
+        _logger.debug(
+            "handle_bare_assert_call: created With node wrapping next_stmt (consumed=%d): %s", consumed, repr(with_node)
+        )
+    except Exception:
+        pass
     return ([with_node], consumed, True)
 
 
@@ -1017,6 +1132,10 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
 
     Returns (new_with, alias_name, changed)
     """
+    try:
+        _logger.debug("transform_with_items: entering With: %s", repr(stmt))
+    except Exception:
+        pass
     items = getattr(stmt, "items", ())
     new_items: list[cst.WithItem] = []
     alias_name: str | None = None
@@ -1056,9 +1175,17 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
             alias_name = it.asname.name.value
 
     if not changed:
+        try:
+            _logger.debug("transform_with_items: no change for With")
+        except Exception:
+            pass
         return (stmt, alias_name, False)
 
     new_with = stmt.with_changes(items=new_items)
+    try:
+        _logger.debug("transform_with_items: changed With -> %s", repr(new_with))
+    except Exception:
+        pass
     return (new_with, alias_name, True)
 
 
@@ -1198,7 +1325,9 @@ def rewrite_following_statements_for_alias(
                                             r = None
                                         if r is not None:
                                             # preserve the original SimpleStatementLine wrapper
-                                            statements[idx] = _preserve_indented_body_wrapper(s, s.with_changes(body=[r]))
+                                            statements[idx] = _preserve_indented_body_wrapper(
+                                                s, s.with_changes(body=[r])
+                                            )
                                             continue
             # libCST often wraps top-level asserts in a SimpleStatementLine whose
             # body contains a single Assert node. Support both shapes so the

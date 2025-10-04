@@ -23,6 +23,7 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, cast
@@ -47,22 +48,25 @@ from ._caplog_helpers import (
 )
 
 
-def _preserve_indented_block(orig_block: cst.BaseSmallStatement | None, new_block: cst.IndentedBlock) -> cst.IndentedBlock:
-    """Try to preserve wrapper metadata when constructing an IndentedBlock.
+def _preserve_indented_block(
+    orig_block: cst.BaseSmallStatement | None, new_block: cst.IndentedBlock
+) -> cst.IndentedBlock:
+    """Delegate to `assert_with_rewrites._preserve_indented_body_wrapper`.
 
-    This is a minimal helper to reduce formatting/token loss during
-    staged transformations. If preservation fails, returns the provided
-    new_block unchanged.
+    During staged migration prefer a central preservation helper in
+    `assert_with_rewrites` while keeping this symbol available for
+    existing callers. The implementation is a thin delegation.
     """
     try:
-        if orig_block is not None and hasattr(orig_block, "with_changes"):
-            try:
-                return orig_block.with_changes(body=new_block.body)  # type: ignore[arg-type]
-            except Exception:
-                pass
+        from . import assert_with_rewrites as _with_rewrites
+
+        res = _with_rewrites._preserve_indented_body_wrapper(orig_block, new_block)
+        if isinstance(res, cst.IndentedBlock):
+            return res
     except Exception:
         pass
     return new_block
+
 
 __all__ = ["AliasOutputAccess"]
 
@@ -482,8 +486,16 @@ def transform_assert_raises(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
-            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
-            new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
+            )
+            new_args.append(
+                cst.Arg(
+                    value=cst.Lambda(
+                        params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
+                    )
+                )
+            )
         else:
             # Standard case with just the callable
             if isinstance(code_to_test, cst.Lambda):
@@ -525,7 +537,9 @@ def transform_assert_raises_regex(node: cst.Call) -> cst.CSTNode:
             # Additional arguments for the callable
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[3:]]
             lambda_call = cst.Call(func=callable_arg, args=lambda_args)
-            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
+            )
             args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=lambda_block)))
         else:
             # Standard case with just the callable
@@ -605,8 +619,16 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
             # Add remaining arguments to the lambda call
             lambda_args = [cst.Arg(value=arg.value) for arg in node.args[2:]]
             lambda_call = cst.Call(func=code_to_test, args=lambda_args)
-            lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])]))
-            new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
+            lambda_block = _preserve_indented_block(
+                None, cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Expr(value=lambda_call)])])
+            )
+            new_args.append(
+                cst.Arg(
+                    value=cst.Lambda(
+                        params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
+                    )
+                )
+            )
         else:
             # Standard case with just the callable
             if isinstance(code_to_test, cst.Lambda):
@@ -621,7 +643,13 @@ def transform_assert_warns(node: cst.Call) -> cst.CSTNode:
                     lambda_body = cst.SimpleStatementLine(body=[cst.Expr(value=code_to_test)])
 
                 lambda_block = _preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body]))
-                new_args.append(cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block))))
+                new_args.append(
+                    cst.Arg(
+                        value=cst.Lambda(
+                            params=cst.Parameters(params=[]), body=_preserve_indented_block(None, lambda_block)
+                        )
+                    )
+                )
 
         return cst.Call(func=new_attr, args=new_args)
     return node
@@ -658,7 +686,12 @@ def transform_assert_warns_regex(node: cst.Call) -> cst.CSTNode:
 
             args: list[cst.Arg] = [
                 cst.Arg(value=exc),
-                cst.Arg(value=cst.Lambda(params=cst.Parameters(params=[]), body=_preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body])))),
+                cst.Arg(
+                    value=cst.Lambda(
+                        params=cst.Parameters(params=[]),
+                        body=_preserve_indented_block(None, cst.IndentedBlock(body=[lambda_body])),
+                    )
+                ),
                 cst.Arg(keyword=cst.Name(value="match"), value=match_arg),
             ]
         return cst.Call(func=cst.Attribute(value=cst.Name(value="pytest"), attr=cst.Name(value="warns")), args=args)
@@ -776,7 +809,21 @@ def transform_with_items(stmt: cst.With) -> tuple[cst.With, str | None, bool]:
         potentially rewritten With node; ``alias_name`` is an alias
         string or ``None``; ``changed`` is a boolean.
     """
-    return _with_rewrites.transform_with_items(stmt)
+    try:
+        import logging
+
+        _logger = logging.getLogger(__name__)
+        _logger.debug(
+            "assert_transformer.transform_with_items: delegating to _with_rewrites for %s", type(stmt).__name__
+        )
+    except Exception:
+        pass
+    res = _with_rewrites.transform_with_items(stmt)
+    try:
+        _logger.debug("assert_transformer.transform_with_items: result changed=%s", res[2])
+    except Exception:
+        pass
+    return res
 
 
 def get_with_alias_name(items: list[cst.WithItem]) -> str | None:
@@ -989,15 +1036,47 @@ def wrap_assert_in_block(statements: list[cst.BaseStatement], max_depth: int = 7
         applied. The function is conservative and preserves original
         nodes on error.
     """
+
+    _logger = logging.getLogger(__name__)
     out: list[cst.BaseStatement] = []
+
+    def _wrap_small_stmt_if_needed(node: cst.CSTNode) -> cst.BaseStatement:
+        try:
+            if isinstance(node, cst.BaseSmallStatement):
+                return cst.SimpleStatementLine(body=[node])
+        except Exception:
+            pass
+        if isinstance(node, cst.BaseStatement):
+            return node  # type: ignore[return-value]
+        try:
+            return cst.SimpleStatementLine(body=[node])  # type: ignore[arg-type]
+        except Exception:
+            return node  # type: ignore[return-value]
+
     i = 0
+    try:
+        _logger.debug("assert_transformer.wrap_assert_in_block: starting with %d statements", len(statements))
+    except Exception:
+        pass
 
     while i < len(statements):
         stmt = statements[i]
 
         try:
             processed_nodes, consumed = _process_statement_with_fallback(stmt, statements, i, max_depth)
-            out.extend(processed_nodes)
+            # Ensure small-statement nodes are wrapped before appending so
+            # they remain valid Statement nodes when placed in IndentedBlock.body.
+            for n in processed_nodes:
+                wrapped = _wrap_small_stmt_if_needed(n)
+                try:
+                    _logger.debug(
+                        "assert_transformer.wrap_assert_in_block: appending %s (wrapped=%s)",
+                        type(n).__name__,
+                        type(wrapped).__name__,
+                    )
+                except Exception:
+                    pass
+                out.append(wrapped)
             i += consumed
         except Exception as e:
             # Ultimate fallback - preserve original statement and continue
@@ -1105,34 +1184,17 @@ def _process_with_statement(stmt: cst.With, statements: list[cst.BaseStatement],
 
 
 def _safe_extract_statements(body_container, max_depth: int = 7) -> list[cst.BaseStatement] | None:
-    """Safely extract a list of statements from a body container, handling nested structures.
+    """Delegate to the staged-migration helper in `assert_with_rewrites`.
 
-    This handles cases where LibCST might create complex nested body structures
-    in deeply nested control flow statements.
-
-    Args:
-        body_container: An IndentedBlock or similar container that should have a body attribute
-        max_depth: Maximum depth to traverse when unwrapping nested structures
-
-    Returns:
-        List of statements if extractable, None otherwise
+    Keeping this symbol in the original module preserves the public
+    API while allowing the implementation to live in the new file.
     """
-    if body_container is None or not hasattr(body_container, "body"):
+    try:
+        from . import assert_with_rewrites as _with_rewrites
+
+        return _with_rewrites._safe_extract_statements(body_container, max_depth)
+    except Exception:
         return None
-
-    current = body_container.body
-
-    # Handle nested IndentedBlock structures that might occur in complex nesting
-    depth = 0
-    while depth < max_depth:
-        if isinstance(current, list | tuple):
-            return list(current)
-        elif hasattr(current, "body"):
-            current = current.body
-            depth += 1
-        else:
-            # Unexpected structure, give up
-            return None
 
     # Too deeply nested or unexpected structure
     return None

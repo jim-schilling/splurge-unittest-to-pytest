@@ -9,12 +9,12 @@ def _parse_module(src: str) -> cst.Module:
 
 def test_with_body_wrapper_preserved_after_rewrite():
     # baseline: simple with with a pass and a trailing assert
-    src = '''
+    src = """
 def test_fn(self):
     with self.assertLogs('m') as log:
         pass
     self.assertEqual(len(log.output), 1)
-'''
+"""
 
     mod = _parse_module(src)
     func = mod.body[0]
@@ -33,13 +33,13 @@ def test_fn(self):
 
 
 def test_nested_withs_and_empty_body_preserved():
-    src = '''
+    src = """
 def test_fn(self):
     with self.assertLogs('m') as log:
         with self.assertLogs('n') as log2:
             pass
     # no trailing asserts
-'''
+"""
     mod = _parse_module(src)
     func = mod.body[0]
     outer_with = func.body.body[0]
@@ -58,14 +58,14 @@ def test_fn(self):
 
 
 def test_with_with_comment_and_whitespace_preserved():
-    src = '''
+    src = """
 def test_fn(self):
     # leading comment
     with self.assertLogs('m') as log:
         # inner comment
         pass
     # trailing comment
-'''
+"""
     mod = _parse_module(src)
     func = mod.body[0]
     w = func.body.body[1] if len(func.body.body) > 1 else func.body.body[0]

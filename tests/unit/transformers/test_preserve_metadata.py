@@ -8,7 +8,7 @@ def _parse_module(src: str) -> cst.Module:
 
 
 def test_comments_and_blank_lines_preserved_after_with_rewrite():
-    src = '''
+    src = """
 def test_fn(self):
     # leading comment A
     with self.assertLogs('m') as log:
@@ -18,7 +18,7 @@ def test_fn(self):
     # trailing comment C
 
     self.assertEqual(len(log.output), 1)
-'''
+"""
 
     mod = _parse_module(src)
     func = mod.body[0]
@@ -41,14 +41,14 @@ def test_fn(self):
 
 
 def test_empty_body_with_comment_preserved():
-    src = '''
+    src = """
 def test_fn(self):
     with self.assertLogs('m') as log:
         # only a comment here
         pass
 
     self.assertEqual(len(log.output), 1)
-'''
+"""
     mod = _parse_module(src)
     func = mod.body[0]
     body_stmts = func.body.body

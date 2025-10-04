@@ -8,13 +8,13 @@ def _parse_module(src: str) -> cst.Module:
 
 
 def test_parentheses_lpar_rpar_preserved_on_comparison_rewrite():
-    src = '''
+    src = """
 def test_fn(self):
     with self.assertLogs('m') as log:
         pass
     # ensure parentheses around len(...) are preserved
     self.assertTrue((len(log.output) == 1))
-'''
+"""
     mod = _parse_module(src)
     func = mod.body[0]
     body_stmts = list(func.body.body)

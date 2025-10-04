@@ -932,9 +932,52 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         try:
             self._parse_to_module(transformed_code)
         except Exception as validation_error:
-            raise TransformationValidationError(str(validation_error)) from validation_error
+            # Conservative fallback: attempt a tiny, local whitespace repair
+            # for common cases where a block header (for example 'finally:')
+            # ends up followed by a non-indented statement which causes a
+            # parser INDENT error. Only attempt this when parsing fails so
+            # we avoid touching valid generated output.
+            repaired = self._attempt_syntax_repair(transformed_code)
+            try:
+                self._parse_to_module(repaired)
+                return repaired
+            except Exception:
+                raise TransformationValidationError(str(validation_error)) from validation_error
 
         return transformed_code
+
+    def _attempt_syntax_repair(self, transformed_code: str) -> str:
+        """Attempt minimal, local repairs when final parsing of transformed
+        code fails. This performs small, conservative whitespace fixes such
+        as indenting single-line bodies after 'finally:' so the parser can
+        accept the output. The function is intentionally small and only
+        used as a last-resort recovery step.
+
+        The heuristic implemented here looks for block headers like
+        'finally:', 'except:', or 'else:' followed by an immediately
+        non-indented line and inserts a single 4-space indent. This is
+        deliberately narrow to avoid broad, risky changes to the output.
+        """
+        import re
+
+        out = transformed_code
+
+        def _indent_after_header(match: re.Match) -> str:
+            indent = match.group("indent") or ""
+            header = match.group("header")
+            line = match.group("line")
+            return f"{indent}{header}\n{indent}    {line}"
+
+        # Only apply to single-line bodies immediately following the header.
+        # Make the pattern robust to both LF and CRLF line endings.
+        pattern = re.compile(
+            r"(?m)^(?P<indent>[ \t]*)(?P<header>(?:finally:|except[^:]*:|else:))\r?\n(?P<line>(?![ \t]).*)"
+        )
+        try:
+            repaired = pattern.sub(_indent_after_header, out)
+            return repaired
+        except Exception:
+            return transformed_code
 
     def _run_inheritance_cleanup(
         self,
@@ -978,8 +1021,18 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         """
         try:
             pos = self.get_metadata(PositionProvider, old_node)
+            # Log the replacement key for debugging when TRANSFORM_DEBUG enabled
+            try:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                key = self.replacement_registry.key_from_position(pos)
+                logger.debug("record_replacement: recording replacement at %s -> %s", key, type(new_node).__name__)
+            except Exception:
+                # ignore logging errors
+                pass
             self.replacement_registry.record(pos, new_node)
-            # recorded replacement (silent)
+            # recorded replacement
         except (AttributeError, TypeError, ValueError):
             # If metadata isn't available for some reason, skip recording
             pass
@@ -1387,6 +1440,26 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 if method_name in mapping:
                     try:
                         new_node = mapping[method_name](updated_node)
+                        # debug: log when a transform returns a statement-level replacement
+                        try:
+                            import logging
+
+                            logger = logging.getLogger(__name__)
+                            if isinstance(new_node, cst.BaseStatement):
+                                # attempt to get position key
+                                try:
+                                    pos = self.get_metadata(PositionProvider, original_node)
+                                    key = self.replacement_registry.key_from_position(pos)
+                                except Exception:
+                                    key = None
+                                logger.debug(
+                                    "leave_Call: transform for %s produced statement replacement at %s -> %s",
+                                    method_name,
+                                    key,
+                                    type(new_node).__name__,
+                                )
+                        except Exception:
+                            pass
                         # If we transformed to pytest.raises, ensure import is tracked
                         if method_name in {"assertRaises", "assertRaisesRegex"}:
                             self.needs_pytest_import = True
@@ -1409,6 +1482,18 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
                 # Note: preserve TestCase API calls like self.id() and self.shortDescription()
                 # to maintain compatibility with string-based fallback handling and tests.
 
+        return updated_node
+
+    def leave_With(self, original_node: cst.With, updated_node: cst.With) -> cst.With:
+        """Log With nodes encountered during traversal for debugging."""
+        try:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug("leave_With: original=%s", repr(original_node))
+            logger.debug("leave_With: updated=%s", repr(updated_node))
+        except Exception:
+            pass
         return updated_node
 
     def visit_Expr(self, node: cst.Expr) -> bool | None:
@@ -1538,7 +1623,12 @@ class UnittestToPytestCstTransformer(cst.CSTTransformer):
         """
         try:
             module = cst.parse_module(code)
-        except (AttributeError, TypeError, ValueError):
+        except Exception:
+            # If parsing fails (including ParserSyntaxError) return the
+            # original code unchanged so the caller's validation/repair
+            # logic can run. We intentionally catch all exceptions here
+            # as this helper is conservative and used only for a final
+            # normalization pass.
             return code
 
         try:

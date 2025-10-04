@@ -19,6 +19,8 @@ This software is released under the MIT License.
 
 from __future__ import annotations
 
+import logging
+
 import libcst as cst
 from libcst.metadata import PositionProvider
 
@@ -94,6 +96,7 @@ class ReplacementApplier(cst.CSTTransformer):
     def __init__(self, registry: ReplacementRegistry) -> None:
         super().__init__()
         self.registry = registry
+        self._logger = logging.getLogger(__name__)
 
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
         # If an expression-level replacement exists for this call, apply it.
@@ -101,6 +104,12 @@ class ReplacementApplier(cst.CSTTransformer):
             pos = self.get_metadata(PositionProvider, original_node)
             repl = self.registry.get(pos)
             if repl is not None and isinstance(repl, cst.BaseExpression):
+                try:
+                    pos = self.get_metadata(PositionProvider, original_node)
+                    key = self.registry.key_from_position(pos)
+                except Exception:
+                    key = None
+                self._logger.debug("ReplacementApplier: replacing Call at %s with %s", key, type(repl).__name__)
                 return repl  # replace the call expression
         except (AttributeError, TypeError, IndexError):
             pass
@@ -118,7 +127,78 @@ class ReplacementApplier(cst.CSTTransformer):
                     pos = self.get_metadata(PositionProvider, expr)
                     repl = self.registry.get(pos)
                     if repl is not None and isinstance(repl, cst.BaseStatement):
-                        return repl
+                        # Ensure the replacement is a SimpleStatementLine when
+                        # inserted into an IndentedBlock body. Some transforms
+                        # return small-statement nodes (for example cst.Assert)
+                        # which must be wrapped in a SimpleStatementLine to
+                        # preserve correct indentation/formatting when rendered.
+                        try:
+                            # Copy leading_lines metadata from the original
+                            leading = getattr(original_node, "leading_lines", ())
+                        except Exception:
+                            leading = ()
+
+                        try:
+                            pos = self.get_metadata(PositionProvider, expr)
+                            key = self.registry.key_from_position(pos)
+                        except Exception:
+                            key = None
+                        self._logger.debug(
+                            "ReplacementApplier: found statement-level replacement at %s -> %s",
+                            key,
+                            type(repl).__name__,
+                        )
+
+                        # If the replacement is already a SimpleStatementLine,
+                        # preserve it and copy metadata when possible.
+                        if isinstance(repl, cst.SimpleStatementLine):
+                            try:
+                                # Always return the recorded SimpleStatementLine.
+                                # If there are leading_lines on the original node,
+                                # copy them onto the replacement when possible so
+                                # formatting is preserved. If not, return the
+                                # replacement as-is.
+                                if hasattr(repl, "with_changes") and leading:
+                                    self._logger.debug(
+                                        "ReplacementApplier: preserving leading_lines on existing SimpleStatementLine at %s",
+                                        key,
+                                    )
+                                    return repl.with_changes(leading_lines=leading)
+                                self._logger.debug(
+                                    "ReplacementApplier: returning existing SimpleStatementLine at %s",
+                                    key,
+                                )
+                                return repl
+                            except Exception:
+                                return repl
+
+                        # Otherwise wrap the replacement into a SimpleStatementLine
+                        try:
+                            # Only wrap when the replacement is a BaseSmallStatement
+                            # (for example an Assert or Pass). Wrapping compound
+                            # statements (Try/With/If) into a SimpleStatementLine
+                            # is invalid. If the replacement is not a
+                            # BaseSmallStatement, return it directly.
+                            if isinstance(repl, cst.BaseSmallStatement):
+                                wrapped = cst.SimpleStatementLine(body=[repl])
+                                if leading and hasattr(wrapped, "with_changes"):
+                                    wrapped = wrapped.with_changes(leading_lines=leading)
+                                self._logger.debug(
+                                    "ReplacementApplier: wrapped %s into SimpleStatementLine at %s",
+                                    type(repl).__name__,
+                                    key,
+                                )
+                                return wrapped
+                            # Not a small-statement: return the replacement as-is
+                            self._logger.debug(
+                                "ReplacementApplier: replacement %s is not a small-statement, returning as-is",
+                                type(repl).__name__,
+                            )
+                            return repl
+                        except Exception:
+                            # If wrapping fails, return the raw replacement
+                            self._logger.exception("ReplacementApplier: failed to wrap replacement at %s", key)
+                            return repl
         except (AttributeError, TypeError, IndexError):
             pass
         return updated_node
