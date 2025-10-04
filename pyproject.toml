@@ -100,7 +100,7 @@ addopts = [
     "--cov-report=html",
     "-v",
     "--tb=short",
-    "-n", "auto",
+    "-n", "4",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
