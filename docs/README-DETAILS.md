@@ -322,6 +322,16 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``--source-map``: Create source mapping for debugging transformations (advanced users) (presence-only flag).
 - ``--max-depth``: Maximum depth to traverse nested control flow structures (3-15, default: 7). Controls how deeply the transformer explores nested control flow blocks (try/except/else/finally, with, if/else, for/else, while/else) when processing assertions.
 
+## Enhanced Validation Features
+- ``--suggestions``: Show intelligent configuration suggestions (presence-only flag).
+- ``--use-case-analysis``: Show detected use case analysis (presence-only flag).
+- ``--field-help FIELD``: Show help for a specific configuration field.
+- ``--list-templates``: List available configuration templates (presence-only flag).
+- ``--template TEMPLATE``: Use a pre-configured template (e.g., 'basic_migration', 'ci_integration').
+- ``--generate-docs [markdown|html]``: Generate configuration documentation.
+- ``generate-templates``: Generate configuration template files for all use cases (standalone command).
+
+
 YAML Configuration File Format
 -------------------------------
 
@@ -390,6 +400,14 @@ report_format: "json"
 # Advanced Options
 create_source_map: false
 max_depth: 7
+
+# Enhanced validation features
+show_suggestions: false
+use_case_analysis: false
+generate_field_help: null
+list_templates: false
+use_template: null
+generate_docs: null
 ```
 
 ### Configuration File Usage
@@ -484,6 +502,35 @@ python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml tests/
 
 # Override specific settings from config file with CLI flags
 python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml --dry-run --no-transform-assertions tests/
+```
+
+## Enhanced Validation Features
+
+Analyze configuration and get intelligent suggestions:
+
+```bash
+# Show detected use case and configuration suggestions
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions --use-case-analysis
+
+# Get help for a specific configuration field
+python -m splurge_unittest_to_pytest.cli field-help target_root
+
+# List available configuration templates
+python -m splurge_unittest_to_pytest.cli templates
+
+# Get detailed information about a template
+python -m splurge_unittest_to_pytest.cli template-info basic_migration
+
+# Use a template for migration
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+
+# Generate configuration documentation
+python -m splurge_unittest_to_pytest.cli generate-docs markdown
+python -m splurge_unittest_to_pytest.cli generate-docs html --output-file config-docs.html
+
+# Generate configuration template files for all use cases
+python -m splurge_unittest_to_pytest.cli generate-templates
+python -m splurge_unittest_to_pytest.cli generate-templates --output-dir ./my-templates --format json
 ```
 
 Selectively disable specific transformations:

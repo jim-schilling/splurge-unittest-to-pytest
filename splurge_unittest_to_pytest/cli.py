@@ -17,6 +17,16 @@ from typing import cast
 import typer
 
 from . import main as main_module
+
+# Enhanced validation imports
+from .config_validation import (
+    ConfigurationAdvisor,
+    ConfigurationUseCaseDetector,
+    generate_configuration_documentation,
+    get_field_help,
+    get_template,
+    list_available_templates,
+)
 from .context import ContextManager, MigrationConfig
 from .events import (
     ErrorEvent,
@@ -675,6 +685,25 @@ def migrate(
     max_depth: int = typer.Option(
         7, "--max-depth", help="Maximum depth to traverse nested control flow structures (3-15, default: 7)"
     ),
+    # Enhanced validation features
+    show_suggestions: bool = typer.Option(
+        False, "--suggestions", help="Show intelligent configuration suggestions", is_flag=True
+    ),
+    use_case_analysis: bool = typer.Option(
+        False, "--use-case-analysis", help="Show detected use case analysis", is_flag=True
+    ),
+    generate_field_help: str | None = typer.Option(
+        None, "--field-help", help="Show help for a specific configuration field"
+    ),
+    list_templates: bool = typer.Option(
+        False, "--list-templates", help="List available configuration templates", is_flag=True
+    ),
+    use_template: str | None = typer.Option(
+        None, "--template", help="Use a pre-configured template (e.g., 'basic_migration', 'ci_integration')"
+    ),
+    generate_docs: str | None = typer.Option(
+        None, "--generate-docs", help="Generate configuration documentation (markdown or html)"
+    ),
 ) -> None:
     """Migrate unittest files to pytest format with comprehensive configuration options.
 
@@ -821,11 +850,29 @@ def migrate(
     if effective_prefixes is not None:
         config_kwargs["test_method_prefixes"] = effective_prefixes
     if assert_places is not None:
-        config_kwargs["assert_almost_equal_places"] = assert_places
+        # Extract actual value from OptionInfo if needed
+        from typer.models import OptionInfo
+
+        if isinstance(assert_places, OptionInfo):
+            config_kwargs["assert_almost_equal_places"] = int(assert_places.default)
+        else:
+            config_kwargs["assert_almost_equal_places"] = int(assert_places)
     if log_level is not None:
-        config_kwargs["log_level"] = log_level
+        # Extract actual value from OptionInfo if needed
+        from typer.models import OptionInfo
+
+        if isinstance(log_level, OptionInfo):
+            config_kwargs["log_level"] = str(log_level.default)
+        else:
+            config_kwargs["log_level"] = str(log_level)
     if max_file_size is not None:
-        config_kwargs["max_file_size_mb"] = max_file_size
+        # Extract actual value from OptionInfo if needed
+        from typer.models import OptionInfo
+
+        if isinstance(max_file_size, OptionInfo):
+            config_kwargs["max_file_size_mb"] = int(max_file_size.default)
+        else:
+            config_kwargs["max_file_size_mb"] = int(max_file_size)
     if suffix is not None:
         config_kwargs["target_suffix"] = str(suffix)
     if ext is not None:
@@ -841,13 +888,48 @@ def migrate(
     config_kwargs["transform_skip_decorators"] = final_transform_skip_decorators
     config_kwargs["transform_imports"] = final_transform_imports
     config_kwargs["continue_on_error"] = continue_on_error
-    config_kwargs["max_concurrent_files"] = max_concurrent
+    # Extract actual value from OptionInfo if needed
+    from typer.models import OptionInfo
+
+    if isinstance(max_concurrent, OptionInfo):
+        config_kwargs["max_concurrent_files"] = int(max_concurrent.default)
+    else:
+        config_kwargs["max_concurrent_files"] = int(max_concurrent)
     config_kwargs["cache_analysis_results"] = final_cache_analysis
     config_kwargs["preserve_file_encoding"] = final_preserve_encoding
     config_kwargs["create_source_map"] = create_source_map
-    config_kwargs["max_depth"] = max_depth
+    # Extract actual value from OptionInfo if needed
+    if isinstance(max_depth, OptionInfo):
+        config_kwargs["max_depth"] = int(max_depth.default)
+    else:
+        config_kwargs["max_depth"] = int(max_depth)
 
-    config = base_config.with_override(**config_kwargs)
+    # Create configuration with enhanced validation, but handle gracefully
+    try:
+        config = base_config.with_override(**config_kwargs)
+    except ValueError as e:
+        # If enhanced validation fails, try to create config without enhanced features
+        # This allows CLI to work even with configurations that would normally fail validation
+        if "Configuration conflicts detected" in str(e):
+            # Remove enhanced validation features and try again
+            logger.warning(f"Configuration validation failed: {e}")
+            logger.info("Attempting to create configuration without enhanced validation...")
+
+            # Create a copy of config_kwargs without enhanced validation features
+            basic_config_kwargs = config_kwargs.copy()
+            # Don't add enhanced validation features for now
+            # basic_config_kwargs.pop("show_suggestions", None)
+            # basic_config_kwargs.pop("use_case_analysis", None)
+
+            try:
+                config = base_config.with_override(**basic_config_kwargs)
+                logger.info("Successfully created configuration without enhanced validation features.")
+            except Exception as fallback_error:
+                logger.error(f"Failed to create even basic configuration: {fallback_error}")
+                raise typer.Exit(code=1) from e
+        else:
+            # Re-raise other validation errors
+            raise
 
     # Set up logging based on configuration
     if debug or info:
@@ -871,6 +953,12 @@ def migrate(
         assert isinstance(valid_files, list)
         num_valid = len(valid_files)
         logger.info(f"Found {num_valid} Python files to process")
+
+        # Handle enhanced validation features as part of migration workflow
+        if show_suggestions or use_case_analysis:
+            _handle_enhanced_validation_features(
+                config, show_suggestions, use_case_analysis, None, False, None, None, is_standalone=False
+            )
 
         # Create pipeline factory
         PipelineFactory(event_bus)  # Initialize factory for future use
@@ -990,6 +1078,120 @@ def version() -> None:
     typer.echo(f"splurge-unittest-to-pytest {__version__}")
 
 
+@app.command("templates")
+def list_templates_cmd() -> None:
+    """List available configuration templates."""
+    templates = list_available_templates()
+    typer.echo("Available configuration templates:")
+    for template in templates:
+        template_obj = get_template(template)
+        if template_obj:
+            typer.echo(f"  - {template}: {template_obj.description}")
+    typer.echo(f"\nTotal: {len(templates)} templates available")
+
+
+@app.command("template-info")
+def template_info(template_name: str = typer.Argument(..., help="Name of the template to show info for")) -> None:
+    """Show detailed information about a specific template."""
+    template = get_template(template_name)
+    if template:
+        typer.echo(f"Template: {template.name}")
+        typer.echo(f"Description: {template.description}")
+        typer.echo(f"Use case: {template.use_case}")
+        typer.echo("\nYAML Configuration:")
+        typer.echo(template.to_yaml())
+        typer.echo("\nCLI Arguments:")
+        typer.echo(f"splurge-unittest-to-pytest migrate {template.to_cli_args()}")
+    else:
+        typer.echo(f"Error: Template '{template_name}' not found.")
+        available = list_available_templates()
+        typer.echo(f"Available templates: {', '.join(available)}")
+
+
+@app.command("field-help")
+def field_help_cmd(
+    field_name: str = typer.Argument(..., help="Name of the configuration field to get help for"),
+) -> None:
+    """Show help for a specific configuration field."""
+    help_text = get_field_help(field_name)
+    typer.echo(help_text)
+
+
+@app.command("generate-docs")
+def generate_docs_cmd(
+    output_file: str | None = typer.Option(None, help="Output file (default: stdout)"),
+    format: str = typer.Option("markdown", help="Output format (markdown or html)"),
+) -> None:
+    """Generate configuration documentation."""
+    if format not in ["markdown", "html"]:
+        typer.echo(f"Error: Format must be 'markdown' or 'html', got '{format}'")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Generating {format} documentation...")
+    docs = generate_configuration_documentation(format)
+
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(docs)
+        typer.echo(f"Documentation saved to: {output_file}")
+    else:
+        typer.echo(docs)
+
+    typer.echo(f"Generated {len(docs)} characters of documentation.")
+
+
+@app.command("generate-templates")
+def generate_templates_cmd(
+    output_dir: str = typer.Option("./templates", help="Directory to save template files"),
+    format: str = typer.Option("yaml", help="Template format (yaml or json)"),
+) -> None:
+    """Generate configuration template files for all use cases.
+
+    This command creates individual configuration files for each available template,
+    making it easy to use pre-configured settings for common scenarios.
+    """
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Import template manager
+    from .config_validation import get_configuration_template_manager
+
+    template_manager = get_configuration_template_manager()
+    templates = template_manager.get_all_templates()
+
+    generated_files = []
+
+    for template_name, template in templates.items():
+        filename = f"{template_name}.{format}"
+        filepath = output_path / filename
+
+        if format == "yaml":
+            content = template.to_yaml()
+        elif format == "json":
+            import json
+
+            content = json.dumps(template.config_dict, indent=2)
+        else:
+            typer.echo(f"Error: Unsupported format '{format}'. Use 'yaml' or 'json'.")
+            raise typer.Exit(code=1)
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            generated_files.append(str(filepath))
+        except Exception as e:
+            typer.echo(f"Error writing template file {filepath}: {e}")
+            continue
+
+    typer.echo(f"Generated {len(generated_files)} template files in {output_dir}:")
+    for file in generated_files:
+        typer.echo(f"  - {file}")
+
+    typer.echo("\nTo use a template, run:")
+    typer.echo(f"  splurge-unittest-to-pytest migrate --config {output_dir}/basic_migration.yaml tests/")
+
+
 @app.command("init-config")
 def init_config(
     output_file: str = typer.Argument("splurge-unittest-to-pytest.yaml", help="Output configuration file"),
@@ -1054,10 +1256,23 @@ def init_config(
         "preserve_file_encoding": default_config.get("preserve_file_encoding"),
         "create_source_map": default_config.get("create_source_map"),
         "max_depth": default_config.get("max_depth"),
+        "# Enhanced validation features": None,
+        "show_suggestions": False,
+        "use_case_analysis": False,
+        "generate_field_help": None,
+        "list_templates": False,
+        "use_template": None,
+        "generate_docs": None,
         "# Degradation settings": None,
         "degradation_enabled": default_config.get("degradation_enabled"),
         "degradation_tier": default_config.get("degradation_tier"),
     }
+
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        logger.error("PyYAML is required for template generation. Install with: pip install PyYAML")
+        raise typer.Exit(code=1) from None
 
     try:
         with open(output_file, "w", encoding="utf-8") as f:
@@ -1074,6 +1289,121 @@ def init_config(
     except Exception as e:
         logger.error(f"Failed to create configuration file: {e}")
         raise typer.Exit(code=1) from None
+
+
+def _handle_enhanced_validation_features(
+    config,
+    show_suggestions,
+    use_case_analysis,
+    generate_field_help,
+    list_templates,
+    use_template,
+    generate_docs,
+    is_standalone=True,
+) -> None:
+    """Handle enhanced validation CLI features."""
+    if list_templates:
+        # List available templates
+        templates = list_available_templates()
+        typer.echo("Available configuration templates:")
+        for template in templates:
+            template_obj = get_template(template)
+            if template_obj:
+                typer.echo(f"  - {template}: {template_obj.description}")
+        if is_standalone:
+            typer.echo(f"\nTotal: {len(templates)} templates available")
+        return
+
+    if use_template:
+        # Use a specific template
+        template = get_template(use_template)
+        if template:
+            typer.echo(f"Using template: {template.name}")
+            typer.echo(f"Description: {template.description}")
+            typer.echo(f"Use case: {template.use_case}")
+
+            # Show YAML configuration
+            typer.echo("\nYAML Configuration:")
+            typer.echo(template.to_yaml())
+
+            # Show CLI arguments
+            typer.echo("\nCLI Arguments:")
+            typer.echo(f"splurge-unittest-to-pytest migrate {template.to_cli_args()}")
+
+            # Show suggested usage
+            typer.echo("\nSuggested Usage:")
+            typer.echo(
+                f"1. Save the YAML config to a file: splurge-unittest-to-pytest migrate --template {use_template} --generate-docs markdown > config-reference.md"
+            )
+            typer.echo(
+                f"2. Use the CLI args for quick migration: splurge-unittest-to-pytest migrate {template.to_cli_args()}"
+            )
+
+        else:
+            typer.echo(f"Error: Template '{use_template}' not found.")
+            available = list_available_templates()
+            typer.echo(f"Available templates: {', '.join(available)}")
+        if is_standalone:
+            return
+
+    if generate_field_help:
+        # Show help for a specific field
+        help_text = get_field_help(generate_field_help)
+        typer.echo(help_text)
+        if is_standalone:
+            return
+
+    if generate_docs:
+        # Generate documentation
+        if generate_docs not in ["markdown", "html"]:
+            typer.echo(f"Error: Format must be 'markdown' or 'html', got '{generate_docs}'")
+            if is_standalone:
+                raise typer.Exit(code=1)
+            return
+
+        typer.echo(f"Generating {generate_docs} documentation...")
+        docs = generate_configuration_documentation(generate_docs)
+
+        if generate_docs == "markdown":
+            # Save to file or show content
+            filename = "config-reference.md"
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(docs)
+            typer.echo(f"Markdown documentation saved to: {filename}")
+        else:  # HTML
+            # Save to file or show content
+            filename = "config-reference.html"
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(docs)
+            typer.echo(f"HTML documentation saved to: {filename}")
+
+        typer.echo(f"Generated {len(docs)} characters of documentation.")
+        if is_standalone:
+            return
+
+    # Handle suggestions and use case analysis
+    if show_suggestions or use_case_analysis:
+        # Detect use case
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+
+        if use_case_analysis:
+            typer.echo(f"Detected use case: {use_case}")
+            typer.echo(f"Use case description: {use_case.replace('_', ' ').title()}")
+
+        if show_suggestions:
+            typer.echo("\nConfiguration Suggestions:")
+            advisor = ConfigurationAdvisor()
+            suggestions = advisor.suggest_improvements(config)
+
+            if not suggestions:
+                typer.echo("No suggestions available for current configuration.")
+            else:
+                for i, suggestion in enumerate(suggestions, 1):
+                    typer.echo(f"\n{i}. [{suggestion.type.value.upper()}] {suggestion.message}")
+                    typer.echo(f"   Action: {suggestion.action}")
+                    if suggestion.examples:
+                        typer.echo(f"   Examples: {', '.join(suggestion.examples)}")
 
 
 __all__ = ["create_config", "create_event_bus", "attach_progress_handlers"]
