@@ -1,0 +1,22 @@
+# Basic Configuration Template
+# This template provides a minimal configuration for basic unittest to pytest migration
+
+# Input and Output Configuration
+input_file: "tests/test_example.py"
+output_file: "converted/test_example_pytest.py"
+
+# Migration Options
+migrate_assertions: true
+migrate_setup_teardown: true
+migrate_test_discovery: true
+
+# Output Format
+output_format: "pytest"
+
+# Logging Configuration
+log_level: "INFO"
+verbose: false
+
+# Error Handling
+strict_mode: false
+continue_on_error: true

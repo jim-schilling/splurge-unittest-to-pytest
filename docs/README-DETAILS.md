@@ -32,6 +32,17 @@ Features
   accumulators or depends on loop ordering.
 - **Enhanced pattern support**: Custom test prefixes (``spec_``, ``should_``, ``it_``),
   nested test classes, custom setup methods, and advanced exception handling.
+- **Intelligent configuration system**: Automatically analyzes your project structure,
+  test patterns, and codebase characteristics to provide tailored migration suggestions
+  and configuration recommendations.
+- **Smart error recovery**: Comprehensive error handling with intelligent recovery
+  strategies, detailed error reporting, and suggestions for resolving configuration issues.
+- **Configuration templates**: Pre-built configuration templates for common migration
+  scenarios including CI/CD integration, large codebase migrations, and specialized testing frameworks.
+- **Interactive configuration builder**: Step-by-step guided configuration process
+  that analyzes your project and builds optimal settings through interactive prompts.
+- **Comprehensive field metadata**: Rich metadata system providing detailed help,
+  validation rules, examples, and cross-references for all configuration options.
 - CST-based transformations using ``libcst`` for stable, semantics-preserving edits.
 - Preserves class-structured tests that inherit from ``unittest.TestCase`` by default to
 	maintain class scope and fixtures unless a conversion is explicitly requested.
@@ -48,6 +59,104 @@ Features
 - Generated code is always formatted with ``isort`` and ``black`` before writing.
 - Import optimization and safe removal of unused ``unittest`` imports while
 	detecting dynamic import patterns to avoid unsafe removals.
+
+Intelligent Configuration System
+---------------------------------
+The tool includes an advanced configuration system that intelligently analyzes your project and provides tailored recommendations for optimal migration settings.
+
+### Intelligent Suggestions
+Use ``--suggestions`` to get intelligent configuration suggestions based on your project's characteristics:
+
+```bash
+# Get suggestions for your project
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+```
+
+The system analyzes:
+- Project structure and test organization
+- Test method naming patterns
+- Code complexity and file sizes
+- Import patterns and dependencies
+- Custom setup/teardown patterns
+
+### Use Case Analysis
+Use ``--use-case-analysis`` to get a comprehensive analysis of your project's migration needs:
+
+```bash
+# Analyze your project's use case
+python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+```
+
+This provides:
+- Detected migration complexity level
+- Recommended configuration templates
+- Potential challenges and solutions
+- Performance optimization suggestions
+
+### Configuration Templates
+Pre-built templates for common scenarios:
+
+```bash
+# List available templates
+python -m splurge_unittest_to_pytest.cli migrate --list-templates
+
+# Use a specific template
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+```
+
+Available templates:
+- ``basic_migration``: Standard unittest to pytest conversion
+- ``ci_integration``: Optimized for CI/CD pipelines with parallel processing
+- ``large_codebase``: Handles large projects with memory optimization
+- ``bdd_framework``: Specialized for BDD-style tests (spec_, should_, it_)
+- ``legacy_system``: Conservative settings for legacy codebases
+
+### Interactive Configuration Builder
+For complex projects, use the interactive builder to create optimal configurations:
+
+```bash
+# Start interactive configuration
+python -m splurge_unittest_to_pytest.cli init-config --interactive my-config.yaml
+```
+
+The builder will:
+- Analyze your project structure
+- Ask targeted questions about your needs
+- Generate a comprehensive configuration file
+- Provide explanations for each setting
+
+### Field Help System
+Get detailed help for any configuration field:
+
+```bash
+# Get help for a specific field
+python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+```
+
+Each field includes:
+- Detailed description
+- Valid value ranges
+- Default values
+- Usage examples
+- Related configuration options
+
+### Configuration Documentation Generation
+Generate comprehensive documentation for all configuration options:
+
+```bash
+# Generate markdown documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+
+# Generate HTML documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs html
+```
+
+### Smart Error Recovery
+The system provides intelligent error recovery with:
+- Detailed error categorization
+- Suggested fixes for common issues
+- Configuration validation with helpful messages
+- Recovery strategies for corrupted configurations
 
 Supported unittest to pytest conversion candidates
 -----------------------------------------------
@@ -401,13 +510,22 @@ report_format: "json"
 create_source_map: false
 max_depth: 7
 
-# Enhanced validation features
-show_suggestions: false
+# Intelligent Configuration System
+intelligent_suggestions: false
 use_case_analysis: false
-generate_field_help: null
-list_templates: false
-use_template: null
-generate_docs: null
+field_help: null  # Set to a field name to get help (e.g., "max_file_size_mb")
+list_available_templates: false
+configuration_template: null  # Set to template name (e.g., "ci_integration")
+generate_config_docs: null  # Set to "markdown" or "html" to generate docs
+
+# Enhanced Validation and Error Recovery
+enable_smart_error_recovery: true
+error_recovery_strategies:
+  - "suggest_alternatives"
+  - "provide_examples"
+  - "validate_dependencies"
+comprehensive_field_metadata: true
+interactive_config_builder: false
 ```
 
 ### Configuration File Usage
@@ -504,6 +622,54 @@ python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml tests/
 python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml --dry-run --no-transform-assertions tests/
 ```
 
+## Intelligent Configuration System
+
+Get intelligent suggestions for your project:
+
+```bash
+# Analyze project and show configuration suggestions
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+
+# Get comprehensive use case analysis
+python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+
+# Combine suggestions with analysis
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions --use-case-analysis
+```
+
+Use configuration templates:
+
+```bash
+# List all available templates
+python -m splurge_unittest_to_pytest.cli migrate --list-templates
+
+# Use a specific template for CI/CD integration
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+
+# Use template for large codebase migration
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template large_codebase
+```
+
+Get help and documentation:
+
+```bash
+# Get detailed help for a configuration field
+python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+
+# Generate markdown documentation for all configuration options
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+
+# Generate HTML documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs html
+```
+
+Interactive configuration:
+
+```bash
+# Create configuration interactively (guided setup)
+python -m splurge_unittest_to_pytest.cli init-config --interactive my-project-config.yaml
+```
+
 ## Enhanced Validation Features
 
 Analyze configuration and get intelligent suggestions:
@@ -513,23 +679,17 @@ Analyze configuration and get intelligent suggestions:
 python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions --use-case-analysis
 
 # Get help for a specific configuration field
-python -m splurge_unittest_to_pytest.cli field-help target_root
+python -m splurge_unittest_to_pytest.cli migrate --field-help target_root
 
 # List available configuration templates
-python -m splurge_unittest_to_pytest.cli templates
-
-# Get detailed information about a template
-python -m splurge_unittest_to_pytest.cli template-info basic_migration
+python -m splurge_unittest_to_pytest.cli migrate --list-templates
 
 # Use a template for migration
 python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
 
 # Generate configuration documentation
-python -m splurge_unittest_to_pytest.cli generate-docs markdown
-python -m splurge_unittest_to_pytest.cli generate-docs html --output-file config-docs.html
-
-# Generate configuration template files for all use cases
-python -m splurge_unittest_to_pytest.cli generate-templates
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+```
 python -m splurge_unittest_to_pytest.cli generate-templates --output-dir ./my-templates --format json
 
 # Error Recovery and Analysis

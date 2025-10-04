@@ -47,6 +47,16 @@ an alternate location.
   accumulators or depends on loop ordering.
 - **Enhanced pattern support**: Custom test prefixes (``spec_``, ``should_``, ``it_``),
   nested test classes, custom setup methods, and advanced exception handling.
+- **Intelligent Configuration System**: Advanced validation with cross-field rules,
+  use case detection, and intelligent suggestions for optimal settings.
+- **Smart Error Recovery**: Context-aware error classification, actionable suggestions,
+  and step-by-step recovery workflows for complex migration scenarios.
+- **Configuration Templates**: Pre-configured templates for common scenarios
+  (basic migration, CI/CD integration, batch processing, advanced analysis).
+- **Interactive Configuration Builder**: Guided configuration process with
+  intelligent defaults based on project analysis.
+- **Comprehensive Documentation**: Auto-generated configuration documentation
+  with examples, constraints, and common mistakes for all 30+ settings.
 - Safe CST-based transformations using `libcst` to preserve formatting and
   minimize behavior changes.
 - Dry-run preview modes: print converted code, show unified diffs
@@ -76,6 +86,13 @@ See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
 - ``--prefix PREFIX``: Allowed test method prefixes (repeatable; default: ``test``).
   Supports custom prefixes like ``spec``, ``should``, ``it`` for modern testing frameworks.
+- ``-c, --config FILE``: YAML configuration file to load settings from (overrides CLI defaults).
+- ``--suggestions``: Show intelligent configuration suggestions (presence-only flag).
+- ``--use-case-analysis``: Show detected use case analysis (presence-only flag).
+- ``--field-help FIELD``: Show help for a specific configuration field.
+- ``--list-templates``: List available configuration templates (presence-only flag).
+- ``--template TEMPLATE``: Use a pre-configured template (e.g., 'basic_migration', 'ci_integration').
+- ``--generate-docs [markdown|html]``: Generate configuration documentation.
 
 For the full set of flags and detailed help, run:
 
@@ -126,6 +143,42 @@ python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix spec --dry-run
 
 # Support multiple prefixes for hybrid test suites
 python -m splurge_unittest_to_pytest.cli migrate tests/ --prefix test --prefix spec --prefix should
+```
+
+Use intelligent configuration suggestions and analysis:
+
+```bash
+# Get intelligent suggestions for your project
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+
+# Analyze your project's use case and get tailored recommendations
+python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+
+# Get help for a specific configuration field
+python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+```
+
+Use configuration templates for common scenarios:
+
+```bash
+# List available templates
+python -m splurge_unittest_to_pytest.cli migrate --list-templates
+
+# Use a pre-configured template
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+
+# Generate configuration documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+```
+
+Use YAML configuration files for complex setups:
+
+```bash
+# Create a configuration file with all settings
+python -m splurge_unittest_to_pytest.cli init-config my-migration.yaml
+
+# Use the configuration file
+python -m splurge_unittest_to_pytest.cli migrate --config my-migration.yaml tests/
 ```
 
 ## Programmatic usage (quick)

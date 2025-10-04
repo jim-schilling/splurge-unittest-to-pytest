@@ -1,6 +1,6 @@
 # Changelog
 
-## [2025.0.7] 2025-10-04
+## [2025.1.0] 2025-10-04
 
 ### Intelligent Configuration Assistant (Phase 3 Complete)
 
