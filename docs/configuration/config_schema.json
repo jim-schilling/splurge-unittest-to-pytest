@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Splurge Configuration Schema",
+  "description": "Machine-readable JSON Schema generated from config_metadata.py. Use this to validate configuration files and to provide editor autocompletion.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "target_root": {
+      "type": ["string", "null"],
+      "description": "Root directory where transformed files will be written. If null, files are written alongside originals with a suffix.",
+      "examples": ["./output", "/tmp/migrated", "migrated_tests"],
+      "default": null
+    },
+    "root_directory": {
+      "type": ["string", "null"],
+      "description": "Root directory to scan for test files. If null, uses current working directory.",
+      "examples": ["./tests", "src/tests", "/path/to/project/tests"],
+      "default": null
+    },
+    "file_patterns": {
+      "type": ["array", "string"],
+      "description": "Glob patterns to match test files for transformation.",
+      "items": {"type": "string"},
+      "examples": ["test_*.py", ["test_*.py", "spec_*.py"], "**/test_*.py"],
+      "default": ["test_*.py"]
+    },
+    "recurse_directories": {
+      "type": "boolean",
+      "description": "Whether to recursively scan subdirectories for test files.",
+      "default": true
+    },
+    "backup_originals": {"type": "boolean", "description": "Whether to create backup copies of original files before transformation.", "default": true},
+    "backup_root": {"type": ["string", "null"], "description": "Directory where backup files will be stored. If null, backups are stored alongside originals.", "default": null},
+    "target_suffix": {"type": "string", "description": "Suffix to append to transformed filenames (used when target_root is null).", "default": ""},
+    "target_extension": {"type": ["string", "null"], "description": "File extension for transformed files. If null, uses original extension.", "default": null},
+    "line_length": {"type": ["integer", "null"], "description": "Maximum line length for formatted output code.", "default": 120, "minimum": 60, "maximum": 200},
+    "assert_almost_equal_places": {"type": "integer", "description": "Default decimal places for assertAlmostEqual transformations.", "default": 7, "minimum": 1, "maximum": 15},
+    "log_level": {"type": "string", "description": "Logging verbosity level for transformation process.", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"], "default": "INFO"},
+    "max_file_size_mb": {"type": "integer", "description": "Maximum file size to process in megabytes.", "default": 10, "minimum": 1, "maximum": 100},
+    "dry_run": {"type": "boolean", "description": "Perform a dry run without writing any files.", "default": false},
+    "fail_fast": {"type": "boolean", "description": "Stop processing on the first error encountered.", "default": false},
+    "format_output": {"type": "boolean", "description": "Whether to format output code with black and isort.", "default": true},
+    "remove_unused_imports": {"type": "boolean", "description": "Whether to remove unused unittest imports after transformation.", "default": true},
+    "preserve_import_comments": {"type": "boolean", "description": "Whether to preserve comments in import sections.", "default": true},
+    "transform_assertions": {"type": "boolean", "description": "Whether to transform unittest assertions to pytest equivalents.", "default": true},
+    "transform_setup_teardown": {"type": "boolean", "description": "Whether to convert setUp/tearDown methods to pytest fixtures.", "default": true},
+    "transform_subtests": {"type": "boolean", "description": "Whether to attempt subTest conversions to pytest parametrize.", "default": true},
+    "transform_skip_decorators": {"type": "boolean", "description": "Whether to convert unittest skip decorators to pytest equivalents.", "default": true},
+    "transform_imports": {"type": "boolean", "description": "Whether to transform unittest imports to pytest equivalents.", "default": true},
+    "continue_on_error": {"type": "boolean", "description": "Whether to continue processing other files when one file fails.", "default": false},
+    "max_concurrent_files": {"type": "integer", "description": "Maximum number of files to process concurrently.", "default": 1, "minimum": 1, "maximum": 50},
+    "cache_analysis_results": {"type": "boolean", "description": "Whether to cache analysis results for improved performance.", "default": true},
+    "preserve_file_encoding": {"type": "boolean", "description": "Whether to preserve original file encoding in output files.", "default": true},
+    "create_source_map": {"type": "boolean", "description": "Whether to create source mapping for debugging transformations.", "default": false},
+    "max_depth": {"type": "integer", "description": "Maximum depth to traverse nested control flow structures.", "default": 7, "minimum": 3, "maximum": 15},
+    "test_method_prefixes": {"type": ["array", "string"], "description": "Prefixes that identify test methods for transformation.", "items": {"type": "string"}, "default": ["test", "spec", "should", "it"]},
+    "parametrize": {"type": "boolean", "description": "Whether to convert unittest subTests to pytest parametrize.", "default": true},
+    "parametrize_ids": {"type": "boolean", "description": "Whether to add ids parameter to parametrize decorators.", "default": false},
+    "parametrize_type_hints": {"type": "boolean", "description": "Whether to add type hints to parametrize parameters.", "default": false},
+    "degradation_enabled": {"type": "boolean", "description": "Whether to enable degradation for failed transformations.", "default": true},
+    "degradation_tier": {"type": "string", "description": "Degradation tier determining fallback behavior (essential, advanced, experimental).", "enum": ["essential", "advanced", "experimental"], "default": "advanced"}
+  },
+  "required": ["file_patterns", "transform_assertions", "transform_imports", "test_method_prefixes"],
+  "examples": [
+    {
+      "file_patterns": ["test_*.py"],
+      "dry_run": true,
+      "format_output": true,
+      "transform_assertions": true
+    }
+  ]
+}

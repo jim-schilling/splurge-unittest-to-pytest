@@ -57,6 +57,24 @@ class PipelineContext:
         return dataclasses.replace(self, metadata=new_metadata)
 ```
 
+## Configuration Subsystem
+
+The configuration subsystem was expanded to support several cooperating components:
+
+- `Configuration Validator` — enforces cross-field rules and produces structured
+    `ValidationError` objects with field-level hints and actionable suggestions.
+- `Suggestion Engine` — analyzes project features (via `ProjectAnalyzer`) and
+    proposes recommended templates and field overrides.
+- `Template Manager` — loads YAML/JSON templates and merges them with CLI flags
+    and interactive answers.
+- `IntegratedConfigurationManager` — merges CLI flags, templates, and
+    interactive responses, validates the merged result, and returns either a
+    `ValidatedMigrationConfig` or a detailed list of validation errors and warnings.
+
+The CLI and programmatic callers use this subsystem to produce a final,
+validated configuration or to surface helpful guidance for correcting inputs.
+
+
 ### Result Container
 Type-safe result handling with comprehensive error information.
 
@@ -289,6 +307,27 @@ class AnalyzeUnittestPatternsStep(Step[cst.Module, UnittestAnalysis]):
             metadata={"patterns_found": len(analysis.patterns)}
         )
 ```
+
+### Suggestion Engine
+
+The `Suggestion Engine` consumes `UnittestAnalysis` and `ProjectAnalyzer` reports
+and returns ranked suggestions that can be presented to users or applied by the
+`IntegratedConfigurationManager`.
+
+```python
+class Suggestion:
+    name: str
+    reason: str
+    fields: Dict[str, Any]  # suggested overrides
+    score: float
+
+suggestions = suggestion_engine.suggest(project_report)
+```
+
+Each suggestion includes a small set of field overrides and a short rationale.
+Integrations (CLI or IDE) may present these with `--suggestions` or during the
+interactive configuration flow.
+
 
 ### Phase 2: Transformation to IR
 ```python
@@ -747,6 +786,51 @@ class ErrorRecoveryStrategy:
         # Create basic test structure, report manual intervention needed
         pass
 ```
+
+## EventBus: explicit events and payload schemas
+
+The `EventBus` emits a set of well-known, namespaced events. Each event is
+represented as a simple object with `name: str` and `payload: Dict[str, Any]`.
+
+Official event names and payloads:
+
+- `file.migrate.started` — {"source": str, "timestamp": float, "run_id": str}
+- `file.migrate.completed` — {"source": str, "target": Optional[str], "wrote": bool, "duration_s": float, "run_id": str}
+- `step.started` — {"step": str, "source": str, "timestamp": float, "context": Dict[str, Any]}
+- `step.completed` — {"step": str, "source": str, "duration_s": float, "status": "success"|"warning"|"error", "metadata": Dict[str, Any]}
+- `migration.summary` — {"run_id": str, "files_processed": int, "errors": int, "warnings": int}
+- `error.reported` — {"category": str, "location": Optional[str], "message": str, "suggestions": List[str]}
+
+Event handlers must be resilient; exceptions from handlers are logged and do
+not interrupt the pipeline. Handlers receive the raw event object and may
+inspect `event.name` and `event.payload`.
+
+Sequence diagram: Event emission during file migration
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant Pipeline
+    participant EventBus
+    participant Logger
+
+    CLI->>Pipeline: migrate_files([src])
+    Pipeline->>EventBus: publish(file.migrate.started)
+    EventBus->>Logger: log(started)
+
+    Pipeline->>Pipeline: run parse/transform/generate
+    Pipeline->>EventBus: publish(step.completed)
+    EventBus->>Logger: log(step completed)
+
+    Pipeline->>EventBus: publish(file.migrate.completed)
+    EventBus->>Logger: log(completed)
+    EventBus->>CLI: publish(migration.summary)
+```
+
+![Event sequence diagram](../assets/event_sequence.svg)
+
+Figure: Event emission sequence (SVG includes mermaid source as fallback).
+
 
 ## Performance Considerations
 

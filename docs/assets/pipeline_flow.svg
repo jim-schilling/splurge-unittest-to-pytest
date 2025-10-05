@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="260">
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="16" y="22" font-family="monospace" font-size="12" fill="#111">Pipeline flow (mermaid source):</text>
+  <foreignObject x="16" y="36" width="968" height="200">
+    <pre xmlns="http://www.w3.org/1999/xhtml" style="font-family: monospace; font-size: 11px;">
+flowchart TB
+    subgraph "Input Processing"
+        A[unittest Source] --&gt; B[libcst Parse]
+        B --&gt; C[Syntax Tree]
+    end
+
+    subgraph "Pattern Recognition"
+        C --&gt; D[TestCase Scanner]
+        C --&gt; E[Method Scanner]
+        C --&gt; F[Assertion Scanner]
+        C --&gt; G[Import Scanner]
+    end
+
+    subgraph "IR Generation"
+        H[Class Patterns] --&gt; L[TestClass IR]
+    end
+    </pre>
+  </foreignObject>
+</svg>

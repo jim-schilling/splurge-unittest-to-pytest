@@ -72,6 +72,17 @@ an alternate location.
 
 See `docs/README-DETAILS.md` for a comprehensive feature and CLI reference.
 
+Programmatic API and developer docs
+
+For programmatic usage, templates, and end-to-end examples see the API docs:
+
+- `docs/api/README.md` — programmatic API index with examples and workflows
+- `docs/api/programmatic_api.md` — migrate() usage and EventBus example
+- `docs/api/configuration_api.md` — configuration schema, templates, and validation notes
+- `docs/api/cli_mapping.md` — CLI to programmatic mapping and CI example
+- `docs/api/end_to_end_workflow.md` — a complete end-to-end programmatic workflow
+- `docs/configuration/configuration-reference.md` — full configuration reference (auto-generated)
+
 ## Common CLI options (summary)
 
 - ``-d, --dir DIR``: Root directory for discovery

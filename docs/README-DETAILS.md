@@ -15,10 +15,30 @@ Table of contents
 - Safety and limitations
 - Developer notes
 
+- Design & Specs
+	- `docs/specs/architecture_diagrams.md`
+	- `docs/specs/technical_specification.md`
+
 Overview
 --------
 ``splurge-unittest-to-pytest`` converts Python ``unittest``-style tests to
 ``pytest``-style tests using conservative, AST/CST-based transformations
+Programmatic API docs
+---------------------
+
+See the API docs for detailed programmatic examples and the end-to-end workflow:
+
+- `docs/api/programmatic_api.md`
+- `docs/api/configuration_api.md`
+- `docs/api/cli_mapping.md`
+- `docs/api/end_to_end_workflow.md`
+
+Configuration docs
+------------------
+
+- `docs/configuration/README.md` — short index for configuration docs
+- `docs/configuration/configuration-reference.md` — master configuration reference
+
 implemented with ``libcst``. The project features a **multi-pass analyzer**
 that intelligently analyzes test patterns and applies transformations with
 high confidence, preserving semantics where code mutates accumulators or
@@ -933,6 +953,29 @@ Developer notes
 	avoiding false-positives caused by Typer's runtime OptionInfo objects.
 	See `docs/developer/mypy-overrides.md` for details and instructions to
 	re-enable strict checking for the CLI module during reviews.
+
+Configuration guidance
+----------------------
+
+If you need to modify configuration templates or the generated
+configuration reference, follow these steps:
+
+1. Edit or add template files under the `templates/` directory (YAML format).
+2. Run the configuration doc generator to update `docs/configuration/configuration-reference.md`:
+
+```bash
+python -m splurge_unittest_to_pytest generate-config-docs --output docs/configuration
+```
+
+3. Review the generated file and update any examples in `docs/configuration/` as needed.
+4. Run the test suite and formatting tools before submitting a PR:
+
+```bash
+python -m pytest -q
+python -m ruff check --fix
+```
+
+If you want, we can add a small Makefile or CLI helper to automate these steps.
 
 Recent updates
 --------------

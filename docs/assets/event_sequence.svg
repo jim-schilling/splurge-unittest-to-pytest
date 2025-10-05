@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="220">
+  <rect width="100%" height="100%" fill="#f8f9fa" />
+  <text x="16" y="24" font-family="monospace" font-size="12" fill="#222">Event sequence (mermaid source included as fallback):</text>
+  <foreignObject x="16" y="36" width="768" height="168">
+    <pre xmlns="http://www.w3.org/1999/xhtml" style="font-family: monospace; font-size: 11px;">
+sequenceDiagram
+    participant CLI
+    participant Pipeline
+    participant EventBus
+    participant Subscriber
+
+    CLI-&gt;&gt;Pipeline: migrate(files)
+    Pipeline-&gt;&gt;EventBus: publish(file.migrate.started)
+    EventBus-&gt;&gt;Subscriber: notify
+    Pipeline-&gt;&gt;EventBus: publish(step.completed)
+    EventBus-&gt;&gt;Subscriber: notify
+    Pipeline-&gt;&gt;EventBus: publish(file.migrate.completed)
+    EventBus-&gt;&gt;Subscriber: notify
+    </pre>
+  </foreignObject>
+</svg>
