@@ -1,0 +1,54 @@
+# Comprehensive Migration Template
+# This template provides a full-featured configuration for complex unittest to pytest migration
+
+# Input and Output Configuration
+input_file: "tests/"
+output_file: "converted/"
+input_format: "auto"
+output_format: "pytest"
+
+# Migration Options - All enabled for comprehensive conversion
+migrate_assertions: true
+migrate_setup_teardown: true
+migrate_test_discovery: true
+migrate_class_fixtures: true
+migrate_module_fixtures: true
+migrate_parametrized_tests: true
+migrate_mock_usage: true
+migrate_subtests: true
+
+# Advanced Migration Features
+preserve_comments: true
+add_type_hints: true
+optimize_imports: true
+generate_fixtures: true
+
+# Code Quality and Analysis
+enable_static_analysis: true
+detect_code_smells: true
+suggest_improvements: true
+
+# Logging and Debugging
+log_level: "DEBUG"
+verbose: true
+debug_mode: true
+
+# Error Handling and Recovery
+strict_mode: false
+continue_on_error: true
+backup_original_files: true
+
+# Performance and Resource Management
+max_file_size: 10485760  # 10MB
+max_workers: 4
+memory_limit: 1073741824  # 1GB
+
+# Output Customization
+include_original_code: false
+add_migration_comments: true
+format_code: true
+
+# Integration and Compatibility
+python_version: "3.8"
+pytest_version: "7.0"
+unittest_compatibility: true

@@ -1,0 +1,13 @@
+# Development Debugging
+# Configuration optimized for development and debugging workflows
+
+create_source_map: true
+degradation_tier: experimental
+dry_run: true
+file_patterns:
+- test_*.py
+format_output: true
+log_level: DEBUG
+max_file_size_mb: 5
+recurse_directories: false
+remove_unused_imports: false

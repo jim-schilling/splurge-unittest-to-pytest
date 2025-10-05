@@ -1,0 +1,51 @@
+# CI/CD Integration Template
+# This template is designed for automated migration in CI/CD pipelines
+
+# Input and Output Configuration
+input_file: "${INPUT_PATH}"  # Environment variable for flexibility
+output_file: "${OUTPUT_PATH}"
+input_format: "auto"
+output_format: "pytest"
+
+# Migration Options - Conservative settings for CI stability
+migrate_assertions: true
+migrate_setup_teardown: true
+migrate_test_discovery: true
+migrate_class_fixtures: false  # Disable potentially complex transformations
+migrate_module_fixtures: false
+
+# CI/CD Specific Configuration
+ci_mode: true
+fail_on_warnings: false
+timeout: 600  # 10 minutes total
+
+# Logging Configuration
+log_level: "${LOG_LEVEL:-INFO}"
+verbose: false
+log_file: "migration_ci.log"
+
+# Error Handling - Strict for CI
+strict_mode: false
+continue_on_error: true
+exit_on_first_error: false
+
+# Quality Gates
+validate_output: true
+run_tests_after_conversion: true
+test_timeout: 120
+require_test_success: true
+
+# Artifact Management
+preserve_artifacts: true
+artifact_dir: "migration-artifacts"
+generate_report: true
+report_format: "json"
+
+# Resource Constraints
+max_workers: 2  # Conservative for CI environments
+memory_limit: 1073741824  # 1GB
+max_file_size: 5242880  # 5MB
+
+# Notification and Integration
+slack_webhook: "${SLACK_WEBHOOK}"  # Optional Slack notifications
+email_notifications: "${EMAIL_RECIPIENTS}"

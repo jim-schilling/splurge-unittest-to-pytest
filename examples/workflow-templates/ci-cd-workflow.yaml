@@ -1,0 +1,174 @@
+# CI/CD Migration Workflow
+# This workflow is designed for automated migration in continuous integration pipelines
+
+name: "CI/CD Migration Workflow"
+description: "Automated workflow for migration in CI/CD environments"
+version: "1.0.0"
+
+# CI/CD Environment Requirements
+environment:
+  required_tools:
+    - "python: 3.10+"
+    - "pytest: 6.0+"
+    - "git: 2.0+"
+  required_permissions:
+    - "read: repository"
+    - "write: repository"
+    - "create: pull_request"
+  timeout: "30m"
+
+# Workflow Triggers
+triggers:
+  - "manual: Migration requested via API"
+  - "scheduled: Weekly migration check"
+  - "push: Migration label added to PR"
+  - "webhook: External migration trigger"
+
+# Pipeline Stages
+stages:
+  - name: "preparation"
+    description: "Set up CI environment and validate prerequisites"
+    steps:
+      - name: "checkout_code"
+        action: "git_checkout"
+        config:
+          depth: 1
+          fetch_tags: true
+
+      - name: "setup_python"
+        action: "setup_python"
+        config:
+          version: "3.9"
+          cache: "pip"
+
+      - name: "install_dependencies"
+        action: "pip_install"
+        config:
+          requirements_file: "requirements.txt"
+          extra_packages: ["pytest", "pytest-cov"]
+
+      - name: "validate_environment"
+        action: "run_script"
+        config:
+          script: "scripts/validate_ci_environment.py"
+
+  - name: "analysis"
+    description: "Analyze codebase and plan migration"
+    steps:
+      - name: "static_analysis"
+        action: "run_migration"
+        config:
+          mode: "analysis_only"
+          output_format: "json"
+          report_file: "analysis_report.json"
+
+      - name: "risk_assessment"
+        action: "run_script"
+        config:
+          script: "scripts/assess_migration_risk.py"
+          input_file: "analysis_report.json"
+
+      - name: "generate_plan"
+        action: "run_script"
+        config:
+          script: "scripts/generate_migration_plan.py"
+
+  - name: "migration"
+    description: "Execute migration with safeguards"
+    steps:
+      - name: "create_feature_branch"
+        action: "git_create_branch"
+        config:
+          branch_name: "migration/${GITHUB_RUN_ID}"
+          base_branch: "main"
+
+      - name: "run_migration"
+        action: "run_migration"
+        config:
+          config_file: "examples/config-templates/ci-cd-integration.yaml"
+          continue_on_error: true
+          backup_original: true
+
+      - name: "validate_migration"
+        action: "run_tests"
+        config:
+          test_command: "pytest --tb=short --cov"
+          timeout: "10m"
+          fail_on_error: true
+
+  - name: "quality_gates"
+    description: "Ensure migration meets quality standards"
+    steps:
+      - name: "code_quality_check"
+        action: "run_script"
+        config:
+          script: "scripts/check_code_quality.py"
+          quality_threshold: 85
+
+      - name: "security_scan"
+        action: "run_security_scan"
+        config:
+          scan_type: "sast"
+          fail_on_high_severity: true
+
+      - name: "performance_check"
+        action: "run_performance_test"
+        config:
+          baseline_comparison: true
+          performance_threshold: 95
+
+  - name: "reporting"
+    description: "Generate reports and notifications"
+    steps:
+      - name: "generate_migration_report"
+        action: "run_script"
+        config:
+          script: "scripts/generate_migration_report.py"
+          formats: ["json", "html", "markdown"]
+
+      - name: "create_pull_request"
+        action: "create_pr"
+        config:
+          title: "Automated unittest to pytest migration"
+          body_file: "migration_report.md"
+          labels: ["migration", "automated"]
+          assignees: ["${MIGRATION_REVIEWERS}"]
+
+      - name: "send_notifications"
+        action: "send_notification"
+        config:
+          channels: ["slack", "email"]
+          on_success: true
+          on_failure: true
+
+# Configuration Template
+config_template: "examples/config-templates/ci-cd-integration.yaml"
+
+# Failure Handling
+failure_handling:
+  on_analysis_failure: "abort_pipeline"
+  on_migration_failure: "create_issue"
+  on_validation_failure: "rollback_changes"
+  retry_attempts: 2
+  retry_delay: "30s"
+
+# Success Criteria
+success_criteria:
+  - "All tests pass"
+  - "Code coverage >= 80%"
+  - "No critical security issues"
+  - "Performance within acceptable range"
+  - "Migration report generated"
+  - "Pull request created"
+
+# Monitoring and Observability
+monitoring:
+  metrics:
+    - "migration_duration"
+    - "test_success_rate"
+    - "code_coverage_change"
+    - "error_count"
+  alerts:
+    - "migration_failure"
+    - "performance_regression"
+    - "security_violation"

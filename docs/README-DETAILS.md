@@ -15,10 +15,30 @@ Table of contents
 - Safety and limitations
 - Developer notes
 
+- Design & Specs
+	- `docs/specs/architecture_diagrams.md`
+	- `docs/specs/technical_specification.md`
+
 Overview
 --------
 ``splurge-unittest-to-pytest`` converts Python ``unittest``-style tests to
 ``pytest``-style tests using conservative, AST/CST-based transformations
+Programmatic API docs
+---------------------
+
+See the API docs for detailed programmatic examples and the end-to-end workflow:
+
+- `docs/api/programmatic_api.md`
+- `docs/api/configuration_api.md`
+- `docs/api/cli_mapping.md`
+- `docs/api/end_to_end_workflow.md`
+
+Configuration docs
+------------------
+
+- `docs/configuration/README.md` — short index for configuration docs
+- `docs/configuration/configuration-reference.md` — master configuration reference
+
 implemented with ``libcst``. The project features a **multi-pass analyzer**
 that intelligently analyzes test patterns and applies transformations with
 high confidence, preserving semantics where code mutates accumulators or
@@ -32,6 +52,17 @@ Features
   accumulators or depends on loop ordering.
 - **Enhanced pattern support**: Custom test prefixes (``spec_``, ``should_``, ``it_``),
   nested test classes, custom setup methods, and advanced exception handling.
+- **Intelligent configuration system**: Automatically analyzes your project structure,
+  test patterns, and codebase characteristics to provide tailored migration suggestions
+  and configuration recommendations.
+- **Smart error recovery**: Comprehensive error handling with intelligent recovery
+  strategies, detailed error reporting, and suggestions for resolving configuration issues.
+- **Configuration templates**: Pre-built configuration templates for common migration
+  scenarios including CI/CD integration, large codebase migrations, and specialized testing frameworks.
+- **Interactive configuration builder**: Step-by-step guided configuration process
+  that analyzes your project and builds optimal settings through interactive prompts.
+- **Comprehensive field metadata**: Rich metadata system providing detailed help,
+  validation rules, examples, and cross-references for all configuration options.
 - CST-based transformations using ``libcst`` for stable, semantics-preserving edits.
 - Preserves class-structured tests that inherit from ``unittest.TestCase`` by default to
 	maintain class scope and fixtures unless a conversion is explicitly requested.
@@ -48,6 +79,104 @@ Features
 - Generated code is always formatted with ``isort`` and ``black`` before writing.
 - Import optimization and safe removal of unused ``unittest`` imports while
 	detecting dynamic import patterns to avoid unsafe removals.
+
+Intelligent Configuration System
+---------------------------------
+The tool includes an advanced configuration system that intelligently analyzes your project and provides tailored recommendations for optimal migration settings.
+
+### Intelligent Suggestions
+Use ``--suggestions`` to get intelligent configuration suggestions based on your project's characteristics:
+
+```bash
+# Get suggestions for your project
+python -m splurge_unittest_to_pytest.cli migrate tests/ --suggestions
+```
+
+The system analyzes:
+- Project structure and test organization
+- Test method naming patterns
+- Code complexity and file sizes
+- Import patterns and dependencies
+- Custom setup/teardown patterns
+
+### Use Case Analysis
+Use ``--use-case-analysis`` to get a comprehensive analysis of your project's migration needs:
+
+```bash
+# Analyze your project's use case
+python -m splurge_unittest_to_pytest.cli migrate tests/ --use-case-analysis
+```
+
+This provides:
+- Detected migration complexity level
+- Recommended configuration templates
+- Potential challenges and solutions
+- Performance optimization suggestions
+
+### Configuration Templates
+Pre-built templates for common scenarios:
+
+```bash
+# List available templates
+python -m splurge_unittest_to_pytest.cli migrate --list-templates
+
+# Use a specific template
+python -m splurge_unittest_to_pytest.cli migrate tests/ --template ci_integration
+```
+
+Available templates:
+- ``basic_migration``: Standard unittest to pytest conversion
+- ``ci_integration``: Optimized for CI/CD pipelines with parallel processing
+- ``large_codebase``: Handles large projects with memory optimization
+- ``bdd_framework``: Specialized for BDD-style tests (spec_, should_, it_)
+- ``legacy_system``: Conservative settings for legacy codebases
+
+### Interactive Configuration Builder
+For complex projects, use the interactive builder to create optimal configurations:
+
+```bash
+# Start interactive configuration
+python -m splurge_unittest_to_pytest.cli init-config --interactive my-config.yaml
+```
+
+The builder will:
+- Analyze your project structure
+- Ask targeted questions about your needs
+- Generate a comprehensive configuration file
+- Provide explanations for each setting
+
+### Field Help System
+Get detailed help for any configuration field:
+
+```bash
+# Get help for a specific field
+python -m splurge_unittest_to_pytest.cli migrate --field-help max_file_size_mb
+```
+
+Each field includes:
+- Detailed description
+- Valid value ranges
+- Default values
+- Usage examples
+- Related configuration options
+
+### Configuration Documentation Generation
+Generate comprehensive documentation for all configuration options:
+
+```bash
+# Generate markdown documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs markdown
+
+# Generate HTML documentation
+python -m splurge_unittest_to_pytest.cli migrate --generate-docs html
+```
+
+### Smart Error Recovery
+The system provides intelligent error recovery with:
+- Detailed error categorization
+- Suggested fixes for common issues
+- Configuration validation with helpful messages
+- Recovery strategies for corrupted configurations
 
 Supported unittest to pytest conversion candidates
 -----------------------------------------------
@@ -322,6 +451,16 @@ All flags are available on the ``migrate`` command. Summary below; use
 - ``--source-map``: Create source mapping for debugging transformations (advanced users) (presence-only flag).
 - ``--max-depth``: Maximum depth to traverse nested control flow structures (3-15, default: 7). Controls how deeply the transformer explores nested control flow blocks (try/except/else/finally, with, if/else, for/else, while/else) when processing assertions.
 
+## Enhanced Validation Features
+- ``--suggestions``: Show intelligent configuration suggestions (presence-only flag).
+- ``--use-case-analysis``: Show detected use case analysis (presence-only flag).
+- ``--field-help FIELD``: Show help for a specific configuration field.
+- ``--list-templates``: List available configuration templates (presence-only flag).
+- ``--template TEMPLATE``: Use a pre-configured template (e.g., 'basic_migration', 'ci_integration').
+- ``--generate-docs [markdown|html]``: Generate configuration documentation.
+- ``generate-templates``: Generate configuration template files for all use cases (standalone command).
+
+
 YAML Configuration File Format
 -------------------------------
 
@@ -390,6 +529,23 @@ report_format: "json"
 # Advanced Options
 create_source_map: false
 max_depth: 7
+
+# Intelligent Configuration System
+intelligent_suggestions: false
+use_case_analysis: false
+field_help: null  # Set to a field name to get help (e.g., "max_file_size_mb")
+list_available_templates: false
+configuration_template: null  # Set to template name (e.g., "ci_integration")
+generate_config_docs: null  # Set to "markdown" or "html" to generate docs
+
+# Enhanced Validation and Error Recovery
+enable_smart_error_recovery: true
+error_recovery_strategies:
+  - "suggest_alternatives"
+  - "provide_examples"
+  - "validate_dependencies"
+comprehensive_field_metadata: true
+interactive_config_builder: false
 ```
 
 ### Configuration File Usage
@@ -486,43 +642,124 @@ python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml tests/
 python -m splurge_unittest_to_pytest.cli migrate --config my-config.yaml --dry-run --no-transform-assertions tests/
 ```
 
+## Intelligent Configuration System
+
+Get intelligent suggestions for your project:
+
+```bash
+# Analyze project and show configuration suggestions
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions
+
+# Get comprehensive use case analysis
+python -m splurge_unittest_to_pytest migrate tests/ --use-case-analysis
+
+# Combine suggestions with analysis
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions --use-case-analysis
+```
+
+Use configuration templates:
+
+```bash
+# List all available templates
+python -m splurge_unittest_to_pytest migrate --list-templates
+
+# Use a specific template for CI/CD integration
+python -m splurge_unittest_to_pytest migrate tests/ --template ci_integration
+
+# Use template for large codebase migration
+python -m splurge_unittest_to_pytest migrate tests/ --template large_codebase
+```
+
+Get help and documentation:
+
+```bash
+# Get detailed help for a configuration field
+python -m splurge_unittest_to_pytest migrate --field-help max_file_size_mb
+
+# Generate markdown documentation for all configuration options
+python -m splurge_unittest_to_pytest migrate --generate-docs markdown
+
+# Generate HTML documentation
+python -m splurge_unittest_to_pytest migrate --generate-docs html
+```
+
+Interactive configuration:
+
+```bash
+# Create configuration interactively (guided setup)
+python -m splurge_unittest_to_pytest init-config --interactive my-project-config.yaml
+```
+
+## Enhanced Validation Features
+
+Analyze configuration and get intelligent suggestions:
+
+```bash
+# Show detected use case and configuration suggestions
+python -m splurge_unittest_to_pytest migrate tests/ --suggestions --use-case-analysis
+
+# Get help for a specific configuration field
+python -m splurge_unittest_to_pytest migrate --field-help target_root
+
+# List available configuration templates
+python -m splurge_unittest_to_pytest migrate --list-templates
+
+# Use a template for migration
+python -m splurge_unittest_to_pytest migrate tests/ --template ci_integration
+
+# Generate configuration documentation
+python -m splurge_unittest_to_pytest migrate --generate-docs markdown
+```
+python -m splurge_unittest_to_pytest.cli generate-templates --output-dir ./my-templates --format json
+
+# Error Recovery and Analysis
+python -m splurge_unittest_to_pytest.cli error-recovery --error "File not found: /missing/file.py"
+python -m splurge_unittest_to_pytest.cli error-recovery --error "Permission denied" --interactive
+python -m splurge_unittest_to_pytest.cli error-recovery --error "Invalid config" --category configuration --workflow-only
+
+# Interactive Configuration Building
+python -m splurge_unittest_to_pytest configure
+python -m splurge_unittest_to_pytest configure --output-file config.yaml
+python -m splurge_unittest_to_pytest configure --analyze-only
+```
+
 Selectively disable specific transformations:
 
 ```bash
 # Keep unittest assertions unchanged but convert everything else
-python -m splurge_unittest_to_pytest.cli migrate --no-transform-assertions tests/
+python -m splurge_unittest_to_pytest migrate --no-transform-assertions tests/
 
 # Convert only assertions and imports, skip setup/teardown conversion
-python -m splurge_unittest_to_pytest.cli migrate --transform-assertions --transform-imports --no-transform-setup tests/
+python -m splurge_unittest_to_pytest migrate --transform-assertions --transform-imports --no-transform-setup tests/
 
 # Continue processing even if some files fail
-python -m splurge_unittest_to_pytest.cli migrate --continue-on-error tests/
+python -m splurge_unittest_to_pytest migrate --continue-on-error tests/
 ```
 
 Control output formatting and imports:
 
 ```bash
 # Skip code formatting (faster but may produce inconsistent style)
-python -m splurge_unittest_to_pytest.cli migrate --no-format tests/
+python -m splurge_unittest_to_pytest migrate --no-format tests/
 
 # Keep unused unittest imports (may leave redundant imports)
-python -m splurge_unittest_to_pytest.cli migrate --no-remove-imports tests/
+python -m splurge_unittest_to_pytest migrate --no-remove-imports tests/
 
 # Preserve comments in import sections
-python -m splurge_unittest_to_pytest.cli migrate --preserve-import-comments tests/
+python -m splurge_unittest_to_pytest migrate --preserve-import-comments tests/
 ```
 
 Advanced analysis and discovery:
 
 ```bash
 # Auto-detect test method prefixes from source files
-python -m splurge_unittest_to_pytest.cli migrate --detect-prefixes tests/
+python -m splurge_unittest_to_pytest migrate --detect-prefixes tests/
 
 # Support multiple custom test prefixes
-python -m splurge_unittest_to_pytest.cli migrate --prefix test --prefix spec --prefix should --prefix it tests/
+python -m splurge_unittest_to_pytest migrate --prefix test --prefix spec --prefix should --prefix it tests/
 
 # Set precision for floating-point assertions
-python -m splurge_unittest_to_pytest.cli migrate --assert-places 10 tests/
+python -m splurge_unittest_to_pytest migrate --assert-places 10 tests/
 ```
 
 Programmatic API
@@ -565,6 +802,22 @@ else:
 	print("Migration failed:", result.error)
 ```
 
+Programmatic helper: `prepare_config`
+------------------------------------
+
+Use `prepare_config` when you want a single entrypoint to build a
+`MigrationConfig` programmatically. It applies defaults, supports an
+optional interactive flow, and attempts to run enhanced validation. The
+function always returns a `MigrationConfig` instance for consistent use in
+tests and programmatic calls.
+
+```python
+from splurge_unittest_to_pytest import prepare_config
+
+cfg = prepare_config(interactive=False, questions=[{"key": "line_length", "default": 88}])
+print(cfg.line_length)  # -> 88
+```
+
 Safety and limitations
 ----------------------
 
@@ -587,6 +840,82 @@ and intelligent fallback mechanisms:
 - **Graceful error handling**: Comprehensive fallback mechanisms prevent tool failures on edge cases
 - **Deprecated API support**: Handles legacy unittest method names (`assertAlmostEquals`, `assertNotAlmostEquals`) for maximum compatibility
 - **Intelligent transformation**: Complex transformation logic broken into focused, maintainable functions with enhanced error reporting
+
+Advanced Error Reporting and Recovery
+------------------------------------
+
+The tool now includes a sophisticated error reporting system that provides intelligent guidance for resolving issues:
+
+- **Smart Error Classification**: Automatically categorizes errors into 10 categories (CONFIGURATION, FILESYSTEM, PARSING, TRANSFORMATION, VALIDATION, PERMISSION, DEPENDENCY, NETWORK, RESOURCE, UNKNOWN)
+- **Context-Aware Suggestions**: Generates intelligent suggestions based on error type and context, with priority-based sorting
+- **Recovery Workflows**: Provides step-by-step recovery guidance for common error scenarios with estimated completion times and success rates
+- **Interactive Error Recovery**: New CLI command `error-recovery` offers guided assistance for error resolution
+
+Error Recovery Example:
+
+```bash
+# Analyze an error and get recovery suggestions
+python -m splurge_unittest_to_pytest error-recovery \
+  --error "File not found: /missing/file.py" \
+  --category filesystem
+
+# Interactive recovery mode
+python -m splurge_unittest_to_pytest error-recovery \
+  --error "Permission denied" \
+  --interactive
+```
+
+Programmatic Error Reporting:
+
+```python
+from splurge_unittest_to_pytest.error_reporting import ErrorReporter
+
+reporter = ErrorReporter()
+error = ValueError("Configuration error: target_root does not exist")
+report = reporter.report_error(error, {"target_root": "/missing/path"})
+
+# Access enhanced error information
+print(f"Category: {report['error']['category']}")
+print(f"Severity: {report['error']['severity']}")
+print(f"Suggestions: {len(report['error']['suggestions'])}")
+print(f"Recovery workflow: {report['recovery_workflow']['title']}")
+```
+
+Interactive Configuration Building
+---------------------------------
+
+The tool now includes an intelligent configuration builder that analyzes your project and guides you through creating optimal configurations:
+
+- **Project Analysis**: Automatically detects project type, test patterns, and complexity
+- **Interactive Workflows**: Different configuration experiences based on detected project types
+- **Intelligent Defaults**: Suggests appropriate settings based on project analysis
+- **Configuration Validation**: Validates and enhances configurations before use
+
+Configuration Building Example:
+
+```bash
+# Analyze project and create configuration interactively
+python -m splurge_unittest_to_pytest configure
+
+# Save configuration to file
+python -m splurge_unittest_to_pytest configure --output-file my-config.yaml
+
+# Just analyze project without creating configuration
+python -m splurge_unittest_to_pytest configure --analyze-only
+```
+
+Programmatic Configuration Building:
+
+```python
+from splurge_unittest_to_pytest.config_validation import InteractiveConfigBuilder
+
+builder = InteractiveConfigBuilder()
+config = builder.build_configuration_interactive()
+
+# Use the validated configuration
+from splurge_unittest_to_pytest import main
+result = main.migrate(["tests/"], config=config)
+```
 
 Note on top-level __main__ guards and runtime test invocations
 ------------------------------------------------------------
@@ -617,6 +946,36 @@ Developer notes
 - Contributions: open a PR against the ``main`` branch and include tests
 	for new behavior. Keep changes small and run the full suite before
 	requesting review.
+
+- Static type-checking notes: we apply a targeted mypy override to exclude
+	the runtime CLI module (`splurge_unittest_to_pytest.cli`) from strict
+	checks. This keeps the library modules under tight static scrutiny while
+	avoiding false-positives caused by Typer's runtime OptionInfo objects.
+	See `docs/developer/mypy-overrides.md` for details and instructions to
+	re-enable strict checking for the CLI module during reviews.
+
+Configuration guidance
+----------------------
+
+If you need to modify configuration templates or the generated
+configuration reference, follow these steps:
+
+1. Edit or add template files under the `templates/` directory (YAML format).
+2. Run the configuration doc generator to update `docs/configuration/configuration-reference.md`:
+
+```bash
+python -m splurge_unittest_to_pytest generate-config-docs --output docs/configuration
+```
+
+3. Review the generated file and update any examples in `docs/configuration/` as needed.
+4. Run the test suite and formatting tools before submitting a PR:
+
+```bash
+python -m pytest -q
+python -m ruff check --fix
+```
+
+If you want, we can add a small Makefile or CLI helper to automate these steps.
 
 Recent updates
 --------------

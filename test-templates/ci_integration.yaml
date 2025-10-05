@@ -1,0 +1,15 @@
+# CI Integration
+# Optimized configuration for continuous integration environments
+
+cache_analysis_results: true
+degradation_tier: advanced
+dry_run: false
+fail_fast: true
+file_patterns:
+- test_*.py
+format_output: true
+line_length: 100
+max_concurrent_files: 8
+max_file_size_mb: 20
+recurse_directories: true
+remove_unused_imports: true

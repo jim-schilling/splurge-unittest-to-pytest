@@ -1,0 +1,21 @@
+# Minimal Configuration Template
+# This template provides only the essential settings for quick migrations
+
+# Required Configuration
+input_file: "test_example.py"
+output_file: "converted_test.py"
+
+# Essential Migration Options
+migrate_assertions: true
+migrate_setup_teardown: true
+
+# Basic Output Format
+output_format: "pytest"
+
+# Minimal Logging
+log_level: "WARNING"
+verbose: false
+
+# Basic Error Handling
+strict_mode: false
+continue_on_error: true

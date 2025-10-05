@@ -3,10 +3,10 @@
     G --> J
     H --> J
     I --> J
-    
+
     J -->|Yes| K[Continue with Warning]
     J -->|No| L[Fail Pipeline]
-    
+
     K --> C
     L --> M[Generate Error Report]
     M --> N[End Pipeline]
@@ -21,17 +21,21 @@ graph LR
     C --> D[Core Steps]
     C --> E[Plugin Steps]
     C --> F[Custom Rules]
-    
+
+    B --> Z[Configuration Validator]
+    B --> Y[Suggestion Engine]
+    B --> X[Template Manager]
+
     G[Plugin System] --> E
     H[Custom Transformations] --> F
-    
+
     subgraph "Extension Points"
         E
         F
         I[Event Handlers]
         J[Output Formatters]
     end
-    
+
     G --> I
     G --> J
 ```
@@ -85,6 +89,8 @@ graph TB
         K
         L[GitHub Releases]
     end
+
+    Note[Note] --> M[Automated Releases]
     
     G --> L
 ```
@@ -136,6 +142,37 @@ sequenceDiagram
     Pipeline-->>CLI: MigrationResult
     CLI-->>User: Summary Report
 ```
+
+### EventBus sequence (overview)
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant Pipeline
+    participant EventBus
+    participant Subscriber
+
+    CLI->>Pipeline: migrate(files)
+    Pipeline->>EventBus: publish(file.migrate.started)
+    EventBus->>Subscriber: notify
+    Pipeline->>EventBus: publish(step.completed)
+    EventBus->>Subscriber: notify
+    Pipeline->>EventBus: publish(file.migrate.completed)
+    EventBus->>Subscriber: notify
+``` 
+
+### Common events and payloads
+
+- `file.migrate.started`: {source, timestamp, run_id}
+- `file.migrate.completed`: {source, target?, wrote, duration_s, run_id}
+- `step.started`: {step, source, timestamp}
+- `step.completed`: {step, source, duration_s, status, metadata}
+- `error.reported`: {category, location?, message, suggestions}
+
+![Event sequence diagram](../assets/event_sequence.svg)
+
+Figure: EventBus sequence (SVG fallback contains mermaid source). Use a mermaid-aware viewer to render dynamically.
+
 
 ## Data Transformation Pipeline
 

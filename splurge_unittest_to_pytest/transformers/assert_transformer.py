@@ -1769,7 +1769,7 @@ def _apply_transformations_with_fallback(code: str) -> str:
     # reference to `caplog.messages[index]` (only when there are two or
     # more repeated calls introduced by nested rewrites).
     out = re.sub(
-        r"caplog\s*\.\s*records\s*\[\s*(\d+)\s*\]\s*\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*{\s*2\s*,\s*}",
+        r"caplog\s*\.\s*records\s*\[\s*(\d+)\s*\](?:\s*\.\s*getMessage\s*\(\s*\)){2,}",
         r"caplog.messages[\1]",
         out,
     )
@@ -1826,14 +1826,14 @@ def _apply_transformations_with_fallback(code: str) -> str:
     # will find it. This handles odd nested rewrites like
     # `caplog.records.getMessage().getMessage()`.
     out = re.sub(
-        r"caplog\s*\.\s*records\s*\.\s*getMessage\s*\(\s*\)\s*\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*+",
+        r"caplog\s*\.\s*records\s*\.\s*getMessage\s*\(\s*\)(?:\s*\.\s*getMessage\s*\(\s*\)){2,}",
         r"caplog.messages",
         out,
     )
 
     # Collapse accidental repeated `.getMessage()` calls into a single
     # call to avoid artifacts like `.getMessage().getMessage()`.
-    out = re.sub(r"\(\s*\.\s*getMessage\s*\(\s*\)\s*\)\s*{\s*2\s*,\s*}", r".getMessage()", out)
+    out = re.sub(r"(?:\s*\.\s*getMessage\s*\(\s*\)){2,}", r".getMessage()", out)
 
     # For membership checks against the record-list with no subscript,
     # include both the record-level `.getMessage()` form and the

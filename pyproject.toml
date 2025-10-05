@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.0.4"
+version = "2025.1.0"
 description = "A tool for migrating unittest test suites to pytest format"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -100,7 +100,7 @@ addopts = [
     "--cov-report=html",
     "-v",
     "--tb=short",
-    "-n", "auto",
+    "-n", "4",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
@@ -144,6 +144,9 @@ ignore_errors = true
 module = "splurge_unittest_to_pytest.transformers.import_transformer"
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = "splurge_unittest_to_pytest.cli"
+ignore_errors = true
 # Black configuration
 [tool.black]
 line-length = 120

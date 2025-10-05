@@ -1,0 +1,161 @@
+# Legacy Code Migration Workflow
+# This workflow handles migration of older unittest code with deprecated patterns
+
+name: "Legacy Code Migration Workflow"
+description: "Specialized workflow for migrating legacy unittest code"
+version: "1.0.0"
+
+# Legacy Code Characteristics
+legacy_patterns:
+  - "Python 2.7 unittest syntax"
+  - "Deprecated assertion methods"
+  - "Old-style class inheritance"
+  - "Manual test discovery"
+  - "Complex setUp/tearDown chains"
+  - "Legacy mocking patterns"
+
+# Assessment Phase
+assessment:
+  - name: "code_inventory"
+    description: "Inventory all unittest files and patterns"
+    checks:
+      - "Python version compatibility"
+      - "Deprecated unittest features"
+      - "Custom test base classes"
+      - "Legacy mocking usage"
+
+  - name: "complexity_analysis"
+    description: "Analyze migration complexity"
+    metrics:
+      - "Lines of code"
+      - "Test count"
+      - "Inheritance depth"
+      - "Mock complexity"
+
+  - name: "dependency_mapping"
+    description: "Map test dependencies and relationships"
+    analysis:
+      - "Shared fixtures"
+      - "Test utilities"
+      - "Custom assertions"
+      - "External dependencies"
+
+# Migration Strategy
+migration_approach:
+  type: "conservative"
+  phases:
+    - "infrastructure_upgrade"
+    - "pattern_modernization"
+    - "code_migration"
+    - "optimization"
+
+# Workflow Steps
+steps:
+  - name: "environment_upgrade"
+    description: "Upgrade Python environment and dependencies"
+    type: "infrastructure"
+    config:
+      target_python_version: "3.10+"
+      update_dependencies: true
+      migrate_requirements: true
+
+  - name: "legacy_pattern_detection"
+    description: "Identify legacy unittest patterns requiring special handling"
+    type: "analysis"
+    config:
+      detect_deprecated_assertions: true
+      find_old_style_classes: true
+      identify_manual_discovery: true
+      analyze_setup_chains: true
+
+  - name: "compatibility_layer"
+    description: "Create compatibility layer for legacy patterns"
+    type: "adaptation"
+    config:
+      create_shims: true
+      preserve_old_behavior: true
+      gradual_migration: true
+
+  - name: "incremental_conversion"
+    description: "Convert legacy patterns step by step"
+    type: "migration"
+    phases:
+      - name: "assertions_phase"
+        patterns: ["assertEquals", "assertNotEquals", "assert_"]
+        replacements: ["assert equal", "assert not equal", "assert"]
+      - name: "fixtures_phase"
+        patterns: ["setUp", "tearDown"]
+        replacements: ["fixtures", "yield fixtures"]
+      - name: "discovery_phase"
+        patterns: ["manual test loading"]
+        replacements: ["automatic discovery"]
+
+  - name: "modernization"
+    description: "Apply modern pytest patterns and best practices"
+    type: "enhancement"
+    config:
+      add_type_hints: true
+      use_parametrize: true
+      implement_conftest: true
+      add_pytest_plugins: true
+
+  - name: "validation_regression"
+    description: "Comprehensive validation with regression testing"
+    type: "validation"
+    config:
+      backward_compatibility: true
+      behavior_preservation: true
+      performance_regression: false
+      extensive_test_runs: true
+
+# Special Handling Rules
+special_handling:
+  - pattern: "Python 2 print statements"
+    action: "convert_to_functions"
+    priority: "high"
+
+  - pattern: "Old-style classes"
+    action: "convert_to_new_style"
+    priority: "medium"
+
+  - pattern: "Custom metaclass usage"
+    action: "manual_review_required"
+    priority: "high"
+
+  - pattern: "Complex inheritance hierarchies"
+    action: "simplify_and_modernize"
+    priority: "medium"
+
+# Risk Mitigation
+risk_strategies:
+  - risk: "Breaking changes in legacy behavior"
+    mitigation: "Compatibility layer, extensive testing"
+  - risk: "Performance impact"
+    mitigation: "Profiling, optimization passes"
+  - risk: "Complex dependencies"
+    mitigation: "Dependency analysis, phased migration"
+
+# Success Criteria
+success_criteria:
+  - "All legacy patterns identified and handled"
+  - "Code runs on modern Python"
+  - "Test behavior preserved"
+  - "Performance acceptable"
+  - "Modern patterns adopted"
+  - "Technical debt reduced"
+
+# Timeline Estimates
+estimated_duration:
+  assessment: "1-2 days"
+  infrastructure: "1-2 days"
+  migration: "1-3 weeks"
+  validation: "2-3 days"
+  total: "3-5 weeks"
+
+# Required Expertise
+required_skills:
+  - "Python 2 to 3 migration experience"
+  - "Legacy unittest patterns knowledge"
+  - "pytest advanced features"
+  - "Testing best practices"
+  - "Code refactoring techniques"
