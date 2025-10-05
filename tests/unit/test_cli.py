@@ -217,3 +217,39 @@ def test_configure_cmd_validation_failure(mocker, monkeypatch, capsys, tmp_path)
     assert "Configuration validation failed:" in captured.out
     assert "- Invalid X" in captured.out
     assert "Warnings:" in captured.out
+
+
+def test_migrate_configuration_conflict_fallback(mocker, capsys):
+    """When enhanced validation detects configuration conflicts, migrate() should retry without enhanced features."""
+
+    # Ensure file discovery returns empty list (so migrate proceeds without file work)
+    mocker.patch(
+        "splurge_unittest_to_pytest.cli.validate_source_files_with_patterns",
+        return_value=[],
+    )
+
+    # First call raises a ValueError indicating configuration conflicts, second returns a basic config object
+    mock_build = mocker.patch(
+        "splurge_unittest_to_pytest.cli.build_config_from_cli",
+        side_effect=[
+            ValueError("Configuration conflicts detected: A vs B"),
+            SimpleNamespace(dry_run=False, log_level="INFO"),
+        ],
+    )
+
+    # Patch event bus creation and progress handlers to be no-ops
+    mocker.patch("splurge_unittest_to_pytest.cli.create_event_bus", return_value=SimpleNamespace())
+    mocker.patch("splurge_unittest_to_pytest.cli.attach_progress_handlers", return_value=None)
+    mocker.patch("splurge_unittest_to_pytest.cli.PipelineFactory", return_value=None)
+
+    # Patch main migrate function to return a successful result
+    mocker.patch(
+        "splurge_unittest_to_pytest.cli.main_module.migrate",
+        return_value=SimpleNamespace(is_success=lambda: True, data=[]),
+    )
+
+    # Call migrate; this should invoke build_config_from_cli twice (fail then fallback)
+    # Pass explicit flags to avoid CLI-level mutual exclusion checks in the function
+    cli.migrate(["tests/"], info=False, debug=False, config_file=None)
+
+    assert mock_build.call_count == 2
