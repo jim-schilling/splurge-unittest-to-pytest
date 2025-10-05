@@ -150,11 +150,7 @@ def transform_caplog_alias_string_fallback(code: str) -> str:
     )
 
     try:
-        return (
-            _orig._apply_transformations_with_fallback(out)
-            if hasattr(_orig, "_apply_transformations_with_fallback")
-            else out
-        )
+        return out
     except Exception:
         return code
 

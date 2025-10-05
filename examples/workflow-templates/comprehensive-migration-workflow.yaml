@@ -1,0 +1,130 @@
+# Comprehensive Migration Workflow
+# This workflow provides a complete migration process with analysis, conversion, and validation
+
+name: "Comprehensive Migration Workflow"
+description: "Full-featured workflow for complex unittest to pytest migrations"
+version: "1.0.0"
+
+# Prerequisites
+prerequisites:
+  - "Python 3.10+ installed"
+  - "pytest package available"
+  - "Source code backup created"
+  - "Test environment prepared"
+
+# Workflow Steps
+steps:
+  - name: "environment_setup"
+    description: "Set up migration environment and validate dependencies"
+    type: "setup"
+    config:
+      check_python_version: true
+      validate_dependencies: true
+      create_backup: true
+
+  - name: "initial_analysis"
+    description: "Perform comprehensive analysis of unittest codebase"
+    type: "analysis"
+    config:
+      enable_static_analysis: true
+      detect_code_smells: true
+      analyze_complexity: true
+      check_test_coverage: true
+      estimate_migration_effort: true
+
+  - name: "backup_creation"
+    description: "Create comprehensive backup of original files"
+    type: "backup"
+    config:
+      backup_directory: "backups/pre_migration"
+      include_metadata: true
+      compress_backup: true
+
+  - name: "incremental_migration"
+    description: "Migrate code in controlled phases"
+    type: "migration"
+    phases:
+      - name: "phase_1_assertions"
+        description: "Migrate assertion methods"
+        config:
+          migrate_assertions: true
+          migrate_setup_teardown: false
+          migrate_test_discovery: false
+      - name: "phase_2_fixtures"
+        description: "Migrate setup/teardown to fixtures"
+        config:
+          migrate_assertions: false
+          migrate_setup_teardown: true
+          migrate_class_fixtures: true
+          migrate_module_fixtures: true
+      - name: "phase_3_discovery"
+        description: "Update test discovery patterns"
+        config:
+          migrate_test_discovery: true
+          migrate_parametrized_tests: true
+          migrate_subtests: true
+
+  - name: "code_quality_improvements"
+    description: "Apply code quality enhancements"
+    type: "enhancement"
+    config:
+      add_type_hints: true
+      optimize_imports: true
+      format_code: true
+      generate_fixtures: true
+
+  - name: "validation_testing"
+    description: "Comprehensive validation of migrated code"
+    type: "validation"
+    config:
+      syntax_check: true
+      import_validation: true
+      run_tests: true
+      performance_comparison: true
+      coverage_analysis: true
+
+  - name: "rollback_procedure"
+    description: "Prepare rollback procedure if needed"
+    type: "rollback"
+    config:
+      create_rollback_script: true
+      validate_rollback: true
+
+  - name: "final_reporting"
+    description: "Generate comprehensive migration report"
+    type: "reporting"
+    config:
+      detailed_report: true
+      include_statistics: true
+      generate_metrics: true
+      export_formats: ["json", "html", "pdf"]
+
+# Configuration Template
+config_template: "examples/config-templates/comprehensive-migration.yaml"
+
+# Risk Assessment
+risk_assessment:
+  low_risk: "Simple assertion conversions"
+  medium_risk: "Fixture migrations, parametrized tests"
+  high_risk: "Complex test discovery changes, subtest conversions"
+
+# Rollback Strategy
+rollback_strategy:
+  automatic: "Revert to backup if validation fails"
+  manual: "Use rollback script for selective reversion"
+  partial: "Allow reverting individual phases"
+
+# Success Metrics
+success_metrics:
+  - "All tests pass after migration"
+  - "Code coverage maintained or improved"
+  - "No syntax or import errors"
+  - "Performance within 10% of original"
+  - "Migration report generated"
+
+# Timeline Estimates
+estimated_duration:
+  analysis: "30 minutes - 2 hours"
+  migration: "1-4 hours per 1000 LOC"
+  validation: "30 minutes - 1 hour"
+  total: "2-8 hours depending on complexity"

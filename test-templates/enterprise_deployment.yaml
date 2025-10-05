@@ -1,0 +1,18 @@
+# Enterprise Deployment
+# Production-ready configuration for enterprise environments
+
+backup_originals: true
+backup_root: ./backups
+cache_analysis_results: true
+continue_on_error: false
+degradation_tier: advanced
+fail_fast: true
+file_patterns:
+- test_*.py
+- '**/test_*.py'
+format_output: true
+max_concurrent_files: 4
+max_file_size_mb: 50
+recurse_directories: true
+remove_unused_imports: true
+target_root: ./converted

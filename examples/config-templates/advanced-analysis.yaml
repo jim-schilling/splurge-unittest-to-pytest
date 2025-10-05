@@ -1,0 +1,61 @@
+# Advanced Analysis Template
+# This template enables comprehensive analysis and detailed reporting
+
+# Input and Output Configuration
+input_file: "tests/"
+output_file: "analysis_output/"
+input_format: "auto"
+output_format: "analysis"
+
+# Analysis Configuration
+enable_static_analysis: true
+detect_code_smells: true
+suggest_improvements: true
+analyze_complexity: true
+check_test_coverage: true
+
+# Migration Options - Analysis focused
+migrate_assertions: false  # Focus on analysis, not migration
+migrate_setup_teardown: false
+migrate_test_discovery: false
+analyze_only: true
+
+# Reporting Configuration
+generate_report: true
+report_format: "json"
+detailed_report: true
+include_statistics: true
+export_metrics: true
+
+# Output Customization
+include_original_code: true
+add_analysis_comments: true
+highlight_issues: true
+
+# Advanced Features
+detect_patterns: true
+suggest_refactoring: true
+estimate_migration_effort: true
+identify_dependencies: true
+
+# Logging and Debugging
+log_level: "DEBUG"
+verbose: true
+debug_mode: true
+log_file: "analysis.log"
+
+# Performance Configuration
+max_workers: 4
+memory_limit: 2147483648  # 2GB
+analysis_timeout: 1800  # 30 minutes
+
+# Quality Metrics
+min_test_coverage: 80
+max_complexity_score: 10
+enable_quality_gates: true
+
+# Integration Options
+export_to_jira: false
+jira_project_key: "${JIRA_PROJECT}"
+export_to_csv: true
+csv_output_file: "analysis_results.csv"

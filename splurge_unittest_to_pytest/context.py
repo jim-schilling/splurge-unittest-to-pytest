@@ -445,7 +445,7 @@ class ContextManager:
             success or an error describing the problem.
         """
         try:
-            import yaml  # type: ignore
+            import yaml  # type: ignore[import-untyped]
 
             with open(config_file, encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)

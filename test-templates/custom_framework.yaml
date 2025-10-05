@@ -1,0 +1,18 @@
+# Custom Testing Framework
+# Migration for projects using custom test method prefixes (BDD, RSpec style)
+
+backup_originals: true
+degradation_tier: advanced
+detect_prefixes: true
+dry_run: true
+file_patterns:
+- test_*.py
+- spec_*.py
+format_output: true
+recurse_directories: true
+remove_unused_imports: true
+test_method_prefixes:
+- test
+- spec
+- should
+- it

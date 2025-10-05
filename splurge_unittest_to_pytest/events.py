@@ -287,12 +287,14 @@ class LoggingSubscriber(EventSubscriber):
     and writes human-readable messages at appropriate logging levels.
     """
 
-    def __init__(self, event_bus: EventBus):
+    def __init__(self, event_bus: EventBus, verbose: bool = False):
         """Initialize logging subscriber.
 
         Args:
             event_bus: Event bus to subscribe to
+            verbose: Whether to enable verbose logging
         """
+        self.verbose = verbose
         self.event_bus = event_bus
         self._setup_subscriptions()
 

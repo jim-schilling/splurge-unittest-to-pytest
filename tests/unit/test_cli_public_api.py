@@ -38,9 +38,9 @@ def test_validate_source_files(tmp_path):
     out = cli.validate_source_files([str(f)])
     assert out == [str(f)]
 
-    # Non-existing path should raise typer.Exit
-    with pytest.raises(typer.Exit):
-        cli.validate_source_files([str(tmp_path / "noexist.py")])
+    # Non-existing path should return empty list
+    result = cli.validate_source_files([str(tmp_path / "noexist.py")])
+    assert result == []
 
 
 def test_init_config_requires_yaml(monkeypatch, tmp_path):

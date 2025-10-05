@@ -1,0 +1,12 @@
+# Basic Migration
+# Standard unittest to pytest migration with safe defaults
+
+backup_originals: true
+degradation_tier: advanced
+dry_run: true
+file_patterns:
+- test_*.py
+format_output: true
+max_file_size_mb: 20
+recurse_directories: true
+remove_unused_imports: true

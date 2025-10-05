@@ -1,0 +1,17 @@
+# Production Deployment
+# Conservative configuration for production deployments
+
+backup_originals: true
+backup_root: ./backups
+continue_on_error: false
+degradation_tier: essential
+dry_run: false
+fail_fast: true
+file_patterns:
+- test_*.py
+format_output: true
+line_length: 100
+max_file_size_mb: 30
+recurse_directories: true
+remove_unused_imports: true
+target_root: ./converted

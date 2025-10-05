@@ -290,15 +290,13 @@ class TestCLIValidateSourceFiles:
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
-        with pytest.raises(typer.Exit) as exc_info:
-            cli.validate_source_files_with_patterns([], str(empty_dir), ["*.py"], recurse=True)
-        assert exc_info.value.exit_code == 1
+        result = cli.validate_source_files_with_patterns([], str(empty_dir), ["*.py"], recurse=True)
+        assert result == []
 
     def test_validate_source_files_invalid_path(self, tmp_path):
         """Test validate_source_files with non-existent path."""
-        with pytest.raises(typer.Exit) as exc_info:
-            cli.validate_source_files([str(tmp_path / "nonexistent.py")])
-        assert exc_info.value.exit_code == 1
+        result = cli.validate_source_files([str(tmp_path / "nonexistent.py")])
+        assert result == []
 
 
 class TestCLIDryRunOutput:

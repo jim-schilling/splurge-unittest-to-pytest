@@ -1,0 +1,48 @@
+# Batch Processing Template
+# This template is optimized for processing multiple test files in batch mode
+
+# Input and Output Configuration
+input_file: "tests/**/*.py"  # Glob pattern for all test files
+output_file: "converted/"   # Output directory
+input_format: "auto"
+output_format: "pytest"
+
+# Migration Options
+migrate_assertions: true
+migrate_setup_teardown: true
+migrate_test_discovery: true
+migrate_class_fixtures: true
+migrate_module_fixtures: true
+
+# Batch Processing Configuration
+batch_mode: true
+max_workers: 8
+process_timeout: 300  # 5 minutes per file
+
+# File Filtering
+include_patterns:
+  - "test_*.py"
+  - "*_test.py"
+exclude_patterns:
+  - "*__pycache__*"
+  - "*.pyc"
+
+# Error Handling
+strict_mode: false
+continue_on_error: true
+skip_failed_files: true
+
+# Logging Configuration
+log_level: "INFO"
+verbose: false
+log_file: "migration_batch.log"
+
+# Performance Optimization
+memory_limit: 2147483648  # 2GB
+enable_caching: true
+cache_dir: ".migration_cache"
+
+# Quality Assurance
+validate_output: true
+run_tests_after_conversion: false  # Set to true if you want to run converted tests
+test_timeout: 60

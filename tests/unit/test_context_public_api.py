@@ -1,11 +1,64 @@
+import dataclasses
 import json
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from splurge_unittest_to_pytest.context import ContextManager, FixtureScope, MigrationConfig, PipelineContext
+from splurge_unittest_to_pytest.context import (
+    ContextManager,
+    FixtureScope,
+    MigrationConfig,
+    PipelineContext,
+)
 from splurge_unittest_to_pytest.result import Result
+
+
+def test_migration_config_override_and_roundtrip():
+    cfg = MigrationConfig()
+    cfg2 = cfg.with_override(max_file_size_mb=42, dry_run=True)
+    assert cfg2.max_file_size_mb == 42
+    assert cfg2.dry_run is True
+
+    d = cfg2.to_dict()
+    cfg3 = MigrationConfig.from_dict(d)
+    assert cfg3.max_file_size_mb == 42
+    assert cfg3.dry_run is True
+
+
+def test_from_dict_validation_rejects_bad_format():
+    with pytest.raises(ValueError):
+        MigrationConfig.from_dict({"line_length": 10})  # too small should trigger validation
+
+
+def test_pipeline_context_create_and_helpers(tmp_path):
+    src = tmp_path / "source.py"
+    src.write_text("# test file")
+
+    cfg = MigrationConfig(dry_run=True)
+    ctx = PipelineContext.create(source_file=str(src), config=cfg)
+    assert ctx.get_source_path() == Path(str(src))
+    assert ctx.is_dry_run() is True
+    assert isinstance(ctx.run_id, str)
+
+    # with_metadata should add without mutating original
+    ctx2 = ctx.with_metadata("k", "v")
+    assert ctx.metadata == {}
+    assert ctx2.metadata["k"] == "v"
+
+    # with_config returns a new context with modified config
+    ctx3 = ctx.with_config(max_file_size_mb=5)
+    assert ctx3.config.max_file_size_mb == 5
+
+    # formatting helpers
+    assert isinstance(ctx.should_format_code(), bool)
+    assert isinstance(ctx.get_line_length(), int)
+
+
+def test_context_manager_load_config_from_nonexistent_file(tmp_path):
+    res = ContextManager.load_config_from_file(str(tmp_path / "nope.yaml"))
+    assert not res.is_success()
+    assert "config_file" in res.metadata
 
 
 def test_migration_config_roundtrip():
@@ -38,12 +91,11 @@ def test_context_manager_load_config(tmp_path):
     assert isinstance(res, Result)
     assert not res.is_success()
 
-    # Valid YAML
+    # Valid YAML (we serialize as JSON since yaml.safe_load will parse JSON)
     cfg = MigrationConfig()
     f = tmp_path / "c.yaml"
-    # JSON can't directly serialize FixtureScope enum, convert to dict with string value
     d = cfg.to_dict()
-    # Ensure fixture_scope is a simple string that matches the enum values
+    # If fixture scope is expected as a string, ensure a simple value is used
     d["fixture_scope"] = "function"
     f.write_text(json.dumps(d))
     res2 = ContextManager.load_config_from_file(str(f))

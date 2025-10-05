@@ -1,0 +1,69 @@
+# Simple Migration Workflow
+# This workflow demonstrates a basic unittest to pytest migration process
+
+name: "Simple Migration Workflow"
+description: "Basic workflow for converting a single unittest file to pytest"
+version: "1.0.0"
+
+# Workflow Steps
+steps:
+  - name: "validate_input"
+    description: "Validate input file exists and is readable"
+    type: "validation"
+    config:
+      check_file_exists: true
+      validate_syntax: true
+
+  - name: "analyze_code"
+    description: "Analyze unittest patterns in the code"
+    type: "analysis"
+    config:
+      detect_patterns: true
+      estimate_complexity: true
+
+  - name: "migrate_code"
+    description: "Convert unittest code to pytest format"
+    type: "migration"
+    config:
+      migrate_assertions: true
+      migrate_setup_teardown: true
+      migrate_test_discovery: true
+      preserve_comments: true
+
+  - name: "validate_output"
+    description: "Validate the migrated code"
+    type: "validation"
+    config:
+      check_syntax: true
+      run_basic_tests: false
+
+  - name: "generate_report"
+    description: "Generate migration report"
+    type: "reporting"
+    config:
+      include_statistics: true
+      report_format: "text"
+
+# Configuration Template
+config_template: "examples/config-templates/basic-migration.yaml"
+
+# Expected Outcomes
+expected_outcomes:
+  - "Converted pytest file in output directory"
+  - "Migration report with statistics"
+  - "Validation of converted code"
+
+# Success Criteria
+success_criteria:
+  - "No syntax errors in output"
+  - "All unittest patterns converted"
+  - "Preserved code functionality"
+
+# Common Issues and Solutions
+troubleshooting:
+  - issue: "Import errors in converted code"
+    solution: "Check that pytest is installed and import statements are correct"
+  - issue: "Test discovery fails"
+    solution: "Ensure test functions follow pytest naming conventions (test_*)"
+  - issue: "Assertion conversion issues"
+    solution: "Review assertion patterns and manually adjust if needed"

@@ -4,7 +4,8 @@ alwaysApply: false
 ---
 - Validate behavior of public APIs only.
 - Prefer validation using actual data, interfaces, and objects
-- Prefer use of mocks, where appropriate.
+- Minimize use of mocks, except where appropriate.
+- Mock at architectural boundaries (external systems, I/O) but prefer real objects for internal logic.
 - Avoid dynamic patching.
 - Unit test must target 85% code coverage for all public interfaces and methods.
 - Combination of unit tests and integration tests must target 95% code coverage for all public interfaces and methods.

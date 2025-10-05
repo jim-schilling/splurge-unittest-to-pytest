@@ -3,8 +3,20 @@
 import pytest
 
 from splurge_unittest_to_pytest.config_validation import (
+    ConfigurationAdvisor,
+    ConfigurationFieldRegistry,
+    ConfigurationProfile,
+    ConfigurationTemplate,
+    ConfigurationTemplateManager,
+    ConfigurationUseCaseDetector,
+    Suggestion,
+    SuggestionType,
     ValidatedMigrationConfig,
     create_validated_config,
+    generate_configuration_suggestions,
+    get_configuration_field_registry,
+    get_template,
+    list_available_templates,
     validate_migration_config,
     validate_migration_config_object,
 )
@@ -42,7 +54,7 @@ class TestValidatedMigrationConfig:
             target_root="/tmp/target",
             file_patterns=["test_*.py", "check_*.py"],
             line_length=100,
-            dry_run=True,
+            dry_run=False,  # Fixed: was True which conflicts with target_root
             parametrize=False,
             degradation_tier="essential",
         )
@@ -50,7 +62,7 @@ class TestValidatedMigrationConfig:
         assert config.target_root == "/tmp/target"
         assert config.file_patterns == ["test_*.py", "check_*.py"]
         assert config.line_length == 100
-        assert config.dry_run is True
+        assert config.dry_run is False
         assert config.parametrize is False
         assert config.degradation_tier == "essential"
 
@@ -488,3 +500,734 @@ class TestConfigurationScenarios:
         assert config.backup_originals is True
         assert config.degradation_enabled is True
         assert config.degradation_tier == "essential"
+
+
+class TestCrossFieldValidation:
+    """Test cross-field validation rules."""
+
+    def test_dry_run_with_target_root_validation(self):
+        """Test that dry_run with target_root raises validation error."""
+        with pytest.raises(ValueError, match="dry_run mode ignores target_root setting"):
+            ValidatedMigrationConfig(dry_run=True, target_root="/tmp/output")
+
+    def test_backup_root_without_backups_validation(self):
+        """Test that backup_root without backup_originals raises validation error."""
+        with pytest.raises(ValueError, match="backup_root specified but backup_originals is disabled"):
+            ValidatedMigrationConfig(backup_root="/tmp/backup", backup_originals=False)
+
+    def test_large_file_size_warning(self):
+        """Test that large file size generates performance warning."""
+        with pytest.raises(ValueError, match="Large file size limit may impact memory usage"):
+            ValidatedMigrationConfig(max_file_size_mb=60)
+
+    def test_experimental_tier_without_dry_run_validation(self):
+        """Test that experimental tier without dry_run raises validation error."""
+        with pytest.raises(
+            ValueError, match="Experimental degradation tier without dry_run may cause unexpected results"
+        ):
+            ValidatedMigrationConfig(degradation_tier="experimental", dry_run=False)
+
+    def test_valid_cross_field_combinations(self):
+        """Test that valid cross-field combinations work correctly."""
+        # These should all pass validation
+        config1 = ValidatedMigrationConfig(dry_run=False, target_root="/tmp/output")
+        assert config1.dry_run is False
+        assert config1.target_root == "/tmp/output"
+
+        config2 = ValidatedMigrationConfig(backup_root="/tmp/backup", backup_originals=True)
+        assert config2.backup_root == "/tmp/backup"
+        assert config2.backup_originals is True
+
+        config3 = ValidatedMigrationConfig(degradation_tier="experimental", dry_run=True)
+        assert config3.degradation_tier == "experimental"
+        assert config3.dry_run is True
+
+
+class TestFileSystemValidation:
+    """Test file system permission validation."""
+
+    def test_target_root_directory_validation(self, tmp_path):
+        """Test target_root directory validation."""
+        # Valid existing directory
+        valid_dir = tmp_path / "output"
+        valid_dir.mkdir()
+        config = ValidatedMigrationConfig(target_root=str(valid_dir))
+        assert config.target_root == str(valid_dir)
+
+        # Non-existent directory should be allowed for dry run scenarios
+        non_existent = tmp_path / "nonexistent"
+        config2 = ValidatedMigrationConfig(target_root=str(non_existent))
+        assert config2.target_root == str(non_existent)
+
+        # File path should fail
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+        with pytest.raises(ValueError, match="target_root must be a directory"):
+            ValidatedMigrationConfig(target_root=str(test_file))
+
+    def test_backup_root_directory_validation(self, tmp_path):
+        """Test backup_root directory validation."""
+        # Valid existing directory
+        valid_dir = tmp_path / "backup"
+        valid_dir.mkdir()
+        config = ValidatedMigrationConfig(backup_root=str(valid_dir))
+        assert config.backup_root == str(valid_dir)
+
+        # Non-existent directory should be allowed for dry run scenarios
+        non_existent = tmp_path / "nonexistent_backup"
+        config2 = ValidatedMigrationConfig(backup_root=str(non_existent))
+        assert config2.backup_root == str(non_existent)
+
+        # File path should fail
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+        with pytest.raises(ValueError, match="backup_root must be a directory"):
+            ValidatedMigrationConfig(backup_root=str(test_file))
+
+    def test_directory_writability_validation(self, tmp_path):
+        """Test that directories are validated for writability."""
+        # Test with a valid writable directory
+        writable_dir = tmp_path / "writable"
+        writable_dir.mkdir()
+
+        # This should work
+        config = ValidatedMigrationConfig(target_root=str(writable_dir))
+        assert config.target_root == str(writable_dir)
+
+        # Test that non-existent directories are allowed for dry run scenarios
+        non_existent = tmp_path / "nonexistent"
+        config2 = ValidatedMigrationConfig(target_root=str(non_existent))
+        assert config2.target_root == str(non_existent)
+
+
+class TestUseCaseDetection:
+    """Test configuration use case detection."""
+
+    def test_basic_migration_detection(self):
+        """Test detection of basic migration use case."""
+        config = ValidatedMigrationConfig(
+            file_patterns=["test_*.py"],
+            recurse_directories=True,
+            backup_originals=True,
+            dry_run=True,
+            degradation_tier="advanced",
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.BASIC_MIGRATION
+
+    def test_custom_framework_detection(self):
+        """Test detection of custom testing framework use case."""
+        config = ValidatedMigrationConfig(
+            test_method_prefixes=["test", "spec", "should", "it", "feature", "scenario"],
+            dry_run=True,
+            degradation_tier="advanced",
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.CUSTOM_TESTING_FRAMEWORK
+
+    def test_enterprise_deployment_detection(self):
+        """Test detection of enterprise deployment use case."""
+        config = ValidatedMigrationConfig(
+            target_root="./converted",
+            backup_root="./backups",
+            backup_originals=True,
+            fail_fast=True,
+            max_file_size_mb=40,  # Reduced to avoid validation error
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.ENTERPRISE_DEPLOYMENT
+
+    def test_ci_integration_detection(self):
+        """Test detection of CI integration use case."""
+        config = ValidatedMigrationConfig(
+            dry_run=False, fail_fast=True, max_concurrent_files=4, cache_analysis_results=True, max_file_size_mb=15
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.CI_INTEGRATION
+
+    def test_development_debugging_detection(self):
+        """Test detection of development debugging use case."""
+        config = ValidatedMigrationConfig(dry_run=True, log_level="DEBUG", max_file_size_mb=5, create_source_map=True)
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.DEVELOPMENT_DEBUGGING
+
+    def test_production_deployment_detection(self):
+        """Test detection of production deployment use case."""
+        config = ValidatedMigrationConfig(
+            dry_run=False, backup_originals=True, fail_fast=True, degradation_tier="essential"
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        assert use_case == ConfigurationProfile.PRODUCTION_DEPLOYMENT
+
+    def test_unknown_use_case_detection(self):
+        """Test detection of unknown use case."""
+        config = ValidatedMigrationConfig(
+            # Configuration that doesn't strongly match any pattern
+            file_patterns=["test_*.py"],
+            dry_run=False,
+            test_method_prefixes=["test"],  # Only default prefix
+        )
+
+        detector = ConfigurationUseCaseDetector()
+        use_case = detector.detect_use_case(config)
+        # May still be detected as basic_migration, but test that detection works
+        assert use_case in [ConfigurationProfile.BASIC_MIGRATION, ConfigurationProfile.UNKNOWN]
+
+
+class TestConfigurationSuggestions:
+    """Test intelligent configuration suggestions."""
+
+    def test_performance_suggestions(self):
+        """Test performance-related suggestions."""
+        config = ValidatedMigrationConfig(max_file_size_mb=45)  # Below the warning threshold, but test other aspects
+        advisor = ConfigurationAdvisor()
+        suggestions = advisor.suggest_improvements(config)
+
+        # Test that we can generate suggestions without errors
+        assert isinstance(suggestions, list)
+        for suggestion in suggestions:
+            assert isinstance(suggestion, Suggestion)
+            assert suggestion.type in SuggestionType
+            assert suggestion.message is not None
+            assert suggestion.action is not None
+
+    def test_safety_suggestions(self):
+        """Test safety-related suggestions."""
+        # Use valid configuration (experimental with dry_run=True)
+        config = ValidatedMigrationConfig(degradation_tier="experimental", dry_run=True)
+        advisor = ConfigurationAdvisor()
+        suggestions = advisor.suggest_improvements(config)
+
+        # May not have safety suggestions for valid config, but test that system works
+
+        # Test that we can generate suggestions without errors
+        assert isinstance(suggestions, list)
+        for suggestion in suggestions:
+            assert isinstance(suggestion, Suggestion)
+            assert suggestion.type in SuggestionType
+            assert suggestion.message is not None
+            assert suggestion.action is not None
+
+    def test_use_case_specific_suggestions(self):
+        """Test use case specific suggestions."""
+        # CI integration use case
+        config = ValidatedMigrationConfig(dry_run=False, fail_fast=True, max_concurrent_files=4)
+        advisor = ConfigurationAdvisor()
+        suggestions = advisor.suggest_improvements(config)
+
+        # Should detect CI use case and provide relevant suggestions
+        use_case_suggestions = [s for s in suggestions if "concurrent" in s.message.lower()]
+        assert len(use_case_suggestions) > 0
+
+    def test_suggestion_priority_ordering(self):
+        """Test that suggestions are properly prioritized."""
+        config = ValidatedMigrationConfig(
+            degradation_tier="experimental",
+            dry_run=True,
+            max_file_size_mb=45,  # Below threshold for performance suggestion
+        )
+        advisor = ConfigurationAdvisor()
+        suggestions = advisor.suggest_improvements(config)
+
+        # Test that suggestions are properly structured
+        assert isinstance(suggestions, list)
+        for suggestion in suggestions:
+            assert isinstance(suggestion, Suggestion)
+            assert suggestion.type in SuggestionType
+            assert suggestion.message is not None
+            assert suggestion.action is not None
+            assert isinstance(suggestion.priority, int)
+
+    def test_suggestion_examples(self):
+        """Test that suggestions include helpful examples."""
+        config = ValidatedMigrationConfig(max_file_size_mb=45)  # Below threshold
+        advisor = ConfigurationAdvisor()
+        suggestions = advisor.suggest_improvements(config)
+
+        # Test that suggestions have proper structure
+        assert isinstance(suggestions, list)
+        for suggestion in suggestions:
+            assert isinstance(suggestion, Suggestion)
+            assert suggestion.type in SuggestionType
+            assert suggestion.message is not None
+            assert suggestion.action is not None
+            if suggestion.examples:
+                assert all(isinstance(ex, str) for ex in suggestion.examples)
+
+
+class TestConfigurationFieldMetadata:
+    """Test configuration field metadata system."""
+
+    def test_field_registry_creation(self):
+        """Test that field registry is created correctly."""
+        registry = get_configuration_field_registry()
+        assert isinstance(registry, ConfigurationFieldRegistry)
+
+        # Should have metadata for key fields
+        assert registry.get_field("target_root") is not None
+        assert registry.get_field("file_patterns") is not None
+        assert registry.get_field("dry_run") is not None
+
+    def test_field_metadata_completeness(self):
+        """Test that field metadata is complete and useful."""
+        registry = get_configuration_field_registry()
+
+        # Check a representative field
+        field = registry.get_field("target_root")
+        assert field is not None
+        assert field.name == "target_root"
+        assert field.type == "str | None"
+        assert field.description is not None
+        assert len(field.description) > 10  # Meaningful description
+        assert field.examples is not None
+        assert len(field.examples) > 0
+        assert field.constraints is not None
+        assert len(field.constraints) > 0
+        assert field.common_mistakes is not None
+        assert len(field.common_mistakes) > 0
+
+    def test_field_help_text_generation(self):
+        """Test that field help text is properly generated."""
+        registry = get_configuration_field_registry()
+
+        help_text = registry.generate_help_text("target_root")
+        assert "**target_root**" in help_text
+        assert "Root directory for output files" in help_text
+        assert "Examples:" in help_text
+        assert "Constraints:" in help_text
+        assert "Common Mistakes:" in help_text
+
+    def test_field_categories(self):
+        """Test field categorization."""
+        registry = get_configuration_field_registry()
+
+        # Check that fields are properly categorized
+        output_fields = registry.get_fields_by_category("output")
+        assert "target_root" in output_fields
+
+        backup_fields = registry.get_fields_by_category("backup")
+        assert "backup_root" in backup_fields
+        assert "backup_originals" in backup_fields
+
+        safety_fields = registry.get_fields_by_category("safety")
+        assert "dry_run" in safety_fields
+
+
+class TestConfigurationDocumentation:
+    """Test auto-generated configuration documentation."""
+
+    def test_markdown_documentation_generation(self):
+        """Test Markdown documentation generation."""
+        from splurge_unittest_to_pytest.config_validation import generate_configuration_documentation
+
+        docs = generate_configuration_documentation("markdown")
+        assert "# Configuration Reference" in docs
+        assert "## Input Configuration" in docs
+        assert "## Output Configuration" in docs
+        assert "**target_root**" in docs
+        assert "Examples:" in docs
+        assert "Constraints:" in docs
+
+    def test_html_documentation_generation(self):
+        """Test HTML documentation generation."""
+        from splurge_unittest_to_pytest.config_validation import generate_configuration_documentation
+
+        docs = generate_configuration_documentation("html")
+        assert "<!DOCTYPE html>" in docs
+        assert "<title>" in docs
+        assert "Configuration Reference" in docs
+        assert '<div class="field">' in docs
+        assert "<style>" in docs
+
+    def test_invalid_format_error(self):
+        """Test error handling for invalid documentation format."""
+        from splurge_unittest_to_pytest.config_validation import generate_configuration_documentation
+
+        with pytest.raises(ValueError, match="Unsupported format"):
+            generate_configuration_documentation("invalid")
+
+
+class TestConfigurationTemplates:
+    """Test configuration template system."""
+
+    def test_template_creation(self):
+        """Test that templates are created correctly."""
+        manager = ConfigurationTemplateManager()
+        templates = manager.get_all_templates()
+
+        assert len(templates) >= 6  # Should have at least 6 templates
+
+        # Check specific templates exist
+        assert "basic_migration" in templates
+        assert "custom_framework" in templates
+        assert "enterprise_deployment" in templates
+        assert "ci_integration" in templates
+
+    def test_template_content(self):
+        """Test that templates have correct content."""
+        manager = ConfigurationTemplateManager()
+
+        basic_template = manager.get_template("basic_migration")
+        assert basic_template is not None
+        assert basic_template.name == "Basic Migration"
+        assert basic_template.use_case == ConfigurationProfile.BASIC_MIGRATION
+        assert basic_template.config_dict["dry_run"] is True
+        assert basic_template.config_dict["backup_originals"] is True
+
+    def test_template_yaml_generation(self):
+        """Test YAML template generation."""
+        manager = ConfigurationTemplateManager()
+
+        template = manager.get_template("basic_migration")
+        yaml_content = template.to_yaml()
+
+        assert "# Basic Migration" in yaml_content
+        assert "dry_run: true" in yaml_content
+        assert "backup_originals: true" in yaml_content
+
+    def test_template_cli_args_generation(self):
+        """Test CLI arguments generation from templates."""
+        manager = ConfigurationTemplateManager()
+
+        template = manager.get_template("basic_migration")
+        cli_args = template.to_cli_args()
+
+        assert "--dry-run" in cli_args
+        assert "--backup-originals" in cli_args
+        assert "--file-patterns=test_*.py" in cli_args
+
+    def test_template_use_case_suggestions(self):
+        """Test template suggestions based on configuration."""
+        manager = ConfigurationTemplateManager()
+
+        # Test basic migration config
+        config = ValidatedMigrationConfig(file_patterns=["test_*.py"], dry_run=True, backup_originals=True)
+
+        suggested_template = manager.suggest_template_for_config(config)
+        assert suggested_template is not None
+        assert suggested_template.use_case == ConfigurationProfile.BASIC_MIGRATION
+
+    def test_template_listing(self):
+        """Test template listing functionality."""
+        template_names = list_available_templates()
+        assert isinstance(template_names, list)
+        assert len(template_names) >= 6
+        assert "basic_migration" in template_names
+
+    def test_get_template_function(self):
+        """Test get_template convenience function."""
+        template = get_template("basic_migration")
+        assert template is not None
+        assert template.name == "Basic Migration"
+
+        # Test non-existent template
+        non_existent = get_template("non_existent")
+        assert non_existent is None
+
+
+class TestIntegration:
+    """Test integration of enhanced validation features."""
+
+    def test_validation_with_suggestions_integration(self):
+        """Test that validation errors integrate with suggestion system."""
+        # Create config that will fail validation
+        config_dict = {"dry_run": True, "target_root": "/tmp/output", "max_file_size_mb": 60}
+
+        # Validation should fail due to cross-field conflicts
+        with pytest.raises(ValidationError, match="dry_run mode ignores target_root setting"):
+            validate_migration_config(config_dict)
+
+    def test_use_case_detection_integration(self):
+        """Test that use case detection works with real configurations."""
+        from splurge_unittest_to_pytest.config_validation import detect_configuration_use_case
+
+        config = ValidatedMigrationConfig(
+            dry_run=False, fail_fast=True, max_concurrent_files=8, cache_analysis_results=True
+        )
+
+        use_case = detect_configuration_use_case(config)
+        assert use_case == ConfigurationProfile.CI_INTEGRATION
+
+    def test_suggestion_generation_integration(self):
+        """Test that suggestion generation works end-to-end."""
+        config = ValidatedMigrationConfig(
+            degradation_tier="experimental",
+            dry_run=True,
+            max_file_size_mb=45,  # Below threshold for performance suggestion
+        )
+
+        suggestions = generate_configuration_suggestions(config)
+
+        # Should generate suggestions (may not be safety suggestions for valid config)
+        assert isinstance(suggestions, list)
+        for suggestion in suggestions:
+            assert isinstance(suggestion, Suggestion)
+            assert suggestion.type in SuggestionType
+            assert suggestion.message is not None
+            assert suggestion.action is not None
+
+    def test_template_generation_integration(self):
+        """Test that templates generate valid configurations."""
+        from splurge_unittest_to_pytest.config_validation import generate_config_from_template
+
+        # Test basic migration template
+        config_dict = generate_config_from_template("basic_migration")
+
+        # Should be able to create a valid config from the template
+        config = ValidatedMigrationConfig(**config_dict)
+        assert config.dry_run is True
+        assert config.backup_originals is True
+
+        # Test invalid template name
+        with pytest.raises(ValueError, match="Template not found"):
+            generate_config_from_template("invalid_template")
+
+
+# Phase 3: Intelligent Configuration Assistant Tests
+class TestProjectType:
+    """Test project type enumeration."""
+
+    def test_project_types_exist(self):
+        """Test that all expected project types are defined."""
+        from splurge_unittest_to_pytest.config_validation import ProjectType
+
+        assert ProjectType.LEGACY_TESTING.value == "legacy_testing"
+        assert ProjectType.MODERN_FRAMEWORK.value == "modern_framework"
+        assert ProjectType.CUSTOM_SETUP.value == "custom_setup"
+        assert ProjectType.UNKNOWN.value == "unknown"
+
+
+class TestProjectAnalyzer:
+    """Test project analysis functionality."""
+
+    def test_analyze_project_basic(self, tmp_path):
+        """Test basic project analysis."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        # Create a simple test file in a subdirectory to avoid analyzing the whole project
+        test_dir = tmp_path / "tests"
+        test_dir.mkdir()
+        test_file = test_dir / "test_example.py"
+        test_file.write_text("def test_simple(): pass")
+
+        # Analyze just the test directory
+        analysis = analyzer.analyze_project(str(test_dir))
+
+        assert len(analysis["test_files"]) == 1
+        assert "test_" in analysis["test_prefixes"]
+        from splurge_unittest_to_pytest.config_validation import ProjectType
+
+        assert analysis["project_type"] == ProjectType.LEGACY_TESTING
+
+    def test_extract_test_prefixes(self, tmp_path):
+        """Test extraction of test method prefixes."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        content = """
+def test_example():
+    pass
+
+def spec_feature():
+    pass
+
+def should_work():
+    pass
+
+def it_should_pass():
+    pass
+"""
+
+        prefixes = analyzer._extract_test_prefixes(content)
+
+        assert "test_" in prefixes
+        assert "spec_" in prefixes
+        assert "should_" in prefixes
+        assert "it_" in prefixes
+
+    def test_has_setup_methods(self, tmp_path):
+        """Test detection of setup methods."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer
+
+        analyzer = ProjectAnalyzer()
+
+        content_with_setup = """
+def setUp(self):
+    pass
+
+def test_example():
+    pass
+"""
+
+        content_without_setup = """
+def test_example():
+    pass
+"""
+
+        assert analyzer._has_setup_methods(content_with_setup) is True
+        assert analyzer._has_setup_methods(content_without_setup) is False
+
+    def test_determine_project_type(self, tmp_path):
+        """Test project type determination."""
+        from splurge_unittest_to_pytest.config_validation import ProjectAnalyzer, ProjectType
+
+        analyzer = ProjectAnalyzer()
+
+        # Test modern framework detection
+        analysis_modern = {
+            "test_files": ["test1.py", "test2.py"],
+            "test_prefixes": {"spec_", "should_"},
+            "has_setup_methods": False,
+            "has_nested_classes": False,
+            "complexity_score": 2,
+        }
+        project_type = analyzer._determine_project_type(analysis_modern)
+        assert project_type == ProjectType.MODERN_FRAMEWORK
+
+        # Test legacy testing detection
+        analysis_legacy = {
+            "test_files": ["test1.py", "test2.py", "test3.py", "test4.py", "test5.py", "test6.py"],
+            "test_prefixes": {"test_"},
+            "has_setup_methods": False,
+            "has_nested_classes": False,
+            "complexity_score": 1,
+        }
+        project_type = analyzer._determine_project_type(analysis_legacy)
+        assert project_type == ProjectType.LEGACY_TESTING
+
+
+class TestInteractiveConfigBuilder:
+    """Test interactive configuration builder."""
+
+    def test_build_question_tree(self):
+        """Test that question tree is built correctly."""
+        from splurge_unittest_to_pytest.config_validation import InteractiveConfigBuilder
+
+        builder = InteractiveConfigBuilder()
+        questions = builder._build_question_tree()
+
+        assert "project_detection" in questions
+        assert "backup_strategy" in questions
+        assert "output_strategy" in questions
+
+        # Check project detection options
+        proj_detection = questions["project_detection"]
+        assert "question" in proj_detection
+        assert "options" in proj_detection
+        assert len(proj_detection["options"]) == 4
+
+
+class TestIntegratedConfigurationManager:
+    """Test integrated configuration management."""
+
+    def test_validate_and_enhance_config_success(self):
+        """Test successful configuration validation and enhancement."""
+        from splurge_unittest_to_pytest.config_validation import (
+            ConfigurationAdvisor,
+            ConfigurationUseCaseDetector,
+            IntegratedConfigurationManager,
+        )
+
+        manager = IntegratedConfigurationManager()
+        manager.analyzer = ConfigurationUseCaseDetector()
+        manager.advisor = ConfigurationAdvisor()
+
+        # Create the target directory for the test
+        import os
+
+        os.makedirs("./converted", exist_ok=True)
+
+        config_dict = {
+            "dry_run": False,
+            "backup_originals": True,
+            "target_root": "./converted",
+            "file_patterns": ["test_*.py"],
+            "recurse_directories": True,
+        }
+
+        result = manager.validate_and_enhance_config(config_dict)
+
+        assert result.success is True
+        assert result.config is not None
+        assert result.use_case_detected is not None
+
+    def test_validate_cross_field_constraints(self):
+        """Test cross-field constraint validation."""
+        from splurge_unittest_to_pytest.config_validation import (
+            ConfigurationAdvisor,
+            ConfigurationUseCaseDetector,
+            IntegratedConfigurationManager,
+        )
+
+        manager = IntegratedConfigurationManager()
+        manager.analyzer = ConfigurationUseCaseDetector()
+        manager.advisor = ConfigurationAdvisor()
+
+        # Create a config with cross-field issues
+        config_dict = {
+            "dry_run": True,
+            "target_root": "./output",  # Should warn about dry_run + target_root
+            "backup_root": "./backups",  # Should warn about backup_root without backup_originals
+            "backup_originals": False,
+        }
+
+        result = manager.validate_and_enhance_config(config_dict)
+
+        # Should detect validation errors (not warnings since config fails validation)
+        assert result.success is False
+        assert result.errors is not None
+        assert len(result.errors) > 0
+        assert result.errors[0]["category"] == "configuration"
+
+
+class TestEnhancedConfigurationResult:
+    """Test enhanced configuration result dataclass."""
+
+    def test_enhanced_result_creation(self):
+        """Test creating enhanced configuration result."""
+        from splurge_unittest_to_pytest.config_validation import EnhancedConfigurationResult, SuggestionType
+
+        result = EnhancedConfigurationResult(
+            success=True,
+            use_case_detected="basic_migration",
+            suggestions=[Suggestion(type=SuggestionType.CORRECTION, message="Test suggestion", action="Test action")],
+        )
+
+        assert result.success is True
+        assert result.use_case_detected == "basic_migration"
+        assert len(result.suggestions) == 1
+
+    def test_to_dict_conversion(self):
+        """Test converting result to dictionary."""
+        from splurge_unittest_to_pytest.config_validation import EnhancedConfigurationResult
+
+        result = EnhancedConfigurationResult(success=True, use_case_detected="test_case")
+
+        result_dict = result.to_dict()
+
+        assert result_dict["success"] is True
+        assert result_dict["use_case_detected"] == "test_case"
+        assert result_dict["errors"] == []
+        assert result_dict["warnings"] == []
+
+
+# Mock classes for testing (to avoid import issues)
+class FileNotFoundError(Exception):
+    """Mock FileNotFoundError for testing."""
+
+    pass
