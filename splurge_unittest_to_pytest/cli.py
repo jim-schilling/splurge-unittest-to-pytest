@@ -477,6 +477,7 @@ def migrate(
         else:
             setup_logging_with_level("INFO")
 
+    # Default behavior: quiet when neither debug nor info are set
     set_quiet_mode(not (debug or info))
 
     try:

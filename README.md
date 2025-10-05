@@ -91,7 +91,7 @@ For programmatic usage, templates, and end-to-end examples see the API docs:
  - ``--diff``: When used with ``--dry-run``, show unified diffs (presence-only flag)
  - ``--list``: When used with ``--dry-run``, list files only (presence-only flag)
  - ``--posix``: Force POSIX-style path output in dry-run mode (presence-only flag)
- - ``--quiet``: Suppress extras in dry-run output (presence-only flag)
+ - (no ``--quiet`` flag) The tool is quiet by default; use ``--verbose``/``--debug`` to increase output verbosity.
  - ``--suffix SUFFIX``: Append a suffix to converted filenames
 - ``--backup-root DIR``: Root directory for backup files when recursing. When specified, backups preserve folder structure. By default, backups are created next to the original files.
 - ``--skip-backup``: Skip creating backup copies of originals when writing (presence-only flag). By default the tool will create a backup of the original file when writing; if a backup file already exists the tool will not overwrite it—an existing ``.backup`` file is preserved.
@@ -125,10 +125,12 @@ Show unified diff for a directory:
 python -m splurge_unittest_to_pytest migrate -d tests --dry-run --diff
 ```
 
-Quiet dry-run with POSIX paths:
+Verbose dry-run with POSIX paths:
+
+The tool is quiet by default. Use ``--verbose`` or ``--debug`` or ``--info`` to increase output verbosity. For example:
 
 ```bash
-python -m splurge_unittest_to_pytest migrate -d tests --dry-run --posix --quiet
+python -m splurge_unittest_to_pytest migrate -d tests --dry-run --posix --verbose
 ```
 
 Perform migration and write files to `converted/` (preserve extensions). Backups are created by default; to disable backups pass ``--skip-backup``:
