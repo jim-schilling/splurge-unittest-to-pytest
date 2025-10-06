@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 try:
-    from typing import Self  # type: ignore[attr-defined]
+    from typing import Self
 except ImportError:
     from typing_extensions import Self
 
