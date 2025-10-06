@@ -4,8 +4,9 @@
 
 [![PyPI](https://img.shields.io/pypi/v/splurge-unittest-to-pytest.svg)](https://pypi.org/project/splurge-unittest-to-pytest)
 [![Development Status](https://img.shields.io/badge/Development%20Status-Alpha-lightgrey.svg)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-[![CI (py3.13)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci-quick-test.yml/badge.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions)
+[![CI (py3.12)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions/workflows/ci-quick-test.yml/badge.svg)](https://github.com/jim-schilling/splurge-unittest-to-pytest/actions)
 [![ruff](https://img.shields.io/badge/ruff-passing-brightgreen.svg)](https://github.com/charliermarsh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-passing-brightgreen.svg)](https://github.com/python/mypy)
 
