@@ -26,5 +26,6 @@ repos:
         # Override pyproject's addopts during pre-commit so coverage/xdist options
         # (which may require plugins not present in the pre-commit environment)
         # are not applied. Run tests serially and without pytest-cov plugin.
-        args: ["-q", "-o", "addopts=", "-p", "no:pytest_cov", "tests"]
+        # Exclude property tests which require hypothesis (not available in system env)
+        args: ["-q", "-o", "addopts=", "-p", "no:pytest_cov", "--ignore=tests/property", "tests"]
 

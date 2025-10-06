@@ -11,7 +11,7 @@ Copyright (c) 2025 Jim Schilling
 This software is released under the MIT License.
 """
 
-__version__ = "2025.1.0"
+__version__ = "2025.1.1"
 __author__ = "Jim Schilling"
 __description__ = "Automated unittest to pytest migration tool"
 
