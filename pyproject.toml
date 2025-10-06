@@ -113,7 +113,6 @@ filterwarnings = [
 
 # mypy configuration
 [tool.mypy]
-# Support multiple Python versions (3.10+)
 python_version = "3.12"
 warn_return_any = false
 warn_unused_configs = true
@@ -147,7 +146,7 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = "splurge_unittest_to_pytest.cli"
 ignore_errors = true
-# Black configuration
+
 [tool.black]
 line-length = 120
 target-version = ['py310']
