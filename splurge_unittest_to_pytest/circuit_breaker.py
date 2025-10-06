@@ -13,7 +13,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 # Signal is only available on Unix-like systems
 if TYPE_CHECKING or sys.platform != "win32":
@@ -28,6 +28,10 @@ else:
     except ImportError:
         signal = None  # type: ignore[assignment]
         HAS_SIGNAL = False
+
+# Note: we avoid redeclaring `signal` under TYPE_CHECKING because the module
+# is imported conditionally above. At call sites we use `cast(Any, signal)` so
+# mypy treats its attributes as available for type checking without redefinition.
 
 T = TypeVar("T")
 
@@ -174,17 +178,17 @@ class CircuitBreaker:
         def timeout_handler(signum, frame):
             raise TimeoutError(f"Operation timed out after {self.config.timeout} seconds")
 
-        signal.signal(signal.SIGALRM, timeout_handler)  # type: ignore[attr-defined]
+        cast(Any, signal).signal(cast(Any, signal).SIGALRM, timeout_handler)
         timeout_value = self.config.timeout
         if timeout_value is not None:
-            signal.alarm(int(timeout_value))  # type: ignore[attr-defined]
+            cast(Any, signal).alarm(int(timeout_value))
         else:
-            signal.alarm(0)  # type: ignore[attr-defined]
+            cast(Any, signal).alarm(0)
 
         try:
             return func(*args, **kwargs)
         finally:
-            signal.alarm(0)  # type: ignore[attr-defined]
+            cast(Any, signal).alarm(0)
 
     @contextmanager
     def protect(self):
