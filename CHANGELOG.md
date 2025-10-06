@@ -1,5 +1,31 @@
 # Changelog
 
+## [2025.1.1] 2025-10-05
+### Added
+
+- Hypothesis-based property tests: Added a new property-testing suite under `tests/property/` to increase coverage of edge cases and fuzz-heavy inputs. These tests augment existing unit tests and are designed to catch non-deterministic and probabilistic issues earlier in CI.
+- New GitHub Actions workflows:
+  - `ci-quality-check.yml` — linting and type checks (ruff, mypy) on pushes and pull requests with PR-deduplication logic.
+  - `ci-quick-test.yml` — canonical quick test run on Python 3.12 (pytest + mypy) on pushes and PRs with caching and dedupe.
+  - `ci-test-matrix.yml` — full test matrix for pull requests (Python 3.10, 3.11, 3.13).
+- Restored `ci-quick-test.yml` after accidental deletion; workflow now includes pip caching and concurrency groups.
+
+### Changed
+
+- Continuous integration: consolidated per-version workflows into a single PR-only matrix and a fast canonical 3.12 run for all pushes/PRs. This reduces CI minutes while keeping full coverage for pull requests.
+- Updated mypy configuration: `python_version` set to `3.12` to reflect development environment and avoid version-specific false positives.
+- Type-checking improvements: removed several now-unused `# type: ignore` comments for `Self` imports (`error_reporting.py`, `config_validation.py`) and reworked platform-dependent `signal` uses in `circuit_breaker.py` (use `cast(Any, signal)` at call sites) so mypy behaves consistently across CI and local environments.
+
+### Fixed
+
+- Fixed CI mypy failures caused by environment differences and unused `type: ignore` comments. Cleaned up import ordering and applied `ruff --fix` where appropriate.
+- Addressed intermittent false positive type-check errors on signal attributes by using typing casts at call sites instead of scattered ignores.
+
+### Removed
+
+- Removed legacy per-version workflows in favor of the consolidated `ci-test-matrix.yml` (PR-only) and the fast `ci-quick-test.yml` (push & PR).
+- Removed a handful of redundant `type: ignore` comments across the codebase where they are no longer necessary.
+
 ## [2025.1.0] 2025-10-04
 
 ### Intelligent Configuration Assistant (Phase 3 Complete)
