@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splurge-unittest-to-pytest"
-version = "2025.1.0"
+version = "2025.1.1"
 description = "A tool for migrating unittest test suites to pytest format"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,8 +44,7 @@ dev = [
     "ruff>=0.1.0",
     "pre-commit>=3.0.0",
     "pytest-xdist>=3.0.0",
-    # Note: `black` and `isort` are intentionally kept as runtime dependencies above
-    # because the library uses them as part of its packaging/runtime behavior.
+    "hypothesis>=6.0.0",
 ]
 
 [project.scripts]
@@ -93,11 +92,7 @@ known-first-party = ["splurge_unittest_to_pytest"]
 # pytest configuration
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = [
-    "--cov=splurge_unittest_to_pytest",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-    "--cov-report=html",
+addopts = [ 
     "-v",
     "--tb=short",
     "-n", "4",
